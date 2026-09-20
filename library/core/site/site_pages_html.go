@@ -163,8 +163,15 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <nav class="nav-list">{{range .Nav}}{{if .Section}}<div class="nav-group"><div class="nav-section">{{.Section}}</div>{{end}}{{range .Links}}<a href="{{.Href}}"{{if .Current}} class="active"{{end}}><span class="nav-icon">{{.Glyph}}</span>{{.Label}}</a>{{end}}{{if .Section}}</div>{{end}}{{end}}</nav>
 <div class="nav-footer"><a class="foot-brand" href="https://gitsocial.org"><svg class="logo-small" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" /></svg><span>Built with GitSocial</span></a></div>
 </aside>
-{{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{.Heading}}</h1>{{range .Chips}} {{template "chip" .}}{{end}}</div>{{end}}{{define "bits"}}{{range $i, $b := .}}{{if $i}} · {{end}}{{if $b.Href}}<a class="{{$b.Class}}" href="{{$b.Href}}">{{$b.Text}}</a>{{else if $b.Class}}<span class="{{$b.Class}}"{{if $b.Title}} title="{{$b.Title}}"{{end}}>{{$b.Text}}</span>{{else}}{{$b.Text}}{{end}}{{end}}{{end}}{{define "metaline"}}<p class="meta">{{range $i, $b := .Meta}}{{if $i}} · {{end}}{{$b}}{{end}}</p>{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
-{{end}}{{end}}{{define "glyph"}}{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}>{{if .BodyOnly}}<span class="meta meta-lead">{{template "glyph" .}}{{if .Chip}}{{template "chip" .Chip}} {{end}}{{template "bits" .Meta}}</span>
+{{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{.Heading}}</h1>{{range .Chips}} {{template "chip" .}}{{end}}</div>{{end}}{{define "bits"}}{{range $i, $b := .}}{{if $i}} · {{end}}{{if $b.Href}}<a class="{{$b.Class}}" href="{{$b.Href}}">{{$b.Text}}</a>{{else if $b.Class}}<span class="{{$b.Class}}"{{if $b.Title}} title="{{$b.Title}}"{{end}}>{{$b.Text}}</span>{{else}}{{$b.Text}}{{end}}{{end}}{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
+{{end}}{{end}}{{define "body"}}{{range .}}{{if .Notes}}<dl class="release-notes">{{range .Notes}}<dt><a class="hash" href="{{.Href}}">{{.Hash}}</a></dt><dd>{{.Text}}</dd>{{end}}</dl>
+{{else}}<p>{{range $i, $l := .Lines}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
+{{end}}{{end}}{{end}}{{define "assetrow"}}{{if .Href}}<a class="asset-row" href="{{.Href}}" rel="noopener"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</a>{{else}}<div class="asset-row"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</div>{{end}}{{end}}{{define "assets"}}<div class="assets"><div class="assets-head mono">Assets</div>
+{{if .Artifacts}}<div class="asset-list">{{range .Artifacts}}{{template "assetrow" .}}{{end}}</div>
+{{end}}{{if .Extra}}<div class="asset-list">{{range .Extra}}{{template "assetrow" .}}{{end}}</div>
+{{end}}{{if .SignedBy}}<div class="asset-signed"><span class="meta">signed-by </span><span class="mono selectable">{{.SignedBy}}</span></div>
+{{end}}</div>
+{{end}}{{define "glyph"}}{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}>{{if .BodyOnly}}<span class="meta meta-lead">{{template "glyph" .}}{{if .Chip}}{{template "chip" .Chip}} {{end}}{{template "bits" .Meta}}</span>
 {{if .Text}}<div class="body">{{.Text}}</div>
 {{end}}{{else}}<div class="card-head">{{template "glyph" .}}{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a>{{range .TailChips}} {{template "chip" .}}{{end}}</div>
 <span class="meta">{{template "bits" .Meta}}</span>{{end}}</div>
@@ -173,11 +180,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{if .Heading}}{{template "detailhead" .}}
 {{end}}<div class="detail-meta"><span class="meta">{{template "bits" .Meta}}</span></div>
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
-{{else}}{{template "paras" .Paras}}{{end}}{{with .Artifacts}}<section>
-{{template "metaline" .}}
-{{if .Pre}}<pre>{{.Pre}}</pre>
-{{end}}{{template "paras" .Paras}}</section>
-{{end}}{{if .Replies}}<div class="thread"><div class="thread-head mono">Comments ({{len .Replies}})</div>
+{{else}}{{template "body" .Body}}{{end}}{{with .Assets}}{{template "assets" .}}{{end}}{{if .Replies}}<div class="thread"><div class="thread-head mono">Comments ({{len .Replies}})</div>
 {{range .Replies}}{{if .Depth}}<div class="comment-row"><div class="thread-rail">{{range $i := .Rail}}<span class="rail-guide"></span>{{end}}</div>{{end}}<div class="card {{.Variant}}">
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
 {{else}}<p class="meta meta-lead">{{template "glyph" .}}{{range .Chips}}{{template "chip" .}} {{end}}{{template "bits" .Meta}}</p>
@@ -205,8 +208,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{if .Files}}<ul class="files">
 {{range .Files}}<li><a href="{{.Href}}">{{.Name}}</a></li>
 {{end}}</ul>
-{{if .MoreHref}}<p class="notice">{{.MoreNotice}}</p>
-<p class="meta"><a href="{{.MoreHref}}">{{.MoreLabel}}</a></p>
+{{if .MoreHref}}<p class="meta"><a href="{{.MoreHref}}">{{.MoreLabel}}</a></p>
 {{end}}{{end}}{{if .Readme}}<section><p class="meta">README</p>
 {{.Readme.HTML}}{{if .Readme.Truncated}}<p class="notice">Truncated. The full file is in the repository.</p>
 {{end}}</section>
@@ -281,13 +283,23 @@ type sitePageBit struct {
 	Href  string // set on the hash bit, which renders as a link
 }
 
-// sitePageSection is one thread section on an item page: a reply, a tombstone
-// line, or the release artifacts block.
-type sitePageSection struct {
-	Meta  []string
-	Paras [][]string
-	Pre   string
-	Tomb  string
+// sitePageNoteRow is one commit a release body names: the short hash, the link to its commit, and the message beside it.
+type sitePageNoteRow struct{ Hash, Href, Text string }
+
+// sitePageBodyBlock is one block of an item body: prose lines, or the commit rows a release lists.
+type sitePageBodyBlock struct {
+	Lines []string
+	Notes []sitePageNoteRow
+}
+
+// sitePageAsset is one release asset row: its name, its download link when the release gives it one, and its kind chip.
+type sitePageAsset struct{ Name, Href, Chip string }
+
+// sitePageAssets is a release's asset block: the artifacts, then the checksums and the SBOM, then the signing key.
+type sitePageAssets struct {
+	Artifacts []sitePageAsset
+	Extra     []sitePageAsset
+	SignedBy  string
 }
 
 // sitePageReply is one thread reply, rendered as the app's comment or feedback card.
@@ -313,15 +325,15 @@ type siteItemPageData struct {
 	ListDir   string
 	ListLabel string
 	// Subject titles the document; Heading is empty on a body-only type, whose first line is prose.
-	Subject   string
-	Heading   string
-	Chips     []sitePageChip // the detail head's one chip slot, after the subject (siteHeadChips)
-	Meta      []sitePageBit
-	Paras     [][]string
-	Tomb      string
-	Artifacts *sitePageSection // a release's artifact block, the only section with a Pre slot
-	Replies   []sitePageReply
-	Omitted   int
+	Subject string
+	Heading string
+	Chips   []sitePageChip // the detail head's one chip slot, after the subject (siteHeadChips)
+	Meta    []sitePageBit
+	Body    []sitePageBodyBlock
+	Tomb    string
+	Assets  *sitePageAssets // a release's asset block, nil on every other type
+	Replies []sitePageReply
+	Omitted int
 }
 
 // sitePageNavLink is one sidebar entry: the app's nav item, pointed at this
@@ -384,7 +396,6 @@ type siteFrontHome struct {
 	Latest       *siteFrontCommit // default branch tip (nil when unreadable)
 	Files        []siteFrontFile  // root entries, directories first, capped
 	MoreHref     string           // app link to the code browser ("" — nothing hidden)
-	MoreNotice   string           // "N more not shown.", the truncation sentence
 	MoreLabel    string           // "Show all N", the app's collapse control
 	Readme       *siteFrontReadme
 }
@@ -558,12 +569,12 @@ const siteActivityMoreLabel = "See more"
 // siteActivityMoreKey is that link's crawlable destination, the served page for the app's /timeline route.
 const siteActivityMoreKey = "./posts/index.html"
 
-// siteFrontFilesTruncation names the root entries the front page hides: the notice sentence and the control label. Mirrors homeFilesTruncation in gs-core.js.
-func siteFrontFilesTruncation(total, limit int) (notice, label string) {
+// siteFrontFilesMoreLabel labels the control that reveals the root entries the front page hides; the label names the total, so no sentence stands beside it. Mirrors homeFilesMoreLabel in gs-core.js.
+func siteFrontFilesMoreLabel(total, limit int) string {
 	if total <= limit {
-		return "", ""
+		return ""
 	}
-	return strconv.Itoa(total-limit) + " more not shown.", "Show all " + strconv.Itoa(total)
+	return "Show all " + strconv.Itoa(total)
 }
 
 // sitePageStateClass maps a workflow state to its chip color class; a cancel state matches by prefix, since the misspell linter rewrites the doubled-l spelling.
@@ -848,28 +859,79 @@ func buildSiteReply(r *sitePageItem) sitePageReply {
 	return s
 }
 
-// buildSiteReleaseArtifacts returns a release page's artifact and checksum block.
-func buildSiteReleaseArtifacts(it *sitePageItem) *sitePageSection {
-	var lines []string
-	for _, a := range strings.Split(pageItemField(it, "artifacts"), ",") {
-		if a = strings.TrimSpace(a); a != "" {
-			lines = append(lines, a)
+// siteReleaseAssetHref builds an asset's download link from the release's artifact-url base, "" when it has none or the result is not a fetchable target. Mirrors assetRow's gate in gs-render.js.
+func siteReleaseAssetHref(base, name string) string {
+	if base == "" {
+		return ""
+	}
+	href := base + "/" + name
+	lower := strings.ToLower(href)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.HasPrefix(href, "/") {
+		return href
+	}
+	return ""
+}
+
+// buildSiteReleaseAssets returns a release page's asset block: the artifacts, then the checksums and the SBOM, then the signing key. Mirrors releaseAssetsSection in gs-render.js.
+func buildSiteReleaseAssets(it *sitePageItem) *sitePageAssets {
+	base := strings.TrimSuffix(pageItemField(it, "artifact-url"), "/")
+	assets := &sitePageAssets{SignedBy: pageItemField(it, "signed-by")}
+	for _, name := range strings.Split(pageItemField(it, "artifacts"), ",") {
+		if name = strings.TrimSpace(name); name != "" {
+			assets.Artifacts = append(assets.Artifacts, sitePageAsset{Name: name, Href: siteReleaseAssetHref(base, name)})
 		}
 	}
 	if c := pageItemField(it, "checksums"); c != "" {
-		lines = append(lines, c)
+		assets.Extra = append(assets.Extra, sitePageAsset{Name: c, Href: siteReleaseAssetHref(base, c), Chip: "checksums"})
 	}
 	if s := pageItemField(it, "sbom"); s != "" {
-		lines = append(lines, s)
+		assets.Extra = append(assets.Extra, sitePageAsset{Name: s, Href: siteReleaseAssetHref(base, s), Chip: "SBOM"})
 	}
-	if len(lines) == 0 {
+	if len(assets.Artifacts) == 0 && len(assets.Extra) == 0 && assets.SignedBy == "" {
 		return nil
 	}
-	meta := []string{"artifacts"}
-	if u := pageItemField(it, "artifact-url"); u != "" {
-		meta = append(meta, u)
+	return assets
+}
+
+// siteReleaseNoteRe matches a release-note line: a commit hash, then the message beside it.
+var siteReleaseNoteRe = regexp.MustCompile(`^([0-9a-f]{7,40})[ \t]+(\S.*)$`)
+
+// sitePageBodyBlocks splits an item body into the blocks a page renders; notes turns a block whose every line reads "<hash> <message>" into a release's commit rows. Mirrors itemBodyBlocks in gs-core.js.
+func sitePageBodyBlocks(text string, notes bool) []sitePageBodyBlock {
+	var blocks []sitePageBodyBlock
+	for _, para := range sitePageParas(text) {
+		if rows := siteReleaseNoteRows(para, notes); rows != nil {
+			blocks = append(blocks, sitePageBodyBlock{Notes: rows})
+			continue
+		}
+		blocks = append(blocks, sitePageBodyBlock{Lines: para})
 	}
-	return &sitePageSection{Meta: meta, Pre: strings.Join(lines, "\n")}
+	return blocks
+}
+
+// siteReleaseNoteRows reads one block as commit rows, nil when notes are off or any line is prose.
+func siteReleaseNoteRows(lines []string, notes bool) []sitePageNoteRow {
+	if !notes || len(lines) == 0 {
+		return nil
+	}
+	rows := make([]sitePageNoteRow, 0, len(lines))
+	for _, line := range lines {
+		m := siteReleaseNoteRe.FindStringSubmatch(strings.TrimSpace(line))
+		if m == nil {
+			return nil
+		}
+		rows = append(rows, sitePageNoteRow{Hash: m[1], Text: strings.TrimSpace(m[2])})
+	}
+	return rows
+}
+
+// siteLinkNoteRows points each commit row at its route in the app, the one surface that renders a plain commit.
+func siteLinkNoteRows(blocks []sitePageBodyBlock, site sitePageSite) {
+	for i := range blocks {
+		for j := range blocks[i].Notes {
+			blocks[i].Notes[j].Href = sitePageAppURL(site, "commit:"+blocks[i].Notes[j].Hash+"@")
+		}
+	}
 }
 
 // sitePageItemSubject returns the subject an item page is titled by: its head subject, or the type and tag when retracted.
@@ -964,7 +1026,8 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		robots = sitePageRobotsNoIndex
 		body = ""
 	} else {
-		d.Paras = sitePageParas(body)
+		d.Body = sitePageBodyBlocks(body, pageItemType(it) == "release")
+		siteLinkNoteRows(d.Body, site)
 	}
 	d.Chips = siteHeadChips(it, d.Heading)
 	d.Chrome = sitePageChrome{
@@ -983,7 +1046,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		Nav:         sitePageSidebar("../", list.Dir, site.Files),
 	}
 	if pageItemType(it) == "release" {
-		d.Artifacts = buildSiteReleaseArtifacts(it)
+		d.Assets = buildSiteReleaseAssets(it)
 	}
 	threadBytes := 0
 	for i, r := range it.Replies {

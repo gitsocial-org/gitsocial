@@ -131,16 +131,50 @@ type parityCardSkeleton struct {
 
 // parityFrontFilesCase pins what the front page says for one root-entry count.
 type parityFrontFilesCase struct {
-	Name         string `json:"name"`
-	Total        int    `json:"total"`
-	ExpectNotice string `json:"expectNotice"`
-	ExpectLabel  string `json:"expectLabel"`
+	Name        string `json:"name"`
+	Total       int    `json:"total"`
+	ExpectLabel string `json:"expectLabel"`
 }
 
 // parityFrontFiles pins the front page's root-listing cap and its cases.
 type parityFrontFiles struct {
 	Limit int                    `json:"limit"`
 	Cases []parityFrontFilesCase `json:"cases"`
+}
+
+// parityBodyBlock pins one block a release body splits into: prose lines, or commit rows.
+type parityBodyBlock struct {
+	Lines []string        `json:"lines"`
+	Notes []parityNoteRow `json:"notes"`
+}
+
+// parityNoteRow pins one commit row a release body yields.
+type parityNoteRow struct {
+	Hash string `json:"hash"`
+	Text string `json:"text"`
+}
+
+// parityReleaseNotesCase pins the blocks one release body renders as.
+type parityReleaseNotesCase struct {
+	Name   string            `json:"name"`
+	Body   string            `json:"body"`
+	Expect []parityBodyBlock `json:"expect"`
+}
+
+// parityAssetRow pins one asset row: its name, its link and its kind chip.
+type parityAssetRow struct {
+	Name string `json:"name"`
+	Href string `json:"href"`
+	Chip string `json:"chip"`
+}
+
+// parityReleaseAssetsCase pins the asset rows one release header yields.
+type parityReleaseAssetsCase struct {
+	Name            string            `json:"name"`
+	Header          map[string]string `json:"header"`
+	ExpectArtifacts []parityAssetRow  `json:"expectArtifacts"`
+	ExpectExtra     []parityAssetRow  `json:"expectExtra"`
+	ExpectSignedBy  string            `json:"expectSignedBy"`
 }
 
 // parityMarkdownPath pins whether a path renders as prose on both surfaces.
@@ -159,22 +193,24 @@ type parityMDXStripCase struct {
 
 // parityFixtures is the shared fixture file shape.
 type parityFixtures struct {
-	MessageCases   []parityMessageCase     `json:"messageCases"`
-	RawObjectCases []parityRawObjectCase   `json:"rawObjectCases"`
-	FeedbackCards  []parityFeedbackCase    `json:"feedbackCards"`
-	ReleaseHeads   []parityReleaseHeadCase `json:"releaseHeads"`
-	DetailHeads    []parityDetailHeadCase  `json:"detailHeads"`
-	RowHeads       []parityDetailHeadCase  `json:"rowHeads"`
-	MetaRow        parityMetaRow           `json:"metaRow"`
-	DefaultTitles  []parityDefaultTitle    `json:"defaultTitles"`
-	RowGlyphs      []parityRowGlyphCase    `json:"rowGlyphs"`
-	ReleaseRows    []parityReleaseRowCase  `json:"releaseRows"`
-	CardSkeleton   parityCardSkeleton      `json:"cardSkeleton"`
-	FrontFiles     parityFrontFiles        `json:"frontFiles"`
-	MarkdownPaths  []parityMarkdownPath    `json:"markdownPaths"`
-	MDXStrip       []parityMDXStripCase    `json:"mdxStrip"`
-	ListEmpty      map[string]string       `json:"listEmpty"`
-	ListHeadings   map[string]string       `json:"listHeadings"`
+	MessageCases   []parityMessageCase       `json:"messageCases"`
+	RawObjectCases []parityRawObjectCase     `json:"rawObjectCases"`
+	FeedbackCards  []parityFeedbackCase      `json:"feedbackCards"`
+	ReleaseHeads   []parityReleaseHeadCase   `json:"releaseHeads"`
+	DetailHeads    []parityDetailHeadCase    `json:"detailHeads"`
+	RowHeads       []parityDetailHeadCase    `json:"rowHeads"`
+	MetaRow        parityMetaRow             `json:"metaRow"`
+	DefaultTitles  []parityDefaultTitle      `json:"defaultTitles"`
+	RowGlyphs      []parityRowGlyphCase      `json:"rowGlyphs"`
+	ReleaseRows    []parityReleaseRowCase    `json:"releaseRows"`
+	ReleaseNotes   []parityReleaseNotesCase  `json:"releaseNotes"`
+	ReleaseAssets  []parityReleaseAssetsCase `json:"releaseAssets"`
+	CardSkeleton   parityCardSkeleton        `json:"cardSkeleton"`
+	FrontFiles     parityFrontFiles          `json:"frontFiles"`
+	MarkdownPaths  []parityMarkdownPath      `json:"markdownPaths"`
+	MDXStrip       []parityMDXStripCase      `json:"mdxStrip"`
+	ListEmpty      map[string]string         `json:"listEmpty"`
+	ListHeadings   map[string]string         `json:"listHeadings"`
 }
 
 // loadParityFixtures reads the shared JSON fixtures the JS half also consumes.
@@ -481,11 +517,80 @@ func TestParityFrontFiles(t *testing.T) {
 	}
 	for _, c := range f.FrontFiles.Cases {
 		t.Run(c.Name, func(t *testing.T) {
-			notice, label := siteFrontFilesTruncation(c.Total, f.FrontFiles.Limit)
-			if notice != c.ExpectNotice || label != c.ExpectLabel {
-				t.Errorf("notice %q label %q, want %q and %q", notice, label, c.ExpectNotice, c.ExpectLabel)
+			if label := siteFrontFilesMoreLabel(c.Total, f.FrontFiles.Limit); label != c.ExpectLabel {
+				t.Errorf("control label %q, want %q", label, c.ExpectLabel)
 			}
 		})
+	}
+}
+
+// TestParityReleaseNotes asserts the page layer splits a release body into the
+// blocks the app's own itemBodyBlocks yields (unit_parity.js).
+func TestParityReleaseNotes(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.ReleaseNotes) == 0 {
+		t.Fatal("no release note cases in parity fixtures")
+	}
+	for _, c := range f.ReleaseNotes {
+		t.Run(c.Name, func(t *testing.T) {
+			blocks := sitePageBodyBlocks(c.Body, true)
+			if len(blocks) != len(c.Expect) {
+				t.Fatalf("%d blocks, want %d", len(blocks), len(c.Expect))
+			}
+			for i, want := range c.Expect {
+				if got := strings.Join(blocks[i].Lines, "\n"); got != strings.Join(want.Lines, "\n") {
+					t.Errorf("block %d lines = %q, want %q", i, got, strings.Join(want.Lines, "\n"))
+				}
+				if len(blocks[i].Notes) != len(want.Notes) {
+					t.Fatalf("block %d has %d rows, want %d", i, len(blocks[i].Notes), len(want.Notes))
+				}
+				for j, row := range want.Notes {
+					if blocks[i].Notes[j].Hash != row.Hash || blocks[i].Notes[j].Text != row.Text {
+						t.Errorf("block %d row %d = %q %q, want %q %q", i, j, blocks[i].Notes[j].Hash, blocks[i].Notes[j].Text, row.Hash, row.Text)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestParityReleaseAssets asserts the page layer builds the asset rows the
+// app's own releaseAssets yields, link for link (unit_parity.js).
+func TestParityReleaseAssets(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.ReleaseAssets) == 0 {
+		t.Fatal("no release asset cases in parity fixtures")
+	}
+	for _, c := range f.ReleaseAssets {
+		t.Run(c.Name, func(t *testing.T) {
+			fields := map[string]string{"type": "release"}
+			for k, v := range c.Header {
+				fields[k] = v
+			}
+			msg := &sitePageMsg{Ext: "release", Header: &protocol.Header{Ext: "release", Fields: fields}}
+			assets := buildSiteReleaseAssets(&sitePageItem{Msg: msg, Resolved: msg})
+			if assets == nil {
+				t.Fatal("no asset block")
+			}
+			assertParityAssetRows(t, "artifact", assets.Artifacts, c.ExpectArtifacts)
+			assertParityAssetRows(t, "extra", assets.Extra, c.ExpectExtra)
+			if assets.SignedBy != c.ExpectSignedBy {
+				t.Errorf("signed-by = %q, want %q", assets.SignedBy, c.ExpectSignedBy)
+			}
+		})
+	}
+}
+
+// assertParityAssetRows compares one asset list against its fixture rows.
+func assertParityAssetRows(t *testing.T, kind string, got []sitePageAsset, want []parityAssetRow) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("%d %s rows, want %d", len(got), kind, len(want))
+	}
+	for i := range want {
+		if got[i].Name != want[i].Name || got[i].Href != want[i].Href || got[i].Chip != want[i].Chip {
+			t.Errorf("%s row %d = %+v, want %+v", kind, i, got[i], want[i])
+		}
 	}
 }
 
@@ -669,6 +774,36 @@ func TestParityDetailHeadMarkup(t *testing.T) {
 	}
 	if strings.Count(string(page), "<h1") != 1 {
 		t.Errorf("an item page carries one h1, got %d", strings.Count(string(page), "<h1"))
+	}
+}
+
+// TestParityReleasePageMarkup asserts a release page renders its commit rows as
+// linked definition rows and its artifacts as the app's own asset list.
+func TestParityReleasePageMarkup(t *testing.T) {
+	fields := map[string]string{
+		"type": "release", "tag": "v1.2.0", "artifacts": "gs-linux.tar.gz",
+		"checksums": "SHA256SUMS", "artifact-url": "https://dl.example.com/v1.2.0",
+	}
+	body := "Ship the rewrite\n\nabc1234 Fix the walk\ndef5678 Add a retry budget"
+	msg := &sitePageMsg{Ext: "release", SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: body, Header: &protocol.Header{Ext: "release", Fields: fields}}
+	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[3], sitePageSite{URL: "https://example.com/"}, "v1.2.0")
+	page, err := renderSitePage("item", d)
+	if err != nil {
+		t.Fatalf("render item page: %v", err)
+	}
+	for _, want := range []string{
+		`<dl class="release-notes"><dt><a class="hash" href="https://example.com/index.html#commit:abc1234@">abc1234</a></dt><dd>Fix the walk</dd>`,
+		`<dt><a class="hash" href="https://example.com/index.html#commit:def5678@">def5678</a></dt><dd>Add a retry budget</dd></dl>`,
+		`<div class="assets"><div class="assets-head mono">Assets</div>`,
+		`<a class="asset-row" href="https://dl.example.com/v1.2.0/gs-linux.tar.gz" rel="noopener"><span class="mono selectable">gs-linux.tar.gz</span></a>`,
+		`<span class="mono selectable">SHA256SUMS</span><span class="chip">checksums</span>`,
+	} {
+		if !strings.Contains(string(page), want) {
+			t.Errorf("release page markup missing:\nwant %s\ngot %s", want, page)
+		}
+	}
+	if strings.Contains(string(page), "<pre>") {
+		t.Error("a release page renders no preformatted artifact block")
 	}
 }
 

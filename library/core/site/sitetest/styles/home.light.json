@@ -6,7 +6,7 @@
       "margin": "0px 0px 9.6px",
       "fontSize": "24px",
       "color": "rgb(26, 26, 26)",
-      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "backgroundColor": "rgb(255, 248, 229)",
       "borderLeftColor": "srgb(0.1 0.1 0.1 / 0.18)",
       "borderRadius": "10px"
     },
@@ -16,7 +16,7 @@
       "margin": "0px 0px 9.6px",
       "fontSize": "24px",
       "color": "rgb(26, 26, 26)",
-      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "backgroundColor": "rgb(255, 248, 229)",
       "borderLeftColor": "srgb(0.1 0.1 0.1 / 0.18)",
       "borderRadius": "10px"
     }

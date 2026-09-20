@@ -6,7 +6,7 @@
       "margin": "0px 0px 9.6px",
       "fontSize": "24px",
       "color": "rgb(26, 26, 26)",
-      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "backgroundColor": "rgb(255, 248, 229)",
       "borderLeftColor": "rgb(207, 34, 46)",
       "borderRadius": "10px"
     },
@@ -16,7 +16,7 @@
       "margin": "0px 0px 9.6px",
       "fontSize": "24px",
       "color": "rgb(26, 26, 26)",
-      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "backgroundColor": "rgb(255, 248, 229)",
       "borderLeftColor": "rgb(31, 157, 85)",
       "borderRadius": "10px"
     },
@@ -26,7 +26,7 @@
       "margin": "0px",
       "fontSize": "12.8px",
       "color": "rgb(26, 26, 26)",
-      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "backgroundColor": "rgb(255, 248, 229)",
       "borderLeftColor": "srgb(0.38 0.37 0.34)",
       "borderRadius": "10px"
     },
@@ -36,7 +36,7 @@
       "margin": "0px",
       "fontSize": "12.8px",
       "color": "rgb(26, 26, 26)",
-      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "backgroundColor": "rgb(255, 248, 229)",
       "borderLeftColor": "srgb(0.38 0.37 0.34)",
       "borderRadius": "10px"
     }
@@ -208,7 +208,7 @@
       "margin": "0px 0px 9.6px",
       "fontSize": "24px",
       "color": "rgb(26, 26, 26)",
-      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "backgroundColor": "rgb(255, 248, 229)",
       "borderLeftColor": "rgb(207, 34, 46)",
       "borderRadius": "10px"
     },
@@ -218,7 +218,7 @@
       "margin": "0px 0px 9.6px",
       "fontSize": "24px",
       "color": "rgb(26, 26, 26)",
-      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "backgroundColor": "rgb(255, 248, 229)",
       "borderLeftColor": "rgb(31, 157, 85)",
       "borderRadius": "10px"
     },
@@ -228,7 +228,7 @@
       "margin": "0px",
       "fontSize": "12.8px",
       "color": "rgb(26, 26, 26)",
-      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "backgroundColor": "rgb(255, 248, 229)",
       "borderLeftColor": "srgb(0.38 0.37 0.34)",
       "borderRadius": "10px"
     },
@@ -238,7 +238,7 @@
       "margin": "0px",
       "fontSize": "12.8px",
       "color": "rgb(26, 26, 26)",
-      "backgroundColor": "srgb(0.95 0.91 0.81)",
+      "backgroundColor": "rgb(255, 248, 229)",
       "borderLeftColor": "srgb(0.38 0.37 0.34)",
       "borderRadius": "10px"
     }

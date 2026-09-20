@@ -28,7 +28,7 @@ const (
 	sitePagesManifestKey = ".gitsocial/site/pages.json"
 	// sitePagesVersion is the page layer's schema version; bump it when a page
 	// head or its sealed markup changes.
-	sitePagesVersion = 30
+	sitePagesVersion = 31
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -408,7 +408,7 @@ func readSiteFrontHome(src *objstore.LocalCommitSource, site sitePageSite, refs 
 		Latest:       readSiteFrontLatest(src, site, tip, defaultBranch),
 	}
 	entries := readSiteRootTree(src, tip)
-	home.Files, home.MoreHref, home.MoreNotice, home.MoreLabel = buildSiteFrontFiles(entries, site, defaultBranch)
+	home.Files, home.MoreHref, home.MoreLabel = buildSiteFrontFiles(entries, site, defaultBranch)
 	home.Readme = readSiteFrontReadme(src, tip, siteReadmeName(entries), defaultBranch, site)
 	return home
 }
@@ -530,8 +530,8 @@ func readSiteFrontReadme(src *objstore.LocalCommitSource, tip, name, branch stri
 	return &siteFrontReadme{HTML: template.HTML(rendered), Truncated: truncated}
 }
 
-// buildSiteFrontFiles renders the root listing the app's homeFileList shows: directories first, then files, capped behind a notice and a "Show all N" link.
-func buildSiteFrontFiles(entries []siteTreeEntry, site sitePageSite, branch string) (files []siteFrontFile, moreHref, moreNotice, moreLabel string) {
+// buildSiteFrontFiles renders the root listing the app's homeFileList shows: directories first, then files, capped behind a "Show all N" link.
+func buildSiteFrontFiles(entries []siteTreeEntry, site sitePageSite, branch string) (files []siteFrontFile, moreHref, moreLabel string) {
 	ordered := append([]siteTreeEntry(nil), entries...)
 	sort.SliceStable(ordered, func(i, j int) bool {
 		a, b := ordered[i], ordered[j]
@@ -548,12 +548,12 @@ func buildSiteFrontFiles(entries []siteTreeEntry, site sitePageSite, branch stri
 	if len(shown) > sitePagesHomeFiles {
 		shown = shown[:sitePagesHomeFiles]
 		moreHref = sitePageAppURL(site, "/code")
-		moreNotice, moreLabel = siteFrontFilesTruncation(len(ordered), sitePagesHomeFiles)
+		moreLabel = siteFrontFilesMoreLabel(len(ordered), sitePagesHomeFiles)
 	}
 	for _, e := range shown {
 		files = append(files, siteFrontFile{Name: e.Name, Href: sitePageAppURL(site, "file:"+e.Name+"@"+branch)})
 	}
-	return files, moreHref, moreNotice, moreLabel
+	return files, moreHref, moreLabel
 }
 
 // generateSitePages runs one budgeted full-regen pass, writing in the pinned order with the manifest last.

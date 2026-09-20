@@ -92,6 +92,28 @@ for (const c of FIX.releaseRows) {
   eq(GS.releaseAssetLabel(c.artifacts), c.expectLabel, c.name + ": asset label");
 }
 
+console.log("=== parity invariant: the blocks a release body splits into ===");
+// blockShape names a block the way site_parity_test.go compares it: its rows, else its lines.
+const blockShape = (b) => (b.notes ? "notes:" + b.notes.map((n) => n.hash + " " + n.text).join("|") : "lines:" + b.lines.join("\n"));
+for (const c of FIX.releaseNotes) {
+  const got = GS.itemBodyBlocks(c.body, true).map(blockShape).join(" ~ ");
+  const want = c.expect.map((b) => (b.notes ? blockShape(b) : "lines:" + b.lines.join("\n"))).join(" ~ ");
+  eq(got, want, c.name + ": blocks");
+}
+
+console.log("=== parity invariant: the asset rows a release carries ===");
+// rowShape names an asset row the way site_parity_test.go compares it.
+const rowShape = (r) => r.name + "|" + (r.href || "") + "|" + (r.chip || "");
+for (const c of FIX.releaseAssets) {
+  const a = GS.releaseAssets(c.header);
+  const extra = [];
+  if (a.checksums) extra.push({ name: a.checksums.name, href: a.checksums.href, chip: "checksums" });
+  if (a.sbom) extra.push({ name: a.sbom.name, href: a.sbom.href, chip: "SBOM" });
+  eq(a.artifacts.map(rowShape).join(","), c.expectArtifacts.map(rowShape).join(","), c.name + ": artifact rows");
+  eq(extra.map(rowShape).join(","), c.expectExtra.map(rowShape).join(","), c.name + ": checksum and SBOM rows");
+  eq(a.signedBy, c.expectSignedBy, c.name + ": signing key");
+}
+
 console.log("=== parity invariant: the one card shape ===");
 // slots names a rendered node's child classes in order, the form site_parity_test.go compares.
 const slots = (node) => ((node && node._children) || []).filter((c) => c && c.nodeType === 1)
@@ -122,11 +144,9 @@ const chipped = GS.prCard({
 });
 eq(slots(chipped), FIX.cardSkeleton.parts.join(","), "a card that fills every part keeps the fixture's order");
 
-console.log("=== parity invariant: what the front page says about the root entries it hides ===");
+console.log("=== parity invariant: what the front page offers for the root entries it hides ===");
 for (const c of FIX.frontFiles.cases) {
-  const cut = GS.homeFilesTruncation(c.total, FIX.frontFiles.limit);
-  eq(cut.notice, c.expectNotice, c.name + ": notice");
-  eq(cut.label, c.expectLabel, c.name + ": control label");
+  eq(GS.homeFilesMoreLabel(c.total, FIX.frontFiles.limit), c.expectLabel, c.name + ": control label");
 }
 
 console.log("=== parity invariant: which files render as prose, and the MDX strip ===");

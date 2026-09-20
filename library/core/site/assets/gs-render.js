@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, homeFilesTruncation, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, homeFilesMoreLabel, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -1011,7 +1011,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         subjectEl.textContent = headSubject(v.header, ext, subject);
         headEl.replaceChildren(subjectEl, ...headChips(v.header, ext, subjectEl.textContent).map(chipEl));
       }
-      const cb = commitBody(bodyOnly ? v.content : body, v.rawMessage);
+      const cb = commitBody(bodyOnly ? v.content : body, v.rawMessage, ext === "release");
       actions.replaceChildren(cb.modes, share);
       metaSlot.replaceChildren(versionMetaRow(v, kind.branch));
       bodyPane.replaceChildren(cb.pane);
@@ -1468,11 +1468,26 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return btn;
   }
 
-  // commitBody builds a detail body with a Raw toggle, returning { modes, pane }; Raw is the full verbatim message.
-  function commitBody(body, rawMessage) {
+  // releaseNotesBody renders a release body: each block of commit rows as definition rows, every other block as markdown.
+  function releaseNotesBody(body) {
+    const wrap = el("div", {}, []);
+    for (const block of itemBodyBlocks(body, true)) {
+      if (!block.notes) { wrap.append(renderCommitBody(block.lines.join("\n"))); continue; }
+      const dl = el("dl", { class: "release-notes" }, []);
+      for (const n of block.notes) {
+        dl.append(el("dt", {}, [el("a", { class: "hash", href: commitRef(n.hash, "") }, [n.hash])]));
+        dl.append(el("dd", {}, [n.text]));
+      }
+      wrap.append(dl);
+    }
+    return wrap;
+  }
+
+  // commitBody builds a detail body with a Raw toggle, returning { modes, pane }; Raw is the full verbatim message, and a release renders its commit rows.
+  function commitBody(body, rawMessage, notes) {
     const pane = el("div", {}, []);
     const btn = rawToggle(
-      () => pane.replaceChildren(renderCommitBody(body)),
+      () => pane.replaceChildren(notes ? releaseNotesBody(body) : renderCommitBody(body)),
       () => pane.replaceChildren(el("div", { class: "body raw-body" }, [rawMessage || ""])));
     const modes = el("div", { class: "view-modes body-modes" }, [btn]);
     return { modes, pane };
@@ -2314,10 +2329,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function assetRow(name, href, tag) {
     const kids = [el("span", { class: "mono selectable" }, [name])];
     if (tag) kids.push(el("span", { class: "chip" }, [tag]));
-    if (href && /^(https?:|\/)/i.test(href)) {
-      const a = el("a", { class: "asset-row", href, rel: "noopener" }, kids);
-      return a;
-    }
+    if (href) return el("a", { class: "asset-row", href, rel: "noopener" }, kids);
     return el("div", { class: "asset-row" }, kids);
   }
 
@@ -4008,19 +4020,17 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     for (const r of rows) listNode.append(r);
     box.append(listNode);
     if (all.length <= HOME_FILE_LIMIT) return box;
-    const cut = homeFilesTruncation(all.length, HOME_FILE_LIMIT);
+    const moreLabel = homeFilesMoreLabel(all.length, HOME_FILE_LIMIT);
     const fade = el("div", { class: "tree-fade" }, []);
-    const notice = el("div", { class: "notice" }, [cut.notice]);
     const glyph = el("span", { class: "show-more-icon" }, []);
     const label = el("span", { class: "show-more-label" }, []);
     const toggle = el("button", { class: "show-more", type: "button" }, [glyph, label]);
-    box.append(notice, toggle);
+    box.append(toggle);
     let expanded = false;
     const apply = () => {
       rows.forEach((r, i) => { r.style.display = expanded || i < HOME_FILE_LIMIT ? "" : "none"; });
       glyph.replaceChildren(chevronEl(expanded ? "up" : "down") || document.createTextNode(expanded ? "⌃" : "⌄"));
-      label.textContent = expanded ? "Show less" : cut.label;
-      notice.style.display = expanded ? "none" : "";
+      label.textContent = expanded ? "Show less" : moreLabel;
       if (expanded) fade.remove();
       else listNode.append(fade);
     };

@@ -170,7 +170,7 @@
   }
   /* Cards / items. */
   .card {
-    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-panel);
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-panel);
     padding: var(--pad-panel); margin: 0 0 var(--sp-3);
   }
   /* Whole-card navigation: the card links to its item detail, so it takes a
@@ -272,9 +272,11 @@
     color: var(--danger); border-color: var(--danger);
     padding: var(--pad-panel); background: var(--danger-t1);
   }
-  .detail dl { margin: var(--sp-3) 0 0; display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-1) var(--sp-4); }
-  .detail dt { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); }
-  .detail dd { margin: 0; font-size: var(--fs-ui); word-break: break-word; }
+  /* Definition rows: the trailer list, and a release's commit rows, which take
+     the same treatment on both surfaces (a generated page has no .detail). */
+  .detail dl, dl.release-notes { margin: var(--sp-3) 0 0; display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-1) var(--sp-4); }
+  .detail dt, .release-notes dt { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); }
+  .detail dd, .release-notes dd { margin: 0; font-size: var(--fs-ui); word-break: break-word; }
   .detail .subject { font-size: var(--fs-h1); margin-bottom: var(--sp-2); }
   .detail .card .subject, .card .subject { font-size: var(--fs-body); }
   .back { display: inline-block; margin-bottom: var(--sp-4); color: var(--muted); font-size: var(--fs-ui); }
@@ -608,7 +610,6 @@
   .load-more { padding: var(--sp-2) var(--sp-5); }
   .load-more:disabled { cursor: default; opacity: 0.6; }
   .thread { margin-top: var(--sp-5); }
-  .card.comment { background: var(--panel); }
   /* Reply-context ("In reply to") block: the parent chain shown above a reply's
      own post. De-emphasized so the anchor post stays visually primary — smaller
      text, tighter padding, and a slight fade on the context cards. */

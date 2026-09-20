@@ -730,8 +730,9 @@ async function main() {
     ok("front page carries the home view's latest commit", text.includes(subject) && text.includes(short), "subject=" + subject + " short=" + short);
     ok("front page lists the same visible root files", shown.length > 0 && shown.every((n) => text.includes(n)), "files=" + JSON.stringify(shown));
     ok("front page carries the same collapse control", !more || text.includes(more), "more=" + more);
+    // The control names the total, so neither surface repeats it as a sentence.
     const cut = global.__shim.textOf(findClass(view, "notice")[0] || null).trim();
-    ok("front page carries the same truncation notice", !more || (!!cut && text.includes(cut)), "notice=" + cut);
+    ok("neither surface carries an overflow sentence", !/more not shown/.test(cut) && !/more not shown/.test(text), "notice=" + cut);
     // The README is PRE-RENDERED into the served page (site_markdown.go, a port
     // of the reader's own grammar), so the boot no longer rewrites markup into
     // prose — the one thing the upgrade still adds here is images it can resolve

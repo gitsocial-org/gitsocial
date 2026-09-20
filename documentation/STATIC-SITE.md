@@ -101,7 +101,7 @@ Rules that hold on every page:
 - The markdown renderer builds every tag itself and escapes every text node, attribute value and code body. Raw HTML in the source is lexed and rebuilt against an allowlist that admits no event handler, no `style`, no `script`, `iframe` or `object`, and no image or link target that is not an absolute `https:`, `mailto:`, in-page or app reference.
 - `f/index.html` is the one list page that boots into another route, the tree view.
 - A first line promoted into a subject or a label is markdown-stripped first, by `siteSubjectText` in Go and its mirror `subjectText` in `gs-core.js`, pinned by `sitetest/parity_fixtures.json`. A subject that strips to nothing falls back to a placeholder, because a row's subject anchor is its only link to the item. What renders as nothing upstream is dropped before the first line is taken: HTML comments, and link reference definitions at a block start outside fenced code, which is where a bot hides its state in an imported comment body.
-- The page layer and the app render the same extensions as prose. An `.mdx` document loses its import, export and standalone JSX lines first, by `siteFileStripMDX` in Go and its mirror `stripMDX` in `gs-core.js`, pinned by `sitetest/parity_fixtures.json`.
+- The page layer and the app render the same extensions as prose. A prose document loses its YAML front matter first, by `siteStripFrontMatter` in Go and its mirror `stripFrontMatter` in `gs-core.js`; an `.mdx` document then loses its import, export and standalone JSX blocks, on one line or spanning several, by `siteFileStripMDX` and its mirror `stripMDX`, which leave a fenced block alone. Both pairs are pinned by `sitetest/parity_fixtures.json`.
 - The page's thread carries review feedback that the app routes into its review and diff sections instead, so the two counts differ on a pull request page.
 - First-time generation runs item pages, then file pages, then commits pages. `GITSOCIAL_SITE_PAGES_BUDGET` caps the item pages one rebuild writes ([S3.md](S3.md#environment-variables)); the rest resume on the next push. The cap is unset by default.
 - Setting `pages false` or removing `url` deletes the page layer on the next push and restores the shell at `index.html`.
@@ -194,6 +194,7 @@ Each bump gets a row here, newest first:
 
 | Version | What it rewrote |
 |---|---|
+| 31 | the front page's root listing, which drops its overflow sentence; a release's notes and asset rows; the front matter a prose page now drops |
 | 30 | the body-only list and activity rows: no head, the first line as the card's text |
 | 29 | the front page's truncation notice over its root file listing |
 | 28 | the release row's asset count in place of its hash, and a typeless item's glyph class |

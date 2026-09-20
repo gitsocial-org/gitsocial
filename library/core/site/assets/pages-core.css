@@ -27,7 +27,7 @@
    rules that must BEAT pages-full.css's same-named classes (.meta, .tomb)
    keep the plain #gs-page prefix for its id weight. */
 
-  /* Base tokens (bg/text/link) define the palette; derived tokens
+  /* Base tokens (bg/text/link/card) define the palette; derived tokens
      (muted/line/panel/chip) are computed off the base with color-mix so they
      track the active theme without restating.
      Derived tokens live on body, not :root: the theme gates override the base
@@ -40,7 +40,11 @@
   :root {
     --pl-bg: #f8eed5; --pl-text: #1a1a1a; --pl-link: #008787;
     --pd-bg: #02041b; --pd-text: #c9d1d9; --pd-link: #00d7d7;
-    --bg: var(--pl-bg); --text: var(--pl-text); --link: var(--pl-link);
+    /* The one surface with a palette entry of its own: light lifts a card above
+       the parchment where --panel's text mix sinks it below. Dark keeps that mix,
+       spelled against the dark pair so the theme gate hands it over unchanged. */
+    --pl-card: #fff8e5; --pd-card: color-mix(in srgb, var(--pd-text) 3%, var(--pd-bg));
+    --bg: var(--pl-bg); --text: var(--pl-text); --link: var(--pl-link); --card: var(--pl-card);
     --open: #1f9d55; --closed: #8957e5; --merged: #8250df;
     --warn: #bf8700; --danger: #cf222e;
     --serif: 'EB Garamond', Georgia, serif;
@@ -98,18 +102,18 @@
      by being declared closer. */
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: var(--pd-bg); --text: var(--pd-text); --link: var(--pd-link);
+      --bg: var(--pd-bg); --text: var(--pd-text); --link: var(--pd-link); --card: var(--pd-card);
       --i-cyan: var(--pd-i-cyan); --i-yellow: var(--pd-i-yellow); --i-orange: var(--pd-i-orange); --i-indigo: var(--pd-i-indigo);
       --i-green: var(--pd-i-green); --i-blue: var(--pd-i-blue); --i-red: var(--pd-i-red); --i-vermilion: var(--pd-i-vermilion);
     }
   }
   html.dark-mode, body.dark-mode {
-    --bg: var(--pd-bg); --text: var(--pd-text); --link: var(--pd-link);
+    --bg: var(--pd-bg); --text: var(--pd-text); --link: var(--pd-link); --card: var(--pd-card);
     --i-cyan: var(--pd-i-cyan); --i-yellow: var(--pd-i-yellow); --i-orange: var(--pd-i-orange); --i-indigo: var(--pd-i-indigo);
     --i-green: var(--pd-i-green); --i-blue: var(--pd-i-blue); --i-red: var(--pd-i-red); --i-vermilion: var(--pd-i-vermilion);
   }
   html.light-mode, body.light-mode {
-    --bg: var(--pl-bg); --text: var(--pl-text); --link: var(--pl-link);
+    --bg: var(--pl-bg); --text: var(--pl-text); --link: var(--pl-link); --card: var(--pl-card);
     --i-cyan: var(--pl-i-cyan); --i-yellow: var(--pl-i-yellow); --i-orange: var(--pl-i-orange); --i-indigo: var(--pl-i-indigo);
     --i-green: var(--pl-i-green); --i-blue: var(--pl-i-blue); --i-red: var(--pl-i-red); --i-vermilion: var(--pl-i-vermilion);
   }

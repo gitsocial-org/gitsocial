@@ -2367,17 +2367,49 @@
   function releaseAssets(header) {
     header = header || {};
     const base = (header["artifact-url"] || "").replace(/\/$/, "");
-    const href = (name) => (base ? base + "/" + name : null);
+    // Only a fetchable target becomes a link; anything else leaves the name as plain text.
+    const href = (name) => {
+      const u = base ? base + "/" + name : "";
+      return /^(https?:\/\/|\/)/i.test(u) ? u : null;
+    };
     const artifacts = (header.artifacts || "").split(",").map((s) => s.trim()).filter(Boolean).map((name) => ({ name, href: href(name) }));
     const checksums = header.checksums ? { name: header.checksums, href: href(header.checksums) } : null;
     const sbom = header.sbom ? { name: header.sbom, href: href(header.sbom) } : null;
     return { artifactUrl: base, artifacts, checksums, sbom, signedBy: header["signed-by"] || "" };
   }
 
-  // homeFilesTruncation names the root entries the front page hides: the notice sentence and the control label. Mirrors siteFrontFilesTruncation in site_pages_html.go.
-  function homeFilesTruncation(total, limit) {
-    if (total <= limit) return { notice: "", label: "" };
-    return { notice: (total - limit) + " more not shown.", label: "Show all " + total };
+  // RELEASE_NOTE_RE matches a release-note line: a commit hash, then the message beside it.
+  const RELEASE_NOTE_RE = /^([0-9a-f]{7,40})[ \t]+(\S.*)$/;
+
+  // itemBodyBlocks splits an item body into the blocks a detail renders; notes turns a block whose every line reads "<hash> <message>" into a release's commit rows. Mirrors sitePageBodyBlocks in site_pages_html.go.
+  function itemBodyBlocks(text, notes) {
+    const blocks = [];
+    const src = (text || "").replace(/\r/g, "").trim();
+    if (!src) return blocks;
+    for (const para of src.split("\n\n")) {
+      const block = para.replace(/^\n+/, "").replace(/\n+$/, "");
+      if (!block) continue;
+      const rows = releaseNoteRows(block.split("\n"), notes);
+      blocks.push(rows ? { notes: rows } : { lines: block.split("\n") });
+    }
+    return blocks;
+  }
+
+  // releaseNoteRows reads one block as commit rows, null when notes are off or any line is prose.
+  function releaseNoteRows(lines, notes) {
+    if (!notes || !lines.length) return null;
+    const rows = [];
+    for (const line of lines) {
+      const m = RELEASE_NOTE_RE.exec(line.trim());
+      if (!m) return null;
+      rows.push({ hash: m[1], text: m[2].trim() });
+    }
+    return rows;
+  }
+
+  // homeFilesMoreLabel labels the control that reveals the root entries the front page hides; the label names the total, so no sentence stands beside it. Mirrors siteFrontFilesMoreLabel in site_pages_html.go.
+  function homeFilesMoreLabel(total, limit) {
+    return total <= limit ? "" : "Show all " + total;
   }
 
   // releaseAssetLabel words a release row's asset count, "" when it names none. Mirrors siteReleaseAssetLabel in site_pages_html.go.
@@ -4109,7 +4141,7 @@
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow, isMarkdownPath, isMDXPath, stripMDX,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, resolveMergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,
-    headFor, parseRefs, refRepoUrl, releaseAssets, releaseAssetLabel, homeFilesTruncation, headSubject, releaseVersionChip, headChips, rowChips, rowHeadChips, chipStateClass, stateCounts, groupThread, flattenThread,
+    headFor, parseRefs, refRepoUrl, releaseAssets, releaseAssetLabel, itemBodyBlocks, homeFilesMoreLabel, headSubject, releaseVersionChip, headChips, rowChips, rowHeadChips, chipStateClass, stateCounts, groupThread, flattenThread,
     THREAD_MAX_DEPTH, embeddedRefs, groupPM, authorStats, iconName, iconColorClass,
     ANCESTOR_CAP, refBranch, parentRef, parentQuote, quotedRefFor, resolveAncestors,
     CONCURRENCY, isBinary, isLFSPointer,

@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head. rowHeads pins the same for a list or activity row, whose tinted glyph carries the state its head chip would repeat. metaRow pins the meta row skeleton: the bit classes in order, the same row once the item is edited, and the author label and its email title both renderers derive. defaultTitles pins the name both renderers give a site with no configured title. listEmpty pins each list route\u0027s empty sentence, which both renderers show. rowGlyphs pins the type glyph class and title both renderers give a row, the extension default standing in for a header that names no type. releaseRows pins the asset count both renderers put on a release row in place of its hash. markdownPaths pins the extensions both renderers render as prose and mdxStrip the MDX lines both drop before parsing. cardSkeleton pins the one card shape: the part order and the head slot order both renderers build, per item type, and the headless shape a body-only type takes, where the marker leads the meta row and the first line stands as the card's text. frontFiles pins the cap on the front page's root listing and the sentence and control label both renderers show once it hides entries.",
+  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head. rowHeads pins the same for a list or activity row, whose tinted glyph carries the state its head chip would repeat. metaRow pins the meta row skeleton: the bit classes in order, the same row once the item is edited, and the author label and its email title both renderers derive. defaultTitles pins the name both renderers give a site with no configured title. listEmpty pins each list route\u0027s empty sentence, which both renderers show. rowGlyphs pins the type glyph class and title both renderers give a row, the extension default standing in for a header that names no type. releaseRows pins the asset count both renderers put on a release row in place of its hash. releaseNotes pins the blocks a release body splits into, so the commit rows and their hashes read the same on both surfaces, and releaseAssets pins the artifact, checksum and SBOM rows and which of them carry a link. markdownPaths pins the extensions both renderers render as prose and mdxStrip the MDX lines both drop before parsing. cardSkeleton pins the one card shape: the part order and the head slot order both renderers build, per item type, and the headless shape a body-only type takes, where the marker leads the meta row and the first line stands as the card's text. frontFiles pins the cap on the front page's root listing and the control label both renderers show once it hides entries.",
   "messageCases": [
     {
       "name": "gpgsig-message-body",
@@ -389,12 +389,50 @@
   "frontFiles": {
     "limit": 3,
     "cases": [
-      { "name": "under the cap hides nothing", "total": 2, "expectNotice": "", "expectLabel": "" },
-      { "name": "at the cap hides nothing", "total": 3, "expectNotice": "", "expectLabel": "" },
-      { "name": "one hidden", "total": 4, "expectNotice": "1 more not shown.", "expectLabel": "Show all 4" },
-      { "name": "nine hidden", "total": 12, "expectNotice": "9 more not shown.", "expectLabel": "Show all 12" }
+      { "name": "under the cap hides nothing", "total": 2, "expectLabel": "" },
+      { "name": "at the cap hides nothing", "total": 3, "expectLabel": "" },
+      { "name": "one hidden", "total": 4, "expectLabel": "Show all 4" },
+      { "name": "nine hidden", "total": 12, "expectLabel": "Show all 12" }
     ]
   },
+  "releaseNotes": [
+    { "name": "a block of commit lines becomes rows", "body": "abc1234 Fix the walk\ndef5678 Add a retry budget", "expect": [{ "notes": [{ "hash": "abc1234", "text": "Fix the walk" }, { "hash": "def5678", "text": "Add a retry budget" }] }] },
+    { "name": "prose above the list stays prose", "body": "Highlights of the release.\n\nabc1234 Fix the walk", "expect": [{ "lines": ["Highlights of the release."] }, { "notes": [{ "hash": "abc1234", "text": "Fix the walk" }] }] },
+    { "name": "one prose line keeps its block prose", "body": "abc1234 Fix the walk\nand the rest of the sentence", "expect": [{ "lines": ["abc1234 Fix the walk", "and the rest of the sentence"] }] },
+    { "name": "a hex word under seven characters is not a hash", "body": "abcdef Fix the walk", "expect": [{ "lines": ["abcdef Fix the walk"] }] },
+    { "name": "a hash with no message stays prose", "body": "abc1234", "expect": [{ "lines": ["abc1234"] }] },
+    { "name": "a full sha reads as a hash", "body": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa Fix the walk", "expect": [{ "notes": [{ "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "text": "Fix the walk" }] }] }
+  ],
+  "releaseAssets": [
+    {
+      "name": "an artifact url links every row",
+      "header": { "artifacts": "gs-linux.tar.gz, gs-mac.tar.gz", "checksums": "SHA256SUMS", "sbom": "sbom.json", "artifact-url": "https://dl.example.com/v1/", "signed-by": "ABCD1234" },
+      "expectArtifacts": [{ "name": "gs-linux.tar.gz", "href": "https://dl.example.com/v1/gs-linux.tar.gz" }, { "name": "gs-mac.tar.gz", "href": "https://dl.example.com/v1/gs-mac.tar.gz" }],
+      "expectExtra": [{ "name": "SHA256SUMS", "href": "https://dl.example.com/v1/SHA256SUMS", "chip": "checksums" }, { "name": "sbom.json", "href": "https://dl.example.com/v1/sbom.json", "chip": "SBOM" }],
+      "expectSignedBy": "ABCD1234"
+    },
+    {
+      "name": "no artifact url leaves every name plain",
+      "header": { "artifacts": "gs-linux.tar.gz", "checksums": "SHA256SUMS" },
+      "expectArtifacts": [{ "name": "gs-linux.tar.gz", "href": "" }],
+      "expectExtra": [{ "name": "SHA256SUMS", "href": "", "chip": "checksums" }],
+      "expectSignedBy": ""
+    },
+    {
+      "name": "an artifact url that is not fetchable leaves the names plain",
+      "header": { "artifacts": "gs-linux.tar.gz", "artifact-url": "ftp://dl.example.com" },
+      "expectArtifacts": [{ "name": "gs-linux.tar.gz", "href": "" }],
+      "expectExtra": [],
+      "expectSignedBy": ""
+    },
+    {
+      "name": "a signing key alone still opens the block",
+      "header": { "signed-by": "ABCD1234" },
+      "expectArtifacts": [],
+      "expectExtra": [],
+      "expectSignedBy": "ABCD1234"
+    }
+  ],
   "markdownPaths": [
     { "name": "markdown", "path": "docs/intro.md", "expectProse": true },
     { "name": "the long spelling", "path": "docs/intro.markdown", "expectProse": true },

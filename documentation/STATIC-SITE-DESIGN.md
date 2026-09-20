@@ -22,7 +22,7 @@ Declared once in `pages-core.css`, consumed by both stylesheets and both rendere
 |---|---|---|
 | Type | `--fs-h1` 2.25rem, `--fs-h2` 2rem, `--fs-h3` 1.75rem, `--fs-h4` 1.5rem, `--fs-body` 24px with `--lh-body` 1.1, `--fs-md` 0.95rem, `--fs-ui` 0.8rem, `--fs-code` 0.85rem, `--fs-dense` 0.72rem | no `font-size` literal outside these |
 | Fonts | `--serif` EB Garamond, Georgia; `--mono` IBM Plex Mono | a page that has not loaded `pages-full.css` reads in Georgia at the same size |
-| Palette | `--bg`, `--text`, `--link`, from the light set `--pl-*` or the dark set `--pd-*`; file-type hues `--i-*` | no hex outside `:root` |
+| Palette | `--bg`, `--text`, `--link`, `--card`, from the light set `--pl-*` or the dark set `--pd-*`; file-type hues `--i-*` | no hex outside `:root` |
 | State colors | `--open` #1f9d55, `--closed` #8957e5, `--merged` #8250df, `--warn` #bf8700, `--danger` #cf222e | one meaning per color, everywhere |
 | Derived | `--muted`, `--line`, `--panel`, `--chip`, `--code-bg`, `--btn`; tints `--link-t1..3`, `--open-t1..3`, `--warn-t1..3`, `--danger-t1..3` | computed with `color-mix` on `body`, never restated |
 | Radius | `--r-pill` 999px, `--r-panel` 10px, `--r-ctl` 6px | marks under 4px stay literal |
@@ -32,6 +32,8 @@ Declared once in `pages-core.css`, consumed by both stylesheets and both rendere
 | Theme | the system preference decides; a stored choice stamps `.dark-mode` or `.light-mode` on `html` for a page and on `body` for the app | a stored choice outranks the system preference |
 
 Off the spacing scale: a mark under 4px, and an `em` value, which scales with its own text. A value off the scale gets a row here.
+
+A card is the one surface with a palette entry of its own rather than a mix off the page: `--pl-card` is #fff8e5, a lift off the light parchment, and `--pd-card` stays the dark panel mix. Every other surface keeps its derived token.
 
 ## Layout
 
@@ -72,7 +74,7 @@ One builder per component in JS and one template in Go. "Both" means the page la
 | Component | Classes | Renderers | Notes |
 |---|---|---|---|
 | Sidebar | `.nav` (app), `.page-nav` (pages), `.nav-group`, `.nav-section`, `.nav-icon`, `.nav-tree-slot` (app), `.nav-footer` | both | every section shows on every repository, and a list reached from it shows its empty state; the title is `site.title`, else the bucket name; the app's file tree scrolls inside `.nav-tree-slot`, so no nav row runs under the pinned credit |
-| Card | `.card > .card-head > .type-glyph + .chip + a.subject`, then `.meta`, then a chip row; a trailing chip slot after the subject | both | every list row is a card: items, commits, releases, board cards, search results, recent activity; the app builds them all from `card` in `gs-render.js`; the head's one slot carries the retracted marker, and a body-only card, which has no head, leads its meta row with it and stands on its body, of which a row shows the first line |
+| Card | `.card > .card-head > .type-glyph + .chip + a.subject`, then `.meta`, then a chip row; a trailing chip slot after the subject | both | every list row is a card: items, commits, releases, board cards, search results, recent activity; the app builds them all from `card` in `gs-render.js`; its ground is `--card`; the head's one slot carries the retracted marker, and a body-only card, which has no head, leads its meta row with it and stands on its body, of which a row shows the first line |
 | Feedback card | `.card.feedback`, the verdict on `.verdict-<state>` as a 3px left border and on a chip | both | approved or changes-requested; the file and line anchor ride a plain chip, dropped inline under the line they anchor; padding, radius and background come from `.card` |
 | Chip | `.chip` plus one variant class, built by `chipEl` in JS and the `chip` template in Go | both | mono, `--fs-ui`, pill radius, tint fills from the token scale; a chip never carries the edited marker |
 | Chip variants, both | `.state.<state>` through the one state-class rule (open, closed, merged, completed, active, planned, canceled, unknown), `.pre.state` ("prerelease"), `.chip-retracted` ("retracted"), `.verdict-<state>` with the hyphen read as a space | both | the plain chip carries a version, a branch name, a file anchor and "draft" |
@@ -84,6 +86,8 @@ One builder per component in JS and one template in Go. "Both" means the page la
 | Detail page | `.card-head > h1.subject` plus the head's one chip slot, then `.detail-meta`, `.body`, the thread, `.version-row` history, `.asset-list` on releases, diff and review sections on pull requests; the app wraps it in `.detail` | both | the state, draft, prerelease, retracted and version chips ride the head's one slot, never the meta line; a body-only type promotes no first line and heads with the meta row alone; the app's raw toggle and copy-link control share the top bar's one `.page-actions` row |
 | Release head | the tag as the subject, then one version chip | both | the chip is dropped when the head already names the version |
 | Release row | the release head over a meta row of the author, the date and the asset count | both | the count stands where every other row links its hash, and goes when the release names no artifact |
+| Release notes | `dl.release-notes` with a `dt` and a `dd` per commit | both | a release body block whose every line reads `<hash> <message>` renders as these rows: the hash a mono link to its commit route, the message beside it; they take the trailer treatment, and every other block of the body stays prose |
+| Release assets | `.assets > .assets-head`, then an `.asset-list` of `.asset-row` artifacts and a second holding the checksums and the SBOM on a chip, then `.asset-signed` | both | a row links its name when `artifact-url` gives it an `https:` or root-relative target, else the name stands as selectable mono text |
 | Thread | comment cards in time order under a `Comments (N)` heading, one rail per depth level | both | a reply follows the one it answers, siblings run oldest first, depth caps at four; the type glyph leads a comment's meta row; a missing parent falls back to a quote |
 | Trailers | `.detail dl` with a `dt` and `dd` per field | app | mono, muted, `--fs-ui`; it carries the header fields no other component on the page shows, so the route's `ext` and `type`, the head's `state`, `draft`, `retracted`, `tag`, `version` and `prerelease`, and the meta row's `origin-author-name`, `origin-author-email` and `origin-time` stay out; `origin-platform` and `origin-url` fold into one `origin` row |
 | Markdown | `.markdown`, headings with `md-` ids, lists, tables, fences, images, blockquotes | both | one grammar, ported between JS and Go, asserted equal |
@@ -108,7 +112,7 @@ Every component defines these where they apply. The wording is fixed, so it read
 | Retracted | a tombstone: "retracted <type>" as the subject, `.chip-retracted`, no body |
 | Edited | an "edited" bit in the meta row after the hash, with the edit's precise time in `title`; "edited by <name>" when the editor is not the author; both renderers, and never a chip |
 | Stale | a commit no longer on its branch: dimmed text, no chip |
-| Truncated | one sentence in `.notice` as the last row, both renderers: "N more not shown." for a list, tree, diff or the front page's root file listing, "N more replies not shown." for a thread, "Truncated. The full file is in the repository." for a file or README, "Search truncated at N entries; refine the query." for a search; a `.load-more` or `.show-more` control below it where the app can expand, a link to the app route where a page cannot |
+| Truncated | one sentence in `.notice` as the last row, both renderers: "N more not shown." for a list, tree or diff, "N more replies not shown." for a thread, "Truncated. The full file is in the repository." for a file or README, "Search truncated at N entries; refine the query." for a search; a `.load-more` or `.show-more` control below it where the app can expand, a link to the app route where a page cannot; a truncation whose control already names the total, as the front page's root listing does with "Show all N", carries that control alone and no sentence |
 | Retry | an app fetch retries 429, 5xx and header timeouts with backoff, then shows the error state |
 
 ## Repo-shape rules
@@ -124,7 +128,7 @@ Each rule has a fixture that checks it, in [Fixtures and visual tests](#fixtures
 | Code only, no gitmsg branches | every section stays and every list shows its empty state |
 | Large tree, 5,000 files or more | the tree caps its rows with "show N more" and offers the tree search; no full expansion |
 | Binary, LFS pointer, submodule, symlink | the blob view labels the object and renders nothing else: "Binary file, 1.2 MB", "Git LFS pointer", "Submodule at <sha>", "Symlink to <path>" |
-| Markdown flavours | the page layer and the app agree on which files render as prose |
+| Markdown flavours | the page layer and the app agree on which files render as prose, and both drop a prose document's YAML front matter, and an `.mdx` document's import, export and standalone JSX blocks, before rendering what is left |
 | Non-Latin or right-to-left text | body text inherits its direction, the chrome stays left-to-right, and truncation is by character, never by byte |
 | Long history, 100,000 commits | everything is served from the index; a screen never walks more than `WALK_CAP` commits |
 | Many branches or tags, 1,000 or more | branch and tag lists page, and graph chips collapse to "+N" |
