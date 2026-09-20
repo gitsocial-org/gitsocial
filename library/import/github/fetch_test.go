@@ -447,6 +447,39 @@ func TestFetchReview_DecodesUpdatedAt(t *testing.T) {
 	}
 }
 
+func TestFetchReview_MapsForgeTips(t *testing.T) {
+	const tipsPRJSON = `[{"number":30,"title":"Tips","body":"","state":"OPEN",
+		"author":{"login":"alice"},"baseRefName":"main","headRefName":"work",
+		"baseRefOid":"basesha30","headRefOid":"headsha30",
+		"createdAt":"2024-06-10T12:00:00Z"}]`
+	adapter := New("acme", "widgets")
+	var fields string
+	fakeGHRoutes(t, func(args []string) ghResponse {
+		if p, ok := ghUserProfile(args); ok {
+			return p
+		}
+		if len(args) > 1 && args[0] == "pr" && args[1] == "list" {
+			fields = strings.Join(args, " ")
+			return ghResponse{stdout: tipsPRJSON}
+		}
+		return ghResponse{stdout: `{"data":{"repository":{}}}`}
+	})
+
+	plan, err := adapter.FetchReview(importpkg.FetchOptions{})
+	if err != nil {
+		t.Fatalf("FetchReview() error = %v", err)
+	}
+	if !strings.Contains(fields, "baseRefOid") {
+		t.Errorf("pr list fields = %q, want baseRefOid requested", fields)
+	}
+	if len(plan.PRs) != 1 {
+		t.Fatalf("PRs = %d, want 1", len(plan.PRs))
+	}
+	if plan.PRs[0].BaseSHA != "basesha30" || plan.PRs[0].HeadSHA != "headsha30" {
+		t.Errorf("PR 30 tips = %q..%q, want basesha30..headsha30", plan.PRs[0].BaseSHA, plan.PRs[0].HeadSHA)
+	}
+}
+
 func TestCountItems(t *testing.T) {
 	adapter := New("acme", "widgets")
 	rec := fakeGHRoutes(t, func(args []string) ghResponse {

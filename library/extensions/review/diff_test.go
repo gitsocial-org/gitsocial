@@ -117,6 +117,47 @@ func TestDiffContext(t *testing.T) {
 	})
 }
 
+// importedPR builds the open imported pull request whose tips the diff must honor.
+func importedPR(baseTip, headTip string, state PRState) *PullRequest {
+	return &PullRequest{
+		ID:      "#commit:abc123def456@gitmsg/review",
+		Branch:  "gitmsg/review",
+		State:   state,
+		Base:    "#branch:main",
+		Head:    "#branch:feature",
+		BaseTip: baseTip,
+		HeadTip: headTip,
+		Origin:  &protocol.Origin{Platform: "github", URL: "https://github.com/test/repo/pull/7"},
+	}
+}
+
+func TestResolvePRDiff_importedPRNamesTheMissingTip(t *testing.T) {
+	dir := initTestRepo(t)
+	pr := importedPR("0123456789ab", "ba9876543210", PRStateOpen)
+
+	ctx := ResolvePRDiff(dir, t.TempDir(), pr, "")
+	if ctx.Base != "" || ctx.Head != "" {
+		t.Errorf("Base = %q, Head = %q, want no diff range", ctx.Base, ctx.Head)
+	}
+	want := "commit ba9876543210 is missing: run git fetch origin ba9876543210"
+	if ctx.Error != want {
+		t.Errorf("Error = %q, want %q", ctx.Error, want)
+	}
+}
+
+func TestResolvePRDiff_mergedImportedPRKeepsItsRefs(t *testing.T) {
+	dir := initTestRepo(t)
+	pr := importedPR("0123456789ab", "ba9876543210", PRStateMerged)
+
+	ctx := ResolvePRDiff(dir, t.TempDir(), pr, "")
+	if ctx.Error != "" {
+		t.Errorf("Error = %q, want none: a merged pull request diffs its merge refs", ctx.Error)
+	}
+	if ctx.Head == "" {
+		t.Error("Head is empty, want the branch a merged pull request falls back to")
+	}
+}
+
 // forkPRSetup builds the shape a cross-repo PR diff resolves against: a bare
 // upstream holding main, and a workspace whose feature branch carries a change
 // no other repo has. Returns the workspace, the upstream URL and a cache dir.

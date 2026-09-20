@@ -690,32 +690,13 @@ func executeReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 		}
 		base := "#branch:" + pr.BaseBranch
 		labels := MapLabels(pr.Labels, opts.LabelMode)
-		var baseTip, headTip string
-		if tip, err := git.ReadRef(opts.WorkDir, pr.BaseBranch); err == nil && len(tip) >= 12 {
-			baseTip = tip[:12]
-		} else if tip, err := git.ReadRef(opts.WorkDir, "origin/"+pr.BaseBranch); err == nil && len(tip) >= 12 {
-			baseTip = tip[:12]
+		// The forge's ids are the pull request's own tips; a local branch has moved since.
+		baseTip, headTip := shortSHA(pr.BaseSHA), shortSHA(pr.HeadSHA)
+		if baseTip == "" {
+			baseTip = localBranchTip(opts.WorkDir, pr.BaseBranch)
 		}
-		if pr.HeadRepo == "" {
-			if tip, err := git.ReadRef(opts.WorkDir, pr.HeadBranch); err == nil && len(tip) >= 12 {
-				headTip = tip[:12]
-			} else if tip, err := git.ReadRef(opts.WorkDir, "origin/"+pr.HeadBranch); err == nil && len(tip) >= 12 {
-				headTip = tip[:12]
-			}
-		}
-		if pr.HeadRepo != "" && pr.HeadSHA != "" && headTip == "" {
-			sha := pr.HeadSHA
-			if len(sha) > 12 {
-				sha = sha[:12]
-			}
-			headTip = sha
-		}
-		if pr.HeadRepo != "" && pr.DiffBaseSHA != "" {
-			sha := pr.DiffBaseSHA
-			if len(sha) > 12 {
-				sha = sha[:12]
-			}
-			baseTip = sha
+		if headTip == "" && pr.HeadRepo == "" {
+			headTip = localBranchTip(opts.WorkDir, pr.HeadBranch)
 		}
 		// Resolve merge-base/merge-head for merged PRs during prepare
 		var mBase, mHead string
@@ -882,6 +863,24 @@ func executeReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 	// Comment phase: conversation comments ride their parent PRs
 	commentPhase()
 	return stats
+}
+
+// shortSHA shortens a commit id to the 12 characters the protocol stores.
+func shortSHA(sha string) string {
+	if len(sha) > 12 {
+		return sha[:12]
+	}
+	return sha
+}
+
+// localBranchTip reads a branch tip from the clone, falling back to its origin tracking ref.
+func localBranchTip(workdir, branch string) string {
+	for _, ref := range []string{branch, "origin/" + branch} {
+		if tip, err := git.ReadRef(workdir, ref); err == nil && len(tip) >= 12 {
+			return tip[:12]
+		}
+	}
+	return ""
 }
 
 // ensureCommitPresent fetches a single commit (and any missing ancestors) from
@@ -1672,9 +1671,20 @@ func updateReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 		currentState := cache.FromNullString(item.State)
 		labels := MapLabels(pr.Labels, opts.LabelMode)
 		curTitle, curBody := protocol.SplitSubjectBody(item.Content)
+		storedBaseTip := cache.FromNullString(item.BaseTip)
+		storedHeadTip := cache.FromNullString(item.HeadTip)
+		baseTip, headTip := shortSHA(pr.BaseSHA), shortSHA(pr.HeadSHA)
+		if baseTip == "" {
+			baseTip = storedBaseTip
+		}
+		if headTip == "" {
+			headTip = storedHeadTip
+		}
+		// A tip the forge corrected is a change of its own, with nothing else to edit.
 		if currentState == pr.State &&
 			curTitle == strings.TrimSpace(pr.Title) &&
 			curBody == strings.TrimSpace(pr.Body) &&
+			baseTip == storedBaseTip && headTip == storedHeadTip &&
 			sortedCSV(cache.FromNullString(item.Labels)) == sortedCSV(strings.Join(labels, ",")) &&
 			sortedCSV(cache.FromNullString(item.Reviewers)) == sortedCSV(strings.Join(pr.Reviewers, ",")) {
 			if !pr.UpdatedAt.IsZero() {
@@ -1695,8 +1705,6 @@ func updateReview(opts Options, plan *ReviewPlan, mapping *MappingFile) Stats {
 			head = pr.HeadRepo + "#branch:" + pr.HeadBranch
 		}
 		base := "#branch:" + pr.BaseBranch
-		baseTip := cache.FromNullString(item.BaseTip)
-		headTip := cache.FromNullString(item.HeadTip)
 		var stateOrigin *protocol.Origin
 		mBase, mHead := "", ""
 		switch pr.State {

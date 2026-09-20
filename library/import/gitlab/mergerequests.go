@@ -111,6 +111,9 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 			UpdatedAt:   updatedAt,
 		}
 		imp.HeadSHA = mr.SHA
+		if mr.DiffRefs != nil {
+			imp.BaseSHA = mr.DiffRefs.BaseSHA
+		}
 		if mr.MergeCommitSHA != nil {
 			imp.MergeCommit = *mr.MergeCommitSHA
 		}
@@ -138,9 +141,6 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 			if forkURL := a.resolveProjectURL(mr.SourceProjectID); forkURL != "" {
 				imp.HeadRepo = forkURL
 				forkSet[forkURL] = true
-			}
-			if mr.DiffRefs != nil && mr.DiffRefs.BaseSHA != "" {
-				imp.DiffBaseSHA = mr.DiffRefs.BaseSHA
 			}
 		}
 		prs = append(prs, imp)

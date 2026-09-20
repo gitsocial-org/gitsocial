@@ -278,6 +278,11 @@ func applyPinPolicy(ctx *DiffContext, workdir string, pr *PullRequest, isForkPR 
 	if !isForkPR {
 		dirs = append(dirs, workdir)
 	}
+	// An imported pull request keeps the forge's tips, so its branches never stand in for them.
+	if pr.Origin != nil {
+		pinImportedTips(ctx, dirs, pr)
+		return
+	}
 	if pr.BaseTip != "" {
 		for _, dir := range dirs {
 			if _, err := git.ReadRef(dir, pr.BaseTip); err != nil {
@@ -299,6 +304,38 @@ func applyPinPolicy(ctx *DiffContext, workdir string, pr *PullRequest, isForkPR 
 			return
 		}
 	}
+}
+
+// pinImportedTips pins an imported pull request to its stored tips, or reports the commit it needs.
+func pinImportedTips(ctx *DiffContext, dirs []string, pr *PullRequest) {
+	for _, dir := range dirs {
+		if _, err := git.ReadRef(dir, pr.HeadTip); err != nil {
+			continue
+		}
+		if pr.BaseTip != "" {
+			if _, err := git.ReadRef(dir, pr.BaseTip); err != nil {
+				continue
+			}
+			ctx.Base = pr.BaseTip
+		}
+		ctx.Head = pr.HeadTip
+		ctx.Workdir = dir
+		return
+	}
+	ctx.Base, ctx.Head = "", ""
+	ctx.Error = missingTipError(dirs, pr)
+}
+
+// missingTipError names the stored tip no candidate repository holds, and the fetch that brings it.
+func missingTipError(dirs []string, pr *PullRequest) string {
+	missing := pr.HeadTip
+	for _, dir := range dirs {
+		if _, err := git.ReadRef(dir, pr.HeadTip); err == nil {
+			missing = pr.BaseTip
+			break
+		}
+	}
+	return "commit " + missing + " is missing: run git fetch origin " + missing
 }
 
 // resolveMergedDiff resolves diff refs for merged PRs using stored merge-base/merge-head.

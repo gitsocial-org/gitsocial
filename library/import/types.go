@@ -171,8 +171,8 @@ type ImportPR struct {
 	BaseBranch    string
 	HeadBranch    string
 	HeadRepo      string // full fork URL if fork PR, empty if same-repo
-	HeadSHA       string // head commit SHA from platform API (for accurate fork diffs)
-	DiffBaseSHA   string // merge-base SHA from platform diff_refs (fork PRs only)
+	HeadSHA       string // head commit id the platform reports
+	BaseSHA       string // base commit id the platform reports: the base branch tip on GitHub, the merge base on GitLab
 	MergeCommit   string // merge commit SHA (merged PRs only)
 	Labels        []string
 	Reviewers     []string

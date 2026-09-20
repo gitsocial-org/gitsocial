@@ -170,6 +170,7 @@ A fork's pull request is discovered when its `base` is a local ref or names the 
 - `review config set require-review true` makes approval a merge condition; `pr merge` then fails with `REVIEW_REQUIRED` until every reviewer's latest verdict is `approved`.
 - `pr list` shows this repository's pull requests and those from [registered forks](CLI.md#gitsocial-fork) whose base is this repository.
 - Fork registrations live at `refs/gitmsg/core/forks/<urlHash>` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)).
+- The diff of an imported pull request pins to its stored tips; when no repository holds one of them, the diff names that commit and the fetch that brings it instead of comparing branches.
 - Branch tips come from the remote: `refs/remotes/origin/<branch>` for this repository, `git ls-remote` for a fork with no tracking ref. A branch gone from its remote fails to resolve, which is how `head-deleted` and `base-deleted` are raised.
 - New fork pull requests, feedback, approvals and change requests raise [notifications](NOTIFICATIONS.md#types), as do branch tips that moved or vanished under an open pull request.
 - In the TUI, `R` opens pull requests ([TUI-KEYS.md](TUI-KEYS.md#review-extension)); the detail view has files changed (`d`), interdiff, history and feedback, and `[` and `]` move through a stack.

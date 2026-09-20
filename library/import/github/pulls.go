@@ -33,6 +33,7 @@ type ghPR struct {
 	HeadRepository      *ghRepo           `json:"headRepository"`
 	HeadRepositoryOwner *ghRepoOwner      `json:"headRepositoryOwner"`
 	MergeCommit         *ghOid            `json:"mergeCommit"`
+	BaseRefOid          string            `json:"baseRefOid"`
 	HeadRefOid          string            `json:"headRefOid"`
 	ReviewRequests      []ghReviewRequest `json:"reviewRequests"`
 	CreatedAt           time.Time         `json:"createdAt"`
@@ -64,7 +65,7 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 	args := []string{
 		"pr", "list",
 		"--repo", a.repoSlug(),
-		"--json", "number,title,body,state,isDraft,author,labels,baseRefName,headRefName,headRepository,headRepositoryOwner,mergeCommit,headRefOid,reviewRequests,createdAt,updatedAt,mergedBy,mergedAt,closedAt",
+		"--json", "number,title,body,state,isDraft,author,labels,baseRefName,baseRefOid,headRefName,headRepository,headRepositoryOwner,mergeCommit,headRefOid,reviewRequests,createdAt,updatedAt,mergedBy,mergedAt,closedAt",
 		"--limit", fmt.Sprintf("%d", limit),
 		"--state", state,
 	}
@@ -133,6 +134,7 @@ func (a *Adapter) FetchReview(opts importpkg.FetchOptions) (*importpkg.ReviewPla
 			ClosedAt:    pr.ClosedAt,
 		}
 		imp.HeadSHA = pr.HeadRefOid
+		imp.BaseSHA = pr.BaseRefOid
 		if pr.MergedBy != nil {
 			merged := a.resolveUser(pr.MergedBy.Login)
 			imp.MergedByName = merged.name

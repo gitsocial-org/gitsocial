@@ -335,6 +335,87 @@ func TestRun_CreatesItems(t *testing.T) {
 	}
 }
 
+func TestRun_PRTipsComeFromTheForge(t *testing.T) {
+	opts := newRunOptions(t)
+	adapter := newFakeAdapter()
+	adapter.revPlan.PRs[0].BaseSHA = "1234567890abcdef1234567890abcdef12345678"
+	adapter.revPlan.PRs[0].HeadSHA = "fedcba0987654321fedcba0987654321fedcba09"
+	if _, err := Run(adapter, opts); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	msg := findCommit(t, opts.WorkDir, "gitmsg/review", "Add widget")
+	if got := msg.Header.Fields["base-tip"]; got != "1234567890ab" {
+		t.Errorf("base-tip = %q, want the forge id", got)
+	}
+	if got := msg.Header.Fields["head-tip"]; got != "fedcba098765" {
+		t.Errorf("head-tip = %q, want the forge id", got)
+	}
+	// The local base branch is behind the forge, so its tip is not what was stamped.
+	localTip, err := git.ReadRef(opts.WorkDir, "main")
+	if err != nil {
+		t.Fatalf("ReadRef(main) error = %v", err)
+	}
+	if localTip[:12] == msg.Header.Fields["base-tip"] {
+		t.Error("base-tip was read from the local branch, not the forge")
+	}
+}
+
+// prTipEdit returns the tips on the one edit commit of the imported pull request.
+func prTipEdit(t *testing.T, workdir string) (baseTip, headTip string) {
+	t.Helper()
+	var edits int
+	for _, c := range branchCommits(t, workdir, "gitmsg/review") {
+		msg := protocol.ParseMessage(c.Message)
+		if msg == nil || msg.Header.Fields["edits"] == "" {
+			continue
+		}
+		edits++
+		baseTip, headTip = msg.Header.Fields["base-tip"], msg.Header.Fields["head-tip"]
+	}
+	if edits != 1 {
+		t.Fatalf("edit commits on gitmsg/review = %d, want 1", edits)
+	}
+	return baseTip, headTip
+}
+
+func TestRun_UpdateRestampsCorrectedTips(t *testing.T) {
+	opts := newRunOptions(t)
+	adapter := newFakeAdapter()
+	adapter.revPlan.PRs[0].BaseSHA = "1111111111111111"
+	adapter.revPlan.PRs[0].HeadSHA = "2222222222222222"
+	if _, err := Run(adapter, opts); err != nil {
+		t.Fatalf("first Run() error = %v", err)
+	}
+	before := len(branchCommits(t, opts.WorkDir, "gitmsg/review"))
+
+	updateOpts := opts
+	updateOpts.Update = true
+	stats, err := Run(adapter, updateOpts)
+	if err != nil {
+		t.Fatalf("matching Run() error = %v", err)
+	}
+	if stats.UpdatedPRs != 0 {
+		t.Errorf("UpdatedPRs = %d, want 0 when the forge ids match the stored tips", stats.UpdatedPRs)
+	}
+	if got := len(branchCommits(t, opts.WorkDir, "gitmsg/review")); got != before {
+		t.Errorf("gitmsg/review commits = %d, want %d (unchanged)", got, before)
+	}
+
+	adapter.revPlan.PRs[0].BaseSHA = "3333333333333333"
+	adapter.revPlan.PRs[0].HeadSHA = "4444444444444444"
+	stats, err = Run(adapter, updateOpts)
+	if err != nil {
+		t.Fatalf("correcting Run() error = %v", err)
+	}
+	if stats.UpdatedPRs != 1 {
+		t.Errorf("UpdatedPRs = %d, want 1 when the forge ids moved", stats.UpdatedPRs)
+	}
+	baseTip, headTip := prTipEdit(t, opts.WorkDir)
+	if baseTip != "333333333333" || headTip != "444444444444" {
+		t.Errorf("edit tips = %q..%q, want the corrected forge ids", baseTip, headTip)
+	}
+}
+
 func TestRun_SkipsAlreadyImported(t *testing.T) {
 	opts := newRunOptions(t)
 	adapter := newFakeAdapter()

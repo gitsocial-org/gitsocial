@@ -16,7 +16,7 @@ const reviewMRsJSON = `[
 	{"iid":10,"title":"Add widget","description":"Desc","state":"opened","draft":true,
 	 "source_branch":"feature/widget","target_branch":"main",
 	 "source_project_id":7,"target_project_id":7,"sha":"abc123",
-	 "diff_refs":{"base_sha":"ignored111"},"labels":["review","p1"],
+	 "diff_refs":{"base_sha":"base010"},"labels":["review","p1"],
 	 "author":{"username":"alice"},"reviewers":[{"username":"bob"},{"username":"dave"}],
 	 "created_at":"2024-06-15T12:00:00Z"},
 	{"iid":11,"title":"Fork work","description":"","state":"merged",
@@ -91,9 +91,9 @@ func TestFetchReview(t *testing.T) {
 	if !draft.CreatedAt.Equal(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)) {
 		t.Errorf("MR 10 created = %v", draft.CreatedAt)
 	}
-	// A same-project request needs no fork base, so diff_refs is left alone.
-	if draft.HeadRepo != "" || draft.DiffBaseSHA != "" {
-		t.Errorf("MR 10 head repo = %q, diff base = %q, want both empty", draft.HeadRepo, draft.DiffBaseSHA)
+	// A same-project request carries the forge's base too, so its diff pins to it.
+	if draft.HeadRepo != "" || draft.BaseSHA != "base010" {
+		t.Errorf("MR 10 head repo = %q, base = %q, want no fork and base010", draft.HeadRepo, draft.BaseSHA)
 	}
 
 	fork := plan.PRs[1]
@@ -106,8 +106,8 @@ func TestFetchReview(t *testing.T) {
 	if !fork.MergedAt.Equal(time.Date(2024, 7, 1, 10, 0, 0, 0, time.UTC)) {
 		t.Errorf("MR 11 merged = %v", fork.MergedAt)
 	}
-	if fork.HeadRepo != "https://gitlab.example.com/forker/widgets" || fork.DiffBaseSHA != "base111" {
-		t.Errorf("MR 11 head repo = %q, diff base = %q", fork.HeadRepo, fork.DiffBaseSHA)
+	if fork.HeadRepo != "https://gitlab.example.com/forker/widgets" || fork.BaseSHA != "base111" {
+		t.Errorf("MR 11 head repo = %q, base = %q", fork.HeadRepo, fork.BaseSHA)
 	}
 	if fork.Labels == nil || len(fork.Labels) != 0 {
 		t.Errorf("MR 11 labels = %v, want an empty slice rather than nil", fork.Labels)
@@ -153,8 +153,8 @@ func TestFetchReview_SkipsForkWhenProjectLookupFails(t *testing.T) {
 		t.Errorf("head repo = %q, want empty", plan.PRs[0].HeadRepo)
 	}
 	// The fork base still lands: it comes from the merge request, not the project lookup.
-	if plan.PRs[0].DiffBaseSHA != "base111" {
-		t.Errorf("diff base = %q, want base111", plan.PRs[0].DiffBaseSHA)
+	if plan.PRs[0].BaseSHA != "base111" {
+		t.Errorf("base = %q, want base111", plan.PRs[0].BaseSHA)
 	}
 }
 
@@ -305,6 +305,27 @@ func TestFetchReview_ReturnsAPageFailure(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "fetch merge requests") || !strings.Contains(err.Error(), "404") {
 		t.Errorf("error = %v, want the fetch context and the status", err)
+	}
+}
+
+func TestFetchReview_MapsForgeTips(t *testing.T) {
+	// base_sha is the merge base of the two branches, so it is an ancestor of the head.
+	const sameProjectMR = `[{"iid":30,"title":"Tips","description":"","state":"opened",
+		"source_branch":"work","target_branch":"main","source_project_id":7,"target_project_id":7,
+		"sha":"headsha30","diff_refs":{"base_sha":"basesha30","start_sha":"startsha30"},
+		"author":{"username":"alice"},"created_at":"2024-06-10T12:00:00Z"}]`
+	server := newGLServer(t, reviewRoutes(t, jsonRoute(sameProjectMR)))
+	adapter := newTestAdapter(server)
+
+	plan, err := adapter.FetchReview(importpkg.FetchOptions{})
+	if err != nil {
+		t.Fatalf("FetchReview() error = %v", err)
+	}
+	if len(plan.PRs) != 1 {
+		t.Fatalf("PRs = %d, want 1", len(plan.PRs))
+	}
+	if plan.PRs[0].BaseSHA != "basesha30" || plan.PRs[0].HeadSHA != "headsha30" {
+		t.Errorf("MR 30 tips = %q..%q, want basesha30..headsha30", plan.PRs[0].BaseSHA, plan.PRs[0].HeadSHA)
 	}
 }
 
