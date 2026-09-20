@@ -1062,7 +1062,7 @@ func TestGetUnpushedCounts_withLocalRefs(t *testing.T) {
 	head, _ := git.ReadRef(dir, "HEAD")
 	fullResult, _ := git.ExecGit(dir, []string{"rev-parse", head})
 	git.WriteRef(dir, "refs/gitmsg/social/config", fullResult.Stdout)
-	git.WriteRef(dir, "refs/gitmsg/social/lists/following", fullResult.Stdout)
+	git.WriteRef(dir, "refs/gitmsg/social/lists/following/_meta", fullResult.Stdout)
 
 	counts, err := GetUnpushedCounts(dir, "", "")
 	if err != nil {

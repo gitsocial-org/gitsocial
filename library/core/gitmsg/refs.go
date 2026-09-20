@@ -107,26 +107,9 @@ func TrackingRef(remote, gitmsgRef string) string {
 	return TrackingRefPrefix(remote) + strings.TrimPrefix(gitmsgRef, "refs/gitmsg/")
 }
 
-// getRemoteGitMsgRefs returns the remote's gitmsg state refs from the local
-// tracking mirror (no network calls). Reads the legacy refs/remotes/<remote>/gitmsg/
-// mirror first, then overlays the current tracking namespace, so refs mirrored
-// before the namespace move still count as pushed.
+// getRemoteGitMsgRefs returns the remote's gitmsg state refs from the local tracking namespace, with no network call.
 func getRemoteGitMsgRefs(workdir, remote string) (map[string]string, error) {
 	refs := make(map[string]string)
-	legacy, err := git.ExecGit(workdir, []string{
-		"for-each-ref",
-		"--format=%(refname) %(objectname)",
-		"refs/remotes/" + remote + "/gitmsg/",
-	})
-	if err == nil {
-		// Convert refs/remotes/<remote>/gitmsg/X → refs/gitmsg/X to match local ref format
-		for ref, hash := range parseRefOutput(legacy.Stdout) {
-			if local := strings.TrimPrefix(ref, "refs/remotes/"+remote+"/"); local != ref {
-				refs["refs/"+local] = hash
-			}
-		}
-	}
-
 	result, err := git.ExecGit(workdir, []string{
 		"for-each-ref",
 		"--format=%(refname) %(objectname)",

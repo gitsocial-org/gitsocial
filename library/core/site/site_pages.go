@@ -278,8 +278,6 @@ func rebuildSitePages(client *objstore.Client, prefix string, refs map[string]st
 	if err != nil || pending {
 		return pending, "", err
 	}
-	// Sweep the retired pre-flip front page so an older binary's bucket stops serving a duplicate.
-	_ = client.Delete(prefix + sitePagesLegacyFrontKey)
 	return false, sitePagesStateOn, nil
 }
 
@@ -785,7 +783,7 @@ func deleteSitePages(client *objstore.Client, prefix string) (bool, error) {
 			remove(key)
 		}
 	}
-	for _, key := range []string{sitePagesLegacyFrontKey, sitePagesLegacyCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey} {
+	for _, key := range []string{sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey} {
 		remove(prefix + key)
 	}
 	// Restore the embedded shell as index.html; a failure keeps the sweep incomplete so the next push retries.

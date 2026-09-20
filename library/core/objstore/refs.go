@@ -24,11 +24,8 @@ const (
 	genWidth = 10 // zero-padded decimal; ~10 updates/s for 30 years before overflow
 )
 
-// bucketRefsKey holds refname to sha for every ref in the bucket; legacySiteManifestKey is its pre-manifest site copy, read as a fallback and not written.
-const (
-	bucketRefsKey         = ".gitsocial/refs.json"
-	legacySiteManifestKey = ".gitsocial/site/refs.json"
-)
+// bucketRefsKey holds refname to sha for every ref in the bucket.
+const bucketRefsKey = ".gitsocial/refs.json"
 
 // publishRefManifest writes refs as the ref manifest and returns the new ETag; errPreconditionFailed means the document moved, so the caller re-derives and retries.
 func publishRefManifest(client *Client, prefix, mode string, refs map[string]string, etag string) (string, error) {
@@ -170,10 +167,7 @@ func readRemoteRefsProgress(client *Client, prefix string, progress Progress) (m
 			chains[refName] = gen
 		}
 	}
-	manifest, found := readClaimsDoc(client, prefix+bucketRefsKey)
-	if !found {
-		manifest, _ = readClaimsDoc(client, prefix+legacySiteManifestKey)
-	}
+	manifest, _ := readClaimsDoc(client, prefix+bucketRefsKey)
 	// Resolve the plain refs the manifest and ETag prove up front; only the rest become GET jobs.
 	out := map[string]string{}
 	type refJob struct {
@@ -262,10 +256,7 @@ func readRefClaims(client *Client, prefix string) (map[string]string, bool) {
 	if claims, found := readClaimsDoc(client, prefix+bucketRefsKey); found {
 		return claims, true
 	}
-	if claims, found := readInfoRefsClaims(client, prefix); found {
-		return claims, true
-	}
-	return readClaimsDoc(client, prefix+legacySiteManifestKey)
+	return readInfoRefsClaims(client, prefix)
 }
 
 // noRefSourceError diagnoses a bucket publishing no ref document, by whether its ref-mode marker or HEAD is readable.

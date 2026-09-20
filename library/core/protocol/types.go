@@ -138,10 +138,6 @@ func ExtractOrigin(header *Header) *Origin {
 	}
 	authorEmail := header.Fields["origin-author-email"]
 	authorName := header.Fields["origin-author-name"]
-	// Backward compat: old format used "origin-author" for email
-	if authorEmail == "" {
-		authorEmail = header.Fields["origin-author"]
-	}
 	platform := header.Fields["origin-platform"]
 	t := header.Fields["origin-time"]
 	url := header.Fields["origin-url"]

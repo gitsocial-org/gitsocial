@@ -874,16 +874,14 @@
     return await fetchText(base, ".gitsocial/ref-mode");
   }
 
-  // MANIFEST_KEY is the push-maintained refs manifest; LEGACY_MANIFEST_KEY is its older site copy.
+  // MANIFEST_KEY is the push-maintained refs manifest.
   const MANIFEST_KEY = ".gitsocial/refs.json";
-  const LEGACY_MANIFEST_KEY = ".gitsocial/site/refs.json";
 
   // manifestFor memoizes the refs manifest per context, keeping the raw body beside the parsed map; null when absent or unparseable.
   function manifestFor(ctx) {
     if (ctx.manifest === undefined) {
       ctx.manifest = (async () => {
         ctx.manifestText = await fetchText(ctx.base, MANIFEST_KEY);
-        if (ctx.manifestText === null) ctx.manifestText = await fetchText(ctx.base, LEGACY_MANIFEST_KEY);
         if (!ctx.manifestText) return null;
         try { return JSON.parse(ctx.manifestText); } catch { return null; }
       })();
@@ -2303,6 +2301,7 @@
     "gitmsg/release": { ext: "release", tab: "releases", label: "Release" },
     "gitmsg/memo": { ext: "memo", tab: "memos", label: "Memo" },
   };
+  // LEGACY_BRANCH maps a detail link shared before the commit routes to its branch; no push retires it, so removing it breaks those links.
   const LEGACY_BRANCH = { issue: "gitmsg/pm", pr: "gitmsg/review", release: "gitmsg/release", commit: "" };
   const INDEX_TABS = { timeline: 1, issues: 1, prs: 1, releases: 1, memos: 1, milestones: 1, sprints: 1 };
 

@@ -88,7 +88,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   // sheet — inlined, hence live before pages-full.css lands — carries them.
   ok("the inlined core carries the shared sidebar and activity vocabulary", /\.nav-list a/.test(front.text) && /\.nav-icon\s*\{/.test(front.text) && /\.show-more\s*\{/.test(front.text) && /\.home-activity-head\s*\{/.test(front.text));
   ok("the inlined core gates dark on the stored-theme class with a media fallback", /html\.dark-mode/.test(front.text) && /@media \(prefers-color-scheme: ?dark\)/.test(front.text) && /html\.light-mode/.test(front.text));
-  ok("front links pages-full.css, not the retired pages.css", /<link rel="stylesheet" href="\.\/pages-full\.css">/.test(front.text) && !/href="\.\/pages\.css"/.test(front.text));
+  ok("front links pages-full.css", /<link rel="stylesheet" href="\.\/pages-full\.css">/.test(front.text));
   ok("front references gs-upgrade.js (defer)", /<script defer src="\.\/gs-upgrade\.js">/.test(front.text));
   ok("front carries the CSP meta", /Content-Security-Policy/.test(front.text));
   ok("front CSP script-src permits eval (lazy grammar loader)", /script-src[^"]*'unsafe-eval'/.test(front.text));
@@ -97,9 +97,6 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("front carries no 'open in app' link", !/open in app/.test(front.text));
   ok("gs-upgrade.js is served", (await get(TD + "gs-upgrade.js")).status === 200);
   ok("pages-core.css is served", (await get(TD + "pages-core.css")).status === 200);
-
-  console.log("\n--- timeline.html retired (the flip dropped it) ---");
-  ok("timeline.html is gone (404)", (await get(TD + "timeline.html")).status === 404);
 
   console.log("\n--- robots.txt + sitemap.xml ---");
   const robots = await get(TD + "robots.txt");
@@ -181,7 +178,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("memos list carries the fixture memos", memos.text.includes("Cache invalidation policy"));
   const posts = await get(TD + "posts/index.html");
   ok("posts list carries the posts", posts.text.includes("Anyone tried the new thread view yet?"));
-  ok("list nav links home (index.html), not timeline.html", /href="\.\.\/index\.html"/.test(posts.text) && !/timeline\.html/.test(posts.text));
+  ok("list nav links home (index.html)", /href="\.\.\/index\.html"/.test(posts.text));
 
   console.log("\n--- Commits list ---");
   // Code commits get no page of their own by design, so the commits list IS their
@@ -223,7 +220,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("a file page under the word floor carries noindex,follow", /<meta name="robots" content="noindex,follow">/.test(doc.text));
 
   console.log("\n--- Guards off: zero page keys, shell index.html intact ---");
-  for (const key of ["timeline.html", "sitemap.xml", "robots.txt", "pages.css", "posts/index.html", "issues/index.html", "commits/index.html", "f/index.html"]) {
+  for (const key of ["sitemap.xml", "robots.txt", "posts/index.html", "issues/index.html", "commits/index.html", "f/index.html"]) {
     const r = await get(OTHER + key);
     ok("other-demo has no " + key, r.status === 404, "status=" + r.status);
   }

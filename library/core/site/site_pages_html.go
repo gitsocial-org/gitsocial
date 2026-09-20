@@ -19,12 +19,8 @@ import (
 )
 
 const (
-	// sitePagesLegacyCSSKey is the retired generated stylesheet, kept for the disable sweep.
-	sitePagesLegacyCSSKey = "pages.css"
 	// sitePagesFrontKey is the front page's bucket key; the page layer owns it whenever it is effective.
 	sitePagesFrontKey = "index.html"
-	// sitePagesLegacyFrontKey is the pre-flip front-page key, swept on every push.
-	sitePagesLegacyFrontKey = "timeline.html"
 	// sitePagesUpgradeKey is the page-entry boot asset every generated page defers.
 	sitePagesUpgradeKey = "gs-upgrade.js"
 	// sitePagesSitemapKey is the sitemap entry point: one urlset, or an index over the parts.

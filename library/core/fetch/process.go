@@ -141,11 +141,7 @@ func processAllBranchCommits(storageDir string, gitCommits []git.Commit, repoURL
 	}, processors)
 }
 
-// backfillRepoSignerKeys scans for legacy NULL-signer_key rows in this repo,
-// extracts signer keys via git, updates the cache, and feeds the updated
-// (signer_key, email) pairs to the verifier. Bounded per call by the identity
-// package's batch limit. After every legacy row is backfilled, this is a cheap
-// no-op (one indexed SELECT returning 0 rows).
+// backfillRepoSignerKeys retries the rows a failed signer lookup left NULL, a batch per call, and feeds each key it finds to the verifier.
 func backfillRepoSignerKeys(storageDir, repoURL string) {
 	if storageDir == "" || repoURL == "" {
 		return

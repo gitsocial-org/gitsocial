@@ -164,9 +164,6 @@ func TestSitePagesHeadWiring(t *testing.T) {
 	if !strings.Contains(html, `<noscript><link rel="stylesheet" href="../pages-full.css"></noscript>`) {
 		t.Error("head must carry the no-JS blocking fallback link for pages-full.css")
 	}
-	if strings.Contains(html, "pages.css") && !strings.Contains(html, "pages-full.css") {
-		t.Error("head still references the retired pages.css")
-	}
 }
 
 // TestSitePagesAccentCSS pins the accent override's mapping to the app's

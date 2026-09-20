@@ -132,6 +132,21 @@ func TestAnon_NoSourceAndWriteRefused(t *testing.T) {
 	}
 }
 
+func TestAnon_RetiredSiteCopyIsNoRefSource(t *testing.T) {
+	// The pre-manifest copy under .gitsocial/site/ is no longer a ref source, so a
+	// bucket carrying only it gets the diagnosis, not an empty ref list.
+	url := publicNoListBucket(t, map[string]string{
+		".gitsocial/site/refs.json": `{"refs/heads/main":"` + shaA + `"}`,
+		"refs/heads/main":           shaA + "\n",
+		"HEAD":                      "ref: refs/heads/main\n",
+	})
+	client, prefix := anonClient(t, url)
+	refs, err := ReadRemoteRefs(client, prefix)
+	if err == nil || !strings.Contains(err.Error(), "publishes no ref manifest") {
+		t.Errorf("refs = %v, err = %v, want the no-manifest diagnosis", refs, err)
+	}
+}
+
 func TestAnon_DeletedRefDropped(t *testing.T) {
 	// Etag mode: a name the manifest carries but whose key is gone was deleted
 	// after the manifest was written, so it must not be resurrected.

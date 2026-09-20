@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -39,18 +38,10 @@ const (
 	metaSubpath  = "/_meta"
 )
 
-var legacyListsMigrated sync.Map // "workdir\x00ext\x00name" → bool
-
 // refPath returns the git ref path for a list's metadata. Stored under
 // `<name>/_meta` so the parent `<name>/` namespace can host items.
 func refPath(extension, name string) string {
 	return fmt.Sprintf("refs/gitmsg/%s/lists/%s%s", extension, name, metaSubpath)
-}
-
-// legacyRefPath returns the pre-migration ref path (single-ref layout
-// where members were embedded in the metadata commit).
-func legacyRefPath(extension, name string) string {
-	return fmt.Sprintf("refs/gitmsg/%s/lists/%s", extension, name)
 }
 
 // itemRefPath returns the per-member ref name for a list.
@@ -76,11 +67,7 @@ func EnumerateLists(workdir, extension string) ([]string, error) {
 		if stripped == "" {
 			continue
 		}
-		// Each ref under lists/ is one of:
-		//   <name>           (legacy single-ref layout)
-		//   <name>/_meta     (new metadata ref)
-		//   <name>/items/<h> (new member ref)
-		// Take the first path segment as the list name in all cases.
+		// Every ref under lists/ is <name>/_meta or <name>/items/<h>, so the first segment is the name.
 		if i := strings.Index(stripped, "/"); i >= 0 {
 			stripped = stripped[:i]
 		}
@@ -93,12 +80,8 @@ func EnumerateLists(workdir, extension string) ([]string, error) {
 	return names, nil
 }
 
-// ReadList reads a list's metadata and member set. Members come from
-// per-element refs; on first read of a legacy list (single ref with
-// embedded Repositories array), this deletes the legacy ref, writes the
-// new metadata-only ref, and splits members into per-element refs.
+// ReadList reads a list's metadata and its member set from the per-element refs.
 func ReadList(workdir, extension, name string) (*ListData, error) {
-	migrateLegacyList(workdir, extension, name)
 	data := readListMetadata(workdir, extension, name)
 	if data == nil {
 		return nil, nil
@@ -107,12 +90,7 @@ func ReadList(workdir, extension, name string) (*ListData, error) {
 	return data, nil
 }
 
-// WriteList writes the list's metadata. The Repositories field is
-// ignored — members are stored as per-element refs via AddListMember /
-// RemoveListMember. Callers passing a non-empty Repositories slice will
-// have it stripped from the persisted metadata; this preserves backward
-// compatibility for any caller that round-trips a ListData through
-// ReadList → WriteList without intending to mutate the member set.
+// WriteList writes the list's metadata; Repositories is stripped, since members live in per-element refs.
 func WriteList(workdir, extension, name string, data ListData) error {
 	data.Repositories = nil
 	ref := refPath(extension, name)
@@ -163,18 +141,14 @@ func RemoveListMember(workdir, extension, name, memberRef string) error {
 }
 
 // DeleteList removes a list's metadata ref and all of its member refs.
-// Also clears any pre-migration legacy ref at the same name.
 func DeleteList(workdir, extension, name string) error {
 	for _, member := range readListMembers(workdir, extension, name) {
 		_ = RemoveListMember(workdir, extension, name, member)
 	}
-	_ = git.DeleteRef(workdir, legacyRefPath(extension, name))
 	return git.DeleteRef(workdir, refPath(extension, name))
 }
 
-// FindListAdditionTime finds when a member was added by reading the
-// item-ref's commit timestamp. Falls back to scanning the legacy
-// metadata commit history if no per-element ref exists (transitional).
+// FindListAdditionTime finds when a member was added by reading the item-ref's commit timestamp.
 func FindListAdditionTime(workdir, extension, listName, targetURL string) (time.Time, string, bool) {
 	normalizedTarget := protocol.NormalizeURL(targetURL)
 	for _, memberRef := range readListMembers(workdir, extension, listName) {
@@ -199,30 +173,23 @@ func FindListAdditionTime(workdir, extension, listName, targetURL string) (time.
 	return time.Time{}, "", false
 }
 
-// readListMetadata reads the metadata commit at the list's head ref.
-// Falls back to the legacy single-ref layout when the new _meta ref is
-// missing — this is the read-side support for transitions in flight.
-// Returns nil when neither ref resolves; never returns an error
-// (unreadable refs are treated as missing, with debug/warn log lines).
+// readListMetadata reads the metadata commit at the list's _meta ref, or nil when it does not resolve.
 func readListMetadata(workdir, extension, name string) *ListData {
-	for _, ref := range []string{refPath(extension, name), legacyRefPath(extension, name)} {
-		hash, err := git.ReadRef(workdir, ref)
-		if err != nil {
-			continue
-		}
-		msg, err := git.GetCommitMessage(workdir, hash)
-		if err != nil {
-			slog.Debug("read list commit message", "error", err, "extension", extension, "name", name)
-			continue
-		}
-		var data ListData
-		if err := json.Unmarshal([]byte(strings.TrimSpace(msg)), &data); err != nil {
-			slog.Warn("list data JSON parse", "error", err, "extension", extension, "name", name)
-			continue
-		}
-		return &data
+	hash, err := git.ReadRef(workdir, refPath(extension, name))
+	if err != nil {
+		return nil
 	}
-	return nil
+	msg, err := git.GetCommitMessage(workdir, hash)
+	if err != nil {
+		slog.Debug("read list commit message", "error", err, "extension", extension, "name", name)
+		return nil
+	}
+	var data ListData
+	if err := json.Unmarshal([]byte(strings.TrimSpace(msg)), &data); err != nil {
+		slog.Warn("list data JSON parse", "error", err, "extension", extension, "name", name)
+		return nil
+	}
+	return &data
 }
 
 // readListMembers returns the member refs for a list by reading every
@@ -249,47 +216,4 @@ func readListMembers(workdir, extension, name string) []string {
 		}
 	}
 	return out
-}
-
-// migrateLegacyList converts a legacy single-ref list to the new
-// metadata + per-member layout. Idempotent: returns early if the new
-// `_meta` ref already exists, or if no legacy ref is present.
-//
-// Order matters: git refuses to create refs under `<name>/...` while
-// `<name>` itself exists as a ref, so the legacy parent ref must be
-// deleted before writing the new metadata and item refs.
-func migrateLegacyList(workdir, extension, name string) {
-	key := workdir + "\x00" + extension + "\x00" + name
-	if _, done := legacyListsMigrated.Load(key); done {
-		return
-	}
-	defer legacyListsMigrated.Store(key, true)
-	legacyRef := legacyRefPath(extension, name)
-	hash, err := git.ReadRef(workdir, legacyRef)
-	if err != nil {
-		return
-	}
-	if _, err := git.ReadRef(workdir, refPath(extension, name)); err == nil {
-		// Both old and new exist — should not happen, but trust the new
-		// layout and just delete the legacy.
-		_ = git.DeleteRef(workdir, legacyRef)
-		return
-	}
-	msg, err := git.GetCommitMessage(workdir, hash)
-	if err != nil {
-		return
-	}
-	var data ListData
-	if err := json.Unmarshal([]byte(strings.TrimSpace(msg)), &data); err != nil {
-		return
-	}
-	members := data.Repositories
-	if err := git.DeleteRef(workdir, legacyRef); err != nil {
-		return
-	}
-	data.Repositories = nil
-	_ = WriteList(workdir, extension, name, data)
-	for _, member := range members {
-		_ = AddListMember(workdir, extension, name, member)
-	}
 }

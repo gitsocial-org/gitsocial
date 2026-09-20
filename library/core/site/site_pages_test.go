@@ -180,14 +180,14 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	// No config at all: publish is off — a full rebuildSite must move repo-data
 	// artifacts only and stamp the marker with pages "off". index.html is the
 	// embedded shell (uploadSiteFiles always ships it), never the generated front
-	// page; the retired timeline.html key must be absent.
+	// page.
 	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
 		t.Fatalf("rebuildSite: %v", err)
 	}
 	if !keyExists(client, "index.html") || generatedFront() {
 		t.Error("guards off: index.html must be the embedded shell, not the generated front page")
 	}
-	for _, key := range []string{sitePagesLegacyFrontKey, sitePagesManifestKey, sitePagesLegacyCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, "posts/index.html"} {
+	for _, key := range []string{sitePagesManifestKey, sitePagesSitemapKey, sitePagesRobotsKey, "posts/index.html"} {
 		if keyExists(client, key) {
 			t.Errorf("guards off: %s must not exist", key)
 		}
@@ -225,9 +225,6 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	if strings.Contains(front, "open in app") {
 		t.Error("pages on: front page must not carry an 'open in app' link")
 	}
-	if keyExists(client, sitePagesLegacyFrontKey) {
-		t.Error("pages on: retired timeline.html must not exist")
-	}
 	for _, key := range []string{sitePagesManifestKey, "pages-core.css", "pages-full.css", sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey, sitePagesUpgradeKey, "posts/index.html", "issues/index.html", "posts/feed.xml", "issues/feed.xml"} {
 		if !keyExists(client, key) {
 			t.Errorf("pages on: %s must exist", key)
@@ -255,7 +252,7 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
 		t.Fatalf("rebuildSite disable: %v", err)
 	}
-	gone := append([]string{sitePagesLegacyFrontKey, sitePagesLegacyCSSKey, sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey, "posts/index.html", "issues/index.html", "posts/feed.xml", "issues/feed.xml", sitePagesManifestKey}, itemKeys...)
+	gone := append([]string{sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey, "posts/index.html", "issues/index.html", "posts/feed.xml", "issues/feed.xml", sitePagesManifestKey}, itemKeys...)
 	for _, key := range gone {
 		if keyExists(client, key) {
 			t.Errorf("disable: %s must be deleted", key)

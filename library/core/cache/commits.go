@@ -187,8 +187,6 @@ func insertCommitsTxn(commits []Commit) error {
 			}
 			if email := msg.Header.Fields["origin-author-email"]; email != "" {
 				originAuthorEmail = &email
-			} else if email := msg.Header.Fields["origin-author"]; email != "" {
-				originAuthorEmail = &email
 			}
 			isRetracted = msg.Header.Fields["retracted"] == "true"
 		}
@@ -211,9 +209,7 @@ func insertCommitsTxn(commits []Commit) error {
 			isEditCommit = 1
 		}
 
-		// signer_key: empty string = signed-extraction confirmed-unsigned;
-		// NULL = unknown (legacy row, or git lookup failed at insert time).
-		// Backfill only retries NULL rows.
+		// signer_key: an empty string is confirmed unsigned; NULL means the git lookup failed at insert, and the backfill retries it.
 		commitResult, err := commitStmt.Exec(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail, c.SignerKey, isEditCommit)
 		if err != nil {
 			return fmt.Errorf("insert commit %s: %w", c.Hash, err)
