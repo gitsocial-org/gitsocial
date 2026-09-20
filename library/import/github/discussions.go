@@ -47,9 +47,9 @@ type ghPageInfo struct {
 // discussionCommentFields is the field set every discussion comment selection shares.
 const discussionCommentFields = `id databaseId body author { login ... on User { name email } } createdAt`
 
-// discussionCommentSelection selects a comment together with the first page of its replies.
+// discussionCommentSelection selects a comment with its first page of replies, capped at 25 because GitHub budgets a query at discussions x comments x replies and rejects over 500,000 nodes.
 const discussionCommentSelection = discussionCommentFields +
-	` replies(first: 100) { nodes { ` + discussionCommentFields + ` } pageInfo { hasNextPage endCursor } }`
+	` replies(first: 25) { nodes { ` + discussionCommentFields + ` } pageInfo { hasNextPage endCursor } }`
 
 // buildDiscussionQuery builds a GraphQL query for fetching discussions with cursor pagination.
 func buildDiscussionQuery(owner, repo string, first int, cursor string) string {
