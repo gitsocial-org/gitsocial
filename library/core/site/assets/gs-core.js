@@ -2906,7 +2906,8 @@
     return { branch: defaultBranch, rows: rows.slice(from, to), page, sealed, total };
   }
 
-  // loadTimelineWindow is the autoscroll-paged merged timeline: merge every branch's metadata, take the newest shown, hydrate that slice alone.
+  // loadTimelineWindow is the autoscroll-paged merged timeline: merge every branch's metadata, take the newest shown, and hydrate that slice alone in the background.
+  // The bodies are one bucket read per item, so the window is returned the moment the metadata merges and `hydrated` tells the caller when to redraw it.
   async function loadTimelineWindow(ctx, extend) {
     const tl = ctx.timeline || (ctx.timeline = { shown: 0 });
     tl.shown = extend ? tl.shown + TIMELINE_WINDOW : TIMELINE_WINDOW;
@@ -2929,8 +2930,8 @@
     for (const it of code.items) { it._ext = "code"; merged.push(it); }
     merged.sort((a, b) => b.effectiveTime - a.effectiveTime);
     const windowItems = merged.slice(0, need);
-    await hydrateItems(ctx, windowItems);
-    return { items: windowItems, truncated: more || merged.length > need };
+    const hydrated = hydrateItems(ctx, windowItems).catch(() => { /* a body that fails to read leaves its card on the index subject */ });
+    return { items: windowItems, truncated: more || merged.length > need, hydrated };
   }
 
   // HOME_ACTIVITY_LIMIT caps the home view's recent-activity rows and mirrors the page layer's sitePagesHomeActivity.

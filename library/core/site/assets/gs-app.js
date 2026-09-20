@@ -153,13 +153,18 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
         // in the background and re-draw the visible cards once they arrive. `counts`
         // is a live reference the drawBody closure reads each render, so both the
         // initial slice and every autoscroll window pick up counts as soon as ready.
+        // The bodies are the same bargain: one bucket read per item, so the window
+        // paints from the metadata index alone and they redraw the same cards when
+        // they land, with ctx.viewSettled holding a page entry's reveal until then.
         const first = await loadTimelineWindow(ctx, false);
         let counts = null;
         let lastRedraw = null;
+        const redraw = () => { if (lastRedraw) lastRedraw(); };
         setView([listHeading("timeline"), ...autoScrollListView(first,
           (items, box) => { lastRedraw = () => box.replaceChildren(...renderList(items, (it) => timelineCard(it, countsFor(counts, it.commit.short)), LIST_EMPTY.timeline)); lastRedraw(); },
-          () => loadTimelineWindow(ctx, true))]);
-        loadInteractionCounts(ctx).then((c) => { counts = c; if (lastRedraw) lastRedraw(); }).catch(() => {});
+          async () => { const next = await loadTimelineWindow(ctx, true); next.hydrated.then(redraw); return next; })]);
+        ctx.viewSettled = first.hydrated.then(redraw);
+        loadInteractionCounts(ctx).then((c) => { counts = c; redraw(); }).catch(() => {});
       } else if (r.type === "index" && r.tab === "memos") {
         const first = await loadExtItemsWindow(ctx, "memo", false);
         setView([listHeading("memos"), ...pagedListView(first,

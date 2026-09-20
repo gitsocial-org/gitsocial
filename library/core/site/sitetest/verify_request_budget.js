@@ -80,6 +80,19 @@ async function run(label, bucket, hash, ceiling) {
   ok(label + " ≤ " + ceiling + " fetches (measured " + n + ")", n <= ceiling, "measured " + n + " > ceiling " + ceiling);
 }
 
+// measureSplit reports what a route had fetched when it PAINTED beside what it
+// fetched in all, which is the difference between a first page the reader waits
+// for and the enrichment that lands behind it.
+async function measureSplit(bucket, hash) {
+  const ctx = GS.newContext(origin + "/" + bucket + "/");
+  setHash(hash);
+  fetches = 0;
+  await GS.route(ctx);
+  const atPaint = fetches;
+  await settle();
+  return { atPaint, total: fetches };
+}
+
 async function main() {
   const TD = "thread-demo";
 
@@ -122,6 +135,14 @@ async function main() {
   // never touch.
   await run("home", TD, "#/", 35);
   await run("timeline", TD, "#/timeline", 85);
+  // The timeline's cards come from the metadata index; the bodies behind them are one
+  // bucket read per item and load after the paint. A regression that puts them back in
+  // front of it reads here as the paint count climbing toward the settled one.
+  {
+    const tl = await measureSplit(TD, "#/timeline");
+    ok("timeline paints on the index alone ≤ 35 fetches (measured " + tl.atPaint + " of " + tl.total + ")",
+      tl.atPaint <= 35, "paint cost " + tl.atPaint + " of " + tl.total + " total");
+  }
   await run("issues", TD, "#/issues", 60);
   await run("prs list", TD, "#/prs", 40);
   await run("releases list", TD, "#/releases", 40);
