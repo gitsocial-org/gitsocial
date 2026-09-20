@@ -27,7 +27,7 @@ bin/gitsocial tui
 - `gitmsg/*` and `gitsocial` are protocol and data branches, not feature branches.
 - Give parallel builds distinct output names so they do not clobber each other.
 - A review fix folds into the branch commit it corrects; a fix for something already on `main` is its own commit.
-- A branch that changes the cache schema runs with its own `--cache-dir`: the first binary to open the shared `~/.cache/gitsocial/cache.db` upgrades it, and older binaries then refuse it. Delete the cache to rebuild.
+- A branch that changes the cache schema runs with its own `--cache-dir`: the first binary to open the shared `~/.cache/gitsocial/cache.db` reseeds it at the new version, and older binaries then refuse it. Delete the cache to rebuild.
 
 ### Test and lint
 
@@ -116,7 +116,7 @@ Inside `core` the packages form a stack, and each imports only what is below it:
 |---|---|
 | `core/git` | the executor seam, the command timeout, the s3 helper alias memo |
 | `core/gitmsg` | the per-workdir caches |
-| `core/cache` | the database singleton, the extension schema and migration registry |
+| `core/cache` | the database singleton, the extension schema registry |
 | `core/log` | the process logger |
 | `core/notifications` | the provider registry |
 | `core/identity` | the in-flight map, the DNS policy flag |
@@ -194,7 +194,7 @@ Outside the tree:
 |---------|-------|---------|
 | `core/git`<br>Git operations | `Commit`, `FileDiff`, `Hunk`, `DiffLine`, `DiffStats` | `GetCommits`, `CreateCommit`, `ReadRef`, `WriteRef`, `GetDiff`, `GetFileDiff`, `GetFileContent`, `GetDiffStats`, `MergeBranches`, `SquashMerge`, `RebaseMerge`, `ForceMerge`, `RebaseBranch`, `RangeDiff`, `PatchesEqual`, `GetBehindCount`, `GetMergeBase`, `GetUserName`, `GetGitConfig`, `GetCommitSignerKey` |
 | `core/protocol`<br>Message parsing | `Header`, `Message`, `Origin`, `Trailer` | `ParseMessage`, `ParseHeader`, `CreateHeader`, `FormatMessage`, `ParseRef`, `CreateRef`, `FormatShortRef`, `QuoteContent`, `ApplyOrigin`, `ExtractTrailers`, `Trailer` |
-| `core/cache`<br>SQLite operations | `Repository`, `Commit`, `TrailerRef` | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `ResetRepositoryData`, `RegisterMigration`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef` |
+| `core/cache`<br>SQLite operations | `Repository`, `Commit`, `TrailerRef` | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `ResetRepositoryData`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef` |
 | `core/gitmsg`<br>Protocol-level storage | | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsBranchConfigurable`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
 | `core/storage`<br>Bare repo management | | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
 | `core/objstore`<br>S3 remote | `Client`, `Config`, `HelperEnv`, `Progress`, `LocalCommitSource`, `PushOutcome`, `PostPushHook`, `SiteOverride` | `NewClient`, `ClientForRemote`, `ParseS3URL`, `RunHelper`, `HelperEnvFromOS`, `ListRemoteRefs`, `ReadRemoteRefs`, `RebuildRefManifest`, `LogDumbTransportInfo`, `RefsHeadDigest`, `ReadPackedObject`, `ThinUpstreamURL`, `CompressJSON`, `ReadCompressedJSON`, `PutCompressed`, `UploadConcurrency`, `RunParallel`, `PushArtifactObjects`, `PutObjectToRemote` |

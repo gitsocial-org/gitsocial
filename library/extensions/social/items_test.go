@@ -771,9 +771,10 @@ func commentsFor(t *testing.T, postID string) int {
 	return counts.Comments
 }
 
-// fetchSocialCommit ingests one commit the way the fetch path does.
-func fetchSocialCommit(t *testing.T, repoURL, branch, hash, message string) {
+// fetchSocialCommit ingests one commit on the social branch the way the fetch path does.
+func fetchSocialCommit(t *testing.T, repoURL, hash, message string) {
 	t.Helper()
+	const branch = "gitmsg/social"
 	now := time.Now()
 	if err := cache.InsertCommits([]cache.Commit{{
 		Hash: hash, RepoURL: repoURL, Branch: branch,
@@ -831,8 +832,8 @@ func TestInteractionCounts_fetchedRetraction(t *testing.T) {
 	setupTestDB(t)
 	repo := "https://github.com/counts/fetched"
 	branch := "gitmsg/social"
-	fetchSocialCommit(t, repo, branch, "a11100000001", "Root post")
-	fetchSocialCommit(t, repo, branch, "a11100000002",
+	fetchSocialCommit(t, repo, "a11100000001", "Root post")
+	fetchSocialCommit(t, repo, "a11100000002",
 		"Nice\n\n"+`GitMsg: ext="social"; type="comment"; original="#commit:a11100000001@gitmsg/social"; v="0.1.0"`)
 	counts, err := RefreshInteractionCounts(repo, "a11100000001", branch)
 	if err != nil {
@@ -841,7 +842,7 @@ func TestInteractionCounts_fetchedRetraction(t *testing.T) {
 	if counts.Comments != 1 {
 		t.Fatalf("root comments after a fetched comment = %d, want 1", counts.Comments)
 	}
-	fetchSocialCommit(t, repo, branch, "a11100000003",
+	fetchSocialCommit(t, repo, "a11100000003",
 		"\n\n"+`GitMsg: ext="social"; type="comment"; edits="#commit:a11100000002@gitmsg/social"; retracted="true"; original="#commit:a11100000001@gitmsg/social"; v="0.1.0"`)
 	counts, err = RefreshInteractionCounts(repo, "a11100000001", branch)
 	if err != nil {
@@ -859,9 +860,9 @@ func TestInteractionCounts_forkMirrorCountsOnce(t *testing.T) {
 	fork := "https://github.com/counts/mirror"
 	branch := "gitmsg/social"
 	comment := "Nice\n\n" + `GitMsg: ext="social"; type="comment"; original="` + repo + `#commit:b22200000001@gitmsg/social"; v="0.1.0"`
-	fetchSocialCommit(t, repo, branch, "b22200000001", "Root post")
-	fetchSocialCommit(t, repo, branch, "b22200000002", comment)
-	fetchSocialCommit(t, fork, branch, "b22200000002", comment)
+	fetchSocialCommit(t, repo, "b22200000001", "Root post")
+	fetchSocialCommit(t, repo, "b22200000002", comment)
+	fetchSocialCommit(t, fork, "b22200000002", comment)
 	counts, err := RefreshInteractionCounts(repo, "b22200000001", branch)
 	if err != nil {
 		t.Fatalf("RefreshInteractionCounts() error = %v", err)

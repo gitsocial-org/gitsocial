@@ -1,4 +1,4 @@
-// db.go - SQLite database initialization, schema migrations, and access.
+// db.go - SQLite database initialization, schema and access.
 //
 // Concurrency model: the package-level *sql.DB is held in an atomic.Pointer
 // so readers and writers can load it without acquiring a lock. SQLite's WAL
@@ -36,46 +36,9 @@ var (
 
 // Extension schema registration
 var (
-	extensionSchemas    = make(map[string]string)
-	extensionMigrations []func(*sql.DB)
-	schemaMu            sync.Mutex
+	extensionSchemas = make(map[string]string)
+	schemaMu         sync.Mutex
 )
-
-// init registers the core column migrations and the tag-row repair.
-func init() {
-	RegisterMigration(func(db *sql.DB) {
-		_, _ = db.Exec(`ALTER TABLE core_commits ADD COLUMN resolved_editor_name TEXT`)
-	})
-	RegisterMigration(func(db *sql.DB) {
-		_, _ = db.Exec(`ALTER TABLE core_commits ADD COLUMN resolved_editor_email TEXT`)
-	})
-	RegisterMigration(func(db *sql.DB) {
-		_, _ = db.Exec(`ALTER TABLE core_commits ADD COLUMN resolved_edit_repo_url TEXT`)
-	})
-	RegisterMigration(func(db *sql.DB) {
-		_, _ = db.Exec(`ALTER TABLE core_commits ADD COLUMN resolved_edit_hash TEXT`)
-	})
-	RegisterMigration(func(db *sql.DB) {
-		_, _ = db.Exec(`ALTER TABLE core_commits ADD COLUMN resolved_edit_branch TEXT`)
-	})
-	RegisterMigration(dropTagAttributedCommits)
-}
-
-// dropTagAttributedCommits removes the rows tags were once attributed to, once per cache.
-func dropTagAttributedCommits(db *sql.DB) {
-	const marker = "repair:tags-branch-commits"
-	var done string
-	if err := db.QueryRow(`SELECT tip FROM core_sync_tips WHERE key = ?`, marker).Scan(&done); err == nil {
-		return
-	}
-	if _, err := db.Exec(`DELETE FROM core_commits WHERE branch LIKE 'tags/%'`); err != nil {
-		log.Warn("delete tag-attributed commits failed", "error", err)
-		return
-	}
-	if _, err := db.Exec(`INSERT OR REPLACE INTO core_sync_tips (key, tip) VALUES (?, ?)`, marker, "done"); err != nil {
-		log.Warn("record tag-attributed commit repair failed", "error", err)
-	}
-}
 
 // RegisterSchema registers an extension schema to be executed after core schema.
 // Extensions should call this in their init() function.
@@ -85,19 +48,10 @@ func RegisterSchema(name, schema string) {
 	extensionSchemas[name] = schema
 }
 
-// RegisterMigration registers a migration function that runs after all schemas.
-// Errors from migrations are ignored (best-effort, e.g. ALTER TABLE ADD COLUMN
-// when the column already exists on fresh installs).
-func RegisterMigration(fn func(*sql.DB)) {
-	schemaMu.Lock()
-	defer schemaMu.Unlock()
-	extensionMigrations = append(extensionMigrations, fn)
-}
-
 // schemaVersion is bumped whenever the core schema changes in a way that
 // requires reseeding the cache. Open() compares user_version to this and
 // nukes-and-recreates the file when it lags. Bump on every breaking change.
-const schemaVersion = 4
+const schemaVersion = 5
 
 const coreSchema = `
 -- Core: Raw commits (1:1 with git, per repo+branch). The is_retracted/has_edits/
@@ -353,9 +307,8 @@ func Open(cacheDir string) error {
 	}
 
 	// If an existing cache predates the current schemaVersion, nuke it and
-	// reseed on next fetch. We treat schema migrations as cheap since the
-	// cache is an index, not a source of truth — re-fetching from origin
-	// repos is always possible.
+	// reseed on next fetch. A reseed is cheap because the cache is an index,
+	// not a source of truth: re-fetching from origin repos is always possible.
 	if needsReseed(dbPath) {
 		log.Info("cache schema is older than current; deleting and recreating", "path", dbPath)
 		if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
@@ -422,9 +375,6 @@ func Open(cacheDir string) error {
 			opened = true
 			return err
 		}
-	}
-	for _, fn := range extensionMigrations {
-		fn(d)
 	}
 	schemaMu.Unlock()
 

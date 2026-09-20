@@ -2,45 +2,12 @@
 package social
 
 import (
-	"database/sql"
-
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
-	"github.com/gitsocial-org/gitsocial/library/core/log"
 )
 
-// init registers the social table schema and its migration.
+// init registers the social table schema.
 func init() {
 	cache.RegisterSchema("social", schema)
-	cache.RegisterMigration(retireLegacySocialTables)
-}
-
-// retireLegacySocialTables copies the legacy read markers, recounts every target, and drops both tables.
-func retireLegacySocialTables(db *sql.DB) {
-	if !socialTableExists(db, "social_notification_reads") && !socialTableExists(db, "social_counted_sources") {
-		return
-	}
-	if socialTableExists(db, "social_notification_reads") {
-		if _, err := db.Exec(`
-			INSERT OR IGNORE INTO core_notification_reads (repo_url, hash, branch, read_at)
-			SELECT repo_url, hash, branch, read_at FROM social_notification_reads`); err != nil {
-			log.Warn("copy legacy notification reads failed", "error", err)
-		} else if _, err := db.Exec(`DROP TABLE social_notification_reads`); err != nil {
-			// The markers are in the core table; a failed drop retries on the next open.
-			log.Warn("drop legacy notification reads failed", "error", err)
-		}
-	}
-	recountAllInteractions(db)
-	// The gate table has no readers left, so a failed drop costs nothing but a retry.
-	if _, err := db.Exec(`DROP TABLE IF EXISTS social_counted_sources`); err != nil {
-		log.Warn("drop legacy counted sources failed", "error", err)
-	}
-}
-
-// socialTableExists reports whether a table is present in the cache.
-func socialTableExists(db *sql.DB, name string) bool {
-	var count int
-	err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, name).Scan(&count)
-	return err == nil && count > 0
 }
 
 const schema = `

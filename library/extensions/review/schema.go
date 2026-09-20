@@ -2,21 +2,12 @@
 package review
 
 import (
-	"database/sql"
-
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 )
 
-// init registers the review schema and its migrations.
+// init registers the review schema.
 func init() {
 	cache.RegisterSchema("review", schema)
-	// Caches predating the column and the table are carried by these two migrations.
-	cache.RegisterMigration(func(db *sql.DB) {
-		_, _ = db.Exec(`ALTER TABLE review_items ADD COLUMN depends_on TEXT`)
-	})
-	cache.RegisterMigration(func(db *sql.DB) {
-		_, _ = db.Exec(branchObservationsSchema)
-	})
 }
 
 const branchObservationsSchema = `

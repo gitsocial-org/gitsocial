@@ -1,4 +1,4 @@
-// migrations_test.go - Tests for the schema-version boundary and the registered migrations
+// reseed_test.go - Tests for the schema-version boundary and the reseed it triggers
 package cache
 
 import (
@@ -141,73 +141,6 @@ func TestOpen_currentSchemaIsPreserved(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("core_commits rows = %d, want 1 (a same-version cache must survive)", n)
-	}
-}
-
-func TestOpen_runsRegisteredMigrations(t *testing.T) {
-	Reset()
-	dir := t.TempDir()
-	if err := Open(dir); err != nil {
-		t.Fatalf("first Open() error = %v", err)
-	}
-	if err := InsertCommits([]Commit{
-		{RepoURL: "r", Hash: "aaa111222333", Branch: "tags/v1.0.0", Message: "tagged", Timestamp: time.Now()},
-		{RepoURL: "r", Hash: "bbb111222333", Branch: "main", Message: "on a branch", Timestamp: time.Now()},
-	}); err != nil {
-		t.Fatalf("InsertCommits() error = %v", err)
-	}
-	Reset()
-
-	// Roll the file back to a pre-migration shape: the resolved_editor_* columns
-	// gone, the tag-attributed row still present, the repair marker not yet written.
-	editorColumns := []string{"resolved_editor_name", "resolved_editor_email", "resolved_edit_repo_url", "resolved_edit_hash", "resolved_edit_branch"}
-	dbPath := filepath.Join(dir, "cache.db")
-	raw, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatalf("reopen raw: %v", err)
-	}
-	for _, col := range editorColumns {
-		if _, err := raw.Exec("ALTER TABLE core_commits DROP COLUMN " + col); err != nil {
-			raw.Close()
-			t.Fatalf("drop column %s: %v", col, err)
-		}
-	}
-	if _, err := raw.Exec(`DELETE FROM core_sync_tips WHERE key = 'repair:tags-branch-commits'`); err != nil {
-		raw.Close()
-		t.Fatalf("clear repair marker: %v", err)
-	}
-	raw.Close()
-
-	if err := Open(dir); err != nil {
-		t.Fatalf("second Open() error = %v", err)
-	}
-	defer Reset()
-
-	for _, col := range editorColumns {
-		var n int
-		if err := DB().QueryRow(`SELECT COUNT(*) FROM pragma_table_info('core_commits') WHERE name = ?`, col).Scan(&n); err != nil {
-			t.Fatalf("pragma_table_info: %v", err)
-		}
-		if n != 1 {
-			t.Errorf("column %s was not re-added by migration", col)
-		}
-	}
-
-	var branches []string
-	rows, err := DB().Query(`SELECT branch FROM core_commits ORDER BY branch`)
-	if err != nil {
-		t.Fatalf("select branches: %v", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var b string
-		if err := rows.Scan(&b); err != nil {
-			t.Fatalf("scan branch: %v", err)
-		}
-		branches = append(branches, b)
-	}
-	if len(branches) != 1 || branches[0] != "main" {
-		t.Errorf("branches = %v, want [main]: the tags/ rows migration did not run", branches)
 	}
 }
 
