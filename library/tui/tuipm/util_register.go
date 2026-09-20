@@ -294,7 +294,8 @@ func handlePMConfigSaved(msg pmConfigSavedMsg, ctx tuicore.AppContext) (bool, te
 func handleIssueCreated(msg issueCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
-		return true, nil
+		// Pass through so the form clears its submitting state and the user can retry
+		return false, nil
 	}
 	msgCmd := ctx.Host().SetMessageWithTimeout(
 		fmt.Sprintf("Created: %s", msg.Issue.Subject),
@@ -370,7 +371,8 @@ func handleSprintCreated(msg sprintCreatedMsg, ctx tuicore.AppContext) (bool, te
 func handleIssueUpdated(msg issueUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
-		return true, nil
+		// Pass through so the form clears its submitting state and the user can retry
+		return false, nil
 	}
 	msgCmd := ctx.Host().SetMessageWithTimeout(
 		fmt.Sprintf("Updated: %s", msg.Issue.Subject),
@@ -389,7 +391,8 @@ func handleIssueUpdated(msg issueUpdatedMsg, ctx tuicore.AppContext) (bool, tea.
 func handleMilestoneUpdated(msg milestoneUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
-		return true, nil
+		// Pass through so the form clears its submitting state and the user can retry
+		return false, nil
 	}
 	msgCmd := ctx.Host().SetMessageWithTimeout(
 		fmt.Sprintf("Updated: %s", msg.Milestone.Title),
@@ -408,7 +411,8 @@ func handleMilestoneUpdated(msg milestoneUpdatedMsg, ctx tuicore.AppContext) (bo
 func handleSprintUpdated(msg sprintUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
-		return true, nil
+		// Pass through so the form clears its submitting state and the user can retry
+		return false, nil
 	}
 	msgCmd := ctx.Host().SetMessageWithTimeout(
 		fmt.Sprintf("Updated: %s", msg.Sprint.Title),

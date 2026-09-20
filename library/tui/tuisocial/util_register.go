@@ -240,7 +240,8 @@ func handleSocialMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 func handlePostSubmitted(msg postSubmittedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
-		return true, nil
+		// Pass through so the form clears its submitting state and the user can retry
+		return false, nil
 	}
 	verb := "Posted"
 	switch msg.Mode {
@@ -568,7 +569,7 @@ func handleListCreated(msg listCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cm
 // handleInteractionCountsRefreshed forwards fresh counts to the views that display them.
 func handleInteractionCountsRefreshed(msg tuicore.InteractionCountsRefreshedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
-		return true, nil
+		return true, nil // a background recount failure stays quiet; the counts refresh again on the next write
 	}
 	// Forward to views to update their display
 	return true, ctx.Host().Update(msg)

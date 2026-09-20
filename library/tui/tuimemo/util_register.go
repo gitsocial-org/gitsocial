@@ -300,7 +300,8 @@ func handleMemoPromoted(msg memoPromotedMsg, ctx tuicore.AppContext) (bool, tea.
 func handleMemoEdited(msg memoEditedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
-		return true, nil
+		// Pass through so the form clears its submitting state and the user can retry
+		return false, nil
 	}
 	statusCmd := ctx.Host().SetMessageWithTimeout(
 		fmt.Sprintf("Updated: %s", msg.Memo.Subject),
@@ -321,7 +322,8 @@ func handleMemoEdited(msg memoEditedMsg, ctx tuicore.AppContext) (bool, tea.Cmd)
 func handleMemoCreated(msg memoCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 	if msg.Err != nil {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
-		return true, nil
+		// Pass through so the form clears its submitting state and the user can retry
+		return false, nil
 	}
 	statusCmd := ctx.Host().SetMessageWithTimeout(
 		fmt.Sprintf("Created: %s", msg.Memo.Subject),

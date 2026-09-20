@@ -502,7 +502,8 @@ func handlePRCreated(msg prCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		ctx.Host().State().AddLogEntry(tuicore.LogSeverityError, "PR create: "+msg.Err.Error(), "review")
 		ctx.Nav().SetErrorLogCount(ctx.Host().State().ErrorLogCount())
-		return true, nil
+		// Pass through so the form clears its submitting state and the user can retry
+		return false, nil
 	}
 	msgCmd := ctx.Host().SetMessageWithTimeout(
 		fmt.Sprintf("Created: %s", msg.PR.Subject),
@@ -523,7 +524,8 @@ func handlePRUpdated(msg prUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		ctx.Host().State().AddLogEntry(tuicore.LogSeverityError, "PR update: "+msg.Err.Error(), "review")
 		ctx.Nav().SetErrorLogCount(ctx.Host().State().ErrorLogCount())
-		return true, nil
+		// Pass through so the form clears its submitting state and the user can retry
+		return false, nil
 	}
 	verb := "Updated"
 	switch msg.PR.State {
@@ -592,7 +594,8 @@ func handleFeedbackCreated(msg feedbackCreatedMsg, ctx tuicore.AppContext) (bool
 		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
 		ctx.Host().State().AddLogEntry(tuicore.LogSeverityError, "Feedback: "+msg.Err.Error(), "review")
 		ctx.Nav().SetErrorLogCount(ctx.Host().State().ErrorLogCount())
-		return true, nil
+		// Pass through so the form clears its submitting state and the user can retry
+		return false, nil
 	}
 	label := "Feedback submitted"
 	switch msg.Feedback.ReviewState {
