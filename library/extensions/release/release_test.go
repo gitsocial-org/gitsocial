@@ -508,7 +508,7 @@ func TestSaveAndGetReleaseConfig(t *testing.T) {
 		t.Errorf("Version = %q, want 0.1.0", config.Version)
 	}
 	if !gitmsg.IsExtInitialized(dir, "release") {
-		t.Error("a saved config should carry the branch key IsExtInitialized reads")
+		t.Error("a saved config should carry the version key IsExtInitialized reads")
 	}
 	if !config.RequireSignature {
 		t.Error("RequireSignature should be true")

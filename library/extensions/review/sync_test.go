@@ -124,6 +124,19 @@ func queryReviewItem(t *testing.T, repoURL, hash, branch string) ReviewItem { //
 	return item
 }
 
+// TestProcessReviewCommit_otherBranch checks GITMSG.md 3.4: only gitmsg/review is scanned.
+func TestProcessReviewCommit_otherBranch(t *testing.T) {
+	setupTestDB(t)
+	hash := "v1a2b3c4d5e6"
+	content := "Add feature\n\n" + `GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="#branch:feature"; v="0.1.0"`
+	insertReviewTestCommit(t, reviewTestRepoURL, hash)
+
+	processReviewCommit(git.Commit{Hash: hash, Timestamp: time.Now()}, protocol.ParseMessage(content), reviewTestRepoURL, "main")
+	if count := countReviewItems(t); count != 0 {
+		t.Errorf("review_items = %d for a commit on main, want 0", count)
+	}
+}
+
 func TestProcessReviewCommit_nilMessage(t *testing.T) {
 	setupTestDB(t)
 	gc := git.Commit{Hash: "abc123456789"}

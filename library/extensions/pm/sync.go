@@ -147,7 +147,8 @@ func buildPMItem(gc git.Commit, msg *protocol.Message, repoURL, branch string) (
 // pm_items row exists and skips the column propagation. Memo's
 // processor follows the same pattern.
 func processPMCommit(gc git.Commit, msg *protocol.Message, repoURL, branch string) {
-	if msg == nil || msg.Header.Ext != "pm" {
+	// GITMSG.md 3.4: gitmsg/pm is the only branch scanned for pm messages.
+	if branch != PMBranch || msg == nil || msg.Header.Ext != "pm" {
 		return
 	}
 	item, lnk := buildPMItem(gc, msg, repoURL, branch)

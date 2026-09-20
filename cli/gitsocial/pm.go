@@ -87,7 +87,6 @@ func newPMStatusCmd() *cobra.Command {
 				slog.Debug("sync workspace", "error", err)
 			}
 			pmConfig := pm.GetPMConfig(cfg.WorkDir)
-			warnIgnoredExtBranch(cmd.ErrOrStderr(), cfg.WorkDir, pmExt)
 
 			branch := pm.PMBranch
 			framework := pmConfig.Framework
@@ -130,7 +129,6 @@ func newPMInitCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			warnIgnoredExtBranch(cmd.ErrOrStderr(), cfg.WorkDir, pmExt)
 
 			branch := pm.PMBranch
 			if framework == "" {

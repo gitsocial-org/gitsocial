@@ -361,7 +361,6 @@ func SaveReleaseConfig(workdir string, config ReleaseConfig) error {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	raw["branch"] = ReleaseBranch // the key stays the initialized marker IsExtInitialized reads
 	return gitmsg.WriteExtConfig(workdir, "release", raw)
 }
 

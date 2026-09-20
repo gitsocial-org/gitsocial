@@ -32,17 +32,12 @@ func GetConfig(workdir string) Config {
 	return cfg
 }
 
-// SaveConfig writes the project-tier memo extension configuration. The branch
-// is always `gitmsg/memo` so `gitmsg.IsExtInitialized` and the rest of the
-// core protocol layer can locate the memo branch without reading this config.
+// SaveConfig writes the project-tier memo extension configuration.
 func SaveConfig(workdir string, cfg Config) error {
 	if cfg.Version == "" {
 		cfg.Version = "0.1.0"
 	}
-	return gitmsg.WriteExtConfig(workdir, "memo", map[string]interface{}{
-		"version": cfg.Version,
-		"branch":  MemoBranch,
-	})
+	return gitmsg.WriteExtConfig(workdir, "memo", map[string]interface{}{"version": cfg.Version})
 }
 
 // InitProject sets up the project-tier memo branch on the workspace.

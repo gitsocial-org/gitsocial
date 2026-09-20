@@ -41,7 +41,8 @@ func ProcessWorkspaceBatch(commits []git.Commit, repoURL, branch string) {
 
 // processReleaseCommit handles a single commit for release extension processing.
 func processReleaseCommit(gc git.Commit, msg *protocol.Message, repoURL, branch string) {
-	if msg == nil || msg.Header.Ext != "release" {
+	// GITMSG.md 3.4: gitmsg/release is the only branch scanned for release messages.
+	if branch != ReleaseBranch || msg == nil || msg.Header.Ext != "release" {
 		return
 	}
 

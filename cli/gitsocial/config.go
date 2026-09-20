@@ -4,7 +4,6 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -19,19 +18,6 @@ import (
 )
 
 const coreExt = "core"
-
-// warnIgnoredExtBranch prints one line when a config names a branch the extension no longer reads.
-func warnIgnoredExtBranch(out io.Writer, workdir, ext string) {
-	if gitmsg.IsBranchConfigurable(ext) {
-		return
-	}
-	configured, ok := gitmsg.GetExtConfigValue(workdir, ext, "branch")
-	branch := gitmsg.GetExtBranch(workdir, ext)
-	if !ok || configured == branch {
-		return
-	}
-	fmt.Fprintf(out, "warning: %s ignores the configured branch %s: run git branch -m %s %s\n", ext, configured, configured, branch)
-}
 
 // NewExtConfigCmd creates a config command with get/set/list subcommands for the given extension.
 func NewExtConfigCmd(ext string) *cobra.Command {

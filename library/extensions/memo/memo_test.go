@@ -668,7 +668,7 @@ func TestConfig_roundtrip(t *testing.T) {
 		t.Errorf("round-trip Version = %q", got.Version)
 	}
 	if !gitmsg.IsExtInitialized(dir, "memo") {
-		t.Error("project not marked initialized after SaveConfig (branch field missing from raw config)")
+		t.Error("project not marked initialized after SaveConfig")
 	}
 }
 
@@ -1344,6 +1344,37 @@ func TestProcessors_skipsNonMemoCommits(t *testing.T) {
 	item, _ := GetMemoItem(remoteURL, hash, "gitmsg/social")
 	if item != nil {
 		t.Errorf("memo CommitProcessor created memo_items row for non-memo commit: %+v", item)
+	}
+}
+
+// TestProcessors_skipsOtherBranches checks GITMSG.md 3.4: only gitmsg/memo is scanned.
+func TestProcessors_skipsOtherBranches(t *testing.T) {
+	setupTestDB(t)
+	freshHome(t)
+
+	remoteURL := "https://example.com/off-branch-memos"
+	hash := "ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12"
+	commitMsg := buildMemoContent("A memo on main", "Body", CreateMemoOptions{}, "")
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash:        hash,
+		RepoURL:     remoteURL,
+		Branch:      "main",
+		AuthorName:  "Org Bot",
+		AuthorEmail: "bot@example.com",
+		Message:     commitMsg,
+		Timestamp:   time.Now(),
+	}}); err != nil {
+		t.Fatalf("InsertCommits: %v", err)
+	}
+
+	gc := git.Commit{Hash: hash, Author: "Org Bot", Email: "bot@example.com", Message: commitMsg}
+	for _, proc := range Processors() {
+		proc(gc, protocol.ParseMessage(commitMsg), remoteURL, "main")
+	}
+
+	item, _ := GetMemoItem(remoteURL, hash, "main")
+	if item != nil {
+		t.Errorf("the memo processor made a row for a commit on main: %+v", item)
 	}
 }
 

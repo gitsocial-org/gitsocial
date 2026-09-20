@@ -121,6 +121,10 @@ func MessageToReviewItem(msg *protocol.Message, repoURL, hash, branch string) Re
 
 // processReviewCommit ingests one commit, matching the fetch.CommitProcessor signature.
 func processReviewCommit(gc git.Commit, msg *protocol.Message, repoURL, branch string) {
+	// GITMSG.md 3.4: gitmsg/review is the only branch scanned for review messages.
+	if branch != ReviewBranch {
+		return
+	}
 	if item := buildReviewItem(gc, msg, repoURL, branch); item != nil {
 		if err := InsertReviewItem(*item); err != nil {
 			log.Debug("insert review item failed", "hash", gc.Hash, "error", err)

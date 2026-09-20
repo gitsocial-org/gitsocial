@@ -422,18 +422,24 @@ func TestGetExtBranch_configuredIsIgnoredOutsideSocial(t *testing.T) {
 	}
 }
 
+// TestIsExtInitialized checks that the version key alone marks an extension initialized.
 func TestIsExtInitialized(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)
 
-	if IsExtInitialized(dir, "social") {
+	if IsExtInitialized(dir, "pm") {
 		t.Error("should be false before init")
 	}
 
-	SetExtConfigValue(dir, "social", "branch", "gitmsg/social")
+	if err := WriteExtConfig(dir, "pm", map[string]interface{}{"framework": "kanban"}); err != nil {
+		t.Fatalf("WriteExtConfig() error = %v", err)
+	}
 
-	if !IsExtInitialized(dir, "social") {
-		t.Error("should be true after setting branch")
+	if _, ok := GetExtConfigValue(dir, "pm", "branch"); ok {
+		t.Error("the config carries a branch key")
+	}
+	if !IsExtInitialized(dir, "pm") {
+		t.Error("should be true once the config carries a version")
 	}
 }
 

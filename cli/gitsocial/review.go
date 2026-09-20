@@ -55,7 +55,6 @@ func newReviewStatusCmd() *cobra.Command {
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 				slog.Debug("sync workspace", "error", err)
 			}
-			warnIgnoredExtBranch(cmd.ErrOrStderr(), cfg.WorkDir, reviewExt)
 
 			branch := review.ReviewBranch
 			repoURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
@@ -95,7 +94,6 @@ func newReviewInitCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			warnIgnoredExtBranch(cmd.ErrOrStderr(), cfg.WorkDir, reviewExt)
 
 			branch := review.ReviewBranch
 			revConfig := review.ReviewConfig{

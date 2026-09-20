@@ -107,7 +107,8 @@ func indexCommits(repoURL, branch string, commits []git.Commit) error {
 
 // processMemoCommit handles a single commit for memo extension processing.
 func processMemoCommit(gc git.Commit, msg *protocol.Message, repoURL, branch string) {
-	if msg == nil || msg.Header.Ext != "memo" {
+	// GITMSG.md 3.4: gitmsg/memo is the only branch scanned for memo messages.
+	if branch != MemoBranch || msg == nil || msg.Header.Ext != "memo" {
 		return
 	}
 	cache.ProcessVersionFromHeader(msg, gc.Hash, repoURL, branch)

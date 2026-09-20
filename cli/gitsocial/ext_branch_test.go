@@ -24,26 +24,23 @@ func TestCLI_extInit_noBranchFlag(t *testing.T) {
 	}
 }
 
-// TestCLI_extStatus_warnsIgnoredBranch checks the warning status and init print.
-func TestCLI_extStatus_warnsIgnoredBranch(t *testing.T) {
+// TestCLI_extInit_writesNoBranchKey checks that init leaves the branch key out of the config.
+func TestCLI_extInit_writesNoBranchKey(t *testing.T) {
 	dir := initCLITestRepo(t)
 	cacheDir := t.TempDir()
-	if _, stderr, code := runInProcess(t, dir, cacheDir, "pm", "init"); code != 0 {
-		t.Fatalf("pm init: exit %d\n%s", code, stderr)
-	}
-	if _, stderr, code := runInProcess(t, dir, cacheDir, "pm", "config", "set", "branch", "feat/pm"); code != 0 {
-		t.Fatalf("pm config set branch: exit %d\n%s", code, stderr)
-	}
-
-	want := "warning: pm ignores the configured branch feat/pm: run git branch -m feat/pm gitmsg/pm"
-	_, stderr, code := runInProcess(t, dir, cacheDir, "pm", "status")
-	if code != 0 {
-		t.Fatalf("pm status: exit %d\n%s", code, stderr)
-	}
-	if !strings.Contains(stderr, want) {
-		t.Errorf("pm status stderr = %q, want %q", stderr, want)
-	}
-	if _, stderr, _ = runInProcess(t, dir, cacheDir, "pm", "init"); !strings.Contains(stderr, want) {
-		t.Errorf("pm init stderr = %q, want %q", stderr, want)
+	for _, ext := range []string{"pm", "review", "release"} {
+		if _, stderr, code := runInProcess(t, dir, cacheDir, ext, "init"); code != 0 {
+			t.Fatalf("%s init: exit %d\n%s", ext, code, stderr)
+		}
+		stdout, stderr, code := runInProcess(t, dir, cacheDir, ext, "config", "list")
+		if code != 0 {
+			t.Fatalf("%s config list: exit %d\n%s", ext, code, stderr)
+		}
+		if strings.Contains(stdout, "branch") {
+			t.Errorf("%s config list = %q, want no branch key", ext, stdout)
+		}
+		if !strings.Contains(stdout, "version") {
+			t.Errorf("%s config list = %q, want a version key", ext, stdout)
+		}
 	}
 }

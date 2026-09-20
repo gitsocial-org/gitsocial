@@ -4,7 +4,6 @@ package storage
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -121,9 +120,7 @@ type FetchOptions struct {
 	Depth int
 }
 
-// FetchRepository fetches all gitmsg/* branches and refs from upstream into the bare repo.
-// Also fetches custom-named branches discovered from extension configs.
-// When branch is "*", fetches all branches from upstream.
+// FetchRepository fetches the gitmsg/* branches and refs, plus the named branch, or every branch when branch is "*".
 func FetchRepository(storageDir string, branch string, opts *FetchOptions) error {
 	branchRefspec := "+refs/heads/gitmsg/*:refs/heads/gitmsg/*"
 	args := []string{"fetch", "upstream", branchRefspec}
@@ -165,18 +162,7 @@ func FetchRepository(storageDir string, branch string, opts *FetchOptions) error
 			slog.Debug("fetch all branches", "error", fetchErr, "dir", storageDir)
 		}
 	} else {
-		// Fetch custom-named branches from extension configs (outside gitmsg/ namespace)
-		for _, b := range discoverCustomBranches(storageDir) {
-			fetchArgs := []string{"fetch", "upstream", b, "--no-tags"}
-			if opts != nil && opts.Since != "" {
-				fetchArgs = append(fetchArgs, "--shallow-since="+opts.Since)
-			}
-			if _, fetchErr := git.ExecGit(storageDir, fetchArgs); fetchErr != nil {
-				slog.Debug("fetch custom branch", "error", fetchErr, "branch", b)
-			}
-		}
-
-		// Fetch the configured default branch (e.g., "main") if not covered by gitmsg/* refspecs
+		// GITMSG.md 3.4: the entry names the branch, and no reader opens a remote's config to find one.
 		if branch != "" && !strings.HasPrefix(branch, "gitmsg/") {
 			defaultRefspec := fmt.Sprintf("+refs/heads/%s:refs/heads/%s", branch, branch)
 			defaultArgs := []string{"fetch", "upstream", defaultRefspec, "--no-tags"}
@@ -190,34 +176,4 @@ func FetchRepository(storageDir string, branch string, opts *FetchOptions) error
 	}
 
 	return err
-}
-
-// discoverCustomBranches reads extension configs from refs/gitmsg/*/config
-// and returns branch names that fall outside the gitmsg/ namespace.
-func discoverCustomBranches(storageDir string) []string {
-	result, err := git.ExecGit(storageDir, []string{
-		"for-each-ref", "--format=%(refname)", "refs/gitmsg/",
-	})
-	if err != nil || result.Stdout == "" {
-		return nil
-	}
-
-	var branches []string
-	for _, ref := range strings.Split(strings.TrimSpace(result.Stdout), "\n") {
-		if !strings.HasSuffix(ref, "/config") {
-			continue
-		}
-		msg, err := git.ExecGit(storageDir, []string{"show", "-s", "--format=%B", ref})
-		if err != nil || msg.Stdout == "" {
-			continue
-		}
-		var config map[string]interface{}
-		if err := json.Unmarshal([]byte(strings.TrimSpace(msg.Stdout)), &config); err != nil {
-			continue
-		}
-		if b, ok := config["branch"].(string); ok && b != "" && !strings.HasPrefix(b, "gitmsg/") {
-			branches = append(branches, b)
-		}
-	}
-	return branches
 }

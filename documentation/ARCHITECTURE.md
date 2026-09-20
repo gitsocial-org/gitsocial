@@ -307,7 +307,7 @@ All-branch following stores each commit under its real refname. The workspace al
 ### Extension rules
 
 - Tables carry the `<ext>_` prefix and key into `core_commits` by `(repo_url, hash, branch)`.
-- Content lives on `gitmsg/<ext>`, named by one constant per extension. Only `social` resolves a configured branch, through `gitmsg.GetExtBranch`; the other extensions ignore the `branch` key, which `init` still writes as the initialized marker.
+- Content lives on `gitmsg/<ext>`, named by one constant per extension. Only `social` writes a configured branch, which its `init` records under the `branch` key and `gitmsg.GetExtBranch` reads back. Every config carries `version`, the key `IsExtInitialized` reads. A pm, review, release or memo processor skips a commit from any other branch.
 - An extension joins the fetch in `library/client`, which lists every extension's `Processors`, `SyncWorkspaceBatch` and `BackfillSpec`. `pm`, `release` and `review` name their own `Processors` again in their `FetchRepository`, which serves the `--repo` form of a CLI list command.
 - An extension costs ten imports: `cache`, `fetch`, `git`, `gitmsg`, `log`, `notifications`, `protocol` and `result`, plus `social` for comments and `tui/tuicore` for its navigation items. It registers a notification provider with `notifications.RegisterProvider`.
 - `core/search` names every extension's table itself, in `query.go` and `group.go`, and `core/cache` names them in `analytics.go`, `clear.go`, `commits.go`, `stats.go` and `versions.go`, where `notifications` takes a registration. A sixth extension edits both packages; the asymmetry stays until one exists.

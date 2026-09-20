@@ -664,7 +664,7 @@ func SaveReviewConfig(workdir string, config ReviewConfig) error {
 	if config.Version == "" {
 		config.Version = "0.1.0"
 	}
-	raw := map[string]interface{}{"version": config.Version, "branch": ReviewBranch} // the key stays the initialized marker IsExtInitialized reads
+	raw := map[string]interface{}{"version": config.Version}
 	if config.RequireReview {
 		raw["require-review"] = true
 	}

@@ -288,12 +288,14 @@ func isolateHomePanic() func() {
 }
 
 // writeExtConfigsPanic writes the gitmsg extension config ref for every
-// extension the fixture seeds.
+// extension the fixture seeds; only social records its branch, as its writer does.
 func writeExtConfigsPanic(workdir string) {
 	for _, ext := range []string{"social", "pm", "review", "release", "memo"} {
-		if err := gitmsg.WriteExtConfig(workdir, ext, map[string]interface{}{
-			"branch": "gitmsg/" + ext,
-		}); err != nil {
+		config := map[string]interface{}{}
+		if ext == "social" {
+			config["branch"] = "gitmsg/social"
+		}
+		if err := gitmsg.WriteExtConfig(workdir, ext, config); err != nil {
 			panic(fmt.Sprintf("WriteExtConfig %s: %v", ext, err))
 		}
 	}

@@ -824,7 +824,7 @@ func TestReviewConfig(t *testing.T) {
 			t.Errorf("Version = %q, want 0.1.0", config.Version)
 		}
 		if !gitmsg.IsExtInitialized(dir, "review") {
-			t.Error("a saved config should carry the branch key IsExtInitialized reads")
+			t.Error("a saved config should carry the version key IsExtInitialized reads")
 		}
 		if !config.RequireReview {
 			t.Error("RequireReview should be true")

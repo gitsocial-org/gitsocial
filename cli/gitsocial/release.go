@@ -59,7 +59,6 @@ func newReleaseStatusCmd() *cobra.Command {
 			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 				slog.Debug("sync workspace", "error", err)
 			}
-			warnIgnoredExtBranch(cmd.ErrOrStderr(), cfg.WorkDir, releaseExt)
 
 			branch := release.ReleaseBranch
 			res := release.GetReleases("", "", "", 0)
@@ -94,7 +93,6 @@ func newReleaseInitCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			warnIgnoredExtBranch(cmd.ErrOrStderr(), cfg.WorkDir, releaseExt)
 
 			branch := release.ReleaseBranch
 			relConfig := release.ReleaseConfig{

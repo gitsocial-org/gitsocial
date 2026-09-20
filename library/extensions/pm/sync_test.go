@@ -37,6 +37,19 @@ func insertTestCommit(t *testing.T, hash, message string) {
 	}
 }
 
+// TestProcessPMCommit_otherBranch checks GITMSG.md 3.4: only gitmsg/pm is scanned.
+func TestProcessPMCommit_otherBranch(t *testing.T) {
+	setupTestDB(t)
+	hash := "b1a2c3d4e5f6"
+	content := "Fix the login bug\n\n" + `GitMsg: ext="pm"; type="issue"; state="open"; v="0.1.0"`
+	insertTestCommit(t, hash, content)
+
+	processPMCommit(git.Commit{Hash: hash, Timestamp: time.Now()}, protocol.ParseMessage(content), pmSyncTestRepoURL, "main")
+	if count := countPMItems(t); count != 0 {
+		t.Errorf("pm_items = %d for a commit on main, want 0", count)
+	}
+}
+
 func TestProcessPMCommit_nilMessage(t *testing.T) {
 	setupTestDB(t)
 	gc := git.Commit{Hash: "abc123456789"}

@@ -235,7 +235,6 @@ func SavePMConfig(workdir string, config PMConfig) error {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	raw["branch"] = PMBranch // the key stays the initialized marker IsExtInitialized reads
 	return gitmsg.WriteExtConfig(workdir, "pm", raw)
 }
 

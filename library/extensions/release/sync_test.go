@@ -65,6 +65,19 @@ func insertTestCommit(t *testing.T, hash, message string) {
 	}
 }
 
+// TestProcessReleaseCommit_otherBranch checks GITMSG.md 3.4: only gitmsg/release is scanned.
+func TestProcessReleaseCommit_otherBranch(t *testing.T) {
+	setupTestDB(t)
+	hash := "r1a2b3c4d5e6"
+	content := "Release v1.0.0\n\n" + `GitMsg: ext="release"; tag="v1.0.0"; version="1.0.0"; v="0.1.0"`
+	insertTestCommit(t, hash, content)
+
+	processReleaseCommit(git.Commit{Hash: hash, Timestamp: time.Now()}, protocol.ParseMessage(content), relSyncTestRepoURL, "main")
+	if count := countReleaseItems(t); count != 0 {
+		t.Errorf("release_items = %d for a commit on main, want 0", count)
+	}
+}
+
 func TestProcessReleaseCommit_nilMessage(t *testing.T) {
 	setupTestDB(t)
 	gc := git.Commit{Hash: "abc123456789"}

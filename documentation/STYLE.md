@@ -95,7 +95,6 @@ An error is one sentence, lowercase, no period: the thing that failed, then the 
 - No parenthesis, semicolon, question mark, newline or em-dash. A second clause is the next action, or it goes.
 - Under 100 characters before the verbs expand.
 - Change the words, not the chain: a sentinel stays, `%w` stays.
-- A warning takes the same shape behind a `warning: ` prefix and names what is ignored and the repair: `warning: pm ignores the configured branch feat/pm: run git branch -m feat/pm gitmsg/pm`.
 
 Examples, before and after (`[em-dash]` stands for the original's em-dash):
 

@@ -517,94 +517,29 @@ func TestFetchRepository_withSinceAndDefaultBranch(t *testing.T) {
 	}
 }
 
-func TestFetchRepository_withSinceAndCustomBranches(t *testing.T) {
+// TestFetchRepository_ignoresConfiguredBranch checks that a remote's config never names a branch to fetch.
+func TestFetchRepository_ignoresConfiguredBranch(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
 	t.Parallel()
-	// Create repo with a gitmsg config ref pointing to a custom branch
-	source := t.TempDir()
-	git.Init(source, "main")
-	git.ExecGit(source, []string{"config", "user.email", "test@test.com"})
-	git.ExecGit(source, []string{"config", "user.name", "Test User"})
-	git.CreateCommit(source, git.CommitOptions{Message: "init", AllowEmpty: true})
-
-	// Create custom branch
+	source := initSourceRepo(t)
 	git.ExecGit(source, []string{"checkout", "-b", "releases"})
-	git.CreateCommit(source, git.CommitOptions{Message: "release", AllowEmpty: true})
-	git.ExecGit(source, []string{"checkout", "main"})
-
-	// Create gitmsg config ref pointing to custom branch
-	hash, _ := git.CreateCommit(source, git.CommitOptions{
-		Message:    `{"branch": "releases", "ext": "release"}`,
-		AllowEmpty: true,
-	})
-	result, _ := git.ExecGit(source, []string{"rev-parse", hash})
-	git.ExecGit(source, []string{"update-ref", "refs/gitmsg/release/config", strings.TrimSpace(result.Stdout)})
-
-	// Create gitmsg posts branch
-	git.ExecGit(source, []string{"checkout", "-b", "gitmsg/social/posts"})
-	git.CreateCommit(source, git.CommitOptions{Message: "post", AllowEmpty: true})
-	git.ExecGit(source, []string{"checkout", "main"})
-
-	bare := pushToBare(t, source)
-	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/release/config:refs/gitmsg/release/config"})
-
-	baseDir := t.TempDir()
-	storageDir, err := EnsureRepository(baseDir, bare, bare, "main", nil)
-	if err != nil {
-		t.Fatalf("EnsureRepository() error = %v", err)
-	}
-
-	// First fetch without Since to populate refs
-	FetchRepository(storageDir, "main", nil)
-
-	// Fetch with Since to cover custom branch + --shallow-since path
-	err = FetchRepository(storageDir, "main", &FetchOptions{Since: "2020-01-01"})
-	if err != nil {
-		t.Fatalf("FetchRepository(Since + custom branches) error = %v", err)
-	}
-}
-
-// --- discoverCustomBranches tests ---
-
-func TestDiscoverCustomBranches_noRefs(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	git.ExecGit(dir, []string{"init", "--bare"})
-
-	branches := discoverCustomBranches(dir)
-	if len(branches) != 0 {
-		t.Errorf("discoverCustomBranches() = %v, want empty", branches)
-	}
-}
-
-func TestDiscoverCustomBranches_withCustomBranch(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-	t.Parallel()
-	// Create a source repo with a gitmsg config ref under refs/gitmsg/
-	source := t.TempDir()
-	git.Init(source, "main")
-	git.ExecGit(source, []string{"config", "user.email", "test@test.com"})
-	git.ExecGit(source, []string{"config", "user.name", "Test User"})
-	git.CreateCommit(source, git.CommitOptions{Message: "init", AllowEmpty: true})
-
-	// Create a config commit and store it under refs/gitmsg/release/config
-	hash, err := git.CreateCommit(source, git.CommitOptions{
-		Message:    `{"branch": "releases", "ext": "release"}`,
-		AllowEmpty: true,
-	})
+	releaseTip, err := git.CreateCommit(source, git.CommitOptions{Message: "release", AllowEmpty: true})
 	if err != nil {
 		t.Fatalf("CreateCommit() error = %v", err)
 	}
-	// Resolve short hash to full hash
-	result, _ := git.ExecGit(source, []string{"rev-parse", hash})
-	fullHash := strings.TrimSpace(result.Stdout)
-	git.ExecGit(source, []string{"update-ref", "refs/gitmsg/release/config", fullHash})
+	git.ExecGit(source, []string{"checkout", "main"})
+	hash, err := git.CreateCommit(source, git.CommitOptions{
+		Message:    `{"version": "0.1.0", "branch": "releases"}`,
+		AllowEmpty: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateCommit(config) error = %v", err)
+	}
+	full, _ := git.ExecGit(source, []string{"rev-parse", hash})
+	git.ExecGit(source, []string{"update-ref", "refs/gitmsg/release/config", strings.TrimSpace(full.Stdout)})
 
-	// Push to bare repo including gitmsg refs
 	bare := pushToBare(t, source)
 	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/release/config:refs/gitmsg/release/config"})
 
@@ -613,136 +548,26 @@ func TestDiscoverCustomBranches_withCustomBranch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureRepository() error = %v", err)
 	}
-	FetchRepository(storageDir, "main", nil)
+	if err := FetchRepository(storageDir, "main", nil); err != nil {
+		t.Fatalf("FetchRepository() error = %v", err)
+	}
 
-	branches := discoverCustomBranches(storageDir)
-
-	found := false
-	for _, b := range branches {
-		if b == "releases" {
-			found = true
-			break
+	refs, err := git.ExecGit(storageDir, []string{"for-each-ref", "--format=%(refname:short)", "refs/heads/"})
+	if err != nil {
+		t.Fatalf("for-each-ref error = %v", err)
+	}
+	fetched := strings.Fields(refs.Stdout)
+	want := map[string]bool{"main": true, "gitmsg/social/posts": true}
+	for _, ref := range fetched {
+		if !want[ref] {
+			t.Errorf("fetched branch %q, want only the entry's branch and gitmsg/*", ref)
 		}
 	}
-	if !found {
-		t.Errorf("discoverCustomBranches() = %v, want to contain 'releases'", branches)
+	if len(fetched) != len(want) {
+		t.Errorf("fetched %v, want %v", fetched, want)
 	}
-}
-
-func TestDiscoverCustomBranches_ignoresGitmsgPrefixBranch(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-	t.Parallel()
-	source := t.TempDir()
-	git.Init(source, "main")
-	git.ExecGit(source, []string{"config", "user.email", "test@test.com"})
-	git.ExecGit(source, []string{"config", "user.name", "Test User"})
-	git.CreateCommit(source, git.CommitOptions{Message: "init", AllowEmpty: true})
-
-	hash, _ := git.CreateCommit(source, git.CommitOptions{
-		Message:    `{"branch": "gitmsg/social/posts", "ext": "social"}`,
-		AllowEmpty: true,
-	})
-	result, _ := git.ExecGit(source, []string{"rev-parse", hash})
-	git.ExecGit(source, []string{"update-ref", "refs/gitmsg/social/config", strings.TrimSpace(result.Stdout)})
-
-	bare := pushToBare(t, source)
-	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/social/config:refs/gitmsg/social/config"})
-
-	baseDir := t.TempDir()
-	storageDir, _ := EnsureRepository(baseDir, bare, bare, "main", nil)
-	FetchRepository(storageDir, "main", nil)
-
-	branches := discoverCustomBranches(storageDir)
-	for _, b := range branches {
-		if strings.HasPrefix(b, "gitmsg/") {
-			t.Errorf("discoverCustomBranches() should not return gitmsg-prefixed branch: %q", b)
-		}
-	}
-}
-
-func TestDiscoverCustomBranches_invalidJSON(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-	t.Parallel()
-	source := t.TempDir()
-	git.Init(source, "main")
-	git.ExecGit(source, []string{"config", "user.email", "test@test.com"})
-	git.ExecGit(source, []string{"config", "user.name", "Test User"})
-	git.CreateCommit(source, git.CommitOptions{Message: "init", AllowEmpty: true})
-
-	hash, _ := git.CreateCommit(source, git.CommitOptions{Message: "not valid json", AllowEmpty: true})
-	result, _ := git.ExecGit(source, []string{"rev-parse", hash})
-	git.ExecGit(source, []string{"update-ref", "refs/gitmsg/test/config", strings.TrimSpace(result.Stdout)})
-
-	bare := pushToBare(t, source)
-	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/test/config:refs/gitmsg/test/config"})
-
-	baseDir := t.TempDir()
-	storageDir, _ := EnsureRepository(baseDir, bare, bare, "main", nil)
-	FetchRepository(storageDir, "main", nil)
-
-	branches := discoverCustomBranches(storageDir)
-	if len(branches) != 0 {
-		t.Errorf("discoverCustomBranches() = %v, want empty for invalid JSON", branches)
-	}
-}
-
-func TestDiscoverCustomBranches_noBranchField(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-	t.Parallel()
-	source := t.TempDir()
-	git.Init(source, "main")
-	git.ExecGit(source, []string{"config", "user.email", "test@test.com"})
-	git.ExecGit(source, []string{"config", "user.name", "Test User"})
-	git.CreateCommit(source, git.CommitOptions{Message: "init", AllowEmpty: true})
-
-	hash, _ := git.CreateCommit(source, git.CommitOptions{Message: `{"ext": "social"}`, AllowEmpty: true})
-	result, _ := git.ExecGit(source, []string{"rev-parse", hash})
-	git.ExecGit(source, []string{"update-ref", "refs/gitmsg/test/config", strings.TrimSpace(result.Stdout)})
-
-	bare := pushToBare(t, source)
-	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/test/config:refs/gitmsg/test/config"})
-
-	baseDir := t.TempDir()
-	storageDir, _ := EnsureRepository(baseDir, bare, bare, "main", nil)
-	FetchRepository(storageDir, "main", nil)
-
-	branches := discoverCustomBranches(storageDir)
-	if len(branches) != 0 {
-		t.Errorf("discoverCustomBranches() = %v, want empty when no branch field", branches)
-	}
-}
-
-func TestDiscoverCustomBranches_emptyBranchField(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-	t.Parallel()
-	source := t.TempDir()
-	git.Init(source, "main")
-	git.ExecGit(source, []string{"config", "user.email", "test@test.com"})
-	git.ExecGit(source, []string{"config", "user.name", "Test User"})
-	git.CreateCommit(source, git.CommitOptions{Message: "init", AllowEmpty: true})
-
-	hash, _ := git.CreateCommit(source, git.CommitOptions{Message: `{"branch": "", "ext": "social"}`, AllowEmpty: true})
-	result, _ := git.ExecGit(source, []string{"rev-parse", hash})
-	git.ExecGit(source, []string{"update-ref", "refs/gitmsg/test/config", strings.TrimSpace(result.Stdout)})
-
-	bare := pushToBare(t, source)
-	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/test/config:refs/gitmsg/test/config"})
-
-	baseDir := t.TempDir()
-	storageDir, _ := EnsureRepository(baseDir, bare, bare, "main", nil)
-	FetchRepository(storageDir, "main", nil)
-
-	branches := discoverCustomBranches(storageDir)
-	if len(branches) != 0 {
-		t.Errorf("discoverCustomBranches() = %v, want empty for empty branch field", branches)
+	if git.CommitExists(storageDir, releaseTip) {
+		t.Errorf("the fetch brought %s from the configured branch", releaseTip)
 	}
 }
 
@@ -993,65 +818,6 @@ func TestIsMissingObjectError(t *testing.T) {
 				t.Errorf("IsMissingObjectError(%v) = %v, want %v", tt.err, got, tt.want)
 			}
 		})
-	}
-}
-
-// --- discoverCustomBranches with non-config refs ---
-
-func TestDiscoverCustomBranches_skipsNonConfigRefs(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-	t.Parallel()
-	source := t.TempDir()
-	git.Init(source, "main")
-	git.ExecGit(source, []string{"config", "user.email", "test@test.com"})
-	git.ExecGit(source, []string{"config", "user.name", "Test User"})
-	git.CreateCommit(source, git.CommitOptions{Message: "init", AllowEmpty: true})
-
-	// Create a non-config ref under refs/gitmsg/ (e.g., a list ref)
-	hash, _ := git.CreateCommit(source, git.CommitOptions{Message: "list data", AllowEmpty: true})
-	result, _ := git.ExecGit(source, []string{"rev-parse", hash})
-	git.ExecGit(source, []string{"update-ref", "refs/gitmsg/social/lists", strings.TrimSpace(result.Stdout)})
-
-	// Also create a valid config ref to ensure iteration hits both
-	hash2, _ := git.CreateCommit(source, git.CommitOptions{
-		Message:    `{"branch": "releases", "ext": "release"}`,
-		AllowEmpty: true,
-	})
-	result2, _ := git.ExecGit(source, []string{"rev-parse", hash2})
-	git.ExecGit(source, []string{"update-ref", "refs/gitmsg/release/config", strings.TrimSpace(result2.Stdout)})
-
-	bare := pushToBare(t, source)
-	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/social/lists:refs/gitmsg/social/lists"})
-	git.ExecGit(source, []string{"push", "origin", "refs/gitmsg/release/config:refs/gitmsg/release/config"})
-
-	baseDir := t.TempDir()
-	storageDir, _ := EnsureRepository(baseDir, bare, bare, "main", nil)
-	FetchRepository(storageDir, "main", nil)
-
-	branches := discoverCustomBranches(storageDir)
-	for _, b := range branches {
-		if b == "list data" {
-			t.Error("discoverCustomBranches() should not read non-config refs")
-		}
-	}
-}
-
-func TestDiscoverCustomBranches_gitShowFails(t *testing.T) {
-	t.Parallel()
-	// Create a bare repo with a config ref pointing to a non-existent object
-	dir := t.TempDir()
-	git.ExecGit(dir, []string{"init", "--bare"})
-
-	// Manually write a ref file pointing to a bogus hash
-	refDir := filepath.Join(dir, "refs", "gitmsg", "broken")
-	os.MkdirAll(refDir, 0755)
-	os.WriteFile(filepath.Join(refDir, "config"), []byte("0000000000000000000000000000000001234567\n"), 0644)
-
-	branches := discoverCustomBranches(dir)
-	if len(branches) != 0 {
-		t.Errorf("discoverCustomBranches() = %v, want empty when git show fails", branches)
 	}
 }
 

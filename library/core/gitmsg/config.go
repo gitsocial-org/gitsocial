@@ -184,9 +184,9 @@ func GetExtBranch(workdir, ext string) string {
 	return "gitmsg/" + ext
 }
 
-// IsExtInitialized checks if an extension has been initialized (has a branch configured).
+// IsExtInitialized reports whether an extension's config carries the version every config requires.
 func IsExtInitialized(workdir, ext string) bool {
-	_, ok := GetExtConfigValue(workdir, ext, "branch")
+	_, ok := GetExtConfigValue(workdir, ext, "version")
 	return ok
 }
 

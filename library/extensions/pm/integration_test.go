@@ -925,7 +925,7 @@ func TestBoardAndConfig(t *testing.T) {
 			t.Errorf("Framework = %q, want scrum", loaded.Framework)
 		}
 		if !gitmsg.IsExtInitialized(workdir, "pm") {
-			t.Error("a saved config should carry the branch key IsExtInitialized reads")
+			t.Error("a saved config should carry the version key IsExtInitialized reads")
 		}
 	})
 
