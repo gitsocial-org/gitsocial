@@ -255,6 +255,10 @@ func handlePMMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return handleIssueCreated(msg, ctx)
 	case issueUpdatedMsg:
 		return handleIssueUpdated(msg, ctx)
+	case milestoneCreatedMsg:
+		return handleMilestoneCreated(msg, ctx)
+	case sprintCreatedMsg:
+		return handleSprintCreated(msg, ctx)
 	case issueClosedMsg:
 		return handleStateChange(msg.Err, "Issue closed", "Close proposed (awaiting acceptance)", msg.Proposed, ctx)
 	case milestoneClosedMsg:
@@ -307,6 +311,56 @@ func handleIssueCreated(msg issueCreatedMsg, ctx tuicore.AppContext) (bool, tea.
 	return true, tea.Batch(msgCmd, func() tea.Msg {
 		return tuicore.NavigateMsg{
 			Location: tuicore.LocPMIssueDetail(msg.Issue.ID),
+			Action:   tuicore.NavReplace,
+		}
+	})
+}
+
+// handleMilestoneCreated reports the new milestone, refreshing the list in place and otherwise opening its detail view.
+func handleMilestoneCreated(msg milestoneCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+	if msg.Err != nil {
+		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
+		// Pass through so the form clears its submitting state and the user can retry
+		return false, nil
+	}
+	msgCmd := ctx.Host().SetMessageWithTimeout(
+		fmt.Sprintf("Created: %s", msg.Milestone.Title),
+		tuicore.MessageTypeSuccess,
+		5*time.Second,
+	)
+	if ctx.Router().Location().Path == "/pm/milestones" {
+		// Forward to the active view so the list refreshes inline
+		viewCmd := ctx.Host().Update(msg)
+		return true, tea.Batch(msgCmd, viewCmd)
+	}
+	return true, tea.Batch(msgCmd, func() tea.Msg {
+		return tuicore.NavigateMsg{
+			Location: tuicore.LocPMMilestoneDetail(msg.Milestone.ID),
+			Action:   tuicore.NavReplace,
+		}
+	})
+}
+
+// handleSprintCreated reports the new sprint, refreshing the list in place and otherwise opening its detail view.
+func handleSprintCreated(msg sprintCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+	if msg.Err != nil {
+		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
+		// Pass through so the form clears its submitting state and the user can retry
+		return false, nil
+	}
+	msgCmd := ctx.Host().SetMessageWithTimeout(
+		fmt.Sprintf("Created: %s", msg.Sprint.Title),
+		tuicore.MessageTypeSuccess,
+		5*time.Second,
+	)
+	if ctx.Router().Location().Path == "/pm/sprints" {
+		// Forward to the active view so the list refreshes inline
+		viewCmd := ctx.Host().Update(msg)
+		return true, tea.Batch(msgCmd, viewCmd)
+	}
+	return true, tea.Batch(msgCmd, func() tea.Msg {
+		return tuicore.NavigateMsg{
+			Location: tuicore.LocPMSprintDetail(msg.Sprint.ID),
 			Action:   tuicore.NavReplace,
 		}
 	})

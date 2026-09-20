@@ -37,6 +37,7 @@ library/tui/test/
 ├── golden_test.go        # golden files and layout properties
 ├── navigation_test.go    # view transitions
 ├── sequence_test.go      # multi-step interactions
+├── form_test.go          # form submits
 ├── cursor_test.go        # list cursor stability
 ├── history_diff_test.go  # history-diff footers
 ├── stack_test.go         # stacked pull requests
@@ -104,6 +105,7 @@ The cache is filled with `client.SyncWorkspace`, workspace first and fork second
 | `golden_test.go` | `TestGolden/{timeline,board,issues,pr_list,releases,settings,help,memo_personal,memo_session,memo_session_items,memo_inherited,memo_inherits}_120x40`, `LayoutProperties`, `TestGoldenWidth_rejectsNavOneColumnTooWide`, `TestGoldenTime_labelHoldsForALongRun` | ANSI-stripped renders against `testdata/*.golden`, each frame also 120 columns wide and 40 lines; the memo goldens carry one memo per tier and the inherited source; every route fits the width and the height at 120x40, 80x24 and 200x60 (full tier only); a nav row one column too wide is rejected; the fixture keeps one relative-time label for the length of a run |
 | `navigation_test.go` | `TestNavigation/GlobalKeys` (`S`, `P`, `R`, `V`, `M`), `Back`, `SiteEditToggle`, `MultiLevelBack`, `Detail`, `Search`, `Help`, `Notifications` | the global jump keys land on their routes; `esc`, `/`, `?` and `@` do what they say |
 | `sequence_test.go` | `TestSequence/*`: AllExtensions, BrowseAndReturn, IssuesFlow, SettingsAndBack, QuickJumpOverridesHistory, the `*OpensForm` and `*Navigates` flows per item type, PostRetractShowsConfirm, SearchFlow, PRDiffNavigates, MultipleViewRenders, PushConfirmNamesRemote | multi-step flows; full tier only |
+| `form_test.go` | `TestMilestoneFormCreates`, `TestSprintFormCreates` | a submitted create form lands on the new item's detail view, on an isolated fixture |
 | `cursor_test.go` | `TestTimelineCursorSurvivesFetch`, `TestTimelineCursorSurvivesBackNav` | the timeline selection survives a fetch and a detail round trip |
 | `history_diff_test.go` | `TestHistoryDiffFooter`, `PostHistoryDiffRenders` | every history-diff context registers its footer entries without duplicates, and the view renders |
 | `stack_test.go` | `TestStackDisplay/BadgeOnPRList`, `TestStackBindings`, `TestStackNavigationBackend` | the stack badge, the stack keys, and `GetStack` and `getDependents` behind them |
