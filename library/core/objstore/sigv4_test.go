@@ -3,6 +3,8 @@ package objstore
 
 import (
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -68,5 +70,68 @@ func TestSignRequest_encodesPathPerSigV4(t *testing.T) {
 	}
 	if got := canonicalURIEncode(u.EscapedPath()); got != "/b/artifacts/1.0.0%2Bbuild.5/tool" {
 		t.Errorf("canonical URI = %q, want the + escaped", got)
+	}
+}
+
+// TestObjectURL_WireMatchesSignature pins the pair: the path a request carries is the path the signature covers.
+func TestObjectURL_WireMatchesSignature(t *testing.T) {
+	keys := []string{
+		"refs/heads/main",
+		"ghostty/f/pkg/afl++/LICENSE.html",
+		"artifacts/1.0.0+build.5/tool",
+		"site/a b/c.html",
+		"site/q&a/what's~this.html",
+		"site/héllo/café.html",
+		"site/100%/done.html",
+	}
+	for _, style := range []bool{true, false} {
+		client, err := NewClient(Config{Endpoint: "https://s3.example.com", Bucket: "b", Region: "us-east-1", AccessKey: "k", SecretKey: "s", PathStyle: style})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, key := range keys {
+			u, err := client.objectURL(key)
+			if err != nil {
+				t.Fatalf("objectURL(%q): %v", key, err)
+			}
+			wire := u.EscapedPath()
+			if signed := canonicalURIEncode(wire); signed != wire {
+				t.Errorf("pathStyle=%v key %q: wire %q, signed %q", style, key, wire, signed)
+			}
+			if !strings.HasSuffix(u.Path, key) {
+				t.Errorf("key %q: decoded path %q no longer ends in the key, so it was escaped twice", key, u.Path)
+			}
+		}
+	}
+}
+
+// TestDoOnce_QueryWireMatchesSignature drives a real request and pins the query a provider receives, where Go writes a space as + and SigV4 writes %20.
+func TestDoOnce_QueryWireMatchesSignature(t *testing.T) {
+	var raw string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(`<ListBucketResult></ListBucketResult>`))
+	}))
+	defer srv.Close()
+	client, err := NewClient(Config{Endpoint: srv.URL, Bucket: "b", Region: "us-east-1", AccessKey: "k", SecretKey: "s", PathStyle: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.List("site/a b+c/"); err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if strings.Contains(raw, "+") {
+		t.Errorf("wire query %q carries a raw +, which a provider reads as a space", raw)
+	}
+	parsed, err := url.ParseQuery(raw)
+	if err != nil {
+		t.Fatalf("parse %q: %v", raw, err)
+	}
+	if signed := canonicalQueryString(parsed); signed != raw {
+		t.Errorf("wire query %q, signed query %q", raw, signed)
+	}
+	if got := parsed.Get("prefix"); got != "site/a b+c/" {
+		t.Errorf("prefix reached the provider as %q", got)
 	}
 }

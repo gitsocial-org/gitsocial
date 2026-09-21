@@ -60,3 +60,44 @@ func TestClientForRemote_strayHalfPairStaysAnonymous(t *testing.T) {
 		t.Error("a stray half env pair must leave the client anonymous")
 	}
 }
+
+// TestPutGetList_KeysWithReservedCharacters: a key holding characters SigV4 escapes stores, reads, lists and deletes under its own name, so the wire encoding is applied once.
+func TestPutGetList_KeysWithReservedCharacters(t *testing.T) {
+	client, bucket := testClient(t)
+	keys := []string{
+		"site/f/pkg/afl++/LICENSE.html",
+		"site/f/a b/c.html",
+		"site/f/q&a/what's~here.html",
+		"site/f/héllo/café.html",
+	}
+	for _, key := range keys {
+		if err := client.Put(key, []byte(key)); err != nil {
+			t.Fatalf("Put(%q): %v", key, err)
+		}
+		if body, ok := bucket.Object(key); !ok || body != key {
+			t.Errorf("Put(%q) stored %q under some other name (found = %v)", key, body, ok)
+		}
+		got, err := client.Get(key)
+		if err != nil {
+			t.Fatalf("Get(%q): %v", key, err)
+		}
+		if string(got) != key {
+			t.Errorf("Get(%q) = %q", key, got)
+		}
+	}
+	listed, err := client.List("site/f/")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(listed) != len(keys) {
+		t.Errorf("List returned %d keys, want %d: %v", len(listed), len(keys), listed)
+	}
+	for _, key := range keys {
+		if err := client.Delete(key); err != nil {
+			t.Fatalf("Delete(%q): %v", key, err)
+		}
+	}
+	if rest, err := client.List("site/f/"); err != nil || len(rest) != 0 {
+		t.Errorf("after delete: List = %v, err = %v", rest, err)
+	}
+}

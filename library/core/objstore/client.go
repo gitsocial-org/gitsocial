@@ -90,7 +90,8 @@ func (c *Client) objectURL(key string) (*url.URL, error) {
 			u.Path += key
 		}
 	}
-	u.RawPath = ""
+	// The wire path carries the SigV4 encoding: Go leaves + and other sub-delims literal, and a provider reads a literal + as a space.
+	u.RawPath = escapePathSegments(u.Path)
 	return &u, nil
 }
 
@@ -155,7 +156,8 @@ func (c *Client) doOnce(method, key string, query url.Values, body []byte, heade
 		return nil, nil, err
 	}
 	if query != nil {
-		u.RawQuery = query.Encode()
+		// The signer's encoding, not Go's: query.Encode writes a space as +, where SigV4 writes %20.
+		u.RawQuery = canonicalQueryString(query)
 	}
 	payloadHash := emptyPayloadSHA256
 	if body != nil {

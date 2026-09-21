@@ -63,14 +63,26 @@ func canonicalURIEncode(escapedPath string) string {
 	if escapedPath == "" {
 		return "/"
 	}
-	segments := strings.Split(escapedPath, "/")
-	for i, segment := range segments {
-		// Go leaves !$&'()*+,;=:@ unescaped in a path, where AWS's UriEncode escapes them.
+	// Go leaves !$&'()*+,;=:@ unescaped in a path, where AWS's UriEncode escapes them.
+	return mapPathSegments(escapedPath, func(segment string) string {
 		decoded, err := url.PathUnescape(segment)
 		if err != nil {
 			decoded = segment
 		}
-		segments[i] = uriEncode(decoded)
+		return uriEncode(decoded)
+	})
+}
+
+// escapePathSegments percent-encodes each segment of a decoded path per SigV4, so the wire form and the signed form are one string.
+func escapePathSegments(path string) string {
+	return mapPathSegments(path, uriEncode)
+}
+
+// mapPathSegments rewrites each slash-separated segment, the one place either path encoding walks a path.
+func mapPathSegments(path string, encode func(string) string) string {
+	segments := strings.Split(path, "/")
+	for i, segment := range segments {
+		segments[i] = encode(segment)
 	}
 	return strings.Join(segments, "/")
 }
