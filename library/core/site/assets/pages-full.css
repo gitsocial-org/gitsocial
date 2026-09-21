@@ -170,7 +170,7 @@
   }
   /* Cards / items. */
   .card {
-    background: var(--card); border: 1px solid var(--line); border-radius: var(--r-panel);
+    background: var(--chip); border: 1px solid var(--line); border-radius: var(--r-panel);
     padding: var(--pad-panel); margin: 0 0 var(--sp-3);
   }
   /* Whole-card navigation: the card links to its item detail, so it takes a
@@ -179,7 +179,7 @@
   .card.clickable { cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
   .card.clickable:hover {
     border-color: color-mix(in srgb, var(--link) 45%, var(--line));
-    background: var(--chip);
+    background: var(--chip-hover);
   }
   /* Subject scale: one semantic element, always weight 600, sized by context —
      card = mono at --fs-md, detail = --fs-h1 (it is the page title), diff-head =
@@ -237,7 +237,7 @@
   .type-glyph.tg-closed { color: var(--closed); }
   .type-glyph.tg-merged { color: var(--merged); }
   .chip {
-    display: inline-block; background: var(--chip); border-radius: var(--r-pill);
+    display: inline-block; background: var(--code-bg); border-radius: var(--r-pill);
     padding: 0.05rem var(--sp-3); font-size: var(--fs-ui); color: var(--muted);
     font-family: var(--mono); font-weight: 500;
   }
@@ -280,7 +280,7 @@
   .detail dt, .release-notes dt { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); }
   /* A trailer value and a release's commit row are metadata, so they read in their key's voice. */
   .detail dd, .release-notes dd { margin: 0; font-family: var(--mono); font-size: var(--fs-ui); word-break: break-word; }
-  .detail .subject { font-size: var(--fs-h1); margin-bottom: var(--sp-2); }
+  .detail .subject { font-size: var(--fs-h1); }
   .detail .card .subject, .card .subject { font-size: var(--fs-md); font-family: var(--mono); }
   .back { display: inline-block; margin-bottom: var(--sp-4); color: var(--muted); font-family: var(--mono); font-size: var(--fs-ui); }
   /* Detail top bar: the back link on the left, the page's controls on the right,
@@ -639,19 +639,16 @@
      with the content edge here. */
   .detail-meta .meta { flex: 1 1 auto; margin-left: 0; }
   .detail-meta .view-modes { margin: 0; flex: 0 0 auto; }
-  .embedded {
-    margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); border-left: 2px solid var(--line);
-    background: var(--chip); border-radius: 0 var(--r-ctl) var(--r-ctl) 0;
+  /* An item's excerpt of what it answers or quotes, carried by its own commit:
+     .reply-quote on a card, .embedded on a detail page and under a cross-repo
+     reference. One kind, so one marker; the excerpt is dimmed under a comment
+     or quote and full-strength under a repost, whose original is the item
+     rather than context for it. */
+  .embedded, .reply-quote {
+    margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); border-left: 5px solid var(--line);
+    background: var(--code-bg); border-radius: 0 var(--r-ctl) var(--r-ctl) 0;
   }
   .embedded-from { font-style: italic; }
-  /* A reply's excerpt of what it answers, on a card. Same left-border kind
-     marker as .embedded (this IS embedded context, carried by the reply's own
-     commit), dimmed under a comment or quote and full-strength under a repost,
-     whose original is the item rather than context for it. */
-  .reply-quote {
-    margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); border-left: 2px solid var(--line);
-    background: var(--chip); border-radius: 0 var(--r-ctl) var(--r-ctl) 0;
-  }
   /* The block is its own navigation target — it opens the PARENT, not the reply
      that carries it — so it takes the card's clickable treatment and says so on
      hover: the border lights and the ground tints the way a card's does, which
@@ -661,11 +658,10 @@
   .reply-quote.clickable { cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
   .reply-quote.clickable:hover {
     border-left-color: color-mix(in srgb, var(--link) 55%, var(--line));
-    background: color-mix(in srgb, var(--link) 8%, var(--chip));
+    background: color-mix(in srgb, var(--link) 8%, var(--code-bg));
   }
   .reply-quote-head { margin-bottom: var(--sp-1); }
   .reply-quote.dimmed .reply-quote-body { color: var(--muted); }
-  .reply-quote-body { font-size: var(--fs-ui); }
   .embedded-quote { white-space: pre-wrap; word-break: break-word; color: var(--muted); margin: var(--sp-1) 0; font-size: var(--fs-ui); }
   /* PM detail extras (milestone/sprint members, sub-issues, relations),
      progress bars, the kanban board, and the in-bucket item search. */
@@ -675,10 +671,10 @@
   .pm-member > .chip.state { flex: 0 0 auto; min-width: 4.2rem; text-align: center; }
   .pm-members-head, .pm-subissues-head { margin: var(--sp-4) 0 var(--sp-2); }
   .pm-members, .pm-subissues { margin-top: var(--sp-3); }
-  /* Progress bar: a slim track with a link-tinted fill + "n closed of m" label. */
+  /* Progress bar: a slim track with a fill in the closed color + "n closed of m" label. */
   .pm-progress { display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-2) 0 var(--sp-3); }
   .pm-bar { flex: 1 1 auto; height: 0.5rem; max-width: 16rem; background: var(--chip); border-radius: var(--r-pill); overflow: hidden; }
-  .pm-bar-fill { height: 100%; background: var(--open); border-radius: var(--r-pill); }
+  .pm-bar-fill { height: 100%; background: var(--closed); border-radius: var(--r-pill); }
   .pm-progress-label { font-size: var(--fs-ui); color: var(--muted); flex: 0 0 auto; }
   /* Issue detail relationship links (parent / milestone / sprint). */
   .pm-rels { margin: var(--sp-3) 0; display: flex; flex-direction: column; gap: var(--sp-2); }
@@ -690,22 +686,18 @@
   .card-chips { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-2); }
   /* Under a head the chips share the meta row's indent past the glyph column. */
   .card-head ~ .card-chips { margin-left: calc(var(--sp-5) + var(--sp-3)); }
-  .chip.chip-label { background: var(--chip); color: var(--muted); }
   .chip.chip-assignee { background: var(--link-t2); color: var(--text); }
-  .chip.chip-priority { color: var(--text); background: var(--chip); }
+  .chip.chip-priority { color: var(--text); }
   .chip.chip-priority.prio-critical { background: var(--danger-t3); }
   .chip.chip-priority.prio-high { background: var(--danger-t2); }
   .chip.chip-priority.prio-medium { background: var(--warn-t2); }
-  .chip.chip-priority.prio-low { background: var(--chip); }
   .chip.chip-retracted { background: var(--danger-t2); color: var(--text); }
-  .chip.chip-origin { background: var(--link-t2); color: var(--text); }
   /* An automated author's mark: muted, because it tells a reader what to SKIM
      past, and a loud chip on the majority of a mirrored repo's rows would be
      the noise it is meant to label. */
-  .chip.chip-bot { background: var(--chip); color: var(--muted); }
+  .chip.chip-bot { color: var(--muted); }
   .chip.chip-due { background: var(--warn-t2); color: var(--text); }
-  .chip.chip-count { background: var(--chip); color: var(--muted); }
-  .chip.chip-review { background: var(--chip); color: var(--text); }
+  .chip.chip-review { color: var(--text); }
   .chip.chip-review .review-ok { color: var(--open); font-weight: 600; }
   .chip.chip-review .review-no { color: var(--danger); font-weight: 600; }
   /* Kanban board: horizontally scrolling columns, each a header + issue cards. */
@@ -800,7 +792,7 @@
      bolder text, no left-border indicator (which also shifted the row 3px). */
   .version-row.active { background: var(--link-t2); font-weight: 600; }
   .version-row-meta { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; color: var(--muted); flex: 1 1 auto; }
-  .chip.version-label { background: var(--chip); color: var(--text); font-family: var(--mono); }
+  .chip.version-label { color: var(--text); font-family: var(--mono); }
   .version-diff-ctl { margin-left: auto; }
   .version-diff-pane:not(:empty) { border-top: 1px solid var(--line); }
   .version-diff { overflow: auto; }
@@ -818,7 +810,7 @@
   /* verdict-<state> tints a chip and colors a feedback card's left border. */
   .chip.verdict-approved { background: var(--open-t2); color: var(--text); }
   .chip.verdict-changes-requested { background: var(--danger-t2); color: var(--text); }
-  .chip.verdict-commented { background: var(--chip); color: var(--text); }
+  .chip.verdict-commented { color: var(--text); }
   /* The signed-tag chip is a positive verdict: the approved tint, not the base chip. */
   .chip.chip-signed { background: var(--open-t2); color: var(--text); }
   /* The diff's feedback containers hold its dense size; the cards inherit it. */

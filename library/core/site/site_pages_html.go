@@ -252,7 +252,7 @@ func sitePageIcon(favicon string) template.URL {
 // sitePageChrome is the shared head/shell data every page stamps.
 type sitePageChrome struct {
 	Title         string       // full <title> (subject · site title)
-	AccentCSS     template.CSS // per-push accent override stamped after the inlined core ("" — the core's stock teals govern)
+	AccentCSS     template.CSS // per-push accent override stamped after the inlined core ("" — the core's stock accent governs)
 	Icon          template.URL
 	Description   string // meta/OG description, whitespace-collapsed, ~160 chars
 	OGTitle       string // og:title (the bare subject)

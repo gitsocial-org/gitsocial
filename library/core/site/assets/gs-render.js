@@ -2555,7 +2555,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       stateChip((m.header && m.header.state) || "open"), " ",
       el("a", { href: commitRef(m.commit.hash, "gitmsg/pm") }, [itemSubject(m) || "(untitled)"]),
     ]));
-    return card({ variant: "pm-group", parts: [head, el("div", { class: "meta" }, [dates.join(" · ")])].concat(rows) });
+    return card({ variant: "pm-group", parts: [head, el("div", { class: "meta" }, [dates.join(" · ")])].concat(rows), nav: { hash: item.commit.hash, branch: "gitmsg/pm" } });
   }
 
   // issuesBody renders the state-filtered issue list as a node array.
@@ -3790,7 +3790,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   const GRAPH_LANE_W = 18, GRAPH_ROW_H = 40, GRAPH_DOT_R = 4;
   // GRAPH_LANE_VARS pairs each lane's theme token with its light-theme fallback.
   const GRAPH_LANE_VARS = [
-    ["--link", "#008787"], ["--closed", "#8957e5"], ["--open", "#1f9d55"],
+    ["--link", "#404ddd"], ["--closed", "#8957e5"], ["--open", "#1f9d55"],
     ["--warn", "#bf8700"], ["--danger", "#cf222e"], ["--i-blue", "#1a85d4"],
     ["--i-vermilion", "#d5512f"], ["--i-indigo", "#693acf"],
   ];

@@ -168,7 +168,7 @@ func TestSitePagesHeadWiring(t *testing.T) {
 
 // TestSitePagesAccentCSS pins the accent override's mapping to the app's
 // applyAccent semantics: nothing configured emits nothing (the core's stock
-// teals govern), a configured accent tints both themes, and accentDark — when
+// accent governs), a configured accent tints both themes, and accentDark — when
 // set — tints the dark theme separately.
 func TestSitePagesAccentCSS(t *testing.T) {
 	cases := []struct {
