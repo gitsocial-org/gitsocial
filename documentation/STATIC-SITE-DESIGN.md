@@ -20,7 +20,7 @@ Declared once in `pages-core.css`, consumed by both stylesheets and both rendere
 
 | Group | Tokens | Rule |
 |---|---|---|
-| Type | `--fs-h1` 2.25rem, `--fs-h2` 2rem, `--fs-h3` 1.75rem, `--fs-h4` 1.5rem, `--fs-body` 24px with `--lh-body` 1.1, `--fs-md` 0.95rem, `--fs-ui` 0.8rem, `--fs-code` 0.85rem, `--fs-dense` 0.72rem | no `font-size` literal outside these |
+| Type | `--fs-h1` 2.25rem, `--fs-h2` 2rem, `--fs-h3` 1.75rem, `--fs-h4` 1.5rem, `--fs-body` 21px with `--lh-body` 1.2, `--fs-md` 0.95rem, `--fs-ui` 0.8rem, `--fs-code` 0.85rem, `--fs-dense` 0.72rem | no `font-size` literal outside these |
 | Fonts | `--serif` EB Garamond, Georgia; `--mono` IBM Plex Mono | a page that has not loaded `pages-full.css` reads in Georgia at the same size |
 | Palette | `--bg`, `--text`, `--link`, `--card`, from the light set `--pl-*` or the dark set `--pd-*`; file-type hues `--i-*` | no hex outside `:root` |
 | State colors | `--open` #1f9d55, `--closed` #8957e5, `--merged` #8250df, `--warn` #bf8700, `--danger` #cf222e | one meaning per color, everywhere |
@@ -92,7 +92,7 @@ One builder per component in JS and one template in Go. "Both" means the page la
 | Trailers | `.detail dl` with a `dt` and `dd` per field | app | mono, muted, `--fs-ui`; it carries the header fields no other component on the page shows, so the route's `ext` and `type`, the head's `state`, `draft`, `retracted`, `tag`, `version` and `prerelease`, and the meta row's `origin-author-name`, `origin-author-email` and `origin-time` stay out; `origin-platform` and `origin-url` fold into one `origin` row |
 | Markdown | `.markdown`, headings with `md-` ids, lists, tables, fences, images, blockquotes | both | one grammar, ported between JS and Go, asserted equal |
 | Code | tree (`.tree-row`, `.tree-node`, chevrons, tree search), blob (highlighted, raw pane, images, video), diff (`.diff-section`, unified or split, inline feedback) | app | a blob the view labels rather than renders carries its one sentence in `.empty` under the breadcrumb, with the submodule's full sha in the label's `title` |
-| Board | columns, WIP indicator, collapsed columns, group-by | app | |
+| Board | columns, WIP indicator, collapsed columns, group-by | app | a board card is chrome: mono at `--fs-ui`, line-height 1 |
 | Search | input, scope help, tier note, snippets, result cards | app | |
 | Notice | `.notice` for degraded content, `.empty`, `.loading`, `.err` | `.notice` and `.empty` both; `.loading` and `.err` app | one sentence in place of the content; the wording is in [States](#states) |
 | Controls | `.action-link`, `.back`, `.page-actions`, `.view-modes`, `.view-toggle`, `.share-link`, `.load-more` | both | mono, `--r-ctl`, `--btn` surface; a surface's controls sit on one `.page-actions` row, never on two |

@@ -196,7 +196,7 @@
   .card-head .subject { flex: 1 1 0; min-width: 0; }
   .card-head .type-glyph { margin-right: 0; }
   /* A detail head is a card head at page scale. */
-  .card-head > h1.subject { font-size: var(--fs-h1); line-height: 1.25; margin: var(--sp-2) 0 var(--sp-1); }
+  .card-head > h1.subject { font-size: var(--fs-h1); line-height: 1; margin: var(--sp-2) 0 var(--sp-1); }
   .card .body { white-space: pre-wrap; word-break: break-word; margin-top: var(--sp-2); }
   .card .body.dim { color: var(--muted); }
   /* A card body holding RENDERED markdown lays itself out: its blocks carry
@@ -217,7 +217,7 @@
     mask-image: linear-gradient(to bottom, #000 calc(8 * var(--lh-body) * 1em), transparent calc(10 * var(--lh-body) * 1em));
   }
   .body-clamp-toggle { display: block; margin-top: var(--sp-1); padding: 0.15rem 0; }
-  .meta { color: var(--muted); font-size: var(--fs-ui); display: inline-flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; margin-left: calc(var(--sp-5) + var(--sp-3)); }
+  .meta { color: var(--muted); font-family: var(--mono); font-size: var(--fs-ui); display: inline-flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; margin-left: calc(var(--sp-5) + var(--sp-3)); }
   /* The indent above aligns a meta row under a card head's subject, past the
      glyph column. A card with no head (post, comment, memo) leads the meta row
      with the glyph itself, which then has to start AT the glyph column like
@@ -407,8 +407,12 @@
   /* README / Markdown. */
   .markdown { margin-top: var(--sp-4); word-break: break-word; }
   .markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin: var(--sp-4) 0 var(--sp-3); line-height: 1.2; }
-  .markdown h1 { font-size: var(--fs-h1); border-bottom: 1px solid var(--line); padding-bottom: var(--sp-2); }
-  .markdown h2 { font-size: var(--fs-h2); border-bottom: 1px solid var(--line); padding-bottom: var(--sp-1); }
+  .markdown h1 { font-size: var(--fs-h1); line-height: 1; border-bottom: 1px solid var(--line); padding-bottom: var(--sp-2); }
+  .markdown h2 { font-size: var(--fs-h2); padding-top: var(--sp-3); border-bottom: 1px solid var(--line); padding-bottom: var(--sp-1); }
+  /* Air above a heading follows its level: one spacing step less per step down,
+     so a reader sees the hierarchy before reading the words. */
+  .markdown h3 { padding-top: var(--sp-2); }
+  .markdown h4 { padding-top: var(--sp-1); }
   .markdown p { margin: var(--sp-4) 0; }
   .markdown ul, .markdown ol { margin: var(--sp-3) 0 var(--sp-3) var(--sp-5); }
   .markdown li { margin: var(--sp-1) 0; }
@@ -708,7 +712,9 @@
   .board-col-name { flex: 1 1 auto; white-space: nowrap; }
   .board-col-toggle, .board-col-hide { flex: 0 0 auto; line-height: 1; padding: 0 0.1rem; }
   .board-empty { color: var(--muted); text-align: center; padding: var(--sp-3) 0; font-size: var(--fs-ui); }
-  .card.board-card { margin-bottom: var(--sp-3); padding: var(--sp-3); }
+  /* A board card is chrome, not prose: mono at the UI size, set tighter than
+     the serif body so a wrapped title stays one compact block in the lane. */
+  .card.board-card { margin-bottom: var(--sp-3); padding: var(--sp-3); font-family: var(--mono); line-height: 1; }
   .card.board-card .subject { font-size: var(--fs-ui); }
   /* Board card title line: glyph + subject as ONE flex child so a long subject
      wraps its text under itself without the glyph splitting onto its own row in a
@@ -759,12 +765,12 @@
   .contrib { margin: var(--sp-3) 0 var(--sp-4); }
   .contrib-row {
     display: flex; align-items: center; justify-content: space-between;
-    padding: var(--pad-row); font-size: var(--fs-ui); border-top: 1px solid var(--line);
+    padding: var(--pad-row); font-family: var(--mono); font-size: var(--fs-ui); border-top: 1px solid var(--line);
   }
   .contrib-list .contrib-row:first-child { border-top: none; }
   .contrib-name { word-break: break-word; }
   .contrib-meta { display: inline-flex; gap: var(--sp-3); align-items: center; }
-  .contrib-pct { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); }
+  .contrib-pct { color: var(--muted); }
   /* Top-authors heading row: label on the left, a live filter input on the same
      line; the list scrolls once it grows past a few rows and reveals more on
      scroll (infinite autoscroll window). */

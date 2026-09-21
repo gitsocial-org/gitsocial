@@ -194,7 +194,7 @@ Each bump gets a row here, newest first:
 
 | Version | What it rewrote |
 |---|---|
-| 31 | the front page's root listing, which drops its overflow sentence; a release's notes and asset rows; the front matter a prose page now drops |
+| 31 | the front page's root listing, which drops its overflow sentence; a release's notes and asset rows; the front matter a prose page now drops; the inlined core's type scale, a 21px serif body and an h1 at line-height 1 |
 | 30 | the body-only list and activity rows: no head, the first line as the card's text |
 | 29 | the front page's truncation notice over its root file listing |
 | 28 | the release row's asset count in place of its hash, and a typeless item's glyph class |

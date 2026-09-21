@@ -67,11 +67,11 @@
        0.7-0.76) collapse onto the nearest token. Inline `.markdown kbd` stays
        in `em` (it scales with surrounding text, not this global scale).
        Heading tokens are rem (root 16px), so they do NOT track --fs-body: the
-       36/32/28/24px steps are chosen to sit at or above the 24px serif body
+       36/32/28/24px steps are chosen to sit above the 21px serif body
        (EB Garamond renders small for its size) — re-step them if it moves. */
     --fs-h1: 2.25rem; --fs-h2: 2rem; --fs-h3: 1.75rem; --fs-h4: 1.5rem;
-    --fs-body: 24px; --fs-md: 0.95rem;
-    --lh-body: 1.1;
+    --fs-body: 21px; --fs-md: 0.95rem;
+    --lh-body: 1.2;
     --fs-ui: 0.8rem; --fs-code: 0.85rem; --fs-dense: 0.72rem;
     /* Radius tiers: pill (chips, round controls), panel (bordered surfaces),
        control (buttons, inputs). Ink-detail radii stay literal below the
@@ -274,7 +274,7 @@
      The class vocabulary the pages share with the app (.chip, .card,
      .markdown, .show-more, …) is NOT restated here — it comes from
      pages-full.css, so the pages render the app's own treatment. */
-  :where(#gs-page, #view) h1 { font-size: var(--fs-h1); line-height: 1.25; margin: var(--sp-2) 0 var(--sp-1); }
+  :where(#gs-page, #view) h1 { font-size: var(--fs-h1); line-height: 1; margin: var(--sp-2) 0 var(--sp-1); }
   :where(#gs-page) h2 { font-size: var(--fs-h2); line-height: 1.25; margin: var(--sp-1) 0 var(--sp-2); }
   :where(#gs-page) p { margin: var(--sp-4) 0; }
   :where(#gs-page) footer, :where(#gs-page) pre, :where(#gs-page) code { font-family: var(--mono); }
