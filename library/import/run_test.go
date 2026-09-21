@@ -309,7 +309,7 @@ func TestRun_CreatesItems(t *testing.T) {
 	}
 
 	prHash := mapping.GetHash(MappingKey("github", "pr", "7"))
-	pr := review.GetPR(prHash)
+	pr := review.GetPR(protocol.CreateRef(protocol.RefTypeCommit, prHash, repoURL, ""))
 	if !pr.Success {
 		t.Fatalf("GetPR(%s) failed: %s", prHash, pr.Error.Message)
 	}
@@ -575,7 +575,7 @@ func TestRun_ClosedStatesResolveOnTheCanonicalItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadMapping() error = %v", err)
 	}
-	closedPR := review.GetPR(mapping.GetHash(MappingKey("github", "pr", "7")))
+	closedPR := review.GetPR(protocol.CreateRef(protocol.RefTypeCommit, mapping.GetHash(MappingKey("github", "pr", "7")), repoURL, ""))
 	if !closedPR.Success {
 		t.Fatalf("GetPR() failed: %s", closedPR.Error.Message)
 	}
@@ -594,7 +594,7 @@ func TestRun_ClosedStatesResolveOnTheCanonicalItem(t *testing.T) {
 	if !sawMergeError {
 		t.Errorf("Errors = %+v, want a pr-state error for the unresolvable merge", stats.Errors)
 	}
-	mergedPR := review.GetPR(mapping.GetHash(MappingKey("github", "pr", "8")))
+	mergedPR := review.GetPR(protocol.CreateRef(protocol.RefTypeCommit, mapping.GetHash(MappingKey("github", "pr", "8")), repoURL, ""))
 	if !mergedPR.Success {
 		t.Fatalf("GetPR() failed: %s", mergedPR.Error.Message)
 	}
