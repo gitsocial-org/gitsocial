@@ -182,11 +182,11 @@
     background: var(--chip);
   }
   /* Subject scale: one semantic element, always weight 600, sized by context —
-     card = body size, detail = --fs-h1 (it is the page title), diff-head =
+     card = mono at --fs-md, detail = --fs-h1 (it is the page title), diff-head =
      --fs-h4, board-card = --fs-ui. The size tiers live on the context rules
      (.detail/.card here, diff-head and board-card at their own rules below);
      cards nest inside .detail views, so the card tier is stated after the
-     detail tier to win the body size back. */
+     detail tier to win the card size back. */
   .subject { font-weight: 600; }
   /* Card head: glyph + state chip + subject + trailing chips on one baseline row,
      with a small gap so chips never touch (and the chip row aligns to the subject
@@ -223,6 +223,8 @@
      with the glyph itself, which then has to start AT the glyph column like
      every other card — same specificity ladder as the rule it overrides. */
   #gs-page .card .meta.meta-lead, .meta.meta-lead { margin-left: 0; }
+  /* Under a head the row is a block, so it sits one step below the subject instead of on a body-size line of its own. */
+  .card-head + .meta { display: flex; margin-top: var(--sp-1); }
   .hash { font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted); }
   /* Type glyphs carry one consistent semantic scheme across every view (timeline,
      search, lists, board, milestones, detail): a state-bearing glyph (issue,
@@ -276,11 +278,10 @@
      the same treatment on both surfaces (a generated page has no .detail). */
   .detail dl, dl.release-notes { margin: var(--sp-3) 0 0; display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-1) var(--sp-4); }
   .detail dt, .release-notes dt { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); }
-  .detail dd, .release-notes dd { margin: 0; font-size: var(--fs-ui); word-break: break-word; }
-  /* A trailer value is metadata, so it reads in its key's voice; a release's commit rows stay prose. */
-  .detail dl:not(.release-notes) dd { font-family: var(--mono); }
+  /* A trailer value and a release's commit row are metadata, so they read in their key's voice. */
+  .detail dd, .release-notes dd { margin: 0; font-family: var(--mono); font-size: var(--fs-ui); word-break: break-word; }
   .detail .subject { font-size: var(--fs-h1); margin-bottom: var(--sp-2); }
-  .detail .card .subject, .card .subject { font-size: var(--fs-body); }
+  .detail .card .subject, .card .subject { font-size: var(--fs-md); font-family: var(--mono); }
   .back { display: inline-block; margin-bottom: var(--sp-4); color: var(--muted); font-family: var(--mono); font-size: var(--fs-ui); }
   /* Detail top bar: the back link on the left, the page's controls on the right,
      on one row so neither disturbs the meta line. */
@@ -425,9 +426,10 @@
   }
   .markdown pre.codeblock {
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-panel);
-    /* Tighter than --pad-panel on purpose (flush top): code-only, so cards and
-       the other panel surfaces keep the shared pair. */
-    padding: 0 var(--sp-4) var(--sp-3); overflow: auto; margin: var(--sp-3) 0; line-height: 0.8;
+    /* Tighter than --pad-panel on purpose, and a step less on top, where the
+       first line's own leading adds to it: code-only, so cards and the other
+       panel surfaces keep the shared pair. */
+    padding: var(--sp-2) var(--sp-4) var(--sp-3); overflow: auto; margin: var(--sp-3) 0; line-height: 0.8;
   }
   .markdown pre.codeblock code { background: none; border: none; padding: 0; font-size: var(--fs-code); }
   .markdown img { max-width: 100%; height: auto; }
@@ -669,7 +671,7 @@
      progress bars, the kanban board, and the in-bucket item search. */
   /* Member rows: flex so the leading state chip sits in a fixed-width slot and
      the subjects line up vertically no matter the chip label's width. */
-  .pm-member { margin-top: var(--sp-2); font-size: var(--fs-md); padding-left: var(--sp-1); display: flex; align-items: baseline; gap: var(--sp-3); }
+  .pm-member { margin-top: var(--sp-2); font-family: var(--mono); font-size: var(--fs-ui); padding-left: var(--sp-1); display: flex; align-items: baseline; gap: var(--sp-3); }
   .pm-member > .chip.state { flex: 0 0 auto; min-width: 4.2rem; text-align: center; }
   .pm-members-head, .pm-subissues-head { margin: var(--sp-4) 0 var(--sp-2); }
   .pm-members, .pm-subissues { margin-top: var(--sp-3); }
@@ -686,6 +688,8 @@
   /* Card enrichment chips (labels/assignees/priority/retracted) on issue/PR list
      cards: a wrapping row below the meta, mirroring the TUI card stats. */
   .card-chips { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-2); }
+  /* Under a head the chips share the meta row's indent past the glyph column. */
+  .card-head ~ .card-chips { margin-left: calc(var(--sp-5) + var(--sp-3)); }
   .chip.chip-label { background: var(--chip); color: var(--muted); }
   .chip.chip-assignee { background: var(--link-t2); color: var(--text); }
   .chip.chip-priority { color: var(--text); background: var(--chip); }
@@ -1002,7 +1006,7 @@
      and the row must overflow into .graph-scroll instead of crushing the text. */
   .graph-text-col { flex: 1 1 auto; min-width: 22rem; }
   .graph-line { display: flex; align-items: center; overflow: hidden; border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent); }
-  .graph-row-text { display: flex; align-items: baseline; flex-wrap: nowrap; gap: var(--sp-3); min-width: 0; width: 100%; }
+  .graph-row-text { display: flex; align-items: baseline; flex-wrap: nowrap; gap: var(--sp-3); min-width: 0; width: 100%; font-family: var(--mono); font-size: var(--fs-ui); }
   .graph-subject { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* One fixed-height row must stay one line: a long branch name (dependabot/…)
      gets a single-line ellipsis cap instead of wrapping over neighboring rows,
