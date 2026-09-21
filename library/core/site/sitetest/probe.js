@@ -8,7 +8,7 @@
     ".detail > .card-head", ".detail > .card-head > h1.subject",
     ".detail > .detail-topbar", ".detail > .detail-topbar > .page-actions",
   ];
-  var PROPS = ["padding", "margin", "fontSize", "color", "backgroundColor", "borderLeftColor", "borderRadius"];
+  var PROPS = ["padding", "margin", "fontSize", "fontFamily", "color", "backgroundColor", "borderLeftColor", "borderRadius"];
 
   // norm rounds fractional lengths and reduces colour functions, so a Chrome
   // that serialises either differently does not diff a whole baseline.

@@ -162,7 +162,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{.Heading}}</h1>{{range .Chips}} {{template "chip" .}}{{end}}</div>{{end}}{{define "bits"}}{{range $i, $b := .}}{{if $i}} · {{end}}{{if $b.Href}}<a class="{{$b.Class}}" href="{{$b.Href}}">{{$b.Text}}</a>{{else if $b.Class}}<span class="{{$b.Class}}"{{if $b.Title}} title="{{$b.Title}}"{{end}}>{{$b.Text}}</span>{{else}}{{$b.Text}}{{end}}{{end}}{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
 {{end}}{{end}}{{define "body"}}{{range .}}{{if .Notes}}<dl class="release-notes">{{range .Notes}}<dt><a class="hash" href="{{.Href}}">{{.Hash}}</a></dt><dd>{{.Text}}</dd>{{end}}</dl>
 {{else}}<p>{{range $i, $l := .Lines}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
-{{end}}{{end}}{{end}}{{define "assetrow"}}{{if .Href}}<a class="asset-row" href="{{.Href}}" rel="noopener"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</a>{{else}}<div class="asset-row"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</div>{{end}}{{end}}{{define "assets"}}<div class="assets"><div class="assets-head mono">Assets</div>
+{{end}}{{end}}{{end}}{{define "assetrow"}}{{if .Href}}<a class="asset-row" href="{{.Href}}" rel="noopener"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</a>{{else}}<div class="asset-row"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</div>{{end}}{{end}}{{define "assets"}}<div class="assets"><div class="assets-head">Assets</div>
 {{if .Artifacts}}<div class="asset-list">{{range .Artifacts}}{{template "assetrow" .}}{{end}}</div>
 {{end}}{{if .Extra}}<div class="asset-list">{{range .Extra}}{{template "assetrow" .}}{{end}}</div>
 {{end}}{{if .SignedBy}}<div class="asset-signed"><span class="meta">signed-by </span><span class="mono selectable">{{.SignedBy}}</span></div>
@@ -176,7 +176,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{if .Heading}}{{template "detailhead" .}}
 {{end}}<div class="detail-meta"><span class="meta">{{template "bits" .Meta}}</span></div>
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
-{{else}}{{template "body" .Body}}{{end}}{{with .Assets}}{{template "assets" .}}{{end}}{{if .Replies}}<div class="thread"><div class="thread-head mono">Comments ({{len .Replies}})</div>
+{{else}}{{template "body" .Body}}{{end}}{{with .Assets}}{{template "assets" .}}{{end}}{{if .Replies}}<div class="thread"><div class="thread-head">Comments ({{len .Replies}})</div>
 {{range .Replies}}{{if .Depth}}<div class="comment-row"><div class="thread-rail">{{range $i := .Rail}}<span class="rail-guide"></span>{{end}}</div>{{end}}<div class="card {{.Variant}}">
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
 {{else}}<p class="meta meta-lead">{{template "glyph" .}}{{range .Chips}}{{template "chip" .}} {{end}}{{template "bits" .Meta}}</p>

@@ -5,6 +5,7 @@
       "padding": "9.6px 14.4px",
       "margin": "0px",
       "fontSize": "21px",
+      "fontFamily": "\"EB Garamond\", Georgia, serif",
       "color": "rgb(207, 34, 46)",
       "backgroundColor": "srgb(0.81 0.13 0.18 / 0.13)",
       "borderLeftColor": "rgb(207, 34, 46)",

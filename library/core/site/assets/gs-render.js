@@ -877,7 +877,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function versionHistorySection(versions, onSelect) {
     const total = versions.length;
     const wrap = el("div", { class: "version-history" }, []);
-    wrap.append(el("div", { class: "version-history-head mono" }, ["History (" + total + " versions)"]));
+    wrap.append(el("div", { class: "version-history-head" }, ["History (" + total + " versions)"]));
     const rows = [];
     for (let i = total - 1; i >= 0; i--) {
       const v = versions[i];
@@ -2065,7 +2065,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // offscreenBlock renders feedback whose anchored line is not in the rendered hunks.
   function offscreenBlock(fbList) {
     const box = el("div", { class: "diff-offscreen" }, []);
-    box.append(el("div", { class: "diff-offscreen-head mono" }, ["Comments not on visible lines"]));
+    box.append(el("div", { class: "diff-offscreen-head" }, ["Comments not on visible lines"]));
     for (const fb of fbList) box.append(feedbackCard(fb));
     return box;
   }
@@ -2272,7 +2272,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const hasAny = summary.reviewers.length || summary.approved || summary.changesRequested || summary.pending;
     if (!hasAny) return null;
     const wrap = el("div", { class: "review-summary" }, []);
-    wrap.append(el("div", { class: "review-summary-head mono" }, ["Reviews"]));
+    wrap.append(el("div", { class: "review-summary-head" }, ["Reviews"]));
     const strip = el("div", { class: "review-summary-line" }, [
       el("span", { class: "meta" }, [summary.approved + " approved · " + summary.changesRequested + " changes requested · " + summary.pending + " pending"]),
     ]);
@@ -2339,7 +2339,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const a = releaseAssets(header);
     if (!a.artifacts.length && !a.checksums && !a.sbom && !a.signedBy) return null;
     const wrap = el("div", { class: "assets" }, []);
-    wrap.append(el("div", { class: "assets-head mono" }, ["Assets"]));
+    wrap.append(el("div", { class: "assets-head" }, ["Assets"]));
     if (a.artifacts.length) {
       const list = el("div", { class: "asset-list" }, []);
       for (const art of a.artifacts) list.append(assetRow(art.name, art.href));
@@ -2399,7 +2399,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const flat = flattenThread(thread);
     if (!flat.length) return null;
     const wrap = el("div", { class: "thread" }, []);
-    wrap.append(el("div", { class: "thread-head mono" }, ["Comments (" + flat.length + ")"]));
+    wrap.append(el("div", { class: "thread-head" }, ["Comments (" + flat.length + ")"]));
     for (const row of flat) wrap.append(commentRow(row.comment, row.depth));
     return wrap;
   }
@@ -2442,7 +2442,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     // Resolved ancestors come from the metadata index (body-less); fetch bodies.
     await hydrateItems(ctx, chain.map((c) => c.item));
     const wrap = el("div", { class: "thread reply-context" }, []);
-    wrap.append(el("div", { class: "thread-head mono" }, ["In reply to"]));
+    wrap.append(el("div", { class: "thread-head" }, ["In reply to"]));
     if (fallback) wrap.append(fallback);
     for (let i = 0; i < chain.length; i++) {
       wrap.append(commentRow(chain[i].item, Math.min(i, THREAD_MAX_DEPTH), chain[i].branch, true, true));
@@ -2644,7 +2644,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // pmMembersSection renders a milestone's or sprint's member list with a count and progress bar.
   function pmMembersSection(headLabel, members) {
     const wrap = el("div", { class: "pm-members" }, []);
-    wrap.append(el("div", { class: "pm-members-head mono" }, [headLabel + " (" + members.length + ")"]));
+    wrap.append(el("div", { class: "pm-members-head" }, [headLabel + " (" + members.length + ")"]));
     const p = pmProgress(members);
     wrap.append(progressBar(p.closed, p.total));
     for (const m of members) wrap.append(issueMemberRow(m));
@@ -2657,7 +2657,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const p = pmProgress(children);
     const open = p.total - p.closed;
     const wrap = el("div", { class: "pm-subissues" }, []);
-    wrap.append(el("div", { class: "pm-subissues-head mono" }, ["Sub-issues (" + open + " open, " + p.closed + " closed)"]));
+    wrap.append(el("div", { class: "pm-subissues-head" }, ["Sub-issues (" + open + " open, " + p.closed + " closed)"]));
     wrap.append(progressBar(p.closed, p.total));
     for (const c of children) wrap.append(issueMemberRow(c));
     return wrap;
@@ -2667,7 +2667,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function pmRelChip(labelText, target, hash) {
     const subject = target ? (subjectBody(target.content)[0] || "(untitled)") : hash;
     const row = el("div", { class: "pm-rel" }, [
-      el("span", { class: "pm-rel-label mono" }, [labelText]),
+      el("span", { class: "pm-rel-label" }, [labelText]),
       el("a", { class: "pm-rel-link", href: commitRef((target && target.commit.hash) || hash, "gitmsg/pm") }, [subject]),
     ]);
     if (target && target.header && target.header.state) row.append(stateChip(target.header.state));
@@ -2734,7 +2734,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // boardColumnEl renders one board column with its header, count, WIP and capped cards.
   function boardColumnEl(col, issues, state, cellKey, onChange) {
     const column = el("div", { class: "board-col" + (state.collapsedCols.has(col.name) ? " board-col-collapsed" : "") }, []);
-    const head = el("div", { class: "board-col-head mono" }, []);
+    const head = el("div", { class: "board-col-head" }, []);
     const caret = el("button", { class: "board-col-toggle", type: "button", "aria-label": "Collapse column" }, [state.collapsedCols.has(col.name) ? "▸" : "▾"]);
     caret.addEventListener("click", (e) => { e.stopPropagation(); state.toggleCol(col.name); onChange(); });
     head.append(caret, el("span", { class: "board-col-name" }, [col.name + " " + issues.length + (col.wip ? " / " + col.wip : "")]));
@@ -2793,7 +2793,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const rerender = () => draw();
     // draw rebuilds the controls and the flat or laned board.
     function draw() {
-      controls.replaceChildren(el("span", { class: "board-groupby-label mono" }, ["Group by"]));
+      controls.replaceChildren(el("span", { class: "board-groupby-label" }, ["Group by"]));
       for (const f of SWIMLANE_FIELDS) {
         const chip = el("button", { class: "filter-chip" + (f === field ? " active" : ""), type: "button" }, [SWIMLANE_LABELS[f]]);
         chip.addEventListener("click", () => { field = f; draw(); });
@@ -2835,7 +2835,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         const collapsed = state.collapsedLanes.has(lane);
         const section = el("div", { class: "board-lane" + (collapsed ? " board-lane-collapsed" : "") }, []);
         laneEls.set(lane, section);
-        const laneHead = el("div", { class: "board-lane-head mono", role: "button", tabindex: "0" }, [
+        const laneHead = el("div", { class: "board-lane-head", role: "button", tabindex: "0" }, [
           el("span", { class: "board-lane-caret" }, [collapsed ? "▸" : "▾"]),
           el("span", {}, [swimlaneLabel(lane) + " (" + m.any + ")"]),
         ]);
@@ -2904,7 +2904,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const out = [];
     if (grouped) {
       for (const g of res.groups) {
-        out.push(el("div", { class: "search-group-head mono" }, [g.label + " (" + g.count + ")"]));
+        out.push(el("div", { class: "search-group-head" }, [g.label + " (" + g.count + ")"]));
         for (const it of g.items) out.push(searchResultCard(it, g, query));
       }
     } else {
@@ -3076,7 +3076,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // analyticsSummary renders the stat grid: total, per-kind totals and the most active period.
   function analyticsSummary(data, mostActive) {
     const wrap = el("div", { class: "analytics-section" }, []);
-    wrap.append(el("div", { class: "contrib-head mono" }, ["Summary"]));
+    wrap.append(el("div", { class: "contrib-head" }, ["Summary"]));
     const grid = el("div", { class: "stat-grid" }, []);
     const cell = (label, value, valueClass) => grid.append(el("div", { class: "stat-cell" }, [
       el("div", { class: valueClass || "stat-value" }, [String(value)]),
@@ -3159,7 +3159,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function analyticsAuthors(authors, total) {
     const PAGE = 50;
     const wrap = el("div", { class: "contrib" }, []);
-    const head = el("div", { class: "contrib-head mono" }, []);
+    const head = el("div", { class: "contrib-head" }, []);
     const label = el("span", {}, []);
     const filter = el("input", { class: "contrib-filter", type: "text", placeholder: "Filter authors…", "aria-label": "Filter authors", autocomplete: "off", spellcheck: "false" }, []);
     head.append(label, filter);
@@ -3233,7 +3233,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const summarySlot = el("div", {}, []);
     wrap.append(summarySlot);
     const chartSec = el("div", { class: "analytics-section" }, []);
-    const heading = el("div", { class: "contrib-head mono" }, []);
+    const heading = el("div", { class: "contrib-head" }, []);
     const toggleSlot = el("div", {}, []);
     chartSec.append(el("div", { class: "analytics-chart-head" }, [heading, toggleSlot]));
     const filterSlot = el("div", {}, []);
@@ -3325,7 +3325,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const detail = await loadListDetail(ctx, id);
     if (!detail) { wrap.append(el("div", { class: "empty" }, ["List not found."])); return [wrap]; }
     const name = (detail.meta && detail.meta.name) || detail.name;
-    wrap.append(el("div", { class: "subject" }, [name]));
+    wrap.append(el("div", { class: "subject mono" }, [name]));
     const meta = [detail.ext, detail.members.length + (detail.members.length === 1 ? " member" : " members")];
     if (detail.meta && detail.meta.version) meta.push("v" + detail.meta.version);
     wrap.append(el("div", { class: "meta" }, [meta.join(" · ")]));
@@ -3348,7 +3348,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // readerPrefsSection renders the reader preferences, driving the same localStorage keys as the header controls.
   function readerPrefsSection() {
     const wrap = el("div", { class: "config-section" }, []);
-    wrap.append(el("div", { class: "config-head mono" }, ["Reader preferences"]));
+    wrap.append(el("div", { class: "config-head" }, ["Reader preferences"]));
     const body = document.body;
     const clickEl = (id) => { const e = document.getElementById(id); if (e) e.click(); };
     const diffMode = () => { try { return localStorage.getItem("diffview") === "split" ? "split" : "unified"; } catch (e) { return "unified"; } };
@@ -3379,7 +3379,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (typeof cfg.favicon === "string" && /^data:image\//.test(cfg.favicon)) rows.push(["favicon", el("img", { class: "config-favicon", src: cfg.favicon, alt: "favicon" }, [])]);
     if (!rows.length) return null;
     const wrap = el("div", { class: "config-section" }, []);
-    wrap.append(el("div", { class: "config-head mono" }, ["Site"]));
+    wrap.append(el("div", { class: "config-head" }, ["Site"]));
     const dl = el("dl", {}, []);
     for (const [k, v] of rows) { dl.append(el("dt", {}, [k])); dl.append(el("dd", {}, [v])); }
     wrap.append(card({ variant: "config-ext", parts: [dl] }));
@@ -3389,7 +3389,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // repoConfigSection renders each extension's in-bucket config JSON read-only.
   async function repoConfigSection(ctx) {
     const wrap = el("div", { class: "config-section" }, []);
-    wrap.append(el("div", { class: "config-head mono" }, ["Repository configuration"]));
+    wrap.append(el("div", { class: "config-head" }, ["Repository configuration"]));
     for (const ext of ["social", "pm", "review", "release", "memo"]) {
       const cfg = await loadExtConfig(ctx, ext);
       let detail;
@@ -3415,7 +3415,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     let forks = await loadForks(ctx, FORKS_CAP);
     if (!forks.length) return null;
     const wrap = el("div", { class: "config-section" }, []);
-    const head = el("div", { class: "config-head mono" }, ["Forks (" + total + ")"]);
+    const head = el("div", { class: "config-head" }, ["Forks (" + total + ")"]);
     wrap.append(head);
     const forkRow = (f) => {
       const row = el("div", { class: "tree-row" }, []);
@@ -3586,7 +3586,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
     const wrap = el("div", { class: "detail" }, []);
     wrap.append(el("a", { class: "back", href: detailBackHref(ctx, "#/tags") }, ["← back"]));
-    const subject = el("div", { class: "subject" }, [name]);
+    const subject = el("div", { class: "subject mono" }, [name]);
     if (peeled.signed) subject.append(" ", el("span", { class: "chip chip-signed" }, ["✓ signed"]));
     wrap.append(subject);
     const meta = el("span", { class: "meta" }, []);
@@ -3631,7 +3631,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   async function tagCommitsSection(ctx, prev, prevCommit, commit) {
     const countEl = el("span", {}, ["0"]);
     const label = prevCommit ? "Commits since " + prev.name : "Commits";
-    const head = el("div", { class: "pm-members-head mono" }, [label + " (", countEl, ")"]);
+    const head = el("div", { class: "pm-members-head" }, [label + " (", countEl, ")"]);
     const wrap = el("div", { class: "pm-members" }, [head]);
     const first = await loadCompareCommitsWindow(ctx, prevCommit || "", commit, false);
     if (!first.items.length) wrap.append(el("div", { class: "empty" }, [prevCommit ? "No commits since " + prev.name + "." : "No commits."]));
@@ -3690,7 +3690,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const first = await loadBranchLogWindow(ctx, name, false);
     if (!first.tip) return [el("div", { class: "err" }, ["Branch not found: " + name])];
     const wrap = el("div", { class: "detail" }, []);
-    wrap.append(el("div", { class: "subject" }, [name]));
+    wrap.append(el("div", { class: "subject mono" }, [name]));
     const actions = el("div", { class: "page-actions" }, [
       el("a", { class: "action-link", href: fileRef("", name) }, ["browse files →"]),
     ]);

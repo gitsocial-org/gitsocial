@@ -811,7 +811,7 @@ func TestParityReleasePageMarkup(t *testing.T) {
 	for _, want := range []string{
 		`<dl class="release-notes"><dt><a class="hash" href="https://example.com/index.html#commit:abc1234@">abc1234</a></dt><dd>Fix the walk</dd>`,
 		`<dt><a class="hash" href="https://example.com/index.html#commit:def5678@">def5678</a></dt><dd>Add a retry budget</dd></dl>`,
-		`<div class="assets"><div class="assets-head mono">Assets</div>`,
+		`<div class="assets"><div class="assets-head">Assets</div>`,
 		`<a class="asset-row" href="https://dl.example.com/v1.2.0/gs-linux.tar.gz" rel="noopener"><span class="mono selectable">gs-linux.tar.gz</span></a>`,
 		`<span class="mono selectable">SHA256SUMS</span><span class="chip">checksums</span>`,
 	} {

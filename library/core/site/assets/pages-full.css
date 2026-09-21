@@ -277,9 +277,11 @@
   .detail dl, dl.release-notes { margin: var(--sp-3) 0 0; display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-1) var(--sp-4); }
   .detail dt, .release-notes dt { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); }
   .detail dd, .release-notes dd { margin: 0; font-size: var(--fs-ui); word-break: break-word; }
+  /* A trailer value is metadata, so it reads in its key's voice; a release's commit rows stay prose. */
+  .detail dl:not(.release-notes) dd { font-family: var(--mono); }
   .detail .subject { font-size: var(--fs-h1); margin-bottom: var(--sp-2); }
   .detail .card .subject, .card .subject { font-size: var(--fs-body); }
-  .back { display: inline-block; margin-bottom: var(--sp-4); color: var(--muted); font-size: var(--fs-ui); }
+  .back { display: inline-block; margin-bottom: var(--sp-4); color: var(--muted); font-family: var(--mono); font-size: var(--fs-ui); }
   /* Detail top bar: the back link on the left, the page's controls on the right,
      on one row so neither disturbs the meta line. */
   .detail-topbar { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
@@ -576,16 +578,16 @@
   /* M3: release assets, filters, threads, embedded context, pm groups, contributors. */
   .selectable { user-select: all; }
   .assets { margin-top: var(--sp-4); }
-  /* Section-label voice, stated once for every uppercase in-content label; the
-     margins stay contextual on each label's own rule (heads take the --sp-4
-     over --sp-3 rhythm, flex-row labels take none). The sidebar's
-     #nav .nav-section keeps its own denser voice. */
+  /* Section-label voice, family included, stated once for every uppercase
+     in-content label; the margins stay contextual on each label's own rule
+     (heads take the --sp-4 over --sp-3 rhythm, flex-row labels take none).
+     The sidebar's #nav .nav-section keeps its own denser voice. */
   .assets-head, .thread-head, .contrib-head, .version-history-head,
   .review-summary-head, .diff-offscreen-head, .pm-members-head, .pm-subissues-head,
   .pm-rel-label, .board-col-head, .board-groupby-label, .board-lane-head,
   .facet-label, .search-group-head, .config-head, .view-count {
-    font-size: var(--fs-ui); color: var(--muted); text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.05em;
   }
   /* Page total-count line (branches/tags/releases); hidden while a count that
      fills in asynchronously (releases) is not yet known. */
@@ -859,7 +861,7 @@
     flex: 1 1 6rem; min-width: 6rem; background: var(--panel); border: 1px solid var(--line);
     border-radius: var(--r-panel); padding: var(--sp-3); text-align: center;
   }
-  .stat-value { font-size: var(--fs-h3); font-weight: 600; }
+  .stat-value { font-family: var(--mono); font-size: var(--fs-h3); font-weight: 600; }
   .stat-value-text { font-size: var(--fs-ui); font-weight: 600; padding-top: var(--sp-2); }
   .stat-label { font-size: var(--fs-ui); color: var(--muted); margin-top: 0.1rem; }
   .activity-plot { display: flex; align-items: flex-start; gap: var(--sp-2); }
@@ -981,7 +983,7 @@
 
   /* Page-level actions above a list (compare links, "browse files"). */
   .page-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); align-items: baseline; margin: var(--sp-1) 0 var(--sp-4); }
-  .action-link { font-size: var(--fs-ui); color: var(--link); }
+  .action-link { font-family: var(--mono); font-size: var(--fs-ui); color: var(--link); }
   .compare-link { margin-left: var(--sp-3); font-size: var(--fs-ui); }
 
   /* Compare page: base/head pickers, then a PR-style commits + files diff. */
