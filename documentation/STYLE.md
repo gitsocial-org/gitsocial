@@ -123,7 +123,7 @@ Rules:
 - A guide sentence tells the reader what to type or what they will see. A sentence that starts with "because", "so that" or "the reason" belongs in the commit body, or goes.
 - A reference row is one line. If it needs a paragraph, it is two rows or a guide sentence.
 - Specs keep the RFC register and never reference this implementation.
-- Every doc opens with one sentence saying what it covers; the site uses it as the page's description. One line of section links follows it, README style. The first section starts right after, with no other text before it.
+- Every doc opens with one sentence saying what it covers; the site uses it as the page's description. One line of section links follows it, `[Sources](#sources) · [Commands](#commands)`. The first section starts right after, with no other text before it.
 - A term the doc coins is defined where it first appears.
 - Link, do not repeat. One explanation lives in one place.
 

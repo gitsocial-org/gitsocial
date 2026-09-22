@@ -1,72 +1,61 @@
 <div align="center">
 
-  <img src="documentation/images/gitsocial-icon.svg" width="120" height="120">
   <h1>GitSocial</h1>
 
   *Git-native collaboration platform*
-
-[About](#about) · [Installation](#installation) · [Quick Start](#quick-start) · [Documentation](#documentation) · [Contributing](#contributing)
 
 </div>
 
 ## About
 
-GitSocial stores issues, pull requests, comments, etc. in the git repository itself, and can push it to an S3 bucket you own as a [git remote](documentation/S3.md) and a [static site](documentation/STATIC-SITE.md), like [GitSocial.org](https://gitsocial.org).
+GitSocial is an open source Go binary that stores issues, pull requests, comments, and other data in git. It can push that data to your own S3 bucket, which then serves as both a git remote and a static site. [GitSocial.org](https://gitsocial.org) runs this way.
 
-Each item is a commit with [GitMsg trailers](specs/GITMSG.md) on a `gitmsg/*` branch: it moves with `git push` and `git fetch`. The CLI and TUI can create and browse them ([demo](documentation/demo/demo.mp4)), the [timeline](documentation/SOCIAL.md) shows items from followed repositories, and one command mirrors a forge project into a bucket:
+Each issue, pull request or comment is a commit with GitMsg trailers on a `gitmsg/*` branch. The GitSocial CLI and TUI can create and browse these items ([demo](documentation/demo/demo.mp4)).
 
-```bash
-gitsocial mirror https://github.com/owner/repo s3://<endpoint>/<bucket>/<prefix>
-```
+## Install
 
-## Installation
-
-#### macOS / Linux with Homebrew
+### macOS / Linux with Homebrew
 
 ```bash
 brew trust gitsocial-org/tap
 brew install gitsocial-org/tap/gitsocial
 ```
 
-Or using installation script
+### Windows
 
-```bash
-curl -fsSL https://gitsocial.org/install.sh | sh
-```
-
-#### Windows
 ```bash
 scoop bucket add gitsocial https://github.com/gitsocial-org/scoop-bucket.git
 scoop install gitsocial
 ```
 
-#### Go
-```bash
-go install github.com/gitsocial-org/gitsocial/cli/gitsocial@latest
-```
+### Other
 
-Or download a binary from [releases](https://gitsocial.org/releases/index.html).
+- Install script: `curl -fsSL https://gitsocial.org/install.sh | sh`
+- Go: `go install github.com/gitsocial-org/gitsocial/cli/gitsocial@latest`
+- Binary: download from the [releases](https://gitsocial.org/releases/index.html) page
 
 ## Quick Start
 
-#### Mirror a project
+_Public access to a bucket is a one-time step in the provider's dashboard._
+
+### Mirror a project
 
 ```bash
-gitsocial mirror https://github.com/owner/repo s3://<endpoint>/<bucket>/<prefix> --url https://your-domain/
+gitsocial mirror https://github.com/owner/repo s3://s3.example.com/mybucket/repo    # first run asks for credentials
 ```
 
-`--url` is the site's public address. `mirror` asks for the bucket credentials on first run; public access and the domain are one-time provider-dashboard steps. On a large repository try `-n 100` first ([all flags](documentation/CLI.md#gitsocial-mirror)).
+On a large repository, try `-n 100` first to cap the items per type. `--url https://example.org/` turns the HTML pages on at a domain you set up in the same dashboard.
 
-#### Explore a repository in the terminal
+### Explore a repository in the terminal
 
-Clone it from GitHub or any host, then from the project directory:
+Clone it from GitHub or GitLab, then from the project directory:
 
 ```bash
 gitsocial import     # import issues, PRs, etc. from GitHub or GitLab
 gitsocial tui        # explore in the terminal
 ```
 
-#### Host your own repository on a bucket
+### Host your own repository on a bucket
 
 ```bash
 gitsocial config credentials set s3.example.com    # paste the access + secret key
@@ -78,16 +67,16 @@ Anyone can then fetch it with `gitsocial clone s3://s3.example.com/mybucket/myre
 
 ## Documentation
 
-### Concepts
+### Core
 
 | Document | Description |
 |----------|-------------|
 | [GitMsg Protocol](specs/GITMSG.md) | Core message format, headers, refs, versioning |
 | [S3 Remote](documentation/S3.md) | Buckets as git remotes, canonical URLs |
 | [Static Site](documentation/STATIC-SITE.md) | Repo website served from the bucket: timeline, issues, PRs, releases, code |
-| [Static Site Design](documentation/STATIC-SITE-DESIGN.md) | What that website looks like: tokens, components, states, visual tests |
-| [Identity Verification](documentation/IDENTITY.md) | Decentralized trust model, attestation sources, caching |
+| [Identity Verification](documentation/IDENTITY.md) | Attestation sources, commands, caching |
 | [Notifications](documentation/NOTIFICATIONS.md) | Notification types, scopes, and triggers |
+| [Settings](documentation/SETTINGS.md) | User preferences, keys, sync across machines |
 
 ### Extensions
 
@@ -103,59 +92,20 @@ Anyone can then fetch it with `gitsocial clone s3://s3.example.com/mybucket/myre
 
 | Document | Description |
 |----------|-------------|
-| [Agent Skill](https://github.com/gitsocial-org/gitsocial-agent-skill) | AI-assisted workflows for Claude Code, Cursor, and other agents |
-| [TUI](documentation/TUI-DIAGRAMS.md) | Per-view layout diagrams (see also [keybindings](documentation/TUI-KEYS.md)) |
 | [CLI](documentation/CLI.md) | Commands, flags, output formats |
+| [TUI](documentation/TUI-DIAGRAMS.md) | Per-view layouts, [keybindings](documentation/TUI-KEYS.md) |
 | [JSON-RPC](documentation/RPC.md) | Client integration over stdio |
+| [Agent Skill](https://github.com/gitsocial-org/gitsocial-agent-skill) | AI-assisted workflows for Claude Code, Cursor, and other agents |
 
 ### Development
 
 | Document | Description |
 |----------|-------------|
+| [Contributing](documentation/CONTRIBUTING.md) | Fork, build, submit a pull request, report a bug |
+| [Architecture](documentation/ARCHITECTURE.md) | Layers, packages, cache schema, TUI structure |
+| [Style](documentation/STYLE.md) | Prose, help text, errors, comments, commits |
+| [Static Site Design](documentation/STATIC-SITE-DESIGN.md) | Tokens, components, states, visual tests |
 | [Testing](documentation/TESTING.md) | Test tiers, gate stages, coverage, supported platforms |
-
-## Contributing
-
-Platform issues and PRs are disabled on all mirrors. GitSocial uses its own tools for collaboration.
-
-### Getting Started
-
-1. Install GitSocial (see [Installation](#installation))
-2. Fork the repository on any host (GitHub, GitLab, Codeberg, or self-hosted)
-3. Clone your fork: `git clone https://your-host.com/you/gitsocial`
-4. Build it with Go 1.25.8 or newer: `go build -o bin/ ./...`
-5. Read [Architecture](documentation/ARCHITECTURE.md) for system design, packages, and cache layout
-
-### Submitting Pull Requests
-
-```bash
-git config core.hooksPath scripts/hooks   # install the gate hook, once per clone
-git checkout -b feature/my-change         # make changes, commit
-scripts/check.sh --quick                  # the gate the hook runs on push
-
-gitsocial review pr create \
-  --base main \
-  --head feature/my-change \
-  "Short description of change"
-
-git push origin feature/my-change         # push your branch
-gitsocial push                            # push PR metadata
-```
-
-After your first push, request fork registration in the [Matrix room](https://matrix.to/#/!uZYlsFjjQgPmSBYJaY:matrix.org?via=matrix.org) so maintainers can discover your PRs and issues.
-
-See [Review](documentation/REVIEW.md) for the full cross-forge PR workflow.
-
-### Reporting Bugs & Requesting Features
-
-```bash
-gitsocial pm issue create "Bug: description"
-gitsocial push
-```
-
-The issue lands in your own repository. Ask in the [Matrix room](https://matrix.to/#/!uZYlsFjjQgPmSBYJaY:matrix.org?via=matrix.org) for fork registration, so a maintainer runs `gitsocial fork add <your-fork-url>` and sees it.
-
-For quick questions or discussion, use the same room.
 
 ## License
 
