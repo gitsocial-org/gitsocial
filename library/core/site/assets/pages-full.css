@@ -410,12 +410,12 @@
   /* README / Markdown. */
   .markdown { margin-top: var(--sp-4); word-break: break-word; }
   .markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin: var(--sp-4) 0 var(--sp-3); line-height: 1.2; }
-  .markdown h1 { font-size: var(--fs-h1); line-height: 1; border-bottom: 1px solid var(--line); padding-bottom: var(--sp-2); }
-  .markdown h2 { font-size: var(--fs-h2); padding-top: var(--sp-3); border-bottom: 1px solid var(--line); padding-bottom: var(--sp-1); }
+  .markdown h1 { font-size: var(--fs-h1); line-height: 1; padding-top: var(--sp-1); border-bottom: 1px solid var(--line); padding-bottom: var(--sp-2); }
+  .markdown h2 { font-size: var(--fs-h2); padding-top: var(--sp-4); border-bottom: 1px solid var(--line); padding-bottom: var(--sp-1); }
   /* Air above a heading follows its level: one spacing step less per step down,
      so a reader sees the hierarchy before reading the words. */
-  .markdown h3 { padding-top: var(--sp-2); }
-  .markdown h4 { padding-top: var(--sp-1); }
+  .markdown h3 { padding-top: var(--sp-3); }
+  .markdown h4 { padding-top: var(--sp-2); }
   .markdown p { margin: var(--sp-4) 0; }
   .markdown ul, .markdown ol { margin: var(--sp-3) 0 var(--sp-3) var(--sp-5); }
   .markdown li { margin: var(--sp-1) 0; }

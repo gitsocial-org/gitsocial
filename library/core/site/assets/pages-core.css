@@ -39,7 +39,7 @@
      the active tokens onto one set or the other. */
   :root {
     --pl-bg: #f8eed5; --pl-text: #1a1a1a; --pl-link: #404ddd;
-    --pd-bg: #02041b; --pd-text: #c9d1d9; --pd-link: #9483ed;
+    --pd-bg: #02041b; --pd-text: #e6e9ed; --pd-link: #9483ed;
     --bg: var(--pl-bg); --text: var(--pl-text); --link: var(--pl-link);
     --lift: 35%; --lift-hover: 70%;
     --open: #1f9d55; --closed: #8957e5; --merged: #8250df;
