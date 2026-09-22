@@ -9,10 +9,12 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 zero=0000000000000000000000000000000000000000
 
 # pushed ranges for the commit checks: remote..local per ref, a new branch as local --not --remotes
+# refs/gitmsg/* carry data commits, whose subjects are not prose, so they are left out
 ranges=""
 not=""
-while read -r _ local_sha _ remote_sha; do
+while read -r _ local_sha remote_ref remote_sha; do
 	if [ -z "$local_sha" ] || [ "$local_sha" = "$zero" ]; then continue; fi
+	case "$remote_ref" in refs/gitmsg/*) continue ;; esac
 	if [ "$remote_sha" = "$zero" ]; then
 		ranges="$ranges $local_sha"
 		not=" --not --remotes"
