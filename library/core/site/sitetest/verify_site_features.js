@@ -192,7 +192,7 @@ async function main() {
   ok("site-config.json is present and parsed", !!cust && typeof cust === "object", "cust=" + JSON.stringify(cust));
   ok("site-config carries the pushed title", cust && cust.title === "Thread Demo", cust && cust.title);
   ok("site-config carries a validated accent + accentDark", cust && cust.accent === "#0a7" && cust.accentDark === "#0dd", cust && (cust.accent + "/" + cust.accentDark));
-  ok("site-config carries a favicon data URI", cust && /^data:image\/png[;,]/.test(cust.favicon || ""), cust && (cust.favicon || "").slice(0, 24));
+  ok("site-config carries the favicon bucket key", cust && cust.favicon === "favicon.png", cust && cust.favicon);
 
   // ---- reader applies the overrides with strict validation ----
   await GS.applySiteCustomization(GS.newContext(BASE), "fallback");
@@ -201,12 +201,12 @@ async function main() {
   const accentCss = accentStyle ? accentStyle.textContent : "";
   ok("accent injects --link light + dark via a scoped style", /--link:#0a7/.test(accentCss) && /--link:#0dd/.test(accentCss), accentCss.replace(/\n/g, " "));
   const icon = document.querySelector("link[rel=icon]");
-  ok("favicon href points at the validated data URI", icon && /^data:image\/png[;,]/.test(icon.getAttribute("href") || ""), icon && (icon.getAttribute("href") || "").slice(0, 24));
+  ok("favicon href points at the resolved bucket key", icon && icon.getAttribute("href") === BASE + "favicon.png", icon && icon.getAttribute("href"));
   // Invalid values are ignored (no crash, defaults kept).
   GS.applyAccent("javascript:alert(1)", "#zzz");
   ok("invalid accent is ignored (no injection of bad literal)", !/alert|zzz/.test(document.getElementById("gs-site-accent").textContent), document.getElementById("gs-site-accent").textContent.replace(/\n/g, " "));
   const beforeHref = document.querySelector("link[rel=icon]").getAttribute("href");
-  GS.applyFavicon("data:text/html,<script>1</script>");
+  GS.applyFavicon(BASE, "../evil.png");
   ok("invalid favicon is ignored (href unchanged)", document.querySelector("link[rel=icon]").getAttribute("href") === beforeHref, document.querySelector("link[rel=icon]").getAttribute("href"));
 
   // ---- tags list is version-aware descending ----

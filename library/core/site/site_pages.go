@@ -180,7 +180,7 @@ func sitePagesEffective(cfg SiteCustomization, ok bool) (string, bool) {
 
 // sitePageSiteFor assembles the site identity every page stamps, resolving a relative site.image against the base URL.
 func sitePageSiteFor(cfg SiteCustomization, base string) sitePageSite {
-	site := sitePageSite{Title: cfg.Title, URL: base, Description: cfg.Description, Image: cfg.Image, Icon: sitePageIcon(cfg.Favicon), AccentCSS: sitePagesAccentCSS(cfg)}
+	site := sitePageSite{Title: cfg.Title, URL: base, Description: cfg.Description, Image: cfg.Image, Favicon: cfg.Favicon, AccentCSS: sitePagesAccentCSS(cfg)}
 	if site.Image != "" && !strings.Contains(site.Image, "://") {
 		site.Image = base + site.Image
 	}
@@ -192,7 +192,7 @@ func sitePageSiteFor(cfg SiteCustomization, base string) sitePageSite {
 
 // sitePageSiteHash fingerprints the site identity baked into every page; a change regenerates the page layer.
 func sitePageSiteHash(site sitePageSite) string {
-	h := sha256.Sum256([]byte(site.Title + "\x00" + site.URL + "\x00" + site.Description + "\x00" + site.Image + "\x00" + string(site.Icon) + "\x00" + string(site.AccentCSS)))
+	h := sha256.Sum256([]byte(site.Title + "\x00" + site.URL + "\x00" + site.Description + "\x00" + site.Image + "\x00" + site.Favicon + "\x00" + string(site.AccentCSS)))
 	return hex.EncodeToString(h[:])[:12]
 }
 
@@ -967,6 +967,7 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 	}
 	metaBits = append(metaBits, "newest first")
 	d := siteChainedListPage(list, entries, metaBits, 0, sealed)
+	icon, repoIcon := sitePageIcons(site.Favicon, "../")
 	d.Chrome = sitePageChrome{
 		Title:         list.NavLabel + " · " + site.Title,
 		AccentCSS:     site.AccentCSS,
@@ -977,7 +978,8 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 		Route:         list.Route,
 		Base:          "../",
 		Image:         site.Image,
-		Icon:          site.Icon,
+		Icon:          icon,
+		RepoIcon:      repoIcon,
 		Feed:          site.URL + sitePagesFeedKey,
 		TypeFeed:      site.URL + siteTypeFeedKey(list),
 		TypeFeedTitle: siteTypeFeedTitle(list, site),
@@ -994,6 +996,7 @@ func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries [
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", len(entries), list.Label), fmt.Sprintf("older page %d", n)}
 	d := siteChainedListPage(list, entries, metaBits, n, sealed)
+	icon, repoIcon := sitePageIcons(site.Favicon, "../")
 	d.Chrome = sitePageChrome{
 		Title:         fmt.Sprintf("%s · page %d · %s", list.NavLabel, n, site.Title),
 		AccentCSS:     site.AccentCSS,
@@ -1004,7 +1007,8 @@ func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries [
 		Route:         list.Route,
 		Base:          "../",
 		Image:         site.Image,
-		Icon:          site.Icon,
+		Icon:          icon,
+		RepoIcon:      repoIcon,
 		Feed:          site.URL + sitePagesFeedKey,
 		TypeFeed:      site.URL + siteTypeFeedKey(list),
 		TypeFeedTitle: siteTypeFeedTitle(list, site),
@@ -1036,6 +1040,7 @@ func writeSiteFrontPage(client *objstore.Client, prefix string, roots map[string
 	if len(d.Activity) > 0 {
 		d.ActivityMoreHref, d.ActivityMoreLabel = siteActivityMoreKey, siteActivityMoreLabel
 	}
+	icon, repoIcon := sitePageIcons(site.Favicon, "./")
 	d.Chrome = sitePageChrome{
 		Title:       site.Title,
 		AccentCSS:   site.AccentCSS,
@@ -1045,12 +1050,13 @@ func writeSiteFrontPage(client *objstore.Client, prefix string, roots map[string
 		// The front page's canonical URL is the site root, matching the sitemap's root entry.
 		Canonical: site.URL,
 		// The front page is the app's home view, so a /timeline route here would boot past the landing it shows.
-		Route: "/",
-		Base:  "./",
-		Image: site.Image,
-		Icon:  site.Icon,
-		Feed:  site.URL + sitePagesFeedKey,
-		Nav:   sitePageSidebar("./", "", site.Files),
+		Route:    "/",
+		Base:     "./",
+		Image:    site.Image,
+		Icon:     icon,
+		RepoIcon: repoIcon,
+		Feed:     site.URL + sitePagesFeedKey,
+		Nav:      sitePageSidebar("./", "", site.Files),
 	}
 	page, err := renderSitePage("front", d)
 	if err != nil {

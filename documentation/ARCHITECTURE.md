@@ -198,7 +198,7 @@ Outside the tree:
 | `core/gitmsg`<br>Protocol-level storage | | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsBranchConfigurable`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
 | `core/storage`<br>Bare repo management | | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
 | `core/objstore`<br>S3 remote | `Client`, `Config`, `HelperEnv`, `Progress`, `LocalCommitSource`, `PushOutcome`, `PostPushHook`, `SiteOverride` | `NewClient`, `ClientForRemote`, `ParseS3URL`, `RunHelper`, `HelperEnvFromOS`, `ListRemoteRefs`, `ReadRemoteRefs`, `RebuildRefManifest`, `LogDumbTransportInfo`, `RefsHeadDigest`, `ReadPackedObject`, `ThinUpstreamURL`, `CompressJSON`, `ReadCompressedJSON`, `PutCompressed`, `UploadConcurrency`, `RunParallel`, `PushArtifactObjects`, `PutObjectToRemote` |
-| `core/site`<br>Static site | `SiteCustomization` | `Rebuild`, `PostPushMaintenance`, `SetRemoteHead`, `WriteSiteStats`, `ReadWorkspaceSiteCustomization`, `WriteWorkspaceSiteCustomization`, `NormalizeSiteURL`, `NormalizeSiteImage`, `NormalizeSiteGlobs`, `ValidSiteAccent`, `ValidSiteFavicon` |
+| `core/site`<br>Static site | `SiteCustomization` | `Rebuild`, `PostPushMaintenance`, `SetRemoteHead`, `WriteSiteStats`, `ReadWorkspaceSiteCustomization`, `WriteWorkspaceSiteCustomization`, `NormalizeSiteURL`, `NormalizeSiteImage`, `NormalizeSiteGlobs`, `ValidSiteAccent` |
 | `core/fetch`<br>Fetch orchestration | | `FetchAll`, `FetchRepository`, `FetchForks`, `CommitProcessor`, `PostFetchHook` |
 | `core/settings`<br>User settings | | `Get`, `Set`, `ListAll` |
 | `core/search`<br>Cross-extension search | | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |

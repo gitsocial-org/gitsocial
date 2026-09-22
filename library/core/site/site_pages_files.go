@@ -506,6 +506,7 @@ func buildSiteFilePage(doc siteFileDoc, source string, truncated bool, site site
 	if thin {
 		robots = sitePageRobotsNoIndex
 	}
+	icon, repoIcon := sitePageIcons(site.Favicon, base)
 	d.Chrome = sitePageChrome{
 		Title:       title + " · " + site.Title,
 		Robots:      robots,
@@ -517,7 +518,8 @@ func buildSiteFilePage(doc siteFileDoc, source string, truncated bool, site site
 		Route:       "file:" + doc.Path + "@" + branch,
 		Base:        base,
 		Image:       site.Image,
-		Icon:        site.Icon,
+		Icon:        icon,
+		RepoIcon:    repoIcon,
 		Feed:        site.URL + sitePagesFeedKey,
 		Nav:         sitePageSidebar(base, sitePagesFilesDir, site.Files),
 	}
@@ -672,6 +674,7 @@ func buildSiteFilesIndexPage(site sitePageSite, state *siteFilesState, branch st
 		metaBits = append(metaBits, branch)
 	}
 	d := siteChainedListPage(siteFilesList, entries, append(metaBits, "by path"), 0, 0)
+	icon, repoIcon := sitePageIcons(site.Favicon, "../")
 	d.Chrome = sitePageChrome{
 		Title:       siteFilesList.NavLabel + " · " + site.Title,
 		AccentCSS:   site.AccentCSS,
@@ -682,7 +685,8 @@ func buildSiteFilesIndexPage(site sitePageSite, state *siteFilesState, branch st
 		Route:       siteFilesList.Route,
 		Base:        "../",
 		Image:       site.Image,
-		Icon:        site.Icon,
+		Icon:        icon,
+		RepoIcon:    repoIcon,
 		Feed:        site.URL + sitePagesFeedKey,
 		Nav:         sitePageSidebar("../", sitePagesFilesDir, site.Files),
 	}

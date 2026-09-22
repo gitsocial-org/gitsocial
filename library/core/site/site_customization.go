@@ -18,9 +18,6 @@ const siteCustomizationKey = ".gitsocial/site/site-config.json"
 // siteConfigMaxTitle bounds a customization title.
 const siteConfigMaxTitle = 200
 
-// SiteFaviconMaxBytes caps the favicon data URI, so the no-cache artifact stays small.
-const SiteFaviconMaxBytes = 32 * 1024
-
 // siteConfigMaxURL bounds the site base URL (site.url), after normalization.
 const siteConfigMaxURL = 500
 
@@ -30,10 +27,7 @@ const SiteConfigMaxDescription = 300
 // siteHexRe matches a strict CSS hex color, the only accent shape the writer emits.
 var siteHexRe = regexp.MustCompile(`^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
 
-// siteFaviconRe matches an allowed favicon data URI prefix, in step with the reader's guard in gs-app.js.
-var siteFaviconRe = regexp.MustCompile(`^data:image/(png|webp|svg\+xml)[;,]`)
-
-// siteImageKeyRe matches a relative bucket key for site.image: plain segments, no scheme, no leading slash, no traversal.
+// siteImageKeyRe matches a relative bucket key for site.image and site.favicon: plain segments, no scheme, no leading slash, no traversal.
 var siteImageKeyRe = regexp.MustCompile(`^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$`)
 
 // applySiteOverride overlays a remote's deployment overrides onto a resolved customization, normalizing each the way the shared keys are.
@@ -110,12 +104,7 @@ func NormalizeSiteGlobs(v string) string {
 // ValidSiteAccent reports whether v is a strict #rgb/#rrggbb hex color.
 func ValidSiteAccent(v string) bool { return siteHexRe.MatchString(v) }
 
-// ValidSiteFavicon reports whether v is an allowed favicon data URI within the size cap.
-func ValidSiteFavicon(v string) bool {
-	return len(v) <= SiteFaviconMaxBytes && siteFaviconRe.MatchString(v)
-}
-
-// NormalizeSiteImage validates a site.image value: an absolute URL under site.url's scheme rules, or a relative bucket key.
+// NormalizeSiteImage validates a site.image or site.favicon value: an absolute URL under site.url's scheme rules, or a relative bucket key.
 func NormalizeSiteImage(v string) (string, bool) {
 	v = strings.TrimSpace(v)
 	if v == "" || len(v) > siteConfigMaxURL {
@@ -129,7 +118,7 @@ func NormalizeSiteImage(v string) (string, bool) {
 		switch u.Scheme {
 		case "https":
 		case "http":
-			if h := u.Hostname(); h != "localhost" && h != "127.0.0.1" {
+			if h := strings.ToLower(u.Hostname()); h != "localhost" && h != "127.0.0.1" {
 				return "", false
 			}
 		default:
@@ -137,10 +126,23 @@ func NormalizeSiteImage(v string) (string, bool) {
 		}
 		return v, true
 	}
-	if !siteImageKeyRe.MatchString(v) {
+	if !validSiteBucketKey(v) {
 		return "", false
 	}
 	return v, true
+}
+
+// validSiteBucketKey reports whether v is a relative bucket key: plain segments, no scheme, no leading slash, no "." or ".." segment.
+func validSiteBucketKey(v string) bool {
+	if !siteImageKeyRe.MatchString(v) {
+		return false
+	}
+	for _, seg := range strings.Split(v, "/") {
+		if seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 // NormalizeSiteURL validates a site base URL: absolute https, or http for a loopback host, with no query or fragment and a trailing slash.
@@ -184,8 +186,10 @@ func validateSiteCustomization(raw map[string]interface{}) (SiteCustomization, b
 	if s, ok := raw["accentDark"].(string); ok && ValidSiteAccent(s) {
 		c.AccentDark = s
 	}
-	if s, ok := raw["favicon"].(string); ok && ValidSiteFavicon(s) {
-		c.Favicon = s
+	if s, ok := raw["favicon"].(string); ok {
+		if norm, valid := NormalizeSiteImage(s); valid {
+			c.Favicon = norm
+		}
 	}
 	if s, ok := raw["image"].(string); ok {
 		if norm, valid := NormalizeSiteImage(s); valid {

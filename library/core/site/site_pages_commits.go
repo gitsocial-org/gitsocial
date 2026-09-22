@@ -149,6 +149,7 @@ func buildSiteCommitEntry(e siteMetaEntry, base, branch string) sitePageListEntr
 
 // siteCommitsChrome assembles a commits page's head; the dir has no feed of its own, so its pages advertise the site feed alone.
 func siteCommitsChrome(site sitePageSite, title, canonical, route string) sitePageChrome {
+	icon, repoIcon := sitePageIcons(site.Favicon, "../")
 	return sitePageChrome{
 		Title:       title,
 		AccentCSS:   site.AccentCSS,
@@ -159,7 +160,8 @@ func siteCommitsChrome(site sitePageSite, title, canonical, route string) sitePa
 		Route:       route,
 		Base:        "../",
 		Image:       site.Image,
-		Icon:        site.Icon,
+		Icon:        icon,
+		RepoIcon:    repoIcon,
 		Feed:        site.URL + sitePagesFeedKey,
 		Nav:         sitePageSidebar("../", siteCommitsDir, site.Files),
 	}

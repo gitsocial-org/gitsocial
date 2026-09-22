@@ -140,7 +140,8 @@ async function main() {
   }
   ok("the pack map is sparse (" + missing + " of 256 prefixes have no shard)", missing > 0);
 
-  // ---- 3. every generated page declares an icon that needs no bucket key ----
+  // ---- 3. every generated page declares an icon, so the browser never falls
+  // back to the origin-root /favicon.ico ----
   const pages = ["index.html", "issues/index.html"];
   const itemPage = (await GS.fetchText(TD, "sitemap.xml") || "").match(/<loc>[^<]*\/(i\/[^<]+\.html)<\/loc>/);
   if (itemPage) pages.push(itemPage[1]);
@@ -149,7 +150,6 @@ async function main() {
     const html = await GS.fetchText(TD, key);
     const icon = (html || "").match(/<link rel="icon" href="([^"]*)"/);
     ok(key + " declares an icon", !!icon, (html || "").slice(0, 60));
-    ok(key + " icon needs no bucket key (a data: URI)", !!icon && /^data:image\//.test(icon[1]), icon ? icon[1].slice(0, 32) : "none");
     ok(key + " references no favicon.ico", !/favicon\.ico/.test(html || ""));
   }
 

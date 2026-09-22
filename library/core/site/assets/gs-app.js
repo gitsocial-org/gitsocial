@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -307,11 +307,10 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     location.hash = "#/search";
   }
 
-  // HEX_RE / FAVICON_RE mirror the writer's strict validation (site_customization.go):
-  // an accent must be #rgb/#rrggbb; a favicon must be an allowed image data URI.
-  // Invalid values are ignored so a bad config never breaks the page.
+  // HEX_RE mirrors the writer's strict accent validation (site_customization.go):
+  // an accent must be #rgb/#rrggbb. A favicon is checked by siteFaviconHref
+  // (gs-core.js); an invalid value is ignored so a bad config never breaks the page.
   const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-  const FAVICON_RE = /^data:image\/(png|webp|svg\+xml)[;,]/;
 
   // setDocTitle applies a title to the tab and header, textContent only.
   function setDocTitle(name) {
@@ -341,12 +340,26 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     style.textContent = rules.join("\n");
   }
 
-  // applyFavicon points the <link rel=icon> at a validated data URI (href only).
-  function applyFavicon(favicon) {
-    if (typeof document === "undefined" || !FAVICON_RE.test(favicon || "")) return;
+  // applyFavicon points the <link rel=icon> at the resolved favicon href and
+  // shows the same icon beside the sidebar title; an unset or invalid favicon
+  // leaves the link untouched and drops any repo-icon already shown.
+  function applyFavicon(base, favicon) {
+    if (typeof document === "undefined") return;
+    const header = document.querySelector(".nav-header");
+    const href = siteFaviconHref(base, favicon);
+    if (!href) {
+      const stale = header && header.querySelector(".repo-icon");
+      if (stale) stale.remove();
+      return;
+    }
     let link = document.querySelector("link[rel=icon]");
     if (!link) { link = document.createElement("link"); link.setAttribute("rel", "icon"); document.head.appendChild(link); }
-    link.setAttribute("href", favicon);
+    link.setAttribute("href", href);
+    if (header) {
+      let icon = header.querySelector(".repo-icon");
+      if (!icon) { icon = document.createElement("img"); icon.className = "repo-icon"; icon.alt = ""; header.insertBefore(icon, header.firstChild); }
+      icon.src = href;
+    }
   }
 
   // applySiteCustomization fetches the push-published site-config.json and applies
@@ -357,7 +370,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     try { cfg = await loadSiteCustomization(ctx); } catch { cfg = null; }
     if (cfg && typeof cfg.title === "string" && cfg.title.trim()) setDocTitle(cfg.title.trim());
     else setDocTitle(fallbackName);
-    if (cfg) { applyAccent(cfg.accent, cfg.accentDark); applyFavicon(cfg.favicon); }
+    if (cfg) { applyAccent(cfg.accent, cfg.accentDark); applyFavicon(ctx.base, cfg.favicon); }
   }
 
   // startFreshnessWatch surfaces a maintainer's push in a long-lived tab: on return

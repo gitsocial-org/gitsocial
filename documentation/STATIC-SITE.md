@@ -45,7 +45,7 @@ Values live in the `site` object of the core config ref and reach the bucket as 
 | `title` | `"My Project"` | plain string, trimmed, up to 200 characters |
 | `description` | `"One sentence for the front page"` | plain string, trimmed, up to 300 characters |
 | `accent`, `accentDark` | `"#0a7"` | `#rgb` or `#rrggbb` |
-| `favicon` | `@icon.png` | `data:image/png`, `webp` or `svg+xml` URI, up to 32 KB; `@path` is converted |
+| `favicon` | `favicon.png` | shown beside the sidebar title: a key relative to the site root (upload with `gitsocial remote put`) or an absolute `https://` URL, up to 500 characters |
 | `image` | `og-card.png` | `og:image` for every page: a key relative to the site root (upload with `gitsocial remote put`) or an absolute `https://` URL, up to 500 characters |
 | `url` | `https://example.com/` | absolute `https://` base (`http://` for localhost only), no query or fragment, up to 500 characters |
 | `publish`, `pages` | `true` | `true` or `false`, both default false |
@@ -97,7 +97,7 @@ Rules that hold on every page:
 
 - Every `<title>` is unique (a shared subject gets the item's date, then its short ref) and every `<meta name="description">` is prose with the markdown syntax stripped.
 - Retraction tombstones and file pages under the word floor carry `noindex,follow`. The page stays, so existing links keep working.
-- Item bodies render as escaped plain text. Only the README and file pages, the bucket owner's own content, go through the markdown renderer, and they are the one typed value a page body carries. Everything else on a page is context-escaped by `html/template`; the other typed value is the favicon href, which is either the shell's own constant or a data URI already narrowed to an image type.
+- Item bodies render as escaped plain text. Only the README and file pages, the bucket owner's own content, go through the markdown renderer, and they are the one typed value a page body carries. Everything else on a page is context-escaped by `html/template`; the other typed value is the favicon href, which is either the shell's own constant or a configured favicon resolved and re-validated against the page's base at render time.
 - The markdown renderer builds every tag itself and escapes every text node, attribute value and code body. Raw HTML in the source is lexed and rebuilt against an allowlist that admits no event handler, no `style`, no `script`, `iframe` or `object`, and no image or link target that is not an absolute `https:`, `mailto:`, in-page or app reference.
 - `f/index.html` is the one list page that boots into another route, the tree view.
 - A first line promoted into a subject or a label is markdown-stripped first, by `siteSubjectText` in Go and its mirror `subjectText` in `gs-core.js`, pinned by `sitetest/parity_fixtures.json`. A subject that strips to nothing falls back to a placeholder, because a row's subject anchor is its only link to the item. What renders as nothing upstream is dropped before the first line is taken: HTML comments, and link reference definitions at a block start outside fenced code, which is where a bot hides its state in an imported comment body.

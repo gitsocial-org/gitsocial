@@ -1377,19 +1377,17 @@ func TestSitePageIcon(t *testing.T) {
 		t.Errorf("the default icon needs a bucket key: %.40s", sitePagesDefaultIcon)
 	}
 
-	small := "data:image/png;base64,iVBORw0KGgo="
-	if got := sitePageIcon(small); string(got) != small {
-		t.Errorf("a configured favicon is not stamped: %.40s", got)
+	if icon, repoIcon := sitePageIcons("favicon.png", "../"); string(icon) != "../favicon.png" || repoIcon != icon {
+		t.Errorf("a relative favicon is not joined to the page's base: icon=%.40s repoIcon=%.40s", icon, repoIcon)
 	}
-	oversized := "data:image/png;base64," + strings.Repeat("A", sitePagesInlineIconMax)
-	if got := sitePageIcon(oversized); got != sitePagesDefaultIcon {
-		t.Error("an oversized favicon is inlined into every page instead of falling back")
+	if icon, repoIcon := sitePageIcons("https://example.com/i.png", "../"); string(icon) != "https://example.com/i.png" || repoIcon != icon {
+		t.Errorf("an absolute favicon URL is not passed through: icon=%.40s repoIcon=%.40s", icon, repoIcon)
 	}
-	if got := sitePageIcon("data:text/html,<script>"); got != sitePagesDefaultIcon {
-		t.Error("an invalid favicon is stamped instead of falling back")
+	if icon, repoIcon := sitePageIcons("../evil.png", "../"); icon != sitePagesDefaultIcon || repoIcon != "" {
+		t.Errorf("a favicon that fails re-validation is stamped instead of falling back: icon=%.40s repoIcon=%.40s", icon, repoIcon)
 	}
-	if got := sitePageIcon(""); got != sitePagesDefaultIcon {
-		t.Error("an unset favicon leaves the page with no icon")
+	if icon, repoIcon := sitePageIcons("", "../"); icon != sitePagesDefaultIcon || repoIcon != "" {
+		t.Errorf("an unset favicon leaves the page with no icon: icon=%.40s repoIcon=%.40s", icon, repoIcon)
 	}
 }
 
@@ -1397,12 +1395,13 @@ func TestSitePageIcon(t *testing.T) {
 // html/template does not rewrite the data: URI to its failsafe (it rewrites a
 // plain string in a URL attribute, which is why the field is typed).
 func TestSitePageIconRendered(t *testing.T) {
-	site := sitePageSiteFor(SiteCustomization{Title: "Demo", Favicon: "data:image/png;base64,iVBORw0KGgo="}, "https://example.com/")
-	page, err := renderSitePage("list", siteListPageData{Chrome: sitePageChrome{Title: "t", Icon: site.Icon, Base: "../"}})
+	site := sitePageSiteFor(SiteCustomization{Title: "Demo", Favicon: "favicon.png"}, "https://example.com/")
+	icon, _ := sitePageIcons(site.Favicon, "../")
+	page, err := renderSitePage("list", siteListPageData{Chrome: sitePageChrome{Title: "t", Icon: icon, Base: "../"}})
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
-	want := `<link rel="icon" href="data:image/png;base64,iVBORw0KGgo=">`
+	want := `<link rel="icon" href="../favicon.png">`
 	if !strings.Contains(string(page), want) {
 		t.Errorf("rendered page missing %s\n%.400s", want, page)
 	}

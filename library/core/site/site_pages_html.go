@@ -155,7 +155,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 </body>
 </html>
 {{end}}{{define "sidebar"}}<aside class="page-nav">
-<div class="nav-header"><a class="repo-title" href="{{.Base}}index.html">{{.SiteTitle}}</a></div>
+<div class="nav-header">{{if .RepoIcon}}<img class="repo-icon" src="{{.RepoIcon}}" alt="">{{end}}<a class="repo-title" href="{{.Base}}index.html">{{.SiteTitle}}</a></div>
 <nav class="nav-list">{{range .Nav}}{{if .Section}}<div class="nav-group"><div class="nav-section">{{.Section}}</div>{{end}}{{range .Links}}<a href="{{.Href}}"{{if .Current}} class="active"{{end}}><span class="nav-icon">{{.Glyph}}</span>{{.Label}}</a>{{end}}{{if .Section}}</div>{{end}}{{end}}</nav>
 <div class="nav-footer"><a class="foot-brand" href="https://gitsocial.org"><svg class="logo-small" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" /></svg><span>Built with GitSocial</span></a></div>
 </aside>
@@ -218,9 +218,6 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 var sitePageTemplates = template.Must(template.New("pages").Parse(
 	strings.NewReplacer("@CORE@", sitePagesCoreCSS, "@BOOT@", sitePagesBootScript).Replace(sitePageTemplateText)))
 
-// sitePagesInlineIconMax bounds a configured favicon the page layer inlines; past it a page carries the shell default.
-const sitePagesInlineIconMax = 2048
-
 // sitePagesShellIconRe pulls the <link rel="icon"> href out of the shell.
 var sitePagesShellIconRe = regexp.MustCompile(`<link rel="icon" href="([^"]*)"`)
 
@@ -240,13 +237,16 @@ func sitePagesShellIcon() template.URL {
 	return template.URL(m[1])
 }
 
-// sitePageIcon resolves the icon a page's head declares: the configured favicon
-// when it is set and small enough to repeat per page, else the shell default.
-func sitePageIcon(favicon string) template.URL {
-	if ValidSiteFavicon(favicon) && len(favicon) <= sitePagesInlineIconMax {
-		return template.URL(favicon)
+// sitePageIcons resolves a page's head icon (favicon joined to base, or the shell default) and its sidebar repo-icon ("" unless a favicon validates).
+func sitePageIcons(favicon, base string) (icon, repoIcon template.URL) {
+	norm, ok := NormalizeSiteImage(favicon)
+	if !ok {
+		return sitePagesDefaultIcon, ""
 	}
-	return sitePagesDefaultIcon
+	if !strings.Contains(norm, "://") {
+		norm = base + norm
+	}
+	return template.URL(norm), template.URL(norm)
 }
 
 // sitePageChrome is the shared head/shell data every page stamps.
@@ -254,8 +254,9 @@ type sitePageChrome struct {
 	Title         string       // full <title> (subject · site title)
 	AccentCSS     template.CSS // per-push accent override stamped after the inlined core ("" — the core's stock accent governs)
 	Icon          template.URL
-	Description   string // meta/OG description, whitespace-collapsed, ~160 chars
-	OGTitle       string // og:title (the bare subject)
+	RepoIcon      template.URL // configured favicon, shown beside the sidebar title ("" — no icon, never the default logo)
+	Description   string       // meta/OG description, whitespace-collapsed, ~160 chars
+	OGTitle       string       // og:title (the bare subject)
 	SiteTitle     string
 	Canonical     string             // absolute self URL from site.url
 	Robots        string             // meta robots content ("" = no tag, the indexable default)
@@ -422,7 +423,7 @@ type sitePageSite struct {
 	URL         string // normalized site.url (trailing slash)
 	Description string
 	Image       string       // absolute og:image URL ("" = no social card)
-	Icon        template.URL // favicon href every page's head declares
+	Favicon     string       // configured favicon: an absolute URL or a relative bucket key ("" = unconfigured)
 	AccentCSS   template.CSS // accent override every page's head inlines ("" = none configured)
 	Files       bool         // the file layer has pages: every sidebar carries the Files entry
 }
@@ -1026,6 +1027,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		siteLinkNoteRows(d.Body, site)
 	}
 	d.Chips = siteHeadChips(it, d.Heading)
+	icon, repoIcon := sitePageIcons(site.Favicon, "../")
 	d.Chrome = sitePageChrome{
 		Title:       title + " · " + site.Title,
 		AccentCSS:   site.AccentCSS,
@@ -1037,7 +1039,8 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		Route:       route,
 		Base:        "../",
 		Image:       site.Image,
-		Icon:        site.Icon,
+		Icon:        icon,
+		RepoIcon:    repoIcon,
 		Feed:        site.URL + sitePagesFeedKey,
 		Nav:         sitePageSidebar("../", list.Dir, site.Files),
 	}

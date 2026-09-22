@@ -47,7 +47,7 @@ func TestWorkspaceSiteCustomizationRoundTrip(t *testing.T) {
 		Title:        "Thread Demo",
 		Accent:       "#0a7",
 		AccentDark:   "#0dd",
-		Favicon:      "data:image/png;base64,iVBORw0KGgo=",
+		Favicon:      "favicon.png",
 		Image:        "og-card.png",
 		URL:          "https://example.com/",
 		Description:  "A demo site",

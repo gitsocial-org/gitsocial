@@ -18,12 +18,12 @@ func TestValidateSiteCustomization(t *testing.T) {
 			"title":      "My Project",
 			"accent":     "#0a7",
 			"accentDark": "#00dddd",
-			"favicon":    "data:image/png;base64,AAAA",
+			"favicon":    "favicon.png",
 		})
 		if !ok {
 			t.Fatal("valid config rejected")
 		}
-		if c.Title != "My Project" || c.Accent != "#0a7" || c.AccentDark != "#00dddd" || c.Favicon != "data:image/png;base64,AAAA" {
+		if c.Title != "My Project" || c.Accent != "#0a7" || c.AccentDark != "#00dddd" || c.Favicon != "favicon.png" {
 			t.Fatalf("valid config = %+v", c)
 		}
 	})
@@ -36,7 +36,7 @@ func TestValidateSiteCustomization(t *testing.T) {
 	})
 
 	t.Run("all invalid yields ok=false (artifact deleted)", func(t *testing.T) {
-		if _, ok := validateSiteCustomization(map[string]interface{}{"accent": "notahex", "favicon": "data:text/html,x"}); ok {
+		if _, ok := validateSiteCustomization(map[string]interface{}{"accent": "notahex", "favicon": "/leading-slash.png"}); ok {
 			t.Fatal("all-invalid config reported valid")
 		}
 	})
@@ -47,16 +47,16 @@ func TestValidateSiteCustomization(t *testing.T) {
 		}
 	})
 
-	t.Run("oversized favicon rejected", func(t *testing.T) {
-		big := "data:image/png;base64," + strings.Repeat("A", SiteFaviconMaxBytes)
+	t.Run("overlong favicon rejected", func(t *testing.T) {
+		big := strings.Repeat("a", siteConfigMaxURL+1) + ".png"
 		if _, ok := validateSiteCustomization(map[string]interface{}{"favicon": big}); ok {
-			t.Fatal("oversized favicon accepted")
+			t.Fatal("overlong favicon accepted")
 		}
 	})
 
-	t.Run("disallowed favicon type rejected", func(t *testing.T) {
-		if _, ok := validateSiteCustomization(map[string]interface{}{"favicon": "data:image/gif;base64,AAAA"}); ok {
-			t.Fatal("gif favicon accepted")
+	t.Run("favicon path traversal rejected", func(t *testing.T) {
+		if _, ok := validateSiteCustomization(map[string]interface{}{"favicon": "../evil.png"}); ok {
+			t.Fatal("traversal favicon accepted")
 		}
 	})
 
@@ -79,13 +79,13 @@ func TestValidSiteAccentAndFavicon(t *testing.T) {
 			t.Errorf("invalid accent %q accepted", v)
 		}
 	}
-	for _, v := range []string{"data:image/png;base64,AA", "data:image/webp,AA", "data:image/svg+xml,<svg/>"} {
-		if !ValidSiteFavicon(v) {
+	for _, v := range []string{"favicon.png", "assets/icon.svg", "https://example.com/i.png"} {
+		if _, ok := NormalizeSiteImage(v); !ok {
 			t.Errorf("valid favicon %q rejected", v)
 		}
 	}
-	for _, v := range []string{"data:image/gif;base64,AA", "http://x/i.png", "data:text/html,x", ""} {
-		if ValidSiteFavicon(v) {
+	for _, v := range []string{"../evil.png", "/leading-slash.png", "ftp://x/i.png", ""} {
+		if _, ok := NormalizeSiteImage(v); ok {
 			t.Errorf("invalid favicon %q accepted", v)
 		}
 	}

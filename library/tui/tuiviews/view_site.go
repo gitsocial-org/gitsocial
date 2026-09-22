@@ -32,7 +32,7 @@ var siteFields = []siteField{
 	{"title", "browser tab + header text", func(c *site.SiteCustomization) *string { return &c.Title }},
 	{"accent", "hex color, e.g. #0a7", func(c *site.SiteCustomization) *string { return &c.Accent }},
 	{"accentDark", "hex color for dark mode", func(c *site.SiteCustomization) *string { return &c.AccentDark }},
-	{"favicon", "data:image/png|webp|svg+xml URI", func(c *site.SiteCustomization) *string { return &c.Favicon }},
+	{"favicon", "bucket key (favicon.png) or https:// URL", func(c *site.SiteCustomization) *string { return &c.Favicon }},
 	{"image", "og:image social card: bucket key (og-card.png) or https:// URL", func(c *site.SiteCustomization) *string { return &c.Image }},
 	{"url", "absolute https:// base URL, e.g. https://example.com/", func(c *site.SiteCustomization) *string { return &c.URL }},
 	{"description", "plain text, 300 chars max", func(c *site.SiteCustomization) *string { return &c.Description }},
@@ -213,8 +213,8 @@ func validateSiteField(label, value string) string {
 			return "invalid hex color (use #rgb or #rrggbb)"
 		}
 	case "favicon":
-		if !site.ValidSiteFavicon(value) {
-			return "invalid favicon (data:image/png|webp|svg+xml URI, max 32KB)"
+		if _, ok := site.NormalizeSiteImage(value); !ok {
+			return "invalid favicon (relative bucket key or absolute https:// URL)"
 		}
 	case "image":
 		if _, ok := site.NormalizeSiteImage(value); !ok {

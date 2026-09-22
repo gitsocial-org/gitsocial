@@ -213,11 +213,16 @@ done
 
 # site customization: title, accent (light + dark), and a tiny 1x1 PNG favicon,
 # so the reader applies the overrides (verify_site_features.js customization checks). The favicon
-# is written from a data URI directly (a minimal transparent PNG).
+# is a bucket key: a minimal transparent PNG uploaded with remote put, then
+# referenced by that key, exercising the same path a real favicon takes.
+openssl base64 -d -A >"$out/favicon-src.png" <<'PNG'
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMCAf8QO7uMAAAAAElFTkSuQmCC
+PNG
 gg config site set title "Thread Demo" >/dev/null
 gg config site set accent "#0a7" >/dev/null
 gg config site set accentDark "#0dd" >/dev/null
-gg config site set favicon "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMCAf8QO7uMAAAAAElFTkSuQmCC" >/dev/null
+gg remote put favicon.png "$out/favicon-src.png" >/dev/null
+gg config site set favicon "favicon.png" >/dev/null
 # The publish/pages guards (both default off) + the site base URL enable the
 # static site AND the crawlable HTML page layer (verify_html_pages.js). The url
 # carries the build-time locals3 port; suites derive the base from

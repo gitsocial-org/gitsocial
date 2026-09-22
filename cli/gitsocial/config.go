@@ -2,10 +2,7 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
-	"net/http"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -184,7 +181,7 @@ Keys:
   description   plain text, up to 300 characters
   accent        accent color, #rgb or #rrggbb
   accentDark    accent color for dark mode, same form
-  favicon       @path/to/icon.png or a data: URI; png, webp or svg, 32KB
+  favicon       a bucket key relative to the site root, or an https:// URL
   image         og:image for every page: a bucket key or an https:// URL
   url           the public base URL, absolute https://, trailing slash
   publish       true or false, default false: the site master switch
@@ -279,7 +276,7 @@ func newSiteConfigListCmd() *cobra.Command {
 			}
 			for _, k := range []string{"title", "accent", "accentDark", "favicon", "image", "url", "description", "publish", "pages", "filesInclude", "filesExclude"} {
 				if v, ok := site[k].(string); ok && v != "" {
-					fmt.Fprintf(cmd.OutOrStdout(), "%s = %s\n", k, siteConfigDisplay(k, v))
+					fmt.Fprintf(cmd.OutOrStdout(), "%s = %s\n", k, v)
 				}
 			}
 			return nil
@@ -287,14 +284,6 @@ func newSiteConfigListCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&remote, "remote", "", "Show the effective values for this remote")
 	return cmd
-}
-
-// siteConfigDisplay truncates a long favicon data URI for readable listing.
-func siteConfigDisplay(key, value string) string {
-	if key == "favicon" && len(value) > 48 {
-		return value[:45] + fmt.Sprintf("... (%d bytes)", len(value))
-	}
-	return value
 }
 
 // newSiteConfigSetCmd builds the command that sets a site customization value.
@@ -308,8 +297,8 @@ accentDark, favicon, image, url, publish, pages, filesInclude,
 filesExclude.
 
   accent, accentDark  #rgb or #rrggbb, such as #0a7 or #00dddd
-  favicon             @path/to/icon.png to read and encode a png, webp
-                      or svg image, or a data: URI; 32KB max
+  favicon             a bucket key relative to the site root, uploaded
+                      with gitsocial remote put, or an https:// URL
   image               a bucket key relative to the site root, uploaded
                       with gitsocial remote put, or an https:// URL
   url                 absolute https://, http:// for localhost only, no
@@ -345,9 +334,9 @@ remote. Only url, publish and pages are overridable per remote.`,
 				return exit(ExitError)
 			}
 			if cfg.JSONOutput {
-				return PrintJSON(cmd, map[string]string{"key": key, "value": siteConfigDisplay(key, resolved)})
+				return PrintJSON(cmd, map[string]string{"key": key, "value": resolved})
 			} else {
-				PrintSuccess(cmd, fmt.Sprintf("%s = %s", key, siteConfigDisplay(key, resolved)))
+				PrintSuccess(cmd, fmt.Sprintf("%s = %s", key, resolved))
 			}
 			return nil
 		},
@@ -387,11 +376,10 @@ func setRemoteSiteOverride(cmd *cobra.Command, cfg *Config, remote, key, value s
 	return nil
 }
 
-// resolveSiteConfigValue validates (and for a favicon, loads/encodes) a raw CLI
-// value into what is stored: accent colors must be strict hex; a favicon may be
-// an @path to a raw image (base64-encoded into a data URI) or a data URI, of an
-// allowed type (png/webp/svg+xml) within the 32KB cap; a url is normalized to a
-// trailing slash; a description is trimmed and length-checked.
+// resolveSiteConfigValue validates a raw CLI value into what is stored: accent
+// colors must be strict hex; a favicon or an image is a bucket key or an
+// absolute https:// URL; a url is normalized to a trailing slash; a
+// description is trimmed and length-checked.
 func resolveSiteConfigValue(key, value string) (string, error) {
 	switch key {
 	case "accent", "accentDark":
@@ -400,7 +388,11 @@ func resolveSiteConfigValue(key, value string) (string, error) {
 		}
 		return value, nil
 	case "favicon":
-		return resolveFaviconValue(value)
+		norm, ok := site.NormalizeSiteImage(value)
+		if !ok {
+			return "", fmt.Errorf("favicon must be a bucket key like favicon.png or an absolute https:// URL, got %q", value)
+		}
+		return norm, nil
 	case "image":
 		norm, ok := site.NormalizeSiteImage(value)
 		if !ok {
@@ -437,54 +429,4 @@ func resolveSiteConfigValue(key, value string) (string, error) {
 	default:
 		return value, nil
 	}
-}
-
-// resolveFaviconValue turns an @path image or a data: URI into a validated
-// favicon data URI. A raw file is read, its type detected from its bytes, and
-// base64-encoded; either form must be an allowed image type within the cap.
-func resolveFaviconValue(value string) (string, error) {
-	dataURI := value
-	if strings.HasPrefix(value, "@") {
-		data, err := os.ReadFile(strings.TrimPrefix(value, "@"))
-		if err != nil {
-			return "", fmt.Errorf("read favicon file: %w", err)
-		}
-		mime := faviconMIME(strings.TrimPrefix(value, "@"), data)
-		if mime == "" {
-			return "", fmt.Errorf("unsupported favicon type: only png, webp, and svg are allowed")
-		}
-		dataURI = "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)
-	}
-	if !site.ValidSiteFavicon(dataURI) {
-		if len(dataURI) > site.SiteFaviconMaxBytes {
-			return "", fmt.Errorf("favicon is %d bytes, over the %d-byte cap", len(dataURI), site.SiteFaviconMaxBytes)
-		}
-		return "", fmt.Errorf("favicon must be a data: URI of type png, webp, or svg+xml")
-	}
-	return dataURI, nil
-}
-
-// faviconMIME detects an allowed favicon MIME type from a file's bytes (and its
-// name for SVG, which http.DetectContentType reports as text/xml), or "" when
-// the type is not an allowed image.
-func faviconMIME(name string, data []byte) string {
-	if strings.HasSuffix(strings.ToLower(name), ".svg") || strings.Contains(string(firstBytes(data, 512)), "<svg") {
-		return "image/svg+xml"
-	}
-	switch http.DetectContentType(data) {
-	case "image/png":
-		return "image/png"
-	case "image/webp":
-		return "image/webp"
-	default:
-		return ""
-	}
-}
-
-// firstBytes returns up to n leading bytes of b.
-func firstBytes(b []byte, n int) []byte {
-	if len(b) < n {
-		return b
-	}
-	return b[:n]
 }

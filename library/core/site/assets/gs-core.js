@@ -3167,6 +3167,28 @@
     return cfg;
   }
 
+  // SITE_FAVICON_KEY_RE mirrors validSiteBucketKey (site_customization.go): plain segments, no scheme, no leading slash, no "." or ".." segment.
+  const SITE_FAVICON_KEY_RE = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
+
+  // siteFaviconHref resolves site.favicon against base (an absolute URL passes
+  // through, a relative key joins onto base, "" when unset or invalid): the
+  // browser mirror of NormalizeSiteImage, since site-config.json can be edited directly in the bucket.
+  function siteFaviconHref(base, favicon) {
+    if (typeof favicon !== "string") return "";
+    favicon = favicon.trim();
+    if (!favicon || favicon.length > 500) return "";
+    if (favicon.includes("://")) {
+      try {
+        const u = new URL(favicon);
+        if (u.protocol === "https:") return favicon;
+        if (u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1")) return favicon;
+      } catch { /* falls through to "" */ }
+      return "";
+    }
+    if (!SITE_FAVICON_KEY_RE.test(favicon) || favicon.split("/").some((s) => s === "." || s === "..")) return "";
+    return base + favicon;
+  }
+
   // SWIMLANE_FIELDS are the board group-by options, mirroring pm.SwimlaneFields.
   const SWIMLANE_FIELDS = ["", "priority", "kind", "assignees", "author"];
   // SWIMLANE_LABELS names each field for the group-by control (none for "").
@@ -4180,7 +4202,7 @@
     THREAD_MAX_DEPTH, embeddedRefs, groupPM, authorStats, iconName, iconColorClass,
     ANCESTOR_CAP, refBranch, parentRef, parentQuote, quotedRefFor, resolveAncestors,
     CONCURRENCY, isBinary, isLFSPointer,
-    itemLabels, isBodyOnly, facetType, stripLinkRefDefs, subjectText, buildBoard, boardColumnsFrom, loadSiteConfig, loadSiteCustomization, loadInteractionCounts, loadExtItemsForCounts, COUNTS_WALK_CAP, countsFor, matchIssueColumn, PM_BOARD_COLUMNS, pmParentHash,
+    itemLabels, isBodyOnly, facetType, stripLinkRefDefs, subjectText, buildBoard, boardColumnsFrom, loadSiteConfig, loadSiteCustomization, siteFaviconHref, loadInteractionCounts, loadExtItemsForCounts, COUNTS_WALK_CAP, countsFor, matchIssueColumn, PM_BOARD_COLUMNS, pmParentHash,
     SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel,
     buildIssueHierarchy, pmProgress, searchItems, searchItemsFaceted, parseSearchFilters, itemMatchesHash, searchableText, itemSubject, typeGlyph, loadSearchWindow, fullSearchBytes,
     SEARCH_GROUPS, hashEq,
