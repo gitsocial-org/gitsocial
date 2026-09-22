@@ -244,6 +244,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         // Evaluated rather than appended as a script tag: the CSP allows connect-src https: but not script-src https:.
         // eslint-disable-next-line no-new-func
         new Function(src)();
+        // Bash colors any word on its fixed command lists, arguments too, so `config credentials set` lit `set`.
+        const bash = window.Prism.languages && window.Prism.languages.bash;
+        if (bash) { delete bash.function; delete bash.builtin; }
       } catch (e) { return false; }
       return !!getPrism();
     })();
