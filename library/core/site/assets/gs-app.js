@@ -345,7 +345,9 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   // leaves the link untouched and drops any repo-icon already shown.
   function applyFavicon(base, favicon) {
     if (typeof document === "undefined") return;
-    const header = document.querySelector(".nav-header");
+    // The app's header is the one holding #repo-title; a hidden generated page still has its own .nav-header before it.
+    const title = document.getElementById("repo-title");
+    const header = title && title.parentNode;
     const href = siteFaviconHref(base, favicon);
     if (!href) {
       const stale = header && header.querySelector(".repo-icon");

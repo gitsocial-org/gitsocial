@@ -202,6 +202,19 @@ async function main() {
   ok("accent injects --link light + dark via a scoped style", /--link:#0a7/.test(accentCss) && /--link:#0dd/.test(accentCss), accentCss.replace(/\n/g, " "));
   const icon = document.querySelector("link[rel=icon]");
   ok("favicon href points at the resolved bucket key", icon && icon.getAttribute("href") === BASE + "favicon.png", icon && icon.getAttribute("href"));
+  // A generated page's own header sits before the app's during the upgrade; the icon must land beside #repo-title.
+  const staleHeader = document.createElement("div");
+  staleHeader.className = "nav-header";
+  const appHeader = document.createElement("div");
+  appHeader.className = "nav-header";
+  appHeader.appendChild(document.getElementById("repo-title"));
+  document.body.append(staleHeader, appHeader);
+  GS.applyFavicon(BASE, "favicon.png");
+  const appIcon = appHeader.querySelector(".repo-icon");
+  ok("sidebar icon lands in the app's header, not the stale page header", !!appIcon && appIcon.src === BASE + "favicon.png" && !staleHeader.querySelector(".repo-icon"), appIcon && appIcon.src);
+  GS.applyFavicon(BASE, "");
+  ok("unsetting the favicon drops the sidebar icon", !appHeader.querySelector(".repo-icon"));
+  staleHeader.remove(); appHeader.remove();
   // Invalid values are ignored (no crash, defaults kept).
   GS.applyAccent("javascript:alert(1)", "#zzz");
   ok("invalid accent is ignored (no injection of bad literal)", !/alert|zzz/.test(document.getElementById("gs-site-accent").textContent), document.getElementById("gs-site-accent").textContent.replace(/\n/g, " "));

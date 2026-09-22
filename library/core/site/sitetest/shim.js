@@ -48,6 +48,7 @@ function mkEl(tag) {
     removeEventListener() {}, scrollIntoView() {}, focus() { global.__lastFocused = this; },
     get parentNode() { return this._parent; },
     closest(sel) { let n = this; while (n && n.nodeType === 1) { if (matchSel(n, sel)) return n; n = n._parent; } return null; },
+    querySelector(sel) { const out = []; collect(this, sel, out); return out[0] || null; },
     querySelectorAll(sel) { const out = []; collect(this, sel, out); return out; },
     set textContent(v) { this._children = [{ nodeType: 3, nodeValue: String(v) }]; },
     get textContent() { return textOf(this); },
@@ -73,15 +74,19 @@ function adopt(parent, c) {
 }
 function textOf(n) { if (n == null) return ""; if (typeof n === "string") return n; if (n.nodeType === 3) return n.nodeValue || ""; let s = ""; for (const c of n._children || []) s += textOf(c); return s; }
 function matchSel(node, sel) {
-  const m = /^([a-zA-Z0-9]*)(?:\[([^\]=^]+)(\^?)(?:=["']?([^\]"']*)["']?)?\])?$/.exec(sel.trim());
+  const m = /^([a-zA-Z0-9]*)((?:\.[\w-]+)*)(?:\[([^\]=^]+)(\^?)(?:=["']?([^\]"']*)["']?)?\])?$/.exec(sel.trim());
   if (!m) return false;
   if (m[1] && node.tagName.toLowerCase() !== m[1].toLowerCase()) return false;
   if (m[2]) {
-    if (!node.hasAttribute(m[2])) return false;
-    const want = m[4];
+    const have = new Set([...node._cls, ...(node.getAttribute("class") || "").split(/\s+/).filter(Boolean)]);
+    for (const c of m[2].split(".").filter(Boolean)) if (!have.has(c)) return false;
+  }
+  if (m[3]) {
+    if (!node.hasAttribute(m[3])) return false;
+    const want = m[5];
     if (want != null && want !== "") {
-      const got = node.getAttribute(m[2]);
-      if (m[3] ? !String(got).startsWith(want) : got !== want) return false;
+      const got = node.getAttribute(m[3]);
+      if (m[4] ? !String(got).startsWith(want) : got !== want) return false;
     }
   }
   return true;
