@@ -7,11 +7,13 @@ Posts, comments, reposts and quotes are commits ([GITSOCIAL.md](../specs/GITSOCI
 ## Initialize
 
 ```
-gitsocial social init [-b <branch>]        # refs/gitmsg/social/config and the gitmsg/social branch
+gitsocial social init [-b <branch>]
 gitsocial social config get|set|list
 ```
 
-`init` is idempotent. `-b` names the branch that `post`, `comment`, `repost` and `quote` write to. A commit without a `GitMsg:` trailer is a post on any branch the timeline reads, so a plain `git commit` posts too. Commits with a trailer are comments, reposts, quotes, edits or retractions.
+`init` is idempotent. It creates `refs/gitmsg/social/config` and the `gitmsg/social` branch. `-b` names the branch that `post`, `comment`, `repost` and `quote` write to.
+
+On each branch that the timeline reads, a commit without a `GitMsg:` trailer is a post, so a plain `git commit` is also a post. Commits with a trailer are comments, reposts, quotes, edits or retractions.
 
 ## Post
 
@@ -24,11 +26,11 @@ gitsocial social edit <ref> "Updated text"
 gitsocial social retract <ref>
 ```
 
-A comment's `original` is the thread's root post; a nested reply adds `reply-to` for its parent. Edits and retractions use core versioning, and the latest version wins.
+The `original` of a comment is the root post of the thread, and a nested reply adds `reply-to` for its parent. Edits and retractions use core versioning, and the latest version has priority.
 
 ## Blog
 
-A blog runs from one branch, with no `gitmsg/social` branch at all.
+A blog uses one branch and has no `gitmsg/social` branch.
 
 ```
 gitsocial social init -b main
@@ -38,7 +40,7 @@ gitsocial social edit <ref> "Updated text"
 gitsocial social retract <ref>
 ```
 
-`edit` and `retract` write to the branch the post is on, so they land on `main` too. A follower names that branch with `list add -b main`, or lets `list add` record the repository's default branch.
+`edit` and `retract` write to the branch that the post is on; for a blog, this is `main`. A follower names that branch with `list add -b main`, or lets `list add` record the repository's default branch.
 
 ## Lists and timeline
 
@@ -56,11 +58,11 @@ gitsocial social timeline [-l following] [-r workspace] [-n 50]
 gitsocial social fetch                      # every repository in every list; `gitsocial fetch` does this and more
 ```
 
-`list add` fetches the URL as you write it, and `list remove` takes any spelling of it: two URLs naming one repository match by canonical form. A repository is in a list once, on one branch or on all of them. The timeline reads the branch the entry names and the repository's `gitmsg/social` branch, and every branch of the workspace.
+`list add` fetches the URL that you type; `list remove` accepts each form of it, because GitSocial compares URLs by identity. A repository is in a list one time, on one branch or on all branches. The timeline reads the branch that the member names, the `gitmsg/social` branch of the repository, and all branches of the workspace.
 
 ## Followers
 
-A repository follows the workspace when one of its lists contains the workspace URL. Followers are detected during fetch.
+A repository follows the workspace when one of its lists contains the workspace URL. GitSocial finds followers during a fetch.
 
 ```
 gitsocial social followers [--json]
@@ -69,9 +71,9 @@ gitsocial social followers [--json]
 ## Reference
 
 - Where social messages are stored is specified in [GITMSG.md §3.4](../specs/GITMSG.md#34-content-branch).
-- Lists live at `refs/gitmsg/social/lists/<name>/`, one ref per member and metadata at `_meta` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)), so adds from concurrent clones do not collide.
-- The timeline excludes retracted posts ([GITMSG.md §1.5](../specs/GITMSG.md#15-versioning)) and commits no longer on their branch ([ARCHITECTURE.md](ARCHITECTURE.md#cache)), and orders by effective timestamp, newest first; imported content sorts by its origin time.
-- A card's comment, repost and quote counts follow the items that are live now, so retracting a comment lowers them.
+- Lists are at `refs/gitmsg/social/lists/<name>/`, one ref per member and metadata at `_meta` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)).
+- The timeline excludes retracted posts ([GITMSG.md §1.5](../specs/GITMSG.md#15-versioning)) and stale commits ([ARCHITECTURE.md](ARCHITECTURE.md#cache)). It sorts by effective timestamp, newest first, and imported content sorts by its origin time.
+- The comment, repost and quote counts of a card include only the items that are not retracted, so retracting a comment decreases the comment count.
 - `gitsocial social log` lists an item by its own type: a comment on a post is a comment, not a post.
-- Mentions, replies, comments and reposts of workspace posts raise [notifications](NOTIFICATIONS.md#types).
+- Mentions, replies, comments and reposts of workspace posts create [notifications](NOTIFICATIONS.md#types).
 - In the TUI, `S` opens the timeline ([TUI-KEYS.md](TUI-KEYS.md#social-extension)).

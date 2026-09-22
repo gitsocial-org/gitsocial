@@ -1,12 +1,19 @@
 # TUI View Diagrams
 
-Reference layouts for the TUI's list and detail views, drawn with the data the protocol specs use as examples.
+Each TUI list and detail view has one layout, which the diagrams draw with the example data from the protocol specs.
 
 [Layout](#layout) · [List views](#list-views) · [Detail views](#detail-views) · [Routes](#routes)
 
 ## Layout
 
-Every structured detail view follows one pattern: a header line, a hero card with the subject, a field table and the body, then sections separated by double rules, and the footer with the view's keys. The keys per view are in [TUI-KEYS.md](TUI-KEYS.md); the diagrams below leave the footer out.
+Each structured detail view has these parts, from top to bottom:
+
+- a header line
+- the hero card: the subject, a field table and the body, with a `▏` bar on the left
+- sections, with a double rule between them
+- the footer, with the keys of the view
+
+The keys of each view are in [TUI-KEYS.md](TUI-KEYS.md); the diagrams do not show the footer.
 
 ```
 ╭─ ICON[⇡]  Subject (40ch) · Author · FormatTime · [repo]#hash ───────────╮
@@ -37,11 +44,11 @@ Every structured detail view follows one pattern: a header line, a hero card wit
 
 ## List views
 
-List views are a `CardList`: one card per item, a `▏` bar on the selected card, and a separator between cards. `MaxLines` is the card's body height.
+Each list view except [List repositories](#list-repositories) is a `CardList`: one card per item, a `▏` bar on the selected card, and a separator between cards. `MaxLines` is the height of the card body.
 
 ### Timeline
 
-MaxLines 5, with interaction counts.
+Timeline cards have MaxLines 5 and show interaction counts.
 
 ```
 ╭─ Timeline ──────────────────────────────────────────────────────────────╮
@@ -84,7 +91,7 @@ The title carries the follow state: workspace, followed, mutual or unfollowed.
 
 ### List repositories
 
-A text list with an input field for local lists.
+The view is a text list, with an input field for a local list.
 
 ```
 ╭─ ☷  My List ───────────────────────────────────────────────────────────╮
@@ -101,7 +108,7 @@ A text list with an input field for local lists.
 
 ### List posts
 
-Posts from every repository in a list.
+The view shows the posts from each repository in a list.
 
 ```
 ╭─ ☷  My List ───────────────────────────────────────────────────────────╮
@@ -119,7 +126,7 @@ Posts from every repository in a list.
 
 ### Issues
 
-MaxLines 1. `n` opens the issue form.
+Issue cards have MaxLines 1. `n` opens the issue form.
 
 ```
 ╭─ ○  Open Issues · (3) ─────────────────────────────────────────────────╮
@@ -159,7 +166,7 @@ MaxLines 1. `n` opens the issue form.
 
 ### Releases
 
-MaxLines 2.
+Release cards have MaxLines 2.
 
 ```
 ╭─ ⏏  Releases (2) ──────────────────────────────────────────────────────╮
@@ -177,7 +184,7 @@ MaxLines 2.
 
 ### Pull requests
 
-MaxLines 2.
+Pull request cards have MaxLines 2.
 
 ```
 ╭─ ⑂  Pull Requests (2) ─────────────────────────────────────────────────╮
@@ -195,7 +202,7 @@ MaxLines 2.
 
 ### Search
 
-An input at the top, results as cards below, matches highlighted.
+The input is at the top, and the results are cards under it, with the matches highlighted.
 
 ```
 ╭─ Search ────────────────────────────────────────────────────────────────╮
@@ -240,7 +247,7 @@ Read items are dimmed.
 
 ### Post detail
 
-A thread: the parent dimmed above, the post itself, then replies indented by depth.
+The view shows a thread: the parent (dimmed), the post, then the replies, indented by depth.
 
 ```
 ╭─ •  Alice <alice@example.com> · Jan 6, 2025 10:30 UTC · #abc1234 ───────╮
@@ -421,7 +428,7 @@ A thread: the parent dimmed above, the post itself, then replies indented by dep
 
 ### Pull request detail
 
-`d` opens the diff, `i` the interdiff between versions.
+`d` opens the diff, and `i` opens the interdiff between versions.
 
 ```
 ╭─ ⑂  Add dark mode support · Alice · 3h ago · #abc123456789 ─────────────╮
@@ -482,7 +489,7 @@ A thread: the parent dimmed above, the post itself, then replies indented by dep
 
 ## Routes
 
-Every view has a route; the diagrams above cover the list and detail shapes, and the rest share them.
+Each view has a route; a view with no diagram uses the list or the detail layout.
 
 | Section | Routes |
 |---|---|

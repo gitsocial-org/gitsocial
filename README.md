@@ -8,7 +8,7 @@
 
 ## About
 
-GitSocial is an open source Go binary that stores issues, pull requests, comments, and other data in git. It can push that data to your own S3 bucket, which then serves as both a git remote and a static site. [GitSocial.org](https://gitsocial.org) runs this way.
+GitSocial is an open source Go binary that stores issues, pull requests, comments and other data in git. It can push that data to your own S3 bucket, which then serves as both a git remote and a static site. [GitSocial.org](https://gitsocial.org) runs this way.
 
 Each issue, pull request or comment is a commit with GitMsg trailers on a `gitmsg/*` branch. The GitSocial CLI and TUI can create and browse these items ([demo](documentation/demo/demo.mp4)).
 
@@ -36,7 +36,7 @@ scoop install gitsocial
 
 ## Quick Start
 
-_Public access to a bucket is a one-time step in the provider's dashboard._
+Before the first mirror or push, enable public access for the bucket in the dashboard of the provider.
 
 ### Mirror a project
 
@@ -44,26 +44,26 @@ _Public access to a bucket is a one-time step in the provider's dashboard._
 gitsocial mirror https://github.com/owner/repo s3://s3.example.com/mybucket/repo    # first run asks for credentials
 ```
 
-On a large repository, try `-n 100` first to cap the items per type. `--url https://example.org/` turns the HTML pages on at a domain you set up in the same dashboard.
+On a large repository, try `-n 100` first to limit the items per type. `--url https://example.org/` enables the HTML pages at a domain that you configure in the same dashboard.
 
 ### Explore a repository in the terminal
 
-Clone it from GitHub or GitLab, then from the project directory:
+Clone the repository from GitHub or GitLab, then run these commands in the repository directory:
 
 ```bash
-gitsocial import     # import issues, PRs, etc. from GitHub or GitLab
+gitsocial import     # import issues, pull requests, releases and discussions
 gitsocial tui        # explore in the terminal
 ```
 
 ### Host your own repository on a bucket
 
 ```bash
-gitsocial config credentials set s3.example.com    # paste the access + secret key
+gitsocial config credentials set s3.example.com    # paste the access key and the secret key
 gitsocial remote add s3://s3.example.com/mybucket/myrepo --default --site
 gitsocial push
 ```
 
-Anyone can then fetch it with `gitsocial clone s3://s3.example.com/mybucket/myrepo`, or with plain `git clone` from the bucket's public URL.
+Anyone can then clone it with `gitsocial clone s3://s3.example.com/mybucket/myrepo`, or with `git clone` from the public URL of the bucket.
 
 ## Documentation
 
@@ -72,11 +72,11 @@ Anyone can then fetch it with `gitsocial clone s3://s3.example.com/mybucket/myre
 | Document | Description |
 |----------|-------------|
 | [GitMsg Protocol](specs/GITMSG.md) | Core message format, headers, refs, versioning |
-| [S3 Remote](documentation/S3.md) | Buckets as git remotes, canonical URLs |
-| [Static Site](documentation/STATIC-SITE.md) | Repo website served from the bucket: timeline, issues, PRs, releases, code |
+| [S3 Remote](documentation/S3.md) | Buckets as git remotes, clone, push, thin fork buckets |
+| [Static Site](documentation/STATIC-SITE.md) | Repository website served from the bucket: timeline, issues, pull requests, releases, code |
 | [Identity Verification](documentation/IDENTITY.md) | Attestation sources, commands, caching |
 | [Notifications](documentation/NOTIFICATIONS.md) | Notification types, scopes, and triggers |
-| [Settings](documentation/SETTINGS.md) | User preferences, keys, sync across machines |
+| [Settings](documentation/SETTINGS.md) | User preferences, keys, `personal sync` across machines |
 
 ### Extensions
 
@@ -104,7 +104,7 @@ Anyone can then fetch it with `gitsocial clone s3://s3.example.com/mybucket/myre
 | [Contributing](documentation/CONTRIBUTING.md) | Fork, build, submit a pull request, report a bug |
 | [Architecture](documentation/ARCHITECTURE.md) | Layers, packages, cache schema, TUI structure |
 | [Style](documentation/STYLE.md) | Prose, help text, errors, comments, commits |
-| [Testing](documentation/TESTING.md) | Test tiers, gate stages, coverage, supported platforms |
+| [Testing](documentation/TESTING.md) | Test tiers, check stages, coverage, supported platforms |
 
 ## License
 

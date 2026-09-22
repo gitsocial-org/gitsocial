@@ -1,39 +1,43 @@
 # Identity Verification
 
-A signed commit is verified when its signing key and author email are attested as a pair by a source the reader trusts ([GITMSG.md §3.2](../specs/GITMSG.md#32-identity-verification)), and verified commits show a ⚿ badge next to the author.
+GitSocial verifies a signed commit when an enabled source attests its signing key and author email as a pair ([GITMSG.md §3.2](../specs/GITMSG.md#32-identity-verification)).
 
 [Sources](#sources) · [Commands](#commands) · [Reference](#reference)
 
 ## Sources
 
-A binding is verified when at least one enabled source affirms it. Verification belongs to the pair: every commit signed with that key and email is verified. Sources are independent, and a negative from one does not count against another. Unsigned commits are unverified, and nothing rejects them.
+A binding is the pair of a signing key and an author email, and one enabled source that attests a binding is enough to verify it. The verification applies to the pair: each commit that has that key and that email is verified and shows a ⚿ badge adjacent to the author.
+
+Each source is independent: a negative result from one source has no effect on a different source. An unsigned commit is not verified, and GitSocial does not reject it.
 
 | Source | Endpoint | Default |
 |---|---|---|
 | Forge GPG endpoint | `https://github.com/<user>.gpg`, GPG keys only | on |
-| Forge commits API | `https://api.github.com/repos/<owner>/<repo>/commits/<sha>`, any signature format | on |
-| Domain owner | `https://<domain>/.well-known/gitmsg-id.json`, the protocol's own source | off |
+| Forge commits API | `https://api.github.com/repos/<owner>/<repo>/commits/<sha>`, all signature formats | on |
+| Domain source | `https://<domain>/.well-known/gitmsg-id.json`, the source that the protocol defines | off |
 
-GitHub is the forge adapter shipped today. A repository on another host falls back to the domain source.
+GitHub is the only forge adapter at this time, so a repository on a different host uses the domain source.
 
-Domain attestation is off by default. Turn it on with `gitsocial settings set identity.dns_verification true`, or `d` in the TUI's Identity view. It applies at once, and cached domain bindings are ignored while it is off. A domain vouches for its own addresses and nothing else, so whoever controls the domain controls the badge. The badge does not tell `alice@examp1e.com` from `alice@example.com`; read the address.
+The domain source is off by default. To enable it, run `gitsocial settings set identity.dns_verification true`, or use the `d` key in the Identity view of the TUI; the change is immediate. When it is off, GitSocial ignores the domain bindings in the cache.
+
+A domain attests only its own addresses, so the person who controls the domain controls the badge. Read the address: the badge does not show the difference between `alice@examp1e.com` and `alice@example.com`.
 
 ## Commands
 
 ```
-gitsocial id verify <commit>         # the commit's binding and the source that affirmed it
+gitsocial id verify <commit>         # the commit's binding and the source that attested it
 gitsocial id resolve <email>         # the domain document for an address
 ```
 
-Signing needs `user.signingkey` and `gpg.format` in git config; SSH and GPG keys both work. The GitHub commits API allows 60 unauthenticated requests an hour and 5,000 with a token. Set `GITHUB_TOKEN` or `GH_TOKEN`, or run `gh auth login`, before fetching many repositories.
+To sign commits, set `user.signingkey` and `gpg.format` in the git config; SSH keys and GPG keys both work. The GitHub commits API allows 60 requests each hour without a token and 5,000 with a token. Before you fetch many repositories, set `GITHUB_TOKEN` or `GH_TOKEN`, or run `gh auth login`.
 
 ## Reference
 
 | Topic | Rule |
 |---|---|
-| Mail subdomains | For `alice@mail.example.com` with no document at `mail.example.com`, `example.com` is tried once ([GITMSG.md §3.2](../specs/GITMSG.md#32-identity-verification)). Prefixes: `mail.`, `email.`, `smtp.`, `imap.`, `pop.`, `mx.` |
-| Binding cache | `core_verified_bindings` ([ARCHITECTURE.md](ARCHITECTURE.md#schema)), per source: 24 hours for a verified result, 1 hour for a negative one |
-| Cache scope | A binding is about the key and the email, so switching repositories or forks does not invalidate it |
-| Several forges | Rows are scoped by forge host and do not overwrite each other. One affirmative row anywhere is enough |
-| Disagreement | Two readers with different trusted sources can disagree about the same commit; the protocol does not require them to agree |
-| TUI | The Identity view ([TUI-KEYS.md](TUI-KEYS.md#core-views)) shows your own binding and the source that verified it |
+| Mail subdomains | If `mail.example.com` has no document for `alice@mail.example.com`, GitSocial tries `example.com` one time ([GITMSG.md §3.2](../specs/GITMSG.md#32-identity-verification)). Prefixes: `mail.`, `email.`, `smtp.`, `imap.`, `pop.`, `mx.` |
+| Binding cache | `core_verified_bindings` ([ARCHITECTURE.md](ARCHITECTURE.md#schema)), for each source: 24 hours for a verified result, 1 hour for a negative result |
+| Cache scope | A binding applies to the key and the email, so a change of repository or fork does not remove it from the cache |
+| Several forges | The forge host is the scope of each row, and rows do not replace each other; one row that attests the binding is enough |
+| Different results | Two readers with different trusted sources can get different results for the same commit, and the protocol allows this |
+| TUI | The Identity view ([TUI-KEYS.md](TUI-KEYS.md#core-views)) shows your binding and the source that attested it |

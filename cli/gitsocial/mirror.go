@@ -329,11 +329,11 @@ func resolveMirrorWorkspace(baseDir, dirFlag, forgeURL string) (wsDir, action st
 		return "", "", fmt.Errorf("stat %s: %w", dir, err)
 	}
 	if !info.IsDir() || !git.IsRepository(dir) {
-		return "", "", fmt.Errorf("%s is not a git repository: pick another --dir", dir)
+		return "", "", fmt.Errorf("%s is not a git repository: choose another --dir", dir)
 	}
 	origin := git.GetOriginURL(dir)
 	if !normalizedRepoURLEqual(origin, forgeURL) {
-		return "", "", fmt.Errorf("%s has origin %q, not %q: pick another --dir", dir, origin, forgeURL)
+		return "", "", fmt.Errorf("%s has origin %q, not %q: choose another --dir", dir, origin, forgeURL)
 	}
 	return dir, "fetch", nil
 }

@@ -1,6 +1,6 @@
 # GitSocial Architecture
 
-Single Go library implementing [GITMSG.md](../specs/GITMSG.md), with thin clients: the [CLI](CLI.md) and the TUI call it directly, JSON-RPC serves it over stdio, and the [static site](STATIC-SITE.md) reads the bucket it publishes to over the [S3 remote](S3.md).
+GitSocial is one Go library that implements [GITMSG.md](../specs/GITMSG.md), with thin clients on top. The [CLI](CLI.md) and the TUI call it directly, JSON-RPC serves it over stdio, and the [static site](STATIC-SITE.md) reads the bucket that it publishes to over the [S3 remote](S3.md).
 
 [Development](#development) · [Code Rules](#code-rules) · [Directory Structure](#directory-structure) · [Package Reference](#package-reference) · [Cache](#cache) · [TUI](#tui)
 
@@ -8,7 +8,7 @@ Single Go library implementing [GITMSG.md](../specs/GITMSG.md), with thin client
 
 ### Branching and builds
 
-Trunk-based. `main` is the integration branch and stays linear; each feature lives on a `feature/<name>` branch, rebased on `main` and merged fast-forward.
+Development is trunk-based. `main` is the integration branch and stays linear; each feature is on a `feature/<name>` branch, rebased on `main` and merged fast-forward.
 
 ```bash
 git switch main && git pull --ff-only                    # refresh before branching and after any merge
@@ -19,19 +19,25 @@ git branch -d feature/<name>
 ```
 
 ```bash
+git worktree add .local/worktrees/<name> -b feature/<name> main   # a parallel branch in its own directory
+git worktree remove .local/worktrees/<name>                       # after the merge
+```
+
+```bash
 go build -o bin/gitsocial ./cli/gitsocial     # the CLI
 go build -o bin/ ./...                        # compile-check everything; mains land in bin/, never the repo root
 bin/gitsocial tui
 ```
 
-- `gitmsg/*` and `gitsocial` are protocol and data branches, not feature branches.
-- Give parallel builds distinct output names so they do not clobber each other.
-- A review fix folds into the branch commit it corrects; a fix for something already on `main` is its own commit.
-- A branch that changes the cache schema runs with its own `--cache-dir`: the first binary to open the shared `~/.cache/gitsocial/cache.db` reseeds it at the new version, and older binaries then refuse it. Delete the cache to rebuild.
+- `gitmsg/*` are content branches, not feature branches.
+- A worktree for a parallel branch is at `.local/worktrees/<name>`, the same as a design note is at `.local/design/`.
+- Give each parallel build a different output name, so one build does not overwrite the output of another.
+- Put a review fix into the branch commit that it corrects; a fix for a change that is already on `main` is a separate commit.
+- If a branch changes the cache schema, run it with its own `--cache-dir`: the first binary that opens the shared `~/.cache/gitsocial/cache.db` reseeds it at the new version, and older binaries then refuse it. To rebuild, delete the cache.
 
 ### Test and lint
 
-`scripts/check.sh` is the gate, in two tiers. `--quick` runs the prose check, the import check, `go vet`, `golangci-lint` and every test except the guarded ones; the pre-push hook runs it on every push that carries code, and skips a push of `gitmsg/*` data alone. Without `--quick` it sets `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too, writes the coverage profile and checks the floors; run it before merging to `main` and at release.
+`scripts/check.sh` is the gate, in two tiers: the quick tier (`--quick`) and the full tier. The pre-push hook runs the quick tier on each push that carries code; run the full tier before you merge to `main` and at release. [TESTING.md](TESTING.md#tiers) tells what each tier runs.
 
 ```bash
 scripts/check.sh --quick                    # the push tier
@@ -39,39 +45,48 @@ scripts/check.sh                            # the full tier
 git config core.hooksPath scripts/hooks     # install the pre-push hook, once per clone
 ```
 
-[TESTING.md](TESTING.md) holds the six stages and what fails each, the guarded tests, the coverage ratchet and its child-process credit, the environment variables and the artifact paths. Every baseline is a ratchet: `--update` accepts a count that fell.
+[TESTING.md](TESTING.md) has the six stages and the failures of each, the guarded tests, the coverage ratchet with child processes, the environment variables and the artifact paths. Each baseline is a ratchet: a count can go down but not up, and `--update` accepts a lower count.
 
 ### Design notes
 
-A branch that changes `core/objstore`, `core/site`, `core/gitmsg` or `core/cache`, or touches consistency, storage layout or a protocol surface, adds three steps to the branch flow above.
+A branch that changes `core/objstore`, `core/site`, `core/gitmsg` or `core/cache`, or that changes what readers see during concurrent writes, where data is stored, or what the protocol writes, adds three steps to the [branch flow](#branching-and-builds).
 
-- Before code: a design note, approved. Half a page in `.local/design/<feature>.md` while the branch is open: invariants, each naming its test; who writes and reads each artifact, under what guard; accepted failure modes and their repair; out of scope.
-- Once the push tier passes: one medium review of the branch against the note. Triage every finding by cause before fixing any: fix, accept and record in the commit body, or defer to an issue. No second full review.
-- On merge the note goes; each invariant lives on as its test, a row in the owning doc's reference tables, and a one-line comment where the code enforces it.
+- Before code: an approved design note, half a page in `.local/design/<feature>.md` while the branch is open, with these parts:
+  - the invariants, each with the name of its test
+  - who writes and reads each artifact, and under what guard
+  - the accepted failure modes and their repair
+  - what is out of scope
+- After the quick tier passes: one medium review of the branch against the note. Triage each finding by cause before you fix any of them: fix it, accept it and record it in the commit body, or defer it to an issue. No second full review.
+- On merge, delete the note; each invariant remains as its test, a row in the reference tables of the owning doc, and a one-line comment where the code enforces it.
 
-A change to what the site looks like needs no note; it follows the rules in [STATIC-SITE.md](STATIC-SITE.md#design).
+A change to the appearance of the site needs no note; it follows the rules in [STATIC-SITE.md](STATIC-SITE.md#design).
 
-Go back to the note instead of another fix when a function is about to be rewritten a second time, a finding is a consequence of a decision, three findings share a cause, or a fix needs a concept the guide does not describe.
+Go back to the note, not to another fix, when one of these is true:
+
+- a function is about to be rewritten a second time
+- a finding is a consequence of a decision
+- three findings share a cause
+- a fix needs a concept that the guide does not describe
 
 ### Definition of done
 
-A change is done when every line below holds; a review checks them in order.
+A change is done when each of these lines is true; a review checks them in order.
 
-- The prose, help text and comments follow [STYLE.md](STYLE.md); every comment is one line, and the reason for the change is in the commit body.
+- The prose, help text and comments follow [STYLE.md](STYLE.md); each comment is one line, and the reason for the change is in the commit body.
 - The quick tier is green on the branch and the full tier before the fast-forward to `main`.
-- Every client the feature reaches is updated in the same branch: CLI, TUI, RPC and the site do not learn about a feature at different times.
-- The guide says what the reader types or sees, the reference table carries the values, and a spec change lands in `specs/` first.
-- A consistency-sensitive change has its design note, its one review and its triage recorded, and the note is gone at merge.
-- A number that the plan ratchets, a prose count, a lint ceiling, an import edge, a coverage floor, has moved toward its target or stayed.
+- Each client that the feature affects is updated in the same branch, so the CLI, the TUI, RPC and the site get a feature at the same time.
+- The guide says what the reader types or sees, the reference table carries the values, and a spec change goes into `specs/` first.
+- A change that needs a [design note](#design-notes) has its note, its one review and its triage recorded, and the note is deleted at merge.
+- Each ratcheted number (a prose count, a lint ceiling, an import edge, a coverage floor) has moved toward its target or has not changed.
 
 ### Working in a session
 
 One set of rules for every session.
 
 - Read the files a change touches in full before a note, a review or a fix. Do not work from search hits.
-- A consistency-sensitive change gets its [design note](#design-notes) first, then one medium review, findings triaged by cause.
+- A change that needs a [design note](#design-notes) gets the note first, then one medium review, findings triaged by cause.
 - A mechanical change merges on a green quick tier and one review; the tiers are in [Test and lint](#test-and-lint).
-- Every commit carries a body; [STYLE.md](STYLE.md) holds the register and the examples.
+- Each commit has a body; [STYLE.md](STYLE.md) has the register and the examples.
 - A commit whose net new comment lines outnumber its added code lines fails the push, unless it changes only documentation.
 - The branch flow is in [Branching and builds](#branching-and-builds), and the closing list is [Definition of done](#definition-of-done).
 
@@ -107,7 +122,7 @@ Inside `core` the packages form a stack, and each imports only what is below it:
 
 ### Never
 
-- Run git from an extension; use `core/git`.
+- Run git from an extension; extensions use `core/git`.
 - Create a type for a single use.
 - Add package-level mutable state outside the seams below. New state takes a new row and a reason.
 - Skip error handling.
@@ -139,7 +154,7 @@ Internal helpers                      return error
 - An intentionally ignored error carries a comment.
 - One `*cobra.Command` per file under `cli/gitsocial/`, registered in `init()`.
 - A CLI command returns its exit code as an error through `RunE`, and `main` exits once.
-- A TUI view implements the `View` interface (`Update`, `Render`); examples in `library/tui/tuicore/`.
+- A TUI view implements the `View` interface (`Update`, `Render`), with examples in `library/tui/tuicore/`.
 
 ## Directory Structure
 
@@ -229,7 +244,7 @@ A push is the sequence: the data push, then the site step after it.
 
 ## Cache
 
-Storage under `repositories/` can be deleted at any time; what to fetch is decided from `cache.db`, not from storage. The cache is append-only. A commit that leaves its source branch (rebase, force-push) is marked `stale_since` by `cache.MarkCommitsStale` or `MarkCommitsStaleByRepo`; stale commits leave timeline and list queries but stay visible, dimmed, in thread and detail views.
+You can delete the storage under `repositories/` at any time; GitSocial uses `cache.db`, not the storage, to decide what to fetch. The cache is append-only. A commit that leaves its source branch (rebase, force-push) is stale: `cache.MarkCommitsStale` or `MarkCommitsStaleByRepo` sets its `stale_since`. Timeline and list queries exclude stale commits, and thread and detail views show them dimmed.
 
 SQLite: WAL, 64 MB page cache, temp store in memory, 16 connections, 256 MB mmap.
 
@@ -239,25 +254,27 @@ Every extension table is keyed by `(repo_url, hash, branch)` into `core_commits`
 
 - `core_commits(repo_url, hash, branch, author_name, author_email, message, timestamp, edits, is_virtual, origin_author_name, origin_author_email, ...)` plus the generated `effective_*` columns
 - `core_commits_version(edit_repo_url, edit_hash, edit_branch, canonical_repo_url, canonical_hash, canonical_branch, is_retracted)`: edit to canonical, authoritative for versioning
-- `core_repositories`, `core_repository_meta`, `core_sync_tips`: followed and workspace repositories, their metadata, and the last synced tips
+- `core_repositories`, `core_repository_meta`, `core_sync_tips`: followed and workspace repositories, their metadata, and the tips of the last workspace fetch
 - `core_lists`, `core_list_repositories`: lists and their members
 - `core_fetch_ranges`: fetched time windows per repository
 - `core_notification_reads`, `core_mentions`, `core_labels`, `core_trailer_refs`: read markers, `@` mentions, labels, and `Closes:`/`Refs:` trailers per commit
-- `core_identity_dns` (24 h TTL), `core_verified_bindings`: identity caches; see [IDENTITY.md](IDENTITY.md)
+- `core_identity_dns` (24 h TTL), `core_verified_bindings`: identity caches ([IDENTITY.md](IDENTITY.md))
 - `core_edit_acceptances`, `core_edit_declines`: outcomes of cross-repo proposals
-- `social_items`, `social_interactions` (recounted from live items on every write), `social_followers`, `social_repo_lists`, `social_repo_list_repositories`
+- `social_items`, `social_interactions` (recounted on every write from the items that are not retracted), `social_followers`, `social_repo_lists`, `social_repo_list_repositories`
 - `pm_items`, `pm_assignees`, `pm_links` (blocks, blocked-by, related)
-- `review_items`, `review_reviewers`, `review_branch_observations` (live tips of every branch an open PR points at, refreshed after fetch)
+- `review_items`, `review_reviewers`, `review_branch_observations` (current tips of every branch an open pull request points at, refreshed after fetch)
 - `release_items`, `release_sbom_cache`
 - `memo_items`
 
 `core_commits.edits` stores the raw header value; `core_commits_version` is authoritative. Use `cache.ResolveToCanonical` and `cache.GetLatestVersion`.
 
-Edit resolution is gated to same-repo edits (GITMSG.md §1.5), so a cross-repo edit is an inert proposal until the owner acts. `proposals.Accept` writes the owner's own same-repo mirror edit carrying `accepts=<proposal>`, which wins resolution and derives `core_edit_acceptances` on processing. `proposals.Decline` publishes a marker at `refs/gitmsg/core/declines/*`. Both clear the proposer's marker; accept takes precedence. A change to an item of a registered fork adopts it instead (GITMSG.md §1.5): the first change writes a copy on this repository's branch carrying `adopts=<original>` and a `GitMsg-Ref:` snapshot of its author, and every later change edits the copy.
+Edit resolution applies only to same-repository edits (GITMSG.md §1.5), so a cross-repository edit is a proposal that has no effect until the owner accepts it. `proposals.Accept` writes an accepting edit: a same-repository edit of the owner that carries `accepts=<proposal>`. The accepting edit has priority in resolution, and its processing writes the `core_edit_acceptances` row. `proposals.Decline` publishes a marker at `refs/gitmsg/core/declines/*`. Both clear the marker of the proposer, and accept has priority over decline.
+
+A change to an item of a registered fork adopts the item and does not make a proposal (GITMSG.md §1.5). The first change writes a copy on the branch of this repository, and the copy carries `adopts=<original>` and a `GitMsg-Ref:` reference section with the author of the original. Each later change edits the copy.
 
 ### Resolved views
 
-`core_commits` carries generated `effective_message`, `effective_author_name`, `effective_author_email` and `effective_timestamp` columns that take the latest edit's content and the origin fields over the raw ones. Each extension has a `<ext>_items_resolved` view joining its table onto `core_commits` and projecting those columns under the display names:
+`core_commits` has the generated columns `effective_message`, `effective_author_name`, `effective_author_email` and `effective_timestamp`, which use the content of the latest edit and the origin fields in place of the raw values. Each extension has a `<ext>_items_resolved` view that joins its table onto `core_commits` and projects those columns under the display names:
 
 ```sql
 CREATE VIEW {ext}_items_resolved AS
@@ -269,15 +286,20 @@ LEFT JOIN {ext}_items e ON c.repo_url = e.repo_url AND c.hash = e.hash AND c.bra
 
 The denormalized columns `resolved_message`, `has_edits` and `is_retracted` are written only by `applyEditToCanonical` in `core/cache/versions.go`.
 
-Use the view when the WHERE clause is on `core_commits` columns. Join `core_commits` to the extension table directly when the WHERE clause is selective on extension columns (`pm_items.state = 'open'`) or the query is a recursive CTE over extension relationships; otherwise the planner scans `core_commits`. `social.GetComments`, and the thread and notification readers inside `social`, are the examples.
+Use the view when the WHERE clause is on `core_commits` columns. Join `core_commits` to the extension table directly when the WHERE clause is selective on extension columns (`pm_items.state = 'open'`) or the query is a recursive CTE over extension relationships; otherwise, the planner scans `core_commits`. `social.GetComments`, and the thread and notification readers inside `social`, are the examples.
 
 ### Refs and keys
 
 References are `[repo_url]#<type>:<value>`: `https://github.com/user/repo#commit:abc123def456` or, workspace-relative, `#commit:abc123def456`. Types: `commit`, `branch`, `tag`, `file`, `list`.
 
-A repository has two names: the identity, `protocol.NormalizeURL` of any spelling, which keys every cache row, ref path and comparison, and the address, the spelling the user gave, which is stored in the list member or fork ref and handed to git. A repository has an identity and a person has a verified binding; the word is not free for a third use.
+A repository has two names:
 
-A virtual commit is one referenced by a `GitMsg-Ref` trailer but not yet fetched; it is stored with `is_virtual = 1` and full metadata, and flips to `0` when fetched.
+- The identity is `protocol.NormalizeURL` of an address: the key of each cache row, ref path and comparison.
+- The address is the URL as the user typed it, stored in the list member or fork ref and given to git.
+
+A repository has an identity, and a person has a verified binding; do not use the word "identity" for a third concept.
+
+A virtual commit is a commit that a `GitMsg-Ref` trailer references and that is not fetched yet. It is stored with `is_virtual = 1` and full metadata, and a fetch of the commit changes the value to `0`.
 
 State refs under `refs/gitmsg/`:
 
@@ -286,33 +308,33 @@ State refs under `refs/gitmsg/`:
 - `refs/gitmsg/core/declines/<hash>`: one ref per declined proposal, subject is the proposal ref
 - `refs/gitmsg/<ext>/lists/<name>/_meta` and `.../items/<refHash>`: list metadata and one ref per member
 
-Per-element refs have no shared write target, so concurrent adds from several clones do not collide. Metadata lives under `_meta` because git refuses a child ref under a same-named parent ref.
+Each element has its own ref, so concurrent adds from several clones do not collide. Metadata is at `_meta`. Git refuses a child ref under a parent ref that has the same name.
 
 Fork refs sit outside `refs/gitmsg/`, keyed by `fetch.URLHash` of the fork identity:
 
 - `refs/forks/<hash>/gitmsg/*`: the protocol branches a registered fork publishes, written by `core/fetch`
-- `refs/fork/<hash>/<branch>`: the code branches a cross-fork diff borrows, written by `extensions/review`
+- `refs/fork/<hash>/<branch>`: the code branches that a cross-fork diff uses, written by `extensions/review`
 
 ### Fetch rules
 
 | Repository | Cache | Storage |
 |---|---|---|
-| Workspace | full history, all branches | the workdir |
+| Workspace | full history, all branches | the workspace directory |
 | Followed with `#branch:*` | full history, all branches | persistent |
 | Followed on one branch | full history, incremental | persistent |
 | Not followed | a 30-day window | may be deleted at any time |
 
-All-branch following stores each commit under its real refname. The workspace always follows all branches. Deduplication and stale marking work per repository through `FilterUnfetchedCommitsByRepo` and `MarkCommitsStaleByRepo`. Switching a repository between one branch and `*` runs `cache.ResetRepositoryData`; the next fetch rebuilds it.
+All-branch following stores each commit under its real refname. The workspace always follows all branches. Deduplication and stale marking work per repository through `FilterUnfetchedCommitsByRepo` and `MarkCommitsStaleByRepo`. Switching a repository between one branch and `*` runs `cache.ResetRepositoryData`, and the next fetch rebuilds the data of the repository.
 
 ### Extension rules
 
 - Tables carry the `<ext>_` prefix and key into `core_commits` by `(repo_url, hash, branch)`.
-- Content lives on `gitmsg/<ext>`, named by one constant per extension. Only `social` writes a configured branch, which its `init` records under the `branch` key and `gitmsg.GetExtBranch` reads back. Every config carries `version`, the key `IsExtInitialized` reads. A pm, review, release or memo processor skips a commit from any other branch.
+- Content is on `gitmsg/<ext>`, named by one constant per extension. Only `social` writes a configured branch, which its `init` records under the `branch` key and `gitmsg.GetExtBranch` reads back. Every config carries `version`, the key `IsExtInitialized` reads. A pm, review, release or memo processor skips a commit from any other branch.
 - An extension joins the fetch in `library/client`, which lists every extension's `Processors`, `SyncWorkspaceBatch` and `BackfillSpec`. `pm`, `release` and `review` name their own `Processors` again in their `FetchRepository`, which serves the `--repo` form of a CLI list command.
-- An extension costs ten imports: `cache`, `fetch`, `git`, `gitmsg`, `log`, `notifications`, `protocol` and `result`, plus `social` for comments and `tui/tuicore` for its navigation items. It registers a notification provider with `notifications.RegisterProvider`.
-- `core/search` names every extension's table itself, in `query.go` and `group.go`, and `core/cache` names them in `analytics.go`, `clear.go`, `commits.go`, `stats.go` and `versions.go`, where `notifications` takes a registration. A sixth extension edits both packages; the asymmetry stays until one exists.
+- An extension has ten imports: `cache`, `fetch`, `git`, `gitmsg`, `log`, `notifications`, `protocol` and `result`, plus `social` for comments and `tui/tuicore` for its navigation items. It registers a notification provider with `notifications.RegisterProvider`.
+- `core/search` names the table of each extension itself, in `query.go` and `group.go`, and `core/cache` names them in `analytics.go`, `clear.go`, `commits.go`, `stats.go` and `versions.go`. `notifications` uses a registration in place of names. A sixth extension must edit both packages; do not change this asymmetry before a sixth extension exists.
 - Core tables are read-only for extensions; use the cache APIs.
-- Known limits: `storage.GetStorageDir` hashes the URL only, so one URL on two branches shares storage; check `meta.HasCommits` before reading timestamps.
+- Known limits: `storage.GetStorageDir` hashes only the URL, so one URL on two branches has one storage directory. Check `meta.HasCommits` before you read timestamps.
 
 ## TUI
 
@@ -338,6 +360,6 @@ library/tui/
 | `version_item_` | a history-picker version item | `version_item_issue.go` |
 | `util_` | helpers, and the shared app state they take: `State`, `Router`, `theme` | `util_render.go` |
 
-The table governs `library/tui/*/`, not `test/` and not the `tuicore/diff/` sub-package. A `component_` renders and takes keys; shared app state stays a `util_`.
+The table governs `library/tui/*/`, not `test/` and not the `tuicore/diff/` sub-package. A `component_` renders and takes keys; shared app state stays in a `util_` file.
 
 A new extension gets a `tui/tui<ext>/` directory with its `view_*.go` files and a `util_register.go` exposing `Register(host)`, called from `app.go`.

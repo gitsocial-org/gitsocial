@@ -10,7 +10,7 @@ Communication uses JSON-RPC 2.0 over stdio (stdin/stdout). Each message is a sin
 
 ### 1.1. Message Format
 
-Requests and responses follow JSON-RPC 2.0. All messages MUST be valid JSON on a single line.
+Requests and responses follow JSON-RPC 2.0. All messages must be valid JSON on a single line.
 
 Request:
 ```json
@@ -34,24 +34,24 @@ Server notification (no id):
 
 ### 1.2. Batching
 
-Clients MAY send JSON-RPC batch requests (array of request objects). The server MUST respond with a batch response in the same order. An empty array returns a single `-32600` error.
+Clients may send JSON-RPC batch requests (an array of request objects). The server must send a batch response in the same order. An empty array returns a single `-32600` error.
 
 ## 2. Lifecycle
 
 ### 2.1. Startup
 
-The client spawns `gitsocial rpc` as a subprocess. The server reads from stdin and writes to stdout. The server MUST NOT produce output before receiving `initialize`.
+The client starts `gitsocial rpc` as a subprocess. The server reads from stdin and writes to stdout, and must not write output before it receives `initialize`.
 
 ### 2.2. Initialize
 
-The first request MUST be `initialize`, except for `ping`, `subscribe`, `unsubscribe` and `shutdown`, which work before it. The server opens the cache, resolves the workspace, and returns server capabilities. A second `initialize` returns `-32007 CONFLICT`; a missing `workdir` returns `-32602`.
+The first request must be `initialize`; only `ping`, `subscribe`, `unsubscribe` and `shutdown` work before it. The server opens the cache, resolves the workspace, and returns server capabilities. A second `initialize` returns `-32007 CONFLICT`, and a missing `workdir` returns `-32602`.
 
 **Method:** `initialize`
 
 Params:
 - `workdir` (string, required): Absolute path to the git repository working directory
 - `cacheDir` (string): Cache directory (default: `~/.cache/gitsocial`)
-- `clientName` (string): Client identifier (e.g., `"vscode"`, `"neovim"`)
+- `clientName` (string): Client identifier, for example `"vscode"` or `"neovim"`
 - `clientVersion` (string): Client version
 
 Result:
@@ -76,7 +76,7 @@ Params: none
 
 Result: `"ok"`
 
-The server closes the cache and stops the read loop. Clients SHOULD send `shutdown` before killing the process.
+The server closes the cache and stops the read loop. Clients should send `shutdown` before they stop the process.
 
 ### 2.4. Ping
 
@@ -86,7 +86,7 @@ Params: none
 
 Result: `"pong"`
 
-For keepalive and health checks.
+Clients use `ping` for keepalive and health checks.
 
 ## 3. Error Codes
 
@@ -120,11 +120,11 @@ An error built from a library `Result[T]` carries `data.appCode` and, when the l
 
 `data.details` holds an error as its text, and a struct or a map as its JSON object.
 
-The table above is not exhaustive. `appCode` is the library's own code string passed through, so a `-32000` response can carry `INVALID_SCOPE`, `LIST_NOT_FOUND`, `GIT_ERROR`, `NO_SBOM`, `NO_VERSION`, `SBOM_FAILED` or `READ_FAILED`. Parameter validation (`-32602`) and the search methods return no `data` at all.
+The table above is not exhaustive. `appCode` is the code string from the library, without change, so a `-32000` response can carry `INVALID_SCOPE`, `LIST_NOT_FOUND`, `GIT_ERROR`, `NO_SBOM`, `NO_VERSION`, `SBOM_FAILED` or `READ_FAILED`. Parameter validation (`-32602`) and the search methods return no `data` at all.
 
 ## 4. Methods
 
-Methods are namespaced as `namespace.method`. The `workdir` set during `initialize` is implicit; individual methods do not accept it.
+Methods are namespaced as `namespace.method`. All methods use the `workdir` from `initialize`, and no method accepts a `workdir` param.
 
 ### 4.1. Social
 
@@ -136,8 +136,8 @@ Params:
 - `scope` (string, required): `"timeline"`, `"repository:my"`, `"repository:workspace"`, `"repository:<url>"` or `"repository:<url>@<branch>"`, `"list:<id>"`, `"post:<ref>"`, `"thread:<ref>"`. Any other value returns `INVALID_SCOPE`
 - `limit` (int): Max posts to return (0 = all)
 - `types` (string[]): Filter by type: `"post"`, `"comment"`, `"repost"`, `"quote"`
-- `since` (string): ISO 8601 timestamp lower bound; a value that does not parse is dropped
-- `until` (string): ISO 8601 timestamp upper bound; a value that does not parse is dropped
+- `since` (string): RFC 3339 timestamp lower bound; the server ignores a value that does not parse
+- `until` (string): RFC 3339 timestamp upper bound; the server ignores a value that does not parse
 - `includeImplicit` (boolean): Include implicit posts
 
 Posts come back newest first. A param this list does not name is ignored.
@@ -225,7 +225,7 @@ Params:
 - `branch` (string): Branch (uses default if omitted)
 - `allBranches` (boolean): Follow all branches (stores `branch:*`). Mutually exclusive with `branch`.
 
-Result: `string` (added repo URL)
+Result: `string` (the added repository URL)
 
 #### social.removeFromList
 
@@ -250,8 +250,8 @@ Params:
 - `limit` (int): Max entries
 - `types` (string[]): Filter by log entry type
 - `author` (string): Filter by author
-- `after` (string): ISO 8601 lower bound
-- `before` (string): ISO 8601 upper bound
+- `after` (string): RFC 3339 timestamp lower bound
+- `before` (string): RFC 3339 timestamp upper bound
 
 Result: `LogEntry[]`
 
@@ -281,11 +281,11 @@ Params:
 - `body` (string): Issue description
 - `state` (string): Initial state (default: `"open"`)
 - `assignees` (string[]): Assignee emails
-- `due` (string): ISO 8601 due date
+- `due` (string): RFC 3339 due date
 - `milestone` (string): Milestone ref
 - `sprint` (string): Sprint ref
-- `parent` (string): Parent issue ref. `root` is derived from it per GITPM.md §1.7, so a client normally sends this alone.
-- `root` (string): Top-level ancestor ref. Only send this to override the derivation; sending `parent` alone is the usual case.
+- `parent` (string): Parent issue ref. The server derives `root` from it (GITPM.md §1.7), so usually a client sends only `parent`.
+- `root` (string): Top-level ancestor ref. Send it only to override the derivation.
 - `labels` (Label[]): `[{"scope":"priority","value":"high"}]`
 
 Result: `Issue`
@@ -301,7 +301,7 @@ Params:
 - `due` (string): New due date
 - `milestone` (string): New milestone ref
 - `sprint` (string): New sprint ref
-- `parent` (string): New parent ref. Sending it without `root` re-derives the root; sending `""` clears both.
+- `parent` (string): New parent ref. Without `root`, the server derives the root again; the value `""` clears both.
 - `root` (string): Top-level ancestor ref. Only send this to override the derivation.
 - `labels` (Label[]): New labels
 
@@ -358,7 +358,7 @@ Params:
 - `title` (string, required): Milestone title
 - `body` (string): Description
 - `state` (string): Initial state
-- `due` (string): ISO 8601 due date
+- `due` (string): RFC 3339 due date
 
 Result: `Milestone`
 
@@ -418,8 +418,8 @@ Params:
 - `title` (string, required): Sprint title
 - `body` (string): Description
 - `state` (string): Initial state (default: `"planned"`)
-- `start` (string): ISO 8601 start date
-- `end` (string): ISO 8601 end date
+- `start` (string): RFC 3339 start date
+- `end` (string): RFC 3339 end date
 
 Result: `Sprint`
 
@@ -514,23 +514,23 @@ Params:
 - `repoURL` (string): Repository URL (default: workspace)
 - `branch` (string): Branch
 - `states` (string[]): Filter: `"open"`, `"merged"`, `"closed"`
-- `includeForks` (bool): Include PRs from registered forks
-- `limit` (int): Max results
+- `includeForks` (bool): Include pull requests from registered forks
+- `limit` (int): Max results; 0 means 1000
 
 Result: `PullRequest[]`
 
 #### review.getPR
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 
 Result: `PullRequest`
 
 #### review.createPR
 
 Params:
-- `subject` (string, required): PR title
-- `body` (string): PR description
+- `subject` (string, required): Pull request title
+- `body` (string): Pull request description
 - `base` (string): Base branch ref. A pull request created without one cannot be merged
 - `head` (string): Head branch ref. A pull request created without one cannot be merged
 - `closes` (string[]): Issue refs to close on merge
@@ -541,7 +541,7 @@ Result: `PullRequest`
 #### review.updatePR
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 - `subject` (string): New title
 - `body` (string): New description
 - `state` (string): New state
@@ -555,7 +555,7 @@ Result: `PullRequest`
 #### review.mergePR
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 
 Merges fast-forward. The other strategies the CLI offers are not reachable over RPC.
 
@@ -563,26 +563,26 @@ Result: `PullRequest`
 
 #### review.markReady
 
-Takes a draft PR out of draft state.
+Takes a draft pull request out of draft state.
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 
 Result: `PullRequest`
 
 #### review.convertToDraft
 
-Puts an open PR back into draft state.
+Puts an open pull request back into draft state.
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 
 Result: `PullRequest`
 
 #### review.closePR
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 
 Result: `PullRequest`
 
@@ -596,14 +596,14 @@ Result: `PullRequest`, the workspace copy; a pull request adopted before returns
 #### review.retractPR
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 
 Result: `true`
 
 #### review.getFeedbackForPR
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 
 Result: `Feedback[]`
 
@@ -611,8 +611,8 @@ Result: `Feedback[]`
 
 Params:
 - `content` (string, required): Feedback body
-- `pullRequest` (string, required): PR ref
-- `commit` (string): Commit hash (12 chars)
+- `pullRequest` (string, required): Pull request ref
+- `commit` (string): Commit hash (12 characters)
 - `file` (string): File path
 - `oldLine` (int): Line in old file
 - `newLine` (int): Line in new file
@@ -648,10 +648,10 @@ Result: `string` (applied file path)
 
 #### review.getDiff
 
-Returns the diff between a PR's base and head.
+Returns the diff between the base and the head of a pull request.
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 
 Result: `FileDiff[]`
 
@@ -679,7 +679,7 @@ Result: `FileDiff[]`
 #### review.getDiffStats
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 
 Result: `DiffStats`
 
@@ -690,7 +690,7 @@ Result: `DiffStats`
 #### review.getFileDiff
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 - `file` (string, required): File path
 
 Result: `FileDiff`
@@ -700,7 +700,7 @@ Result: `FileDiff`
 Returns file content at a specific ref.
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 - `file` (string, required): File path
 - `side` (string): `"base"` reads the base; any other value, including an absent one, reads the head
 
@@ -709,13 +709,13 @@ Result: `string` (file contents)
 #### review.getPRComments
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 
 Result: `Post[]`
 
 #### review.getForks
 
-Returns registered fork URLs (stored in core config, shared across all extensions).
+Returns the registered fork URLs. Each fork is at a ref under `refs/gitmsg/core/forks/`, and all extensions share the list.
 
 Params: none
 
@@ -723,7 +723,7 @@ Result: `string[]` (fork URLs)
 
 #### review.addFork
 
-Registers a fork URL in the core config (shared across all extensions).
+Registers a fork URL at a ref under `refs/gitmsg/core/forks/`.
 
 Params:
 - `url` (string, required): Fork repository URL
@@ -732,7 +732,7 @@ Result: `true`
 
 #### review.removeFork
 
-Removes a fork URL from the core config. A URL that is not registered returns `NOT_FOUND`.
+Removes the ref of a registered fork URL. A URL that is not registered returns `NOT_FOUND`.
 
 Params:
 - `url` (string, required): Fork repository URL
@@ -741,38 +741,38 @@ Result: `true`
 
 #### review.updatePRTips
 
-Re-snapshots the PR's base and head tips from the live branches.
+Records the base and head tips of the pull request again, from the current branches.
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 
 Result: `PullRequest`
 
 #### review.syncPRBranch
 
-Brings the head branch up to date with the base, then re-snapshots the tips.
+Rebases or merges the head branch onto the base, then records the tips again.
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 - `strategy` (string): `rebase` (default) or `merge`
 
 Result: `PullRequest`
 
 #### review.getPRVersions
 
-Lists every version of the PR, oldest first.
+Lists all versions of the pull request, oldest first.
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 
 Result: `PRVersion[]`
 
 #### review.comparePRVersions
 
-Range-diffs two versions of the PR.
+Returns the range-diff of two versions of the pull request.
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 - `from` (int, required): Version number to compare from
 - `to` (int, required): Version number to compare to
 
@@ -780,11 +780,10 @@ Result: string (the range-diff)
 
 #### review.getVersionAwareReviews
 
-Each reviewer's latest review tagged with the version it was left against, so a
-client can tell a stale approval from a current one.
+Returns the latest review of each reviewer, with the pull request version that it reviewed and the current version.
 
 Params:
-- `ref` (string, required): PR ref
+- `ref` (string, required): Pull request ref
 
 Result: `VersionAwareReview[]`
 
@@ -818,7 +817,7 @@ Params:
 - `artifactURL` (string): Download URL
 - `checksums` (string): Checksum data
 - `signedBy` (string): GPG signer
-- `sbom` (string): SBOM filename (e.g., `sbom.spdx.json`)
+- `sbom` (string): SBOM filename, for example `sbom.spdx.json`
 
 Result: `Release`
 
@@ -855,7 +854,7 @@ Result: `Post[]`
 
 #### release.getSBOM
 
-Returns parsed SBOM summary for a release (format, package count, licenses, generator).
+Returns the parsed SBOM summary of a release: format, package count, licenses and generator.
 
 Params:
 - `ref` (string, required): Release ref
@@ -875,7 +874,7 @@ Result: `string` (raw SBOM JSON content)
 
 #### core.fetch
 
-Fetches updates from all subscribed repositories. Returns immediately with a fetch ID. Progress and completion are reported via server notifications.
+Fetches updates from the followed repositories and returns a fetch ID immediately. Server notifications report the progress and the completion.
 
 Params:
 - `listId` (string): Fetch only repositories in this list
@@ -899,9 +898,9 @@ Params:
 - `siteOnly` (boolean): Rebuild the site, send no refs
 - `full` (boolean): Send every object and detach a thin fork bucket
 - `dryRun` (boolean): Report the plan, send nothing
-- `extensions` (string[]): Accepted and ignored; every initialized extension is pushed
+- `extensions` (string[]): Ignored; the server pushes all initialized extensions
 
-Result for one remote, the object below; for several, an array of them in push order.
+Result: for one remote, the object below; for more than one remote, an array of these objects in push order.
 
 ```json
 {
@@ -980,7 +979,7 @@ Result: `int`
 #### core.markAsRead
 
 Params:
-- `repoURL` (string, required): Notification repo URL
+- `repoURL` (string, required): Notification repository URL
 - `hash` (string, required): Notification hash
 - `branch` (string, required): Notification branch
 
@@ -994,7 +993,7 @@ Result: `true`
 
 #### core.getHistory
 
-Returns edit history for any item (post, issue, PR, release, etc.).
+Returns the edit history of an item, for example a post, an issue, a pull request or a release.
 
 Params:
 - `ref` (string, required): Item ref
@@ -1022,7 +1021,7 @@ Result: `KeyValue[]`
 ]
 ```
 
-`description` is the key's registry description, left out for a key the registry does not carry.
+`description` is the description of the key in the registry; the server omits it for a key that is not in the registry.
 
 #### core.setSetting
 
@@ -1036,7 +1035,7 @@ Result: `true`
 
 #### search
 
-Cross-extension search (posts, issues, PRs, releases, feedback).
+Searches all extensions: posts, issues, pull requests, releases and feedback.
 
 Params:
 - `query` (string): Free-text query
@@ -1044,8 +1043,8 @@ Params:
 - `repo` (string): Filter by repository URL
 - `type` (string): Filter by type: `post`, `comment`, `repost`, `quote`, `issue`, `milestone`, `sprint`, `pr`, `feedback`, `release`
 - `hash` (string): Filter by commit-hash prefix
-- `after` (string): ISO 8601 timestamp lower bound
-- `before` (string): ISO 8601 timestamp upper bound
+- `after` (string): RFC 3339 timestamp lower bound
+- `before` (string): RFC 3339 timestamp upper bound
 - `limit` (int): Max results (default: 20)
 - `scope` (string): `timeline` (default), `list:<id>`, `repository:<url>`, `repos:<csv>`
 - `sort` (string): `score` (default) or `date`
@@ -1065,7 +1064,7 @@ Result: `SearchResult`
 
 ## 5. Server Notifications
 
-Server-initiated notifications (no `id` field) pushed to the client. Clients opt in by sending `subscribe` after initialization.
+The server sends notifications (with no `id` field) to the client. A client opts in with `subscribe`, which works before `initialize`.
 
 ### 5.1. Subscribe
 
@@ -1124,7 +1123,7 @@ Sent once when the fetch as a whole fails, not per repository.
 
 #### notifications.changed
 
-Sent at the end of `core.fetch`. Mark-as-read and local commits send nothing; a client that changes read state updates its own count.
+Sent at the end of `core.fetch`. Mark-as-read and local commits send nothing; a client that changes the read state updates its own count.
 
 ```json
 {"jsonrpc":"2.0","method":"notifications.changed","params":{
@@ -1136,7 +1135,7 @@ Sent at the end of `core.fetch`. Mark-as-read and local commits send nothing; a 
 
 #### workspace.changed
 
-Reserved. `subscribe` accepts `"workspace"`, but the server has no emitter for this notification and sends none. The payload shape below is what a client should expect once one exists.
+Reserved. `subscribe` accepts `"workspace"`, but the server has no emitter for this notification and sends none. A client should expect the payload shape below when an emitter exists.
 
 ```json
 {"jsonrpc":"2.0","method":"workspace.changed","params":{
@@ -1146,7 +1145,7 @@ Reserved. `subscribe` accepts `"workspace"`, but the server has no emitter for t
 
 ## 6. Type Reference
 
-Types returned by methods. Most are Go structs with no JSON tags, so their field names serialize as written in Go, with a capital first letter and no omission of zero values: an unset pointer is `null`, an unset time is `"0001-01-01T00:00:00Z"`, an unset slice is `null`. The five tagged types, marked below, serialize under their tag names instead.
+The methods return the types below. Most are Go structs with no JSON tags, so their field names serialize as written in Go, with a capital first letter. Zero values are not omitted: an unset pointer is `null`, an unset time is `"0001-01-01T00:00:00Z"`, an unset slice is `null`. The five tagged types, marked below, serialize under their tag names.
 
 Times are RFC 3339 strings. Refs are strings in `#commit:hash@branch` or `url#commit:hash@branch` form. A library `Result[T]` maps to `result` or `error`.
 
@@ -1247,7 +1246,7 @@ Tagged type.
   "branch": "string",
   "author_name": "string",
   "author_email": "string",
-  "timestamp": "string (ISO 8601)",
+  "timestamp": "string (RFC 3339)",
   "subject": "string (optional)",
   "body": "string (optional)",
   "base_tip": "string (optional)",
@@ -1266,7 +1265,7 @@ Tagged type.
   "reviewer_name": "string",
   "reviewer_email": "string",
   "state": "approved | changes-requested",
-  "reviewed_at": "string (ISO 8601)",
+  "reviewed_at": "string (RFC 3339)",
   "reviewed_version": 0,
   "reviewed_label": "string",
   "current_version": 0,
@@ -1291,7 +1290,7 @@ Tagged type. Every field is always present.
   "packages": 127,
   "generator": "string, e.g. syft-1.0.0",
   "licenses": {"MIT": 42, "Apache-2.0": 15},
-  "generated": "string (ISO 8601)",
+  "generated": "string (the SBOM's own creation time)",
   "items": [
     {"name": "string", "version": "string", "license": "string"}
   ]
@@ -1317,12 +1316,12 @@ Tagged type. Every field is always present.
 
 ### search.Result
 
-Tagged type; see the [search](#search--socialsearch) method for the shape.
+Tagged type. The [search](#search) method shows the shape.
 
 ## 7. Implementation Notes
 
-- The read loop is single-threaded: one request is dispatched to completion before the next line is read, and a batch runs its entries in order. `core.fetch` is the exception; it starts a goroutine, returns a `fetchId` at once and reports through notifications.
-- A server serves the workspace given at `initialize`. For another workspace, shut down and spawn a new server; multi-root editors run one per workspace.
+- The read loop is single-threaded: the server runs one request to completion before it reads the next line, and runs the entries of a batch in order. `core.fetch` is the exception: it starts a goroutine, returns a `fetchId` immediately and reports through notifications.
+- A server serves the workspace given at `initialize`. For a different workspace, shut down the server and start a new one; a multi-root editor runs one server for each workspace.
 - Serialization rules are in [Section 6](#6-type-reference).
-- `-32003 NOT_INITIALIZED` is defined but no method raises it today. Read the `initialize` response to learn which extensions are available.
-- Handlers live in `library/rpc/methods_*.go`, one file per namespace; each unmarshals its params, calls the extension API and returns the result. No business logic lives in the RPC layer.
+- `-32003 NOT_INITIALIZED` is defined, but no method returns it. Read the `initialize` response to learn which extensions are available.
+- Handlers are in `library/rpc/methods_*.go`, one file for each namespace. Each handler unmarshals its params, calls the extension API and returns the result; the RPC layer has no business logic.

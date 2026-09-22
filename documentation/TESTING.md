@@ -1,12 +1,12 @@
 # Testing
 
-The two test tiers, every gate stage, the supported platforms, and the flags, environment variables and artifacts the scripts in `scripts/` use.
+GitSocial tests run through the gate, `scripts/check.sh`, in two tiers, and through the release and coverage scripts in `scripts/`.
 
 [Tiers](#tiers) · [Stages](#stages) · [Guarded tests](#guarded-tests) · [Coverage](#coverage) · [Beyond the gate](#beyond-the-gate) · [Platforms](#platforms) · [Environment](#environment) · [Artifacts](#artifacts)
 
 ## Tiers
 
-`scripts/check.sh` is the gate, in two tiers. `--quick` runs every test except the guarded ones, and the pre-push hook runs it on every push that carries code, and skips a push of `gitmsg/*` data alone. Without `--quick` it sets `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too, writes the coverage profile and checks the floors. Run the full tier before merging to `main` and at release.
+`scripts/check.sh` is the gate, in two tiers. `--quick` runs every test except the guarded ones; the pre-push hook runs it on every push that carries code, and skips a push of `gitmsg/*` data alone. Without `--quick`, the gate sets `GITSOCIAL_TEST_FULL=1` so the guarded tests also run, then writes the coverage profile and checks the floors. Run the full tier before merging to `main` and at release.
 
 | Tier | Command | Runs |
 |---|---|---|
@@ -22,7 +22,7 @@ git config core.hooksPath scripts/hooks     # install the pre-push hook, once pe
 GITSOCIAL_SKIP_GATE=1 git push              # skip the gate once
 ```
 
-A missing `golangci-lint` fails unless `--skip-lint` is passed. `.golangci.yml` is `version: "2"`, which a v1 binary refuses, so install v2 or newer:
+A missing `golangci-lint` fails unless `--skip-lint` is passed. Install golangci-lint v2 or newer; a v1 binary refuses `.golangci.yml`, which is `version: "2"`.
 
 ```bash
 brew install golangci-lint
@@ -46,7 +46,7 @@ The full tier runs six stages, the quick tier the first five.
 
 Stage 1 reads the core stack sentence from [ARCHITECTURE.md](ARCHITECTURE.md#layers), and fails when that sentence names a `core` package that does not exist or misses one that does.
 
-Each baseline takes `--update`, which accepts the current numbers and is for a count that fell. `funlen` and `gocognit` in `.golangci.yml` hold today's largest function and highest complexity, and a threshold only moves down.
+Each baseline takes `--update`, which accepts the current numbers; use it for a count that fell. `funlen` and `gocognit` in `.golangci.yml` hold the current largest function length and highest complexity, and a threshold only moves down.
 
 ```bash
 scripts/prose-check.sh --list <rule>        # the offending lines of one rule
@@ -65,16 +65,16 @@ A guarded test calls `fullTierOnly` and runs only under `GITSOCIAL_TEST_FULL=1`.
 |---|---|
 | `TestSmoke`, `TestSequence`, `TestGolden/LayoutProperties` | `library/tui/test`, the matrices in [TUI-TESTS.md](TUI-TESTS.md) |
 | `TestCommandTreeJSONOutput` | `cli/gitsocial`, the `--json` walk |
-| `TestS3Helper_*` | `cli/gitsocial`, the child-process helper battery |
+| `TestS3Helper_*` | `cli/gitsocial`, the child-process helper suite |
 | `TestSiteFixtureBuild` | `library/core/site`, the showcase fixture build |
 
 The fixture build needs neither node nor Chrome. It reruns when the site assets, the site generators, `sitetest/fixture.sh` or `sitetest/fixture-lib.sh` change.
 
 ## Coverage
 
-`scripts/coverage.sh` measures statement-weighted coverage under `-coverpkg=./...`, so a package with no test files of its own still counts and another package's integration tests credit the code they reach. The full tier writes the profile the floors read; a bare run writes the report in full.
+`scripts/coverage.sh` measures statement-weighted coverage under `-coverpkg=./...`, so a package with no test files of its own still counts. The integration tests of one package also add coverage to the code that they run in other packages. The full tier writes the profile that the floors read; a bare run, one with no arguments, writes the full report.
 
-The CLI tests build their binary with `go build -cover` when `GITSOCIAL_COVERDIR` names a directory, and every child process inherits `GOCOVERDIR`. The push verbs, the `TestS3Helper_*` battery and the thin-bucket tests then credit what their children run, down to the s3 remote helper git spawns. `scripts/coverage.sh --merge` converts that data with `go tool covdata textfmt` and appends it to the profile, before the table and the floors are computed from it. The converted `children.out` is kept: a run whose tests the test cache replays reuses it, and a block the profile does not carry is dropped.
+The CLI tests build their binary with `go build -cover` when `GITSOCIAL_COVERDIR` names a directory, and every child process inherits `GOCOVERDIR`. The coverage of the push verbs, the `TestS3Helper_*` suite and the thin-bucket tests then includes the code that their child processes run, including the s3 remote helper that git starts. `scripts/coverage.sh --merge` converts that data with `go tool covdata textfmt` and appends it to the profile, before the table and the floors are computed from it. The converted `children.out` is kept: a run whose test results come from the test cache uses it again, and a block that the profile does not carry is dropped.
 
 ```bash
 scripts/coverage.sh                            # run the suite and write the report
@@ -85,20 +85,20 @@ scripts/coverage.sh --merge [profile]          # fold the child-process data int
 GS_COVER_PROFILE=old.out scripts/coverage.sh   # re-report an existing profile, running no tests
 ```
 
-A bare run sets `GITSOCIAL_TEST_FULL=1` itself, so its figures carry the guarded tests. The browser suites stay uncredited: they are JavaScript, so `site_pages*.go` reads as untested and is not.
+A bare run sets `GITSOCIAL_TEST_FULL=1` itself, so its figures include the guarded tests. The browser suites are JavaScript and the figures do not include them, so `site_pages*.go` shows as untested although the browser suites test it.
 
 ## Beyond the gate
 
 | Run | Command |
 |---|---|
-| the race detector, the browser battery and the advisory scan, at release | `scripts/release.sh vX.Y.Z` |
-| the advisory scan alone; needs the network and downloads the module | `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` |
-| the browser site battery | `scripts/site-test.sh`, or `go test -tags sitetest -timeout 30m ./library/core/site/` |
+| the race detector, the browser suite and the vulnerability scan, at release | `scripts/release.sh vX.Y.Z` |
+| the vulnerability scan alone, which needs the network and downloads the module | `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` |
+| the browser site suite | `scripts/site-test.sh`, or `go test -tags sitetest -timeout 30m ./library/core/site/` |
 | the reader assets' per-file function coverage | `scripts/site-coverage.sh` |
 | the 100k-row thread benchmark | `go test -tags bench -run '^$' -bench . ./library/extensions/social/` |
 | one package with streamed per-test progress | `scripts/test.sh -run TestSmoke ./library/tui/test/` |
 
-`scripts/site-coverage.sh` runs the battery under `NODE_V8_COVERAGE` and prints one row per asset in `library/core/site/assets/`: covered functions, total functions and the percentage. `--list <file>` prints the line and name of each uncovered function. `GS_JSCOV=<dir>` reports an existing profile directory and runs nothing; a run writes `.test-artifacts/jscov/`.
+`scripts/site-coverage.sh` runs the browser suite under `NODE_V8_COVERAGE` and prints one row per asset in `library/core/site/assets/`: covered functions, total functions and the percentage. `--list <file>` prints the line and name of each uncovered function. `GS_JSCOV=<dir>` reports an existing profile directory and runs nothing; a run writes `.test-artifacts/jscov/`.
 
 ```bash
 scripts/site-coverage.sh                                   # the per-file table
@@ -106,7 +106,7 @@ scripts/site-coverage.sh --list gs-render.js               # the uncovered funct
 GS_JSCOV=.test-artifacts/jscov scripts/site-coverage.sh    # re-report the last run
 ```
 
-`scripts/release.sh` preflights `GITSOCIAL_TEST_FULL=1 go test -race ./...`, the browser battery and `govulncheck ./...`, each into its own log. The scan is the one preflight step that reaches the network, so both tiers stay offline. The battery needs node, and its style suite needs Chrome; the harness and the fixtures are in [STATIC-SITE.md](STATIC-SITE.md#testing). `scripts/test.sh` pipes `go test -json` through `scripts/testfmt` and defaults to `./...`.
+Before a release, `scripts/release.sh` runs `GITSOCIAL_TEST_FULL=1 go test -race ./...`, the browser suite and `govulncheck ./...`, each into its own log. The scan is the only release check that needs the network, and both tiers run offline. The browser suite needs node and its style suite needs Chrome; the harness and the fixtures are in [STATIC-SITE.md](STATIC-SITE.md#testing). `scripts/test.sh` pipes `go test -json` through `scripts/testfmt` and defaults to `./...`.
 
 ## Platforms
 
@@ -120,7 +120,7 @@ GS_JSCOV=.test-artifacts/jscov scripts/site-coverage.sh    # re-report the last 
 | linux/arm64 | yes | yes | no |
 | windows/amd64 | yes | no | no |
 
-Windows installs through the Scoop bucket the [README](../README.md#installation) names. No source file carries a platform build tag, and `runtime.GOOS` is read in one place.
+Windows installs through the Scoop bucket the [README](../README.md#windows) names. No source file carries a platform build tag, and `runtime.GOOS` is read in one place.
 
 ## Environment
 
@@ -128,12 +128,12 @@ Windows installs through the Scoop bucket the [README](../README.md#installation
 |---|---|---|
 | `GITSOCIAL_TEST_FULL` | the full tier, `scripts/coverage.sh`, `scripts/release.sh` | runs the guarded tests |
 | `GITSOCIAL_COVERDIR` | the full tier, `scripts/coverage.sh` | the directory the child processes write coverage data into, and the switch for the `-cover` build |
-| `GITSOCIAL_PUSH_RANGES` | `scripts/hooks/pre-push` | the pushed code commits, without `gitmsg/*` data, that the subject and `comment-heavy` checks read; else `@{upstream}..HEAD`, else neither runs |
+| `GITSOCIAL_PUSH_RANGES` | `scripts/hooks/pre-push` | the pushed code commits, without `gitmsg/*` data, that the subject and `comment-heavy` checks read; without it, the checks read `@{upstream}..HEAD`, and with no upstream neither check runs |
 | `GITSOCIAL_SKIP_GATE` | the user | skips the pre-push gate once |
 | `GS_COVER_PROFILE` | the user | re-reports that profile instead of running the suite |
 | `DAYS` | the user | the churn window of the import report, in days; 90 by default |
 | `CHROME` | the user | the Chrome binary the style suite drives |
-| `GS_JSCOV` | the user | the V8 coverage directory `scripts/site-coverage.sh` reports instead of running the battery |
+| `GS_JSCOV` | the user | the V8 coverage directory that `scripts/site-coverage.sh` reports instead of running the browser suite |
 
 ## Artifacts
 
@@ -149,7 +149,7 @@ Every run writes under `.test-artifacts/`, which git ignores.
 | `coverage/children/` | the child processes' raw coverage data, and the `children.out` converted from it |
 | `coverage/packages.txt`, `coverage/agg.txt` | the package list and the per-package totals the report is built from |
 | `coverage/test.log` | the suite output of a bare `scripts/coverage.sh` run |
-| `jscov/` | the V8 coverage of one `scripts/site-coverage.sh` run, and the battery log beside it |
+| `jscov/` | the V8 coverage of one `scripts/site-coverage.sh` run, and the browser suite log beside it |
 | `release-race.log` | `go test -race ./...` at release |
-| `release-site.log` | the browser battery at release |
-| `release-vuln.log` | the advisory scan at release |
+| `release-site.log` | the browser suite at release |
+| `release-vuln.log` | the vulnerability scan at release |

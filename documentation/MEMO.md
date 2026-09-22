@@ -1,12 +1,12 @@
 # Memo Extension
 
-Memos are knowledge kept as commits on the fixed `gitmsg/memo` branch (core protocol only, [GITMSG.md](../specs/GITMSG.md)), at one of five tiers and organized by labels.
+Memos are notes stored as commits on the `gitmsg/memo` branch, with the core protocol only ([GITMSG.md](../specs/GITMSG.md)); each memo is at one of five tiers and has labels.
 
 [Tiers](#tiers) · [Initialize](#initialize) · [Write and promote](#write-and-promote) · [Sessions](#sessions) · [Inherit](#inherit) · [Labels](#labels) · [Workflows](#workflows) · [Reference](#reference)
 
 ## Tiers
 
-| Order | Tier | Repository | Syncs with | In `memo list` by default |
+| Order | Tier | Repository | Remote | In `memo list` by default |
 |---|---|---|---|---|
 | 1 | session | `~/.cache/gitsocial/memo/session/<id>/` | its own remote, when one is set | the current session only |
 | 2 | personal | `~/.config/gitsocial/personal/`, shared with settings | the personal remote | yes |
@@ -14,7 +14,7 @@ Memos are knowledge kept as commits on the fixed `gitmsg/memo` branch (core prot
 | 4 | inherited | followed repositories declared with `memo inherit add` | none | yes |
 | 5 | external | other followed repositories with a memo branch | none | no; `--include-external` or `--tier external` |
 
-The order is retrieval order, most local first. Which memo wins when two contradict is decided by `priority/` labels, not by tier.
+`memo list` reads the tiers in this order, the most local tier first. When two memos contradict, the `priority/` labels decide which memo has priority, not the tier.
 
 ## Initialize
 
@@ -25,7 +25,7 @@ gitsocial personal init --remote <url>     # once per machine, so personal memos
 gitsocial personal sync [--push-only | --fetch-only]
 ```
 
-Sessions create themselves on first write. Two machines writing between syncs merge automatically, and the merge commit is not a memo.
+GitSocial creates a session at its first memo. When two machines write memos between two syncs, the push or the fetch merges them automatically, and the merge commit is not a memo.
 
 ## Write and promote
 
@@ -37,8 +37,8 @@ gitsocial memo promote <ref> --to project|personal|session
 gitsocial memo list | show <ref>
 ```
 
-- The default scope is the session.
-- Promotion copies the memo to the higher tier as a new commit with no back-reference; the source stays until it is retracted or its session is collected.
+- The default tier is the session.
+- `promote` writes a copy of the memo to the tier that `--to` names, as a new commit with no reference to the source. The source stays until you retract it or `gc` deletes its session.
 - Project memos travel with `gitsocial push` and `gitsocial fetch`.
 
 ## Sessions
@@ -51,8 +51,8 @@ gitsocial memo session gc <id> | --older-than 30d
 gitsocial memo list --include-sessions all|<id>
 ```
 
-- The id comes from `MEMO_SESSION_ID`, else `<YYYYMMDD>-<8 hex>`. Any string works: `daily`, `task-auth-bug`.
-- Sessions persist until `gc`, which deletes the repository and every memo not promoted.
+- The id comes from `MEMO_SESSION_ID`, or is `<YYYYMMDD>-<8 hex>` when it is not set. All strings are valid ids: `daily`, `task-auth-bug`.
+- A session stays until `gc` deletes its repository and all its memos that are not promoted.
 
 ## Inherit
 
@@ -63,7 +63,7 @@ gitsocial memo inherit remove <url>
 gitsocial memo list --tier inherited | --tier external | --include-external
 ```
 
-`inherit add` records the source at `refs/gitmsg/memo/inherits/<urlHash>` and adds it to the managed social list `memo-inherits` with all branches, so every fetch picks up its memo branch. `remove` undoes both.
+`inherit add` records the repository at `refs/gitmsg/memo/inherits/<urlHash>` and adds it, with all branches, to the social list `memo-inherits`, which GitSocial manages. Each fetch then gets its memo branch. `inherit remove` reverses both steps.
 
 ## Labels
 
@@ -79,17 +79,31 @@ Labels are the core `<scope>/<value>` field ([GITMSG.md §1.7](../specs/GITMSG.m
 
 ## Workflows
 
-- **Solo.** Write to the session as you work, `memo list` at the end of the day, `promote --to project` what should stay.
-- **Team.** `memo create --scope project --labels priority/critical,kind/policy`, then `gitsocial push`; teammates `fetch` and `memo list --tier project`. Comment on a memo after it reaches its final tier, since promotion creates a new commit and comments stay with the source.
-- **Organization.** `memo inherit add https://github.com/org/policies`, `fetch`, `memo list --tier inherited`. A `priority/critical` inherited policy outranks a local `priority/low` capture.
-- **Several machines.** `gitsocial personal init --remote <url>` and `memo personal init` on each; `memo create --scope personal`, then `gitsocial personal sync` on both.
-- **Agents.** Set `MEMO_SESSION_ID=task-auth-bug` so the run resumes; capture with `memo create`; review with `memo list --include-sessions task-auth-bug --json`; promote the keepers; `memo session gc task-auth-bug`, or `gc --older-than 30d` from cron. Sessions with different ids never collide.
+- **Solo.** Write to the session as you work; at the end of the day, run `memo list` and `promote --to project` the memos to keep.
+- **Team.** Run `memo create --scope project --labels priority/critical,kind/policy`, then `gitsocial push`. Teammates run `fetch` and `memo list --tier project`. Comment on a memo only when it is on its final tier: a promotion does not move the comments to the new commit.
+- **Organization.** Run `memo inherit add https://github.com/org/policies`, `fetch` and `memo list --tier inherited`. An inherited `priority/critical` policy has priority over a local `priority/low` memo.
+- **Several machines.** On each machine, run `gitsocial personal init --remote <url>` and `memo personal init`. Write with `memo create --scope personal`, then run `gitsocial personal sync` on both machines.
+- **Agents.** Sessions with different ids are in different repositories.
+  1. Set `MEMO_SESSION_ID=task-auth-bug`; a run with the same id continues the session.
+  2. Write memos with `memo create`.
+  3. Examine them with `memo list --include-sessions task-auth-bug --json`.
+  4. Promote the memos to keep.
+  5. Run `memo session gc task-auth-bug`, or `gc --older-than 30d` from cron.
 
 ## Reference
 
 - Versions follow [GITMSG.md §1.5](../specs/GITMSG.md#15-versioning) and labels [§1.7](../specs/GITMSG.md#17-labels).
-- `memo list` excludes retracted memos, expired ones (`--include-expired` shows them, `--expired` shows only them), other sessions, the external tier, and commits no longer on their branch ([ARCHITECTURE.md](ARCHITECTURE.md#cache)). Order: tier, then `priority/` rank, then recency.
-- A comment on a memo you authored, and a `priority/critical` memo on an inherited source, raise [notifications](NOTIFICATIONS.md).
-- [`gitsocial search`](CLI.md#gitsocial-search) `--type memo` applies the same defaults; `--tier` scopes it.
+- `memo list` sorts by tier, then by `priority/` rank, then newest first. It excludes these memos:
+
+  | Excluded | Show them with |
+  |---|---|
+  | retracted memos | |
+  | expired memos | `--include-expired`, or `--expired` for only these |
+  | memos of other sessions | `--include-sessions` |
+  | memos on the external tier | `--include-external` |
+  | stale commits ([ARCHITECTURE.md](ARCHITECTURE.md#cache)) | |
+
+- A comment on a memo you authored, and a `priority/critical` memo on an inherited repository, create [notifications](NOTIFICATIONS.md).
+- [`gitsocial search`](CLI.md#gitsocial-search) `--type memo` applies the same defaults, and `--tier` limits it to one tier.
 - `GITSOCIAL_PERSONAL_REPO` overrides the personal repository, `MEMO_SESSION_DIR` the sessions directory and `MEMO_SESSION_ID` the session, all from the environment only ([SETTINGS.md](SETTINGS.md#environment)).
 - In the TUI, `M` opens memos, grouped by tier ([TUI-KEYS.md](TUI-KEYS.md#memo-extension)).

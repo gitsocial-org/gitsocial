@@ -1,6 +1,6 @@
 # CLI
 
-The gitsocial command line: global flags, the core commands, import, scripting, exit codes and environment variables.
+The gitsocial command line has global flags, core commands, an import command, scripting support, exit codes and environment variables.
 
 [Command Structure](#command-structure) · [Core Commands](#core-commands) · [Import](#import) · [Scripting](#scripting) · [Reference Format](#reference-format) · [Exit Codes](#exit-codes) · [Environment Variables](#environment-variables)
 
@@ -10,7 +10,7 @@ The gitsocial command line: global flags, the core commands, import, scripting, 
 gitsocial [--json] <command> [subcommand] [args] [flags]
 ```
 
-`--help` on any command is the authority for its flags. Global flags:
+`--help` on a command shows all its flags. Global flags:
 
 - `--json` - JSON output
 - `--workdir, -C <path>` - run in another directory
@@ -25,7 +25,7 @@ gitsocial [--json] <command> [subcommand] [args] [flags]
 | `release` | [RELEASE.md](RELEASE.md) | releases, artifacts, SBOM |
 | `memo` | [MEMO.md](MEMO.md) | memos across tiers |
 
-Each extension has `init`, `status` and `config`; `memo` inits per tier. Content lives on `gitmsg/<extension>`, and only `social init` takes `-b` to name another branch.
+Each extension has `init`, `status` and `config`, and `memo` has one `init` for each tier. Content is on `gitmsg/<extension>`, and only `social init` takes `-b` to name another branch.
 
 ## Core Commands
 
@@ -51,7 +51,7 @@ The first fetch in a workspace asks whether to track the default branch only or 
 
 ### gitsocial push
 
-Sends the `gitmsg/*` branches, state refs, tags, the default branch when it is ahead, and open PR heads to every resolved remote. A push to an s3 remote with `site.publish` then rebuilds the site. Flags and remote resolution are in [S3.md](S3.md#push).
+Sends the `gitmsg/*` branches, state refs, tags, the default branch when it is ahead, and the heads of open pull requests to each resolved remote. A push to an s3 remote with `site.publish` then rebuilds the site. Flags and remote resolution are in [S3.md](S3.md#push).
 
 ```
 gitsocial push [remote...]
@@ -61,7 +61,7 @@ gitsocial push --site-only     # rebuild the site, send no refs
 
 ### gitsocial mirror
 
-Mirrors a forge-hosted project into a bucket: fetch from the forge, import issues, pull requests, releases and discussions, then push data and code, and rebuild the site. Re-running refreshes. It is safe from cron, and a crashed run resumes.
+Mirrors a forge-hosted project into a bucket: fetch from the forge, import issues, pull requests, releases and discussions, then push data and code, and rebuild the site. Run it again, or from cron, to refresh the mirror; a run that stops before it completes continues at the next run.
 
 ```
 gitsocial mirror <forge-url> <s3-url> --url <public-url>   # cold start: clone, import, push
@@ -70,13 +70,13 @@ gitsocial mirror                                           # refresh
 gitsocial mirror --dry-run <forge-url> <s3-url>            # the provider checklist and the plan
 ```
 
-- The forge URL stays `origin`; the bucket is a second remote. Every upstream branch is mirrored unless `--default-branch-only`.
-- `--url` sets `site.url` and turns the HTML pages on. `-n` caps items per type on import. `-y` skips every prompt; missing credentials then fail naming the `gitsocial config credentials set` command.
-- Creating the bucket, allowing public reads and attaching a domain are provider dashboard steps.
+- The forge URL stays `origin`, and the bucket is a second remote. All upstream branches are mirrored, unless you give `--default-branch-only`.
+- `--url` sets `site.url` and turns the HTML pages on. `-n` sets the maximum number of items for each type on import. `-y` skips all prompts, and missing credentials then cause an error that names the `gitsocial config credentials set` command.
+- Do these steps in the dashboard of the provider: create the bucket, allow public reads and attach a domain.
 
 ### gitsocial clone
 
-`git clone` with `s3://` support: pasted provider URLs are normalized, and the helper alias is written to the clone's local config so plain git works there.
+`git clone` with `s3://` support: it normalizes provider URLs and writes the helper alias to the local config of the clone, so plain git works in the clone.
 
 ```
 gitsocial clone <url> [directory]
@@ -90,7 +90,7 @@ gitsocial remote default [name...]                        # set the default push
 gitsocial remote put <key> <file> [--remote <name>]       # upload one file to the bucket root, e.g. an installer
 ```
 
-An s3 URL is normalized on `add`; the accepted shapes are in [S3.md](S3.md#push). Any other URL is added as an ordinary git remote.
+`add` normalizes an s3 URL; the accepted forms are in [S3.md](S3.md#push). Any other URL is added as an ordinary git remote.
 
 ### gitsocial config
 
@@ -104,7 +104,7 @@ gitsocial config credentials set <host>          # see S3.md
 
 ### gitsocial settings
 
-User settings, stored in the personal bare repo and synced across machines. Keys are in [SETTINGS.md](SETTINGS.md).
+User settings, stored in the personal bare repository and synced between machines with `gitsocial personal sync`. Keys are in [SETTINGS.md](SETTINGS.md).
 
 ```
 gitsocial settings get <key> | set <key> <value> | list
@@ -124,7 +124,7 @@ fetch.workspace_mode = (per-repo)
 
 ### gitsocial personal
 
-The personal bare repo that holds settings and personal-tier memos. See [SETTINGS.md](SETTINGS.md#cross-machine-sync).
+The personal bare repository that holds settings and personal-tier memos. See [SETTINGS.md](SETTINGS.md#cross-machine-sync).
 
 ```
 gitsocial personal init [--remote <url>]
@@ -134,7 +134,7 @@ gitsocial personal status
 
 ### gitsocial fork
 
-Registers other repositories as forks of this one. Issues and pull requests filed in a fork appear here, and changing one adopts it into this repository; an edit to another repository's item stays a proposal until its owner accepts it.
+Registers other repositories as forks of this one. Issues and pull requests of a fork appear here, and when you change one, GitSocial adopts it into this repository. An edit to an item of a different repository stays a proposal until its owner accepts it.
 
 ```
 gitsocial fork add <url>
@@ -176,10 +176,10 @@ gitsocial search --type issue --labels bug --assignee dev@example.com
 gitsocial search --type pr --group-by state --count-only
 ```
 
-- `--type` takes post, comment, repost, quote, pr, issue, milestone, sprint, release or memo. An inline prefix in the query sets the same filters; the flag wins.
+- `--type` takes post, comment, repost, quote, pr, issue, milestone, sprint, release or memo. An inline prefix in the query sets the same filters; the flag has priority.
 - `--scope` takes `timeline`, the default, `list:<name>` or `repository:<url>`. `--sort` takes `score`, the default, or `date`.
-- `--group-by` takes state, author, type, extension, repo, label, assignee, reviewer, milestone or base. `--top` caps the items per group and `--count-only` prints the counts alone.
-- `--assignee`, `--milestone` and `--sprint` imply `--type issue`; `--reviewer`, `--draft` and `--base` imply `--type pr`; `--prerelease` and `--tag` imply `--type release`.
+- `--group-by` takes state, author, type, extension, repo, label, assignee, reviewer, milestone or base. `--top` sets the maximum number of items for each group, and `--count-only` prints only the counts.
+- `--assignee`, `--milestone` and `--sprint` imply `--type issue`. `--reviewer`, `--draft` and `--base` imply `--type pr`. `--prerelease` and `--tag` imply `--type release`.
 - `--tier` applies to `--type memo` and takes session, personal, project, inherited or external.
 
 Inline prefixes, in the order the parser reads them:
@@ -228,7 +228,7 @@ gitsocial id verify <commit>
 gitsocial id resolve <email>
 ```
 
-DNS verification is off by default: `gitsocial settings set identity.dns_verification true`.
+The domain source is off by default. To enable it, run `gitsocial settings set identity.dns_verification true`.
 
 ### gitsocial tui
 
@@ -269,9 +269,9 @@ gitsocial import pm --state open --limit 100 --dry-run
 - GitHub imports through the `gh` CLI, GitLab through its REST API. Discussions come from GitHub only. Other hosts are detected but not imported.
 - `--host` forces the host type, `--api-url` overrides the instance the URL names, `--token` overrides the platform CLI's token.
 - GitLab reads `GITLAB_TOKEN`, then `GITLAB_PRIVATE_TOKEN`, when `--token` is not given.
-- `--update` syncs changes to items already imported. `--labels auto|raw|skip` controls label mapping. `--email-map <file>` maps usernames to emails. `--skip-bots` is on by default.
-- An imported pull request takes `base-tip` and `head-tip` from the forge's commit ids, and from local branches only when the forge gives none. `--update` re-stamps a pull request whose ids moved, and nothing else has to change for it.
-- The mapping file `~/.cache/gitsocial/imports/<url-slug>.json` records platform ids against commit hashes; `--map-file` overrides it.
+- `--update` applies the changes on the forge to the items that are already imported. `--labels auto|raw|skip` controls label mapping. `--email-map <file>` maps usernames to emails. `--skip-bots` is on by default.
+- An imported pull request takes `base-tip` and `head-tip` from the forge's commit ids, and from local branches only when the forge gives none. `--update` records the new tips of a pull request whose ids changed, also when nothing else changed.
+- The mapping file `~/.cache/gitsocial/imports/<url-slug>.json` maps platform ids to commit hashes; `--map-file` overrides it.
 
 ## Scripting
 
@@ -286,7 +286,7 @@ cat CHANGELOG.md | gitsocial release create -
 
 References follow [GITMSG.md §1.3](../specs/GITMSG.md#13-reference-sections):
 
-- `#commit:abc123456789@main` - a commit; a bare hash prefix (`abc123`) works when unambiguous
+- `#commit:abc123456789@main` - a commit; a hash prefix (`abc123`) also works when it is not ambiguous
 - `#branch:main`, `#tag:v1.0.0`
 - `#file:src/auth.go@main`, `#file:src/auth.go@main:L42`, `#file:src/auth.go@main:L42-50`, `#file:src/auth.go@main:v1.0.0`
 - `https://github.com/user/repo#commit:abc123456789@main` - a reference in another repository
@@ -307,9 +307,9 @@ References follow [GITMSG.md §1.3](../specs/GITMSG.md#13-reference-sections):
 | Variable | Purpose |
 |---|---|
 | `XDG_CONFIG_HOME` | config root, default `~/.config`; gitsocial uses `<root>/gitsocial` |
-| `GITSOCIAL_PERSONAL_REPO` | path of the personal bare repo, default `~/.config/gitsocial/personal` |
-| `GITSOCIAL_EDITOR` | editor for messages; falls back to `$EDITOR`, `$VISUAL`, then `vi` |
-| `GM_PAGER` | pager for output; falls back to `$PAGER` |
+| `GITSOCIAL_PERSONAL_REPO` | path of the personal bare repository, default `~/.config/gitsocial/personal` |
+| `GITSOCIAL_EDITOR` | editor for messages; if it is not set, gitsocial uses `$EDITOR`, `$VISUAL`, then `vi` |
+| `GM_PAGER` | pager for output; if it is not set, gitsocial uses `$PAGER` |
 | `GITSOCIAL_PPROF` | `cpu`, `mem` or `trace`: write a profile to `/tmp/gitsocial-cpu.pprof`, `/tmp/gitsocial-mem.pprof` or `/tmp/gitsocial.trace` on exit |
 | `TERM_PROGRAM` | read by the TUI; `Apple_Terminal` widens the layout margin |
 | S3 credentials, endpoints and tuning | see [S3.md](S3.md#environment-variables) |

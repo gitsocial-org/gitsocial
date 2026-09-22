@@ -1,6 +1,6 @@
 # Notifications
 
-Notifications gather events from every extension into one feed, newest first, with read state kept per notification in `core_notification_reads`.
+Notifications from all extensions are in one feed, with the newest first.
 
 [Commands](#commands) · [Types](#types)
 
@@ -17,7 +17,15 @@ gitsocial notifications unread <id> | unread-all
 
 ## Types
 
-Scopes: the workspace is your repository, forks are registered forks, followed are the repositories in your lists, inherited are the memo sources added with `memo inherit add`, and any is every repository in the cache. Your own actions do not notify you.
+The scope of a type tells which repositories can create it. GitSocial does not notify you about your own actions.
+
+| Scope | Repositories |
+|---|---|
+| workspace | your repository |
+| forks | the registered forks |
+| followed | the repositories in your lists |
+| inherited | the memo repositories that you add with `memo inherit add` |
+| any | all repositories in the cache |
 
 | Type | Scope | Trigger |
 |---|---|---|
@@ -34,11 +42,13 @@ Scopes: the workspace is your repository, forks are registered forks, followed a
 | `feedback`, `approved`, `changes-requested` | workspace, any | on a pull request in your workspace or one you authored |
 | `pr-merged`, `pr-closed` | any | someone else merges or closes a pull request you authored |
 | `pr-ready` | forks | a draft pull request on a registered fork is marked ready |
-| `head-advanced`, `base-advanced` | workspace, forks | an open pull request's branch moved past its recorded tip; `pr update` records the new one |
-| `head-deleted`, `base-deleted` | workspace, forks | an open pull request's branch is gone from its remote |
+| `head-advanced`, `base-advanced` | workspace, forks | a branch of an open pull request is ahead of its recorded tip, until `pr update` records the new tip |
+| `head-deleted`, `base-deleted` | workspace, forks | a branch of an open pull request is not on its remote |
 | `new-release` | followed | a repository in your lists publishes a release |
 | `memo-comment` | any | someone else comments on a memo you authored |
-| `inherited-policy` | inherited | a `priority/critical` memo appears on an inherited source |
+| `inherited-policy` | inherited | a `priority/critical` memo is added to an inherited repository |
 | `branch-diverged` | workspace | a local `gitmsg/<ext>` branch has unpushed commits and diverges from origin |
 
-The four branch notifications come from `review_branch_observations` ([ARCHITECTURE.md](ARCHITECTURE.md#schema)), refreshed after each fetch. They go to the pull request's author and reviewers, and clear once the pull request catches up. `branch-diverged` clears once the branch is reconciled and pushed.
+The four branch notifications come from `review_branch_observations` ([ARCHITECTURE.md](ARCHITECTURE.md#schema)), which GitSocial updates after each fetch, and go to the author and the reviewers of the pull request. A notification clears when `pr update` records the new tip, when the branch is on its remote again, or when the pull request closes. `branch-diverged` clears when the local and remote branches no longer diverge, for example after you merge and push.
+
+The read state of each notification is in `core_notification_reads`.

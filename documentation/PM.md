@@ -1,17 +1,17 @@
 # Project Management Extension
 
-Issues, milestones and sprints are commits on the `gitmsg/pm` branch ([GITPM.md](../specs/GITPM.md)); a state change is an edit of the original commit, and comments live on the social branch.
+Issues, milestones and sprints are commits on the `gitmsg/pm` branch ([GITPM.md](../specs/GITPM.md)). A state change is an edit of the original commit, and comments are on the social branch.
 
 [Initialize](#initialize) · [Issues](#issues) · [Milestones and sprints](#milestones-and-sprints) · [Labels](#labels) · [Forks](#forks) · [Board](#board) · [Reference](#reference)
 
 ## Initialize
 
 ```
-gitsocial pm init                       # refs/gitmsg/pm/config and the gitmsg/pm branch
+gitsocial pm init
 gitsocial pm config get|set|list
 ```
 
-`init` is idempotent. Issues, milestones and sprints always live on `gitmsg/pm`: a `branch` value in the config is ignored, and `pm status` prints the rename that moves content off it.
+`init` is idempotent. It creates `refs/gitmsg/pm/config` and the `gitmsg/pm` branch.
 
 ## Issues
 
@@ -24,15 +24,15 @@ gitsocial pm issue show <ref>
 gitsocial pm issue edit <ref> [--subject ...] [--body ...] [--state ...] [-l ...] [-a ...]
 gitsocial pm issue close <ref>
 gitsocial pm issue reopen <ref>
-gitsocial pm issue adopt <ref>                 # a registered fork's issue, copied into this repository
+gitsocial pm issue adopt <ref>                 # adopt a registered fork's issue into this repository
 gitsocial pm issue comment <ref> "Repro steps below"
 gitsocial pm issue comments <ref>
 ```
 
-- `-f` takes the field terms `state:`, `assignees:`, `milestone:`, `parent:`, `root:` and `due:`, a leading `-` to exclude, and quoted free text for full-text search. Any other `<scope>:<value>` term matches the label `<scope>/<value>`, so `priority:high` finds `priority/high`.
+- `-f` takes the field terms `state:`, `assignees:`, `milestone:`, `parent:`, `root:` and `due:`, a leading `-` to exclude, and quoted free text for full-text search. Each other `<scope>:<value>` term matches the label `<scope>/<value>`, so `priority:high` finds `priority/high`.
 - `due:` takes `today`, `overdue`, `week` or `<n>d`.
-- `--sort` takes `created`, `due` or `priority`, each with `:asc` or `:desc`. `updated` sorts by the item's own timestamp.
-- A sub-issue names its `--parent`; `root` is derived. `--blocks`, `--blocked-by` and `--related` link issues.
+- `--sort` takes `created`, `due` or `priority`, each with `:asc` or `:desc`. `updated` is also accepted and sorts the same as `created`.
+- A sub-issue names its `--parent`, and GitSocial derives `root` from it. `--blocks`, `--blocked-by` and `--related` link issues.
 - An issue closes when a pull request whose `--closes` names it is merged.
 
 ## Milestones and sprints
@@ -68,7 +68,7 @@ gitsocial fork add <fork-url>
 gitsocial fetch
 ```
 
-Issues opened on a registered fork appear in `pm issue list` and raise notifications. `pm issue adopt` copies one into this repository unchanged, and editing, closing or assigning one adopts it the same way; the copy carries `adopts`, and later changes edit it. An edit made from another repository is a proposal until the owner accepts it.
+Issues opened on a registered fork appear in `pm issue list` and create notifications. `pm issue adopt` adopts one into this repository with no change; an edit, a close or an assignment adopts it the same way. The adopted issue has an `adopts` field, and later changes edit it. An edit from a different repository is a proposal until the owner accepts it.
 
 ## Board
 
@@ -76,12 +76,12 @@ Issues opened on a registered fork appear in `pm issue list` and raise notificat
 gitsocial pm board          # a summary; the kanban board is in the TUI
 ```
 
-Columns come from a custom `boards` list, else from the `framework` config (`minimal`, `kanban`, `scrum`) ([GITPM.md §2](../specs/GITPM.md#2-config)).
+Columns come from a custom `boards` list or, if there is none, from the `framework` config (`minimal`, `kanban`, `scrum`) ([GITPM.md §2](../specs/GITPM.md#2-configuration)).
 
 ## Reference
 
 - Links and hierarchy: [GITPM.md §1.6](../specs/GITPM.md#16-issue-links) and [§1.7](../specs/GITPM.md#17-hierarchy-references).
-- `issue list` excludes retracted items ([GITMSG.md §1.5](../specs/GITMSG.md#15-versioning)) and commits no longer on their branch ([ARCHITECTURE.md](ARCHITECTURE.md#cache)); the latest version wins.
+- `issue list` excludes retracted items ([GITMSG.md §1.5](../specs/GITMSG.md#15-versioning)) and stale commits ([ARCHITECTURE.md](ARCHITECTURE.md#cache)), and shows the latest version of each issue.
 - Links are stored in `pm_links`, assignees in `pm_assignees` ([ARCHITECTURE.md](ARCHITECTURE.md#schema)).
-- Mentions, assignments and link changes raise [notifications](NOTIFICATIONS.md#types).
+- Mentions, assignments and link changes create [notifications](NOTIFICATIONS.md#types).
 - In the TUI, `P` opens the board ([TUI-KEYS.md](TUI-KEYS.md#pm-extension)).
