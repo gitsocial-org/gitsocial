@@ -6,7 +6,9 @@ package main
 
 import (
 	"fmt"
+	"mime"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -68,6 +70,9 @@ the key's mutability, so a root key like install.sh is stored no-cache.`,
 				PrintError(cmd, fmt.Sprintf("read %s: %v", file, err))
 				return exit(ExitError)
 			}
+			if contentType == "" {
+				contentType = mime.TypeByExtension(filepath.Ext(key))
+			}
 			if err := objstore.PutObjectToRemote(remoteURL, objstore.HelperEnvFromOS(), key, data, contentType); err != nil {
 				PrintError(cmd, fmt.Sprintf("upload %s: %v", key, err))
 				return exit(ExitError)
@@ -80,7 +85,7 @@ the key's mutability, so a root key like install.sh is stored no-cache.`,
 		},
 	}
 	cmd.Flags().StringVar(&remote, "remote", "", "Target remote, default the push remote")
-	cmd.Flags().StringVar(&contentType, "content-type", "", "Content-Type for the uploaded object")
+	cmd.Flags().StringVar(&contentType, "content-type", "", "Content-Type, default from the key's extension")
 	return cmd
 }
 
