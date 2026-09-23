@@ -104,7 +104,6 @@ Anyone can then fetch it with `gitsocial clone s3://s3.example.com/mybucket/myre
 | [Contributing](documentation/CONTRIBUTING.md) | Fork, build, submit a pull request, report a bug |
 | [Architecture](documentation/ARCHITECTURE.md) | Layers, packages, cache schema, TUI structure |
 | [Style](documentation/STYLE.md) | Prose, help text, errors, comments, commits |
-| [Static Site Design](documentation/STATIC-SITE-DESIGN.md) | Tokens, components, states, visual tests |
 | [Testing](documentation/TESTING.md) | Test tiers, gate stages, coverage, supported platforms |
 
 ## License
