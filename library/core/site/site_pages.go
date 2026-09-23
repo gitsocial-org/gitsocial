@@ -28,17 +28,15 @@ const (
 	sitePagesManifestKey = ".gitsocial/site/pages.json"
 	// sitePagesVersion is the page layer's schema version; bump it when a page
 	// head or its sealed markup changes.
-	sitePagesVersion = 31
+	sitePagesVersion = 32
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
 	sitePagesFeedSize = 50
 	// sitePagesReadmeMax caps the front page's inlined README bytes.
 	sitePagesReadmeMax = 8 * 1024
-	// sitePagesHomeFiles caps the front page's root file listing, mirroring the app's HOME_FILE_LIMIT.
-	sitePagesHomeFiles = 3
-	// sitePagesHomeActivity caps the front page's recent-activity rows, mirroring the app's HOME_ACTIVITY_LIMIT.
-	sitePagesHomeActivity = 10
+	// sitePagesHomeRows is how many root entries the front page shows before its chevron, mirroring the app's HOME_ROWS.
+	sitePagesHomeRows = 2
 )
 
 // sitePagesBudget bounds one push's item-page writes; unbounded unless GITSOCIAL_SITE_PAGES_BUDGET caps it. A var so tests can lower it.
@@ -269,7 +267,7 @@ func rebuildSitePages(client *objstore.Client, prefix string, refs map[string]st
 	case manifest != nil && manifest.Cursor == nil && sitePagesTipsCurrent(manifest, tips) && !sitePagesCommitsPending(manifest) &&
 		!sitePagesFilesPending(manifest) && !siteFileDocsChanged(manifest.Files, docs, defaultBranch):
 		// Nothing a page derives from moved, but this push's shell upload may have written over index.html, so reclaim it.
-		err = reclaimSiteFrontPage(client, prefix, site, manifests, home)
+		err = writeSiteFrontPage(client, prefix, site, home)
 	case manifest != nil && manifest.Cursor == nil:
 		pending, err = incrementalSitePages(client, prefix, site, manifest, manifests, tips, defaultBranch, home, files, progress)
 	default:
@@ -279,48 +277,6 @@ func rebuildSitePages(client *objstore.Client, prefix string, refs map[string]st
 		return pending, "", err
 	}
 	return false, sitePagesStateOn, nil
-}
-
-// reclaimSiteFrontPage re-renders index.html from the metadata index alone, reading no bodies.
-func reclaimSiteFrontPage(client *objstore.Client, prefix string, site sitePageSite, manifests map[string]*siteShardManifest, home *siteFrontHome) error {
-	metas := map[string][]sitePageMsg{}
-	for ext, m := range manifests {
-		entries, err := readSitePagesMeta(client, prefix, ext, m)
-		if err != nil {
-			return fmt.Errorf("read pages index %s: %w", ext, err)
-		}
-		metas[ext] = entries
-	}
-	roots := buildSitePageThreads(metas)
-	done := map[string]int{}
-	for _, list := range sitePageLists {
-		done[list.Ext] = len(roots[list.Ext])
-	}
-	return writeSiteFrontPage(client, prefix, roots, done, site, home)
-}
-
-// readSiteFrontCodeEntries returns the newest code items from the code index: the head, then the newest sealed shards.
-func readSiteFrontCodeEntries(client *objstore.Client, prefix string, limit int) ([]siteMetaEntry, error) {
-	m, err := readItemsManifest(client, prefix, siteCodeExt)
-	if err != nil || m == nil {
-		return nil, err
-	}
-	head, err := readItemsHeadEntries(client, prefix+siteItemsHeadKey(siteCodeExt))
-	if err != nil {
-		return nil, err
-	}
-	out := reverseGeneric(head)
-	for i := len(m.Shards) - 1; i >= 0 && len(out) < limit; i-- {
-		entries, err := readItemsHeadEntries(client, prefix+siteItemsDir(siteCodeExt)+m.Shards[i].Key)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, reverseGeneric(entries)...)
-	}
-	if len(out) > limit {
-		out = out[:limit]
-	}
-	return out, nil
 }
 
 // sitePageDefaultTitle names a site with no configured title: the base URL's last path segment, else its host. Mirrors repoTitle in gs-core.js.
@@ -401,12 +357,16 @@ func readSiteFrontHome(src *objstore.LocalCommitSource, site sitePageSite, refs 
 	tip := siteBucketBranchTip(refs, defaultBranch)
 	home := &siteFrontHome{
 		Branch:       defaultBranch,
+		BranchHref:   sitePageAppURL(site, "branch:"+defaultBranch),
 		Branches:     strconv.Itoa(branches) + label,
 		BranchesHref: sitePageAppURL(site, "/branches"),
 		Latest:       readSiteFrontLatest(src, site, tip, defaultBranch),
 	}
 	entries := readSiteRootTree(src, tip)
-	home.Files, home.MoreHref, home.MoreLabel = buildSiteFrontFiles(entries, site, defaultBranch)
+	home.Files = buildSiteFrontFiles(entries, site, defaultBranch)
+	if len(home.Files) > sitePagesHomeRows {
+		home.Files, home.MoreFiles = home.Files[:sitePagesHomeRows], home.Files[sitePagesHomeRows:]
+	}
 	home.Readme = readSiteFrontReadme(src, tip, siteReadmeName(entries), defaultBranch, site)
 	return home
 }
@@ -422,7 +382,7 @@ func siteBucketBranchTip(refs map[string]string, branch string) string {
 	return ""
 }
 
-// readSiteFrontLatest reads the default branch's tip commit for the front page's meta strip.
+// readSiteFrontLatest reads the default branch's tip commit for the front page's head line.
 func readSiteFrontLatest(src *objstore.LocalCommitSource, site sitePageSite, sha, branch string) *siteFrontCommit {
 	if len(sha) < 12 {
 		return nil
@@ -435,12 +395,10 @@ func readSiteFrontLatest(src *objstore.LocalCommitSource, site sitePageSite, sha
 	if err != nil {
 		return nil
 	}
-	short := sha[:12]
 	return &siteFrontCommit{
 		Subject: subjectOf(c.item.Message),
-		Date:    sitePageDate(c.item.TS),
-		Short:   short,
-		Href:    sitePageAppURL(site, "commit:"+short+"@"+branch),
+		Href:    sitePageAppURL(site, "commit:"+sha[:12]+"@"+branch),
+		Meta:    []sitePageBit{sitePageAuthorBit(&sitePageMsg{Author: c.item.Author, Email: c.item.Email}), sitePageTimeBit(c.item.TS)},
 	}
 }
 
@@ -528,8 +486,8 @@ func readSiteFrontReadme(src *objstore.LocalCommitSource, tip, name, branch stri
 	return &siteFrontReadme{HTML: template.HTML(rendered), Truncated: truncated}
 }
 
-// buildSiteFrontFiles renders the root listing the app's homeFileList shows: directories first, then files, capped behind a "Show all N" link.
-func buildSiteFrontFiles(entries []siteTreeEntry, site sitePageSite, branch string) (files []siteFrontFile, moreHref, moreLabel string) {
+// buildSiteFrontFiles renders the root listing the app's homeFileRows shows: directories first, then files.
+func buildSiteFrontFiles(entries []siteTreeEntry, site sitePageSite, branch string) []siteFrontFile {
 	ordered := append([]siteTreeEntry(nil), entries...)
 	sort.SliceStable(ordered, func(i, j int) bool {
 		a, b := ordered[i], ordered[j]
@@ -542,16 +500,11 @@ func buildSiteFrontFiles(entries []siteTreeEntry, site sitePageSite, branch stri
 		}
 		return a.Name > b.Name // the app's localeCompare orders lowercase first
 	})
-	shown := ordered
-	if len(shown) > sitePagesHomeFiles {
-		shown = shown[:sitePagesHomeFiles]
-		moreHref = sitePageAppURL(site, "/code")
-		moreLabel = siteFrontFilesMoreLabel(len(ordered), sitePagesHomeFiles)
-	}
-	for _, e := range shown {
+	files := make([]siteFrontFile, 0, len(ordered))
+	for _, e := range ordered {
 		files = append(files, siteFrontFile{Name: e.Name, Href: sitePageAppURL(site, "file:"+e.Name+"@"+branch)})
 	}
-	return files, moreHref, moreLabel
+	return files
 }
 
 // generateSitePages runs one budgeted full-regen pass, writing in the pinned order with the manifest last.
@@ -584,7 +537,7 @@ func generateSitePages(client *objstore.Client, prefix string, site sitePageSite
 	if err != nil {
 		return false, err
 	}
-	if err := writeSiteFrontPage(client, prefix, roots, done, site, home); err != nil {
+	if err := writeSiteFrontPage(client, prefix, site, home); err != nil {
 		return false, err
 	}
 	if err := writeSiteSitemap(client, prefix, roots, done, site, commits, filesState); err != nil {
@@ -685,7 +638,7 @@ func incrementalSitePages(client *objstore.Client, prefix string, site sitePageS
 			return false, err
 		}
 	}
-	if err := writeSiteFrontPage(client, prefix, roots, done, site, home); err != nil {
+	if err := writeSiteFrontPage(client, prefix, site, home); err != nil {
 		return false, err
 	}
 	commitsMoved := prior.Commits == nil || *prior.Commits != *commits
@@ -1022,24 +975,13 @@ func sitePageListDescription(list sitePageList, site sitePageSite) string {
 	return list.NavLabel + " of " + site.Title + ", newest first."
 }
 
-// writeSiteFrontPage writes the front page: the branch strip, root file listing, README and recent-activity rows the app's home route also renders.
-func writeSiteFrontPage(client *objstore.Client, prefix string, roots map[string][]*sitePageItem, done map[string]int, site sitePageSite, home *siteFrontHome) error {
-	code, err := readSiteFrontCodeEntries(client, prefix, sitePagesHomeActivity)
-	if err != nil {
-		return err
-	}
+// writeSiteFrontPage writes the front page: the code block, then the README, as the app's home route renders them.
+func writeSiteFrontPage(client *objstore.Client, prefix string, site sitePageSite, home *siteFrontHome) error {
 	description := site.Description
 	if description == "" {
 		description = site.Title + ": code, issues, pull requests, posts and releases."
 	}
-	d := siteFrontPageData{
-		Description: site.Description,
-		Home:        home,
-		Activity:    buildSiteFrontActivity(roots, done, code, site),
-	}
-	if len(d.Activity) > 0 {
-		d.ActivityMoreHref, d.ActivityMoreLabel = siteActivityMoreKey, siteActivityMoreLabel
-	}
+	d := siteFrontPageData{Home: home}
 	icon, repoIcon := sitePageIcons(site.Favicon, "./")
 	d.Chrome = sitePageChrome{
 		Title:       site.Title,

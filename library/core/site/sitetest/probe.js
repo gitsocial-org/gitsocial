@@ -7,6 +7,7 @@
     ".card.feedback", ".type-glyph", ".empty", ".err", ".view-count", ".filter-chip",
     ".detail > .card-head", ".detail > .card-head > h1.subject",
     ".detail > .detail-topbar", ".detail > .detail-topbar > .page-actions",
+    ".home-head", ".home-commit", ".home-row", ".home-toggle",
   ];
   var PROPS = ["padding", "margin", "fontSize", "fontFamily", "color", "backgroundColor", "borderLeftColor", "borderRadius"];
 

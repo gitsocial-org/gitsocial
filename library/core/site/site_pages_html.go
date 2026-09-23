@@ -167,7 +167,9 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{if .Extra}}<div class="asset-list">{{range .Extra}}{{template "assetrow" .}}{{end}}</div>
 {{end}}{{if .SignedBy}}<div class="asset-signed"><span class="meta">signed-by </span><span class="mono selectable">{{.SignedBy}}</span></div>
 {{end}}</div>
-{{end}}{{define "glyph"}}{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}>{{if .BodyOnly}}<span class="meta meta-lead">{{template "glyph" .}}{{if .Chip}}{{template "chip" .Chip}} {{end}}{{template "bits" .Meta}}</span>
+{{end}}{{define "glyph"}}{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{end}}{{define "hometoggle"}}<summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></summary>
+{{end}}{{define "filerow"}}<a class="home-row" href="{{.Href}}"><span class="home-row-subject">{{.Name}}</span></a>
+{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}>{{if .BodyOnly}}<span class="meta meta-lead">{{template "glyph" .}}{{if .Chip}}{{template "chip" .Chip}} {{end}}{{template "bits" .Meta}}</span>
 {{if .Text}}<div class="body">{{.Text}}</div>
 {{end}}{{else}}<div class="card-head">{{template "glyph" .}}{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a>{{range .TailChips}} {{template "chip" .}}{{end}}</div>
 <span class="meta">{{template "bits" .Meta}}</span>{{end}}</div>
@@ -199,19 +201,13 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}<footer><a href="{{.Chrome.Base}}f/index.html">← files</a> <a href="{{.Chrome.Base}}index.html">home</a></footer>
 {{template "foot"}}{{end}}{{define "front"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
-{{if .Description}}<p class="meta">{{.Description}}</p>
-{{end}}{{with .Home}}{{if .Branch}}<p class="meta"><span class="chip">{{.Branch}}</span> <a class="chip" href="{{.BranchesHref}}">{{.Branches}}</a>{{with .Latest}} {{.Subject}} · {{.Date}} · <a href="{{.Href}}">{{.Short}}</a>{{end}}</p>
-{{end}}{{if .Files}}<ul class="files">
-{{range .Files}}<li><a href="{{.Href}}">{{.Name}}</a></li>
-{{end}}</ul>
-{{if .MoreHref}}<p class="meta"><a href="{{.MoreHref}}">{{.MoreLabel}}</a></p>
-{{end}}{{end}}{{if .Readme}}<section><p class="meta">README</p>
+{{with .Home}}<div class="home-section"><div class="home-head"><a class="chip" href="{{.BranchHref}}">{{.Branch}}</a>{{with .Latest}} <a class="home-commit" href="{{.Href}}"><span class="home-row-subject">{{.Subject}}</span> <span class="meta">{{template "bits" .Meta}}</span></a>{{end}} <a class="chip home-branches" href="{{.BranchesHref}}">{{.Branches}}</a></div>
+{{range .Files}}{{template "filerow" .}}{{end}}{{if .MoreFiles}}<details class="home-more">{{template "hometoggle"}}{{range .MoreFiles}}{{template "filerow" .}}{{end}}</details><div class="home-fade"></div>
+{{end}}</div>
+{{end}}{{with .Home}}{{if .Readme}}<section><p class="meta">README</p>
 {{.Readme.HTML}}{{if .Readme.Truncated}}<p class="notice">Truncated. The full file is in the repository.</p>
 {{end}}</section>
-{{end}}{{end}}{{if .Activity}}<div class="home-activity"><h2 class="home-activity-head">Recent activity</h2>
-{{template "entries" .Activity}}{{if .ActivityMoreHref}}<a class="show-more" href="{{.ActivityMoreHref}}"><span class="show-more-icon"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></span><span class="show-more-label">{{.ActivityMoreLabel}}</span></a>
-{{end}}</div>
-{{end}}<footer>{{range .Chrome.Nav}}{{range .Links}}{{if not .Current}}<a href="{{.Href}}">{{.Label}}</a> {{end}}{{end}}{{end}}</footer>
+{{end}}{{end}}<footer>{{range .Chrome.Nav}}{{range .Links}}{{if not .Current}}<a href="{{.Href}}">{{.Label}}</a> {{end}}{{end}}{{end}}</footer>
 {{template "foot"}}{{end}}`
 
 // sitePageTemplates is the parsed page template set, with the core CSS and the boot script spliced in.
@@ -377,32 +373,27 @@ type siteListPageData struct {
 
 // siteFrontPageData feeds the "front" template (index.html).
 type siteFrontPageData struct {
-	Chrome            sitePageChrome
-	Description       string
-	Home              *siteFrontHome
-	Activity          []sitePageListEntry
-	ActivityMoreHref  string // crawlable destination for the section's trailing link ("" — no rows)
-	ActivityMoreLabel string // its label, shared with the app's control (siteActivityMoreLabel)
+	Chrome sitePageChrome
+	Home   *siteFrontHome
 }
 
-// siteFrontHome is the front page's body: the branch strip, the root file listing, then the README, in the app's home order.
+// siteFrontHome is the front page's code block and README, in the app's home order.
 type siteFrontHome struct {
-	Branch       string           // default branch name ("" — no strip, no files)
+	Branch       string           // default branch name
+	BranchHref   string           // app link to the branch's log
 	Branches     string           // "N branches", the app's branch-count chip
 	BranchesHref string           // app link behind that chip
 	Latest       *siteFrontCommit // default branch tip (nil when unreadable)
-	Files        []siteFrontFile  // root entries, directories first, capped
-	MoreHref     string           // app link to the code browser ("" — nothing hidden)
-	MoreLabel    string           // "Show all N", the app's collapse control
+	Files        []siteFrontFile  // the root entries the code block shows, directories first
+	MoreFiles    []siteFrontFile  // the root entries behind its chevron
 	Readme       *siteFrontReadme
 }
 
-// siteFrontCommit is the front page's latest-commit bit (the app's meta strip).
+// siteFrontCommit is the default branch's tip on the front page's head line.
 type siteFrontCommit struct {
 	Subject string
-	Date    string
-	Short   string
-	Href    string // app link to the commit detail
+	Href    string        // app link to the commit detail
+	Meta    []sitePageBit // the author and the date
 }
 
 // siteFrontFile is one root-tree row in the front page's file listing.
@@ -558,20 +549,6 @@ func sitePageGlyphTitle(itemType, state string) string {
 		state = "open"
 	}
 	return itemType + " · " + state
-}
-
-// siteActivityMoreLabel labels the recent-activity section's trailing link on both surfaces.
-const siteActivityMoreLabel = "See more"
-
-// siteActivityMoreKey is that link's crawlable destination, the served page for the app's /timeline route.
-const siteActivityMoreKey = "./posts/index.html"
-
-// siteFrontFilesMoreLabel labels the control that reveals the root entries the front page hides; the label names the total, so no sentence stands beside it. Mirrors homeFilesMoreLabel in gs-core.js.
-func siteFrontFilesMoreLabel(total, limit int) string {
-	if total <= limit {
-		return ""
-	}
-	return "Show all " + strconv.Itoa(total)
 }
 
 // sitePageStateClass maps a workflow state to its chip color class; a cancel state matches by prefix, since the misspell linter rewrites the doubled-l spelling.
@@ -1158,67 +1135,6 @@ func buildSiteListEntry(it *sitePageItem, defaultType string) sitePageListEntry 
 	row.Glyph, row.GlyphClass, row.GlyphTitle = glyph, glyphClass, sitePageGlyphTitle(t, state)
 	row.Href, row.Meta = href, meta
 	return row
-}
-
-// siteFrontActivityEntry pairs a rendered activity row with its sort key.
-type siteFrontActivityEntry struct {
-	row sitePageListEntry
-	ts  int64
-	sha string
-}
-
-// buildSiteFrontActivity merges the newest items (memo excluded) with the newest code commits into the front page's activity rows.
-func buildSiteFrontActivity(roots map[string][]*sitePageItem, done map[string]int, code []siteMetaEntry, site sitePageSite) []sitePageListEntry {
-	var merged []siteFrontActivityEntry
-	for _, e := range code {
-		short := e.SHA
-		if len(short) > 12 {
-			short = short[:12]
-		}
-		glyph, glyphClass := sitePageGlyph("commit", "")
-		href := sitePageAppURL(site, "commit:"+short+"@"+e.Branch)
-		row := sitePageListEntry{
-			Href:       href,
-			Title:      e.Subject,
-			Meta:       []sitePageBit{{Class: "author", Text: sitePageAuthorLabel(e.Author, "")}, sitePageTimeBit(e.TS), sitePageHashBit(short, href)},
-			Glyph:      glyph,
-			GlyphClass: glyphClass,
-			GlyphTitle: "commit",
-		}
-		merged = append(merged, siteFrontActivityEntry{row: row, ts: e.TS, sha: e.SHA})
-	}
-	for _, list := range sitePageLists {
-		if list.Ext == "memo" {
-			continue
-		}
-		for _, it := range roots[list.Ext][:done[list.Ext]] {
-			if it.Retracted {
-				continue
-			}
-			itemType := pageItemType(it)
-			state := pageItemField(it, "state")
-			glyph, glyphClass := sitePageGlyph(itemType, state)
-			href := "./i/" + it.Msg.Short + ".html"
-			row := siteRowHead(it)
-			row.Glyph, row.GlyphClass, row.GlyphTitle = glyph, glyphClass, sitePageGlyphTitle(itemType, state)
-			row.Href, row.Meta = href, siteRowMeta(it, href)
-			merged = append(merged, siteFrontActivityEntry{row: row, ts: pageEffectiveTime(it.Msg), sha: it.Msg.SHA})
-		}
-	}
-	sort.Slice(merged, func(i, j int) bool {
-		if merged[i].ts != merged[j].ts {
-			return merged[i].ts > merged[j].ts
-		}
-		return merged[i].sha > merged[j].sha
-	})
-	if len(merged) > sitePagesHomeActivity {
-		merged = merged[:sitePagesHomeActivity]
-	}
-	rows := make([]sitePageListEntry, 0, len(merged))
-	for _, m := range merged {
-		rows = append(rows, m.row)
-	}
-	return rows
 }
 
 // sitePageNavSections orders the sidebar's sections, mirroring the app's nav; the empty section closes the list.

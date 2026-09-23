@@ -280,7 +280,7 @@ async function main() {
   ok("the file view renders a packed blob", /gamma/.test(textOf(viewNode)), textOf(viewNode).slice(0, 120));
 
   // ---- a sha12 commit route resolves a PACKED code commit ----
-  // The static pages (front-page activity rows, the commits lists) link code
+  // The static pages (the front page head, the commits lists) link code
   // commits by sha12, and getObject alone cannot answer one: a short sha builds
   // a malformed loose key, and the packed path looks up exact full shas (pack
   // map offsets, pack index binary search). The route must resolve the prefix

@@ -394,10 +394,6 @@ async function main() {
     ok("a draft pull request leads its head with the draft chip", JSON.stringify(headOrder(draft)) === JSON.stringify(["glyph:⑂", "chip:draft", "subject:Add the thing"]), JSON.stringify(headOrder(draft)));
     const pre = GS.releaseCard({ header: { type: "release", tag: "v2.0.0", version: "2.0.0", prerelease: "true" }, content: "v2.0.0", commit });
     ok("a prerelease leads its head with the prerelease chip", headOrder(pre)[1] === "chip:prerelease" && headOrder(pre)[2] === "subject:v2.0.0", JSON.stringify(headOrder(pre)));
-    const preRow = GS.homeActivityRow({ header: { type: "release", tag: "v2.0.0", version: "2.0.0", prerelease: "true" }, content: "Nightly build notes.", commit, _ext: "release" });
-    ok("a prerelease heads its activity row with the tag and the prerelease chip", JSON.stringify(headOrder(preRow)) === JSON.stringify(["glyph:⏏", "chip:prerelease", "subject:v2.0.0"]), JSON.stringify(headOrder(preRow)));
-    const issueRow = GS.homeActivityRow({ header: { type: "issue", state: "closed" }, content: "Clamp rejects an inverted range", commit, _ext: "pm" });
-    ok("an issue leaves its activity row's state to the tinted glyph", JSON.stringify(headOrder(issueRow)) === JSON.stringify(["glyph:●", "subject:Clamp rejects an inverted range"]), JSON.stringify(headOrder(issueRow)));
     const stable = GS.releaseCard({ header: { type: "release", tag: "v1.0.0", version: "1.0.0" }, content: "v1.0.0", commit });
     ok("a stable release heads with its tag alone, the version rendered once", JSON.stringify(headOrder(stable)) === JSON.stringify(["glyph:⏏", "subject:v1.0.0"]), JSON.stringify(headOrder(stable)));
     const post = GS.timelineCard({ header: { type: "post" }, content: "First line\n\nRest", commit }, null);

@@ -2441,11 +2441,6 @@
     return rows;
   }
 
-  // homeFilesMoreLabel labels the control that reveals the root entries the front page hides; the label names the total, so no sentence stands beside it. Mirrors siteFrontFilesMoreLabel in site_pages_html.go.
-  function homeFilesMoreLabel(total, limit) {
-    return total <= limit ? "" : "Show all " + total;
-  }
-
   // releaseAssetLabel words a release row's asset count, "" when it names none. Mirrors siteReleaseAssetLabel in site_pages_html.go.
   function releaseAssetLabel(artifacts) {
     const n = (artifacts || "").split(",").map((s) => s.trim()).filter(Boolean).length;
@@ -2924,50 +2919,8 @@
     return { items: windowItems, truncated: more || merged.length > need, hydrated };
   }
 
-  // HOME_ACTIVITY_LIMIT caps the home view's recent-activity rows and mirrors the page layer's sitePagesHomeActivity.
-  const HOME_ACTIVITY_LIMIT = 10;
-
-  // HOME_ACTIVITY_NEED over-requests per branch: replies and edits are commits too, and would otherwise crowd out top-level items.
-  const HOME_ACTIVITY_NEED = HOME_ACTIVITY_LIMIT * 4;
-
-  // HOME_ACTIVITY_SPECS lists the data branches the section merges and the default item type each carries.
-  const HOME_ACTIVITY_SPECS = [
-    { ext: "pm", branch: "gitmsg/pm", type: "issue" },
-    { ext: "review", branch: "gitmsg/review", type: "pull-request" },
-    { ext: "social", branch: "gitmsg/social", type: "post" },
-    { ext: "release", branch: "gitmsg/release", type: "release" },
-  ];
-
-  // homeActivityRoot mirrors the page layer's thread rule: a social comment and a review feedback are replies, so neither side lists them.
-  function homeActivityRoot(ext, type) {
-    if (ext === "social" && type === "comment") return false;
-    if (ext === "review" && type === "feedback") return false;
-    return true;
-  }
-
-  // loadHomeActivity returns the newest top-level items across the data branches, metadata only, matching buildSiteFrontActivity.
-  async function loadHomeActivity(ctx) {
-    const merged = [];
-    // All lanes in parallel; the code lane is indexed only, so a bucket without a code index shows no code rows on either surface.
-    const [lanes, code] = await Promise.all([
-      Promise.all(HOME_ACTIVITY_SPECS.map(async (spec) => ({ spec, r: await resolveExtItems(ctx, spec.ext, HOME_ACTIVITY_NEED) }))),
-      resolveCodeItemsIndexed(ctx, HOME_ACTIVITY_NEED),
-    ]);
-    for (const { spec, r } of lanes) {
-      for (const it of r.items) {
-        const type = (it.header && it.header.type) || spec.type;
-        if (!homeActivityRoot(spec.ext, type)) continue;
-        it._ext = spec.ext; it._branch = spec.branch; it._type = type;
-        merged.push(it);
-      }
-    }
-    for (const it of (code ? code.items : [])) { it._ext = "code"; it._type = "commit"; merged.push(it); }
-    merged.sort((a, b) => {
-      if (a.effectiveTime !== b.effectiveTime) return b.effectiveTime - a.effectiveTime;
-      return a.commit.hash < b.commit.hash ? 1 : (a.commit.hash > b.commit.hash ? -1 : 0);
-    });
-    return merged.slice(0, HOME_ACTIVITY_LIMIT);
-  }
+  // HOME_ROWS is how many root entries the home section shows before its chevron, mirroring the page layer's sitePagesHomeRows.
+  const HOME_ROWS = 2;
 
   // embeddedRefs returns the cross-repo context an item embeds for its own original and reply-to references.
   function embeddedRefs(commit, header) {
@@ -4191,14 +4144,14 @@
     reviewSummary, suggestionBody,
     loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadBranchLogIndexed, loadCompareCommitsWindow, loadGraphWindow, orderGraphWindow, assignGraphLanes, GRAPH_WINDOW,
     loadItemsIndex, loadOlderItemShards, olderItemBytes, loadBodyIndex, extWalkState, indexCommit, metaCommit, hydrateItem, hydrateItems,
-    loadTimelineItems, loadTimelineWindow, loadHomeActivity, HOME_ACTIVITY_LIMIT, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
+    loadTimelineItems, loadTimelineWindow, HOME_ROWS, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
     loadCommitsPage, loadCommitsLayout, COMMITS_PAGE_SIZE,
     manifestFor, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
     parseTree, getTree, resolvePath, listBranches, listTags, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, resolveMergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,
-    headFor, parseRefs, refRepoUrl, releaseAssets, releaseAssetLabel, itemBodyBlocks, homeFilesMoreLabel, headSubject, releaseVersionChip, headChips, rowChips, rowHeadChips, chipStateClass, stateCounts, groupThread, flattenThread,
+    headFor, parseRefs, refRepoUrl, releaseAssets, releaseAssetLabel, itemBodyBlocks, headSubject, releaseVersionChip, headChips, rowChips, rowHeadChips, chipStateClass, stateCounts, groupThread, flattenThread,
     THREAD_MAX_DEPTH, embeddedRefs, groupPM, authorStats, iconName, iconColorClass,
     ANCESTOR_CAP, refBranch, parentRef, parentQuote, quotedRefFor, resolveAncestors,
     CONCURRENCY, isBinary, isLFSPointer,

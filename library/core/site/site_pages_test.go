@@ -406,9 +406,7 @@ func TestSitePages_HostileEscaping(t *testing.T) {
 	if pending, _ := buildPages(t, client); pending {
 		t.Fatal("unexpected pending")
 	}
-	// The front page surfaces hostile subjects too (its recent-activity rows), so
-	// it is escaped alongside the item page and the type list.
-	for _, key := range []string{"i/" + shas[0][:12] + ".html", "posts/index.html", sitePagesFrontKey} {
+	for _, key := range []string{"i/" + shas[0][:12] + ".html", "posts/index.html"} {
 		// Drop the layer's own boot script first: it is a constant of this file,
 		// never content, and it is the only bare "<script>" a page carries (the
 		// upgrade tag has attributes). What this check is for is a script tag
@@ -557,9 +555,6 @@ func TestSitePages_IncrementalDeltaPartition(t *testing.T) {
 	}
 	if !keyExists(client, "i/"+newRoot[:12]+".html") {
 		t.Error("the new top-level post must get its own page")
-	}
-	if !strings.Contains(getKey(t, client, sitePagesFrontKey), "New root post") {
-		t.Error("the front page's recent activity must show the new root")
 	}
 	manifest, _ := readSitePagesManifest(client, "")
 	tip := strings.TrimSpace(getKey(t, client, "refs/heads/gitmsg/social"))
@@ -778,10 +773,9 @@ func pagesFrontRepo(t *testing.T) (dir, head string) {
 }
 
 // TestSitePages_FrontHome pins the front page as the app's home landing, in the
-// order the booted home render repaints it: the default-branch strip, the root
-// file listing, the README, then the recent-activity rows. The bucket carries
-// the default branch at the local commit, so both sources agree and the body is
-// the one the app renders.
+// order the booted home render repaints it: the code block, then the README. The
+// bucket carries the default branch at the local commit, so both sources agree
+// and the body is the one the app renders.
 func TestSitePages_FrontHome(t *testing.T) {
 	dir, head := pagesFrontRepo(t)
 
@@ -807,14 +801,17 @@ func TestSitePages_FrontHome(t *testing.T) {
 	if strings.Contains(front, `class="notice"`) {
 		t.Error("a small README must not be marked truncated")
 	}
-	if !strings.Contains(front, `<span class="chip">main</span>`) {
-		t.Error("front page must carry the default-branch strip")
+	if !strings.Contains(front, `<a class="chip" href="https://example.com/index.html#branch:main">main</a> <a class="home-commit" href="https://example.com/index.html#commit:`+head[:12]+`@main"><span class="home-row-subject">readme</span> <span class="meta"><span class="author" title="t@example.com">T</span> · <span class="reltime"`) {
+		t.Error("the head line must carry the branch chip, then the tip commit as one link")
 	}
-	if i, j := strings.Index(front, `<ul class="files">`), strings.Index(front, "readme paragraph text"); i < 0 || j < 0 || j < i {
-		t.Error("the README must render after the root file listing")
+	if !strings.Contains(front, `<a class="home-row" href="https://example.com/index.html#file:README.md@main"><span class="home-row-subject">README.md</span></a>`) {
+		t.Error("the code block must list the root files as one-line links")
 	}
-	if i, j := strings.Index(front, "readme paragraph text"), strings.Index(front, "readme fixture post"); i < 0 || j < 0 || j < i {
-		t.Error("recent activity must render after the README")
+	if i, j := strings.Index(front, `class="home-section"`), strings.Index(front, "readme paragraph text"); i < 0 || j < 0 || j < i {
+		t.Error("the README must render after the code block")
+	}
+	if strings.Contains(front, "readme fixture post") {
+		t.Error("the front page carries no activity rows")
 	}
 }
 
@@ -903,19 +900,18 @@ func TestSitePages_FrontHomeIgnoresLocalBranch(t *testing.T) {
 		t.Fatalf("rebuildSitePages: pending=%v err=%v", pending, err)
 	}
 	front := getKey(t, client, sitePagesFrontKey)
-	if strings.Contains(front, `<ul class="files">`) {
+	if strings.Contains(front, `#file:`) {
 		t.Error("the front page listed files the bucket has no tip for; the listing must come from the bucket tip, not the local ref")
 	}
 	if strings.Contains(front, "readme paragraph text") {
 		t.Error("the front page carried a README the bucket has no tip for")
 	}
-	// The rest of the page still stands: the strip names the branch, and the
-	// activity section is sourced from the bucket's own item indexes.
-	if !strings.Contains(front, `<span class="chip">main</span>`) {
-		t.Error("front page must still carry the default-branch strip")
+	// The head line still stands: the chip names the branch, and no tip commit is claimed.
+	if !strings.Contains(front, `<a class="chip" href="https://example.com/index.html#branch:main">main</a>`) {
+		t.Error("front page must still carry the default-branch chip")
 	}
-	if !strings.Contains(front, "readme fixture post") {
-		t.Error("front page must still carry the recent-activity rows")
+	if strings.Contains(front, `class="home-commit"`) {
+		t.Error("the front page named a tip commit the bucket has no branch for")
 	}
 }
 

@@ -63,34 +63,34 @@ async function main() {
   ok("the fixture has an extension branch its manifest omits", absent.length > 0, "all " + present.length + " listed");
 
   const ctx = GS.newContext(TD);
-  setHash("#/");
+  setHash("#/timeline");
   let at = mark();
   await GS.route(ctx);
   await drain();
-  const home = since(at);
+  const first = since(at);
   // The well-known extension branches are asked for on every route, so the cost
   // that matters is per refname, not per ask: one live probe establishes the
   // miss and the context remembers it.
-  const overProbed = absent.filter((ref) => probesFor(home, ref) > 1);
+  const overProbed = absent.filter((ref) => probesFor(first, ref) > 1);
   ok("a manifest-omitted branch is probed at most once on the route that first asks for it",
-    overProbed.length === 0, overProbed.map((ref) => ref + " x" + probesFor(home, ref)).join(", "));
-  ok("home reads the refs manifest once",
-    hits(home, /refs\.json/).length === 1, hits(home, /refs\.json/).length + " reads");
+    overProbed.length === 0, overProbed.map((ref) => ref + " x" + probesFor(first, ref)).join(", "));
+  ok("the route reads the refs manifest once",
+    hits(first, /refs\.json/).length === 1, hits(first, /refs\.json/).length + " reads");
   // And the probe asks for one bit, so it must not pay for a body. An object
   // store answers a missing key with a full error document (R2 serves ~27 KB),
   // which on a repo missing two well-known branches was ~54 KB per session
   // against a page whose own transfer is ~18 KB. HEAD answers the same question
   // for nothing.
-  const probeReqs = absent.flatMap((ref) => home.filter((r) => r.url.endsWith(ref)));
+  const probeReqs = absent.flatMap((ref) => first.filter((r) => r.url.endsWith(ref)));
   ok("the absence probe is issued, and every one of them is a HEAD",
     probeReqs.length > 0 && probeReqs.every((r) => r.method === "HEAD"),
     JSON.stringify(probeReqs.map((r) => r.method + " " + r.url + " -> " + r.status)));
   ok("no absent branch is ever fetched for its body",
-    !home.some((r) => r.status === 404 && r.method === "GET" && absent.some((ref) => r.url.endsWith(ref))),
-    JSON.stringify(home.filter((r) => r.status === 404).map((r) => r.method + " " + r.url)));
+    !first.some((r) => r.status === 404 && r.method === "GET" && absent.some((ref) => r.url.endsWith(ref))),
+    JSON.stringify(first.filter((r) => r.status === 404).map((r) => r.method + " " + r.url)));
   // The half that used to be paid per route: a second route on the same context
   // re-asks for the same branches and must issue nothing at all for them.
-  setHash("#/timeline");
+  setHash("#/releases");
   at = mark();
   await GS.route(ctx);
   await drain();

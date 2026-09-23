@@ -121,19 +121,10 @@ async function main() {
   // Ceilings were set from a MEASURE run (see the printed table): ≈ measured ×
   // 1.5, rounded up to a round number. Index-fed routes first.
   //
-  // home's ceiling moved 30 → 45 when the front page gained its Recent activity
-  // section: the four ext indexes cost ~18 and the code index ~3, a deliberate
-  // and understood increase, not drift. It was then raised again to absorb
-  // run-to-run variance, which was an artifact of the measurement — the section
-  // fills AFTER first paint, and a flat settle window counted however much of it
-  // happened to land in time. Now that measure() waits for the route to stop
-  // fetching, the count is stable and the ceiling is back near it. This drives
-  // the app directly (the plain-shell path); a page entry behaves the same way,
-  // since its reveal does NOT wait for the section. A real bucket
-  // pays ~23: this fixture forces 4-entry shards (GITSOCIAL_SITE_SHARD_COUNT),
-  // so its tiny branches drain older shards that 4000-entry production shards
-  // never touch.
-  await run("home", TD, "#/", 35);
+  // home's ceiling fell 35 → 20 when the front page dropped its Recent activity
+  // section: the landing reads the head, the branch list, the root tree and the
+  // README, and no extension index (measured 11).
+  await run("home", TD, "#/", 20);
   await run("timeline", TD, "#/timeline", 85);
   // The timeline's cards come from the metadata index; the bodies behind them are one
   // bucket read per item and load after the paint. A regression that puts them back in

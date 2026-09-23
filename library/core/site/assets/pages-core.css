@@ -155,7 +155,7 @@
   }
   a { color: var(--link); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  /* Shared chrome vocabulary. The sidebar and the recent-activity block are the
+  /* Shared chrome vocabulary. The sidebar and the home section are the
      same components on both surfaces, so their rules live here — inlined into
      every generated page, linked ahead of pages-full.css by the app — and
      neither sheet restates them. The app's nav element carries id="nav" for its
@@ -208,22 +208,38 @@
     width: 1rem; height: 1rem; flex: 0 0 auto; color: var(--muted); vertical-align: -0.15em;
   }
   .gs-icon svg { width: 100%; height: 100%; display: block; }
-  /* Recent activity closes both landings — the app's home view and the generated
-     front page — as the same heading, the same cards, and the same centered
-     chevron control (a button in the app, an anchor on the page). */
-  .home-activity-head {
-    font-size: var(--fs-h2); margin: var(--sp-5) 0 var(--sp-3);
-    border-bottom: 1px solid var(--line); padding-bottom: var(--sp-1);
-  }
-  .show-more {
-    display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
-    width: 100%; margin-top: var(--sp-3); padding: var(--sp-2);
-    background: transparent; border: none; cursor: pointer;
+  /* The home section heads both landings: a head line, one-line root entries, the rest behind a details chevron at its top right. */
+  .home-section { position: relative; }
+  .home-head {
+    display: flex; align-items: center; gap: var(--sp-3); padding-right: var(--sp-5);
     font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); color: var(--muted);
   }
-  .show-more:hover { color: var(--text); }
-  .show-more .gs-icon { width: 1.15rem; height: 1.15rem; color: inherit; }
-  .show-more-label { font-size: var(--fs-ui); }
+  .home-head .chip { flex: 0 0 auto; }
+  .home-commit { display: flex; align-items: center; gap: var(--sp-3); flex: 1 1 auto; min-width: 0; color: var(--text); }
+  .home-commit .meta { flex: 0 0 auto; margin: 0; }
+  .home-branches { margin-left: auto; }
+  .home-row {
+    display: flex; align-items: center; gap: var(--sp-3); line-height: 1.6;
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-code); color: var(--text);
+  }
+  .home-row:hover { background: var(--chip); text-decoration: none; }
+  .home-row-subject { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .home-fade {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 2.5rem; pointer-events: none;
+    background: linear-gradient(to bottom, transparent, var(--bg));
+  }
+  .home-more[open] + .home-fade { visibility: hidden; }
+  .home-toggle { position: absolute; top: 0; right: 0; display: flex; list-style: none; cursor: pointer; color: var(--muted); }
+  .home-toggle:hover { color: var(--text); }
+  .home-toggle .gs-icon { width: 1.15rem; height: 1.15rem; color: inherit; }
+  .home-more[open] > .home-toggle .gs-icon { transform: rotate(180deg); }
+  .home-section:has(> .home-more:not([open])) :is(.home-row, .home-commit) { color: var(--muted); font-size: var(--fs-ui); }
+  .home-section:has(> .home-more:not([open])) :is(.home-row, .home-commit):hover { color: var(--text); }
+  .home-section:has(> .home-more:not([open])) .home-head .chip { font-weight: 400; }
+  @media (max-width: 720px) {
+    .home-head { flex-wrap: wrap; }
+    .home-commit { order: 1; flex-basis: 100%; }
+  }
   /* The pre-rendered page shell. Nav and content are siblings under #gs-page
      (there is no wrapper element to make them two columns of a grid), so the
      sidebar column is RESERVED as left padding and the nav is positioned into
@@ -274,7 +290,7 @@
   }
   /* Page-structural rules: the bare-element voice of the generated documents.
      The class vocabulary the pages share with the app (.chip, .card,
-     .markdown, .show-more, …) is NOT restated here — it comes from
+     .markdown, …) is NOT restated here — it comes from
      pages-full.css, so the pages render the app's own treatment. */
   :where(#gs-page, #view) h1 { font-size: var(--fs-h1); line-height: 1; margin: var(--sp-2) 0 var(--sp-1); }
   :where(#gs-page) h2 { font-size: var(--fs-h2); line-height: 1.25; margin: var(--sp-1) 0 var(--sp-2); }
@@ -288,8 +304,6 @@
     background: var(--panel); padding: var(--sp-3); border: 1px solid var(--line);
   }
   :where(#gs-page) footer { margin-top: var(--sp-6); border-top: 1px solid var(--line); padding-top: var(--sp-4); }
-  :where(#gs-page) ul.files { list-style: none; padding: 0; margin: var(--sp-4) 0; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); }
-  :where(#gs-page) ul.files li { border-top: 1px solid var(--line); padding: var(--sp-2) 0; }
   /* Containment guards, duplicated from pages-full: that sheet loads async on
      the pre-rendered pages, so during its load window wide README content must
      already scroll inside its own box instead of widening the page past a phone
@@ -312,9 +326,7 @@
   #gs-page .meta { font-size: var(--fs-ui); color: var(--muted); display: block; margin-left: 0; }
   #gs-page .card .meta { margin-top: var(--sp-1); margin-left: calc(var(--sp-5) + var(--sp-3)); }
   #gs-page .tomb { color: var(--muted); font-style: italic; }
-  /* The pages' "See more" is an anchor where the app's is a button; keep the
-     anchor from underlining under the base a:hover rule. */
-  #gs-page .show-more, #gs-page .show-more:hover { text-decoration: none; }
+  #gs-page .home-row:hover, #gs-page .home-commit:hover { text-decoration: none; }
   @media (max-width: 720px) {
     #gs-page { padding: var(--sp-3); }
     /* No drawer without JS (the app's hamburger is a scripted control), so the

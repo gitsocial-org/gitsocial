@@ -21,10 +21,7 @@ function pageLocs(xml) {
   return [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
 }
 
-// REPLY_TEXT is one fixture reply's body, used by a matched pair of assertions:
-// it must be ABSENT from the front page's recent activity (a reply has no page
-// of its own) and PRESENT on the parent post's thread page. A negative
-// assertion alone would keep passing after the fixture reworded the line.
+// REPLY_TEXT is one fixture reply's body, which the parent post's thread page inlines.
 const REPLY_TEXT = "Congrats, this is huge!";
 
 (async () => {
@@ -40,37 +37,14 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("index.html is the GENERATED front page", /id="gs-page"/.test(front.text) && /name="gs-route" content="\/"/.test(front.text));
   ok("front carries the site title", /Thread Demo/.test(front.text));
   // The front page IS the app's home landing (the upgrade re-renders the same
-  // thing): default-branch strip with the tip commit, then the root file listing.
-  ok("front carries the default-branch strip (app-linked)", /class="chip">main</.test(front.text) && /Add python and rust sources/.test(front.text) && /index\.html#\/branches/.test(front.text));
-  ok("front lists the root files (app-linked, capped)", /<ul class="files">/.test(front.text) && /index\.html#file:notes\.txt@main/.test(front.text) && /Show all \d/.test(front.text));
-  ok("front carries the README text after the file listing", front.text.indexOf("Showcase fixture.") > front.text.indexOf("</ul>"), "idx=" + front.text.indexOf("Showcase fixture."));
-  // Recent activity closes the page: the newest items, each linking to its own
-  // crawlable page (the front page's content links), below the README.
-  ok("front closes with the recent-activity section", front.text.indexOf('<h2 class="home-activity-head">Recent activity</h2>') > front.text.indexOf("Showcase fixture."));
-  // Rows are the app's own card shape — leading type glyph, subject — so the
-  // upgrade re-renders them rather than replacing one presentation with another.
-  // The glyphs are plain text, which is how the no-JS page can carry them, and a
-  // state-bearing glyph names its state in its title (the tint alone cannot).
-  const cards = front.text.match(/<div class="card">/g) || [];
-  ok("the section is capped at ten cards", cards.length === 10, "cards=" + cards.length);
-  ok("activity rows link item pages, not app routes", (front.text.match(/href="\.\/i\/[0-9a-f]{12}\.html"/g) || []).length >= 1, "links=" + (front.text.match(/href="\.\/i\/[0-9a-f]{12}\.html"/g) || []).length);
-  ok("activity rows carry glyph, subject, author and date, and no type chip", /<span class="type-glyph tg-(?:open|closed)" title="issue · (?:open|closed)">[○●]<\/span> <a class="subject" href="\.\/i\/[0-9a-f]{12}\.html">/.test(front.text) && /<span class="author"[^>]*>Ada Lovelace<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span>/.test(front.text));
-  ok("no activity row repeats its glyph as a chip", !/<span class="type-glyph[^>]*>[^<]*<\/span> <span class="chip">/.test(front.text));
-  // A reply gets no page of its own, so it must not appear here. Pinned to a
-  // string with a POSITIVE control: REPLY_TEXT is asserted PRESENT on the parent
-  // post's thread page below, so a reworded fixture turns that assertion red
-  // instead of leaving this one passing against a string nothing produces.
-  ok("activity excludes replies (they have no page)", !front.text.includes(REPLY_TEXT));
-  // A code row is the commit card the app shows everywhere else: glyph, subject,
-  // and the short sha in the meta. No row carries a chip repeating what the
-  // glyph's own title already says — the item rows above dropped theirs too.
-  ok("activity interleaves code commits (app-linked, commit glyph, no chip)", /<span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="[^"]*index\.html#commit:[0-9a-f]+@/.test(front.text));
-  ok("code activity rows carry the short sha in their meta", /<span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject"[^>]*>[^<]*<\/a><\/div>\s*<span class="meta"><span class="author"[^>]*>[^<]*<\/span> · <span class="reltime" title="[^"]*">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="[^"]*">[0-9a-f]{12}<\/a><\/span>/.test(front.text));
-  // The section closes with a crawlable link on to the social posts archive (the
-  // served page for the app's /timeline route), carrying the app's own
-  // chevron-and-label show-more affordance — the app's own control, chevron SVG
-  // included, so the two surfaces close the section identically.
-  ok("activity closes with a crawlable See more link", /<a class="show-more" href="\.\/posts\/index\.html"><span class="show-more-icon"><span class="gs-icon chevron"><svg [^>]*><path [^>]*\/><\/svg><\/span><\/span><span class="show-more-label">See more<\/span><\/a>/.test(front.text));
+  // thing): one section, its head line, the root entries, then the README.
+  ok("the head line is the branch chip, the tip commit, then the branch count, each a link",
+    /<div class="home-head"><a class="chip" href="[^"]*index\.html#branch:main">main<\/a> <a class="home-commit" href="[^"]*index\.html#commit:[0-9a-f]{12}@main"><span class="home-row-subject">Add python and rust sources<\/span> <span class="meta"><span class="author"[^>]*>[^<]+<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span><\/span><\/a> <a class="chip home-branches" href="[^"]*index\.html#\/branches">\d+ branch(es)?<\/a><\/div>/.test(front.text));
+  ok("front lists the root files as one-line links", /<a class="home-row" href="[^"]*index\.html#file:notes\.txt@main"><span class="home-row-subject">notes\.txt<\/span><\/a>/.test(front.text));
+  ok("the section shows two rows and folds the rest behind its chevron, under a fade",
+    /<\/div>\n(<a class="home-row"[^\n]*\n){2}<details class="home-more"><summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg [^]*?<\/details><div class="home-fade"><\/div>/.test(front.text));
+  ok("the section carries no label and no activity rows", !/>Show all|>See more|Recent activity/.test(front.text));
+  ok("the README follows the section", front.text.indexOf("Showcase fixture.") > front.text.indexOf('class="home-section"'));
   // The pages' styling is the shell's own two sheets: the inlined core (tokens,
   // theme gates, page-structural rules) plus the linked pages-full.css, which
   // carries the class vocabulary — so a page rule that exists anywhere else is
@@ -83,10 +57,10 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("pages-full.css styles the app's chip classes", /\.chip\.state\s*\{/.test(css.text) && /\.chip\.verdict-approved\s*\{/.test(css.text) && /\.chip\.chip-retracted\s*\{/.test(css.text));
   // The inlined core carries the page-structural rules (scoped to #gs-page) and
   // gates dark on the boot-stamped theme class with a media fallback.
-  ok("front inlines the core sheet with the page-structural rules", /<style data-gs-core>/.test(front.text) && /:where\(#gs-page\) h2/.test(front.text) && /ul\.files/.test(front.text));
-  // The sidebar and the recent-activity block are shared vocabulary, so the core
+  ok("front inlines the core sheet with the page-structural rules", /<style data-gs-core>/.test(front.text) && /:where\(#gs-page\) h2/.test(front.text));
+  // The sidebar and the home section are shared vocabulary, so the core
   // sheet — inlined, hence live before pages-full.css lands — carries them.
-  ok("the inlined core carries the shared sidebar and activity vocabulary", /\.nav-list a/.test(front.text) && /\.nav-icon\s*\{/.test(front.text) && /\.show-more\s*\{/.test(front.text) && /\.home-activity-head\s*\{/.test(front.text));
+  ok("the inlined core carries the shared sidebar and home vocabulary", /\.nav-list a/.test(front.text) && /\.nav-icon\s*\{/.test(front.text) && /\.home-row\s*\{/.test(front.text) && /\.home-toggle\s*\{/.test(front.text));
   ok("the inlined core gates dark on the stored-theme class with a media fallback", /html\.dark-mode/.test(front.text) && /@media \(prefers-color-scheme: ?dark\)/.test(front.text) && /html\.light-mode/.test(front.text));
   ok("front links pages-full.css", /<link rel="stylesheet" href="\.\/pages-full\.css">/.test(front.text));
   ok("front references gs-upgrade.js (defer)", /<script defer src="\.\/gs-upgrade\.js">/.test(front.text));
@@ -127,7 +101,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   console.log("\n--- Item pages: threads, edits, feedback ---");
   const thread = pages.find((p) => p.includes("Shipping the S3 static site reader this week."));
   ok("thread root has a page", !!thread);
-  ok("thread inlines direct replies (the control for the front page's reply exclusion)", !!thread && thread.includes(REPLY_TEXT) && thread.includes("What about generation-mode buckets?"));
+  ok("thread inlines direct replies", !!thread && thread.includes(REPLY_TEXT) && thread.includes("What about generation-mode buckets?"));
   ok("thread inlines nested replies in order", !!thread && thread.indexOf("Thanks, appreciate it!") > thread.indexOf(REPLY_TEXT) && thread.includes("Seconded, well earned."));
   ok("nested reply carries its reply-to attribution", !!thread && /reply to /.test(thread));
   // A post is the root of its own page, feed entry and OG card, and its first

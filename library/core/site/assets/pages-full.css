@@ -304,19 +304,7 @@
     padding: 0.12rem var(--sp-3); font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-code); color: var(--text);
   }
   .tree-row:hover { background: var(--chip); text-decoration: none; }
-  /* Home root listing: collapsed to HOME_FILE_LIMIT rows with a gradient fade
-     over the last visible row and a centered chevron toggle that flips to
-     "Show less" once expanded. The fade uses the page-background token so it
-     reads on both themes, and takes no pointer events so rows stay clickable. */
-  .home-list { position: relative; }
-  .tree-fade {
-    position: absolute; left: 0; right: 0; bottom: 0; height: 2.75rem;
-    pointer-events: none;
-    background: linear-gradient(to bottom, transparent, var(--bg));
-  }
-  /* The centered chevron control (.show-more) and home's recent-activity
-     heading are shared vocabulary in pages-core.css: the generated front page
-     closes with the same section. */
+  .home-toggle::-webkit-details-marker { display: none; }
   .tree-icon { width: 1.1rem; text-align: center; opacity: 0.85; }
   /* File-type icons (vendored @pierre/vscode-icons, monochrome currentColor, so
      they read on both themes via the inherited --muted color). Cloned from

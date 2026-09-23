@@ -129,17 +129,9 @@ type parityCardSkeleton struct {
 	Cases         []parityCardSkeletonCase `json:"cases"`
 }
 
-// parityFrontFilesCase pins what the front page says for one root-entry count.
-type parityFrontFilesCase struct {
-	Name        string `json:"name"`
-	Total       int    `json:"total"`
-	ExpectLabel string `json:"expectLabel"`
-}
-
-// parityFrontFiles pins the front page's root-listing cap and its cases.
-type parityFrontFiles struct {
-	Limit int                    `json:"limit"`
-	Cases []parityFrontFilesCase `json:"cases"`
+// parityHomeRows pins how many root entries the home section shows before its chevron.
+type parityHomeRows struct {
+	Limit int `json:"limit"`
 }
 
 // parityBodyBlock pins one block a release body splits into: prose lines, or commit rows.
@@ -206,7 +198,7 @@ type parityFixtures struct {
 	ReleaseNotes   []parityReleaseNotesCase  `json:"releaseNotes"`
 	ReleaseAssets  []parityReleaseAssetsCase `json:"releaseAssets"`
 	CardSkeleton   parityCardSkeleton        `json:"cardSkeleton"`
-	FrontFiles     parityFrontFiles          `json:"frontFiles"`
+	HomeRows       parityHomeRows            `json:"homeRows"`
 	MarkdownPaths  []parityMarkdownPath      `json:"markdownPaths"`
 	MDXStrip       []parityMDXStripCase      `json:"mdxStrip"`
 	FrontMatter    []parityMDXStripCase      `json:"frontMatter"`
@@ -311,11 +303,7 @@ func TestParityEditedMetaRow(t *testing.T) {
 	edit := &sitePageMsg{Ext: "pm", SHA: strings.Repeat("d", 40), Short: strings.Repeat("d", 12), Message: "An issue, edited", TS: 1700003600, Author: "Bob", Email: "bob@example.com", Header: header}
 	it := &sitePageItem{Msg: msg, Resolved: edit, Edited: true}
 	want := strings.Join(f.MetaRow.EditedBits, ",")
-	front := buildSiteFrontActivity(map[string][]*sitePageItem{"pm": {it}}, map[string]int{"pm": 1}, nil, sitePageSite{URL: "https://example.com/"})
-	if len(front) != 1 {
-		t.Fatalf("front activity rows = %d, want 1", len(front))
-	}
-	for name, bits := range map[string][]sitePageBit{"item page": siteItemPageMeta(it), "list row": buildSiteListEntry(it, "issue").Meta, "front activity row": front[0].Meta} {
+	for name, bits := range map[string][]sitePageBit{"item page": siteItemPageMeta(it), "list row": buildSiteListEntry(it, "issue").Meta} {
 		if got := strings.Join(parityBitClasses(bits, len(f.MetaRow.EditedBits)), ","); got != want {
 			t.Errorf("%s meta bits = %q, want %q", name, got, want)
 		}
@@ -506,22 +494,10 @@ func TestParityCardSkeleton(t *testing.T) {
 	}
 }
 
-// TestParityFrontFiles asserts the front page's root-listing cap and truncation
-// wording against the fixture unit_parity.js also asserts.
-func TestParityFrontFiles(t *testing.T) {
-	f := loadParityFixtures(t)
-	if len(f.FrontFiles.Cases) == 0 {
-		t.Fatal("no front file cases in parity fixtures")
-	}
-	if f.FrontFiles.Limit != sitePagesHomeFiles {
-		t.Errorf("front file cap = %d, fixture %d", sitePagesHomeFiles, f.FrontFiles.Limit)
-	}
-	for _, c := range f.FrontFiles.Cases {
-		t.Run(c.Name, func(t *testing.T) {
-			if label := siteFrontFilesMoreLabel(c.Total, f.FrontFiles.Limit); label != c.ExpectLabel {
-				t.Errorf("control label %q, want %q", label, c.ExpectLabel)
-			}
-		})
+// TestParityHomeRows asserts the front page's row count against the fixture unit_parity.js also asserts.
+func TestParityHomeRows(t *testing.T) {
+	if f := loadParityFixtures(t); f.HomeRows.Limit != sitePagesHomeRows {
+		t.Errorf("home rows = %d, fixture %d", sitePagesHomeRows, f.HomeRows.Limit)
 	}
 }
 

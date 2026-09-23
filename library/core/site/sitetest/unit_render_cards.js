@@ -64,19 +64,11 @@ eq(findClass(GS.memoCard(item("u", { type: "memo" }, "A memo")), "hash").length,
 console.log("=== a row's type glyph takes its class from the item type ===");
 const FIX = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "parity_fixtures.json"), "utf8"));
 for (const c of FIX.rowGlyphs) {
-  const row = GS.homeActivityRow(Object.assign(item("g", c.header, "A row"), { _ext: c.ext, _branch: "gitmsg/" + c.ext }));
+  const row = (c.ext === "memo" ? GS.memoCard : GS.timelineCard)(Object.assign(item("g", c.header, "A row"), { _ext: c.ext, _branch: "gitmsg/" + c.ext }));
   const g = findClass(row, "type-glyph")[0];
   eq(Array.from(g._cls).filter((x) => x !== "type-glyph"), [c.expectClass], c.name + ": glyph class");
   eq(g.getAttribute("title"), c.expectTitle, c.name + ": glyph title");
 }
-
-console.log("=== the front activity row is the one meta row ===");
-const bitClasses = (node) => findClass(node, "meta")[0]._children.filter((c) => c.nodeType === 1).map((c) => Array.from(c._cls).join("."));
-const activityItem = Object.assign(item("v", { type: "issue", state: "open" }, "An issue"), { _ext: "pm", _branch: "gitmsg/pm" });
-eq(bitClasses(GS.homeActivityRow(activityItem)), ["author", "reltime", "hash"], "an item row carries the author, time and hash bits");
-eq(bitClasses(GS.homeActivityRow(Object.assign({}, activityItem, { edited: true, editorName: "Bob" }))), ["author", "reltime", "hash", "edited"], "an edited row marks the edit after the hash");
-const codeActivity = { _ext: "code", _branch: "trunk", author: "Ada", effectiveTime: 1750000000, commit: { hash: sha40("8"), short: H("8"), authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000 } };
-eq(bitClasses(GS.homeActivityRow(codeActivity)), ["author", "reltime", "hash"], "a code commit row carries the same bits");
 
 console.log("=== card dispatch and navigation ===");
 const branchOf = (node) => (findClass(node, "subject")[0].getAttribute("href") || "").split("@")[1];

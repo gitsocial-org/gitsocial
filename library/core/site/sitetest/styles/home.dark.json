@@ -1,97 +1,14 @@
 {
-  ".card": [
-    {
-      "shape": "div.card-head > span.meta",
-      "padding": "9.6px 14.4px",
-      "margin": "0px 0px 9.6px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
-      "color": "rgb(201, 209, 217)",
-      "backgroundColor": "srgb(0.03 0.04 0.13)",
-      "borderLeftColor": "srgb(0.79 0.82 0.85 / 0.18)",
-      "borderRadius": "10px"
-    },
-    {
-      "shape": "span.meta.meta-lead",
-      "padding": "9.6px 14.4px",
-      "margin": "0px 0px 9.6px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
-      "color": "rgb(201, 209, 217)",
-      "backgroundColor": "srgb(0.03 0.04 0.13)",
-      "borderLeftColor": "srgb(0.79 0.82 0.85 / 0.18)",
-      "borderRadius": "10px"
-    }
-  ],
-  ".card-head": [
-    {
-      "shape": "span.type-glyph > a.subject",
-      "padding": "0px",
-      "margin": "0px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
-      "color": "rgb(201, 209, 217)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(201, 209, 217)",
-      "borderRadius": "0px"
-    }
-  ],
   ".meta": [
     {
-      "shape": "span.author > span.reltime > a.hash > span.edited",
-      "padding": "0px",
-      "margin": "3.2px 0px 0px 28.8px",
-      "fontSize": "12.8px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.54 0.56 0.61)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.54 0.56 0.61)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "span.author > span.reltime > a.hash",
-      "padding": "0px",
-      "margin": "3.2px 0px 0px 28.8px",
-      "fontSize": "12.8px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.54 0.56 0.61)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.54 0.56 0.61)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "span.reltime > a.hash",
-      "padding": "0px",
-      "margin": "0px 0px 0px 28.8px",
-      "fontSize": "12.8px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.54 0.56 0.61)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.54 0.56 0.61)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "span.type-glyph > span.author > span.reltime > a.hash",
+      "shape": "span.author > span.reltime",
       "padding": "0px",
       "margin": "0px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.54 0.56 0.61)",
+      "color": "srgb(0.62 0.63 0.67)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.54 0.56 0.61)",
-      "borderRadius": "0px"
-    }
-  ],
-  ".edited": [
-    {
-      "shape": "",
-      "padding": "0px",
-      "margin": "0px",
-      "fontSize": "12.8px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.54 0.56 0.61)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.54 0.56 0.61)",
+      "borderLeftColor": "srgb(0.62 0.63 0.67)",
       "borderRadius": "0px"
     }
   ],
@@ -102,68 +19,83 @@
       "margin": "0px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.54 0.56 0.61)",
-      "backgroundColor": "srgb(0.79 0.82 0.85 / 0.09)",
-      "borderLeftColor": "srgb(0.54 0.56 0.61)",
+      "color": "srgb(0.62 0.63 0.67)",
+      "backgroundColor": "srgb(0.9 0.91 0.93 / 0.14)",
+      "borderLeftColor": "srgb(0.62 0.63 0.67)",
       "borderRadius": "999px"
     }
   ],
-  ".subject": [
+  ".home-head": [
     {
-      "shape": "",
-      "padding": "0px",
-      "margin": "0px 0px 6.4px",
-      "fontSize": "15.2px",
+      "shape": "a.chip > a.home-commit > a.chip.home-branches",
+      "padding": "0px 19.2px 0px 0px",
+      "margin": "0px",
+      "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(0, 221, 221)",
+      "color": "srgb(0.62 0.63 0.67)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(0, 221, 221)",
+      "borderLeftColor": "srgb(0.62 0.63 0.67)",
       "borderRadius": "0px"
     }
   ],
-  ".type-glyph": [
+  ".home-commit": [
     {
-      "shape": "",
+      "shape": "span.home-row-subject > span.meta",
       "padding": "0px",
-      "margin": "0px 3.84px 0px 0px",
+      "margin": "0px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.54 0.56 0.61)",
+      "color": "srgb(0.62 0.63 0.67)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.54 0.56 0.61)",
+      "borderLeftColor": "srgb(0.62 0.63 0.67)",
+      "borderRadius": "0px"
+    }
+  ],
+  ".home-row": [
+    {
+      "shape": "span.gs-icon.i-blue.tree-icon > span.home-row-subject",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
+      "color": "srgb(0.62 0.63 0.67)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "srgb(0.62 0.63 0.67)",
       "borderRadius": "0px"
     },
     {
-      "shape": "",
+      "shape": "span.gs-icon.i-orange.tree-icon > span.home-row-subject",
       "padding": "0px",
       "margin": "0px",
-      "fontSize": "21px",
+      "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(137, 87, 229)",
+      "color": "srgb(0.62 0.63 0.67)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(137, 87, 229)",
+      "borderLeftColor": "srgb(0.62 0.63 0.67)",
       "borderRadius": "0px"
     },
     {
-      "shape": "",
+      "shape": "span.gs-icon.tree-icon > span.home-row-subject",
       "padding": "0px",
       "margin": "0px",
-      "fontSize": "21px",
+      "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(31, 157, 85)",
+      "color": "srgb(0.62 0.63 0.67)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(31, 157, 85)",
+      "borderLeftColor": "srgb(0.62 0.63 0.67)",
       "borderRadius": "0px"
-    },
+    }
+  ],
+  ".home-toggle": [
     {
-      "shape": "",
+      "shape": "span.chevron.gs-icon",
       "padding": "0px",
       "margin": "0px",
       "fontSize": "21px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.54 0.56 0.61)",
+      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "color": "srgb(0.62 0.63 0.67)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.54 0.56 0.61)",
+      "borderLeftColor": "srgb(0.62 0.63 0.67)",
       "borderRadius": "0px"
     }
   ]

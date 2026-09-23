@@ -65,13 +65,12 @@ function pageText(html) { return unesc(html.replace(/<[^>]+>/g, " ")).replace(/\
 
 // The page-entry reveal handshake. gs-upgrade holds the page on its loading
 // state and installs window.__gsOnFirstView; gs-app calls it once the first route
-// has settled INCLUDING the home view's deferred recent-activity fill, which is
-// what makes the app appear once and FINISHED rather than filling in in pieces
-// while the visitor watches. Requiring gs-app boots it (the shim defines a
-// document), so the callback is installed HERE, synchronously, before that first
-// route can settle; what it recorded is asserted further down.
-let revealCalls = 0, revealCards = -1;
-global.window.__gsOnFirstView = () => { revealCalls++; revealCards = findClass(global.__shim.viewNode, "card").length; };
+// has settled, which is what makes the app appear once and FINISHED rather than
+// filling in in pieces while the visitor watches. Requiring gs-app boots it (the
+// shim defines a document), so the callback is installed HERE, synchronously,
+// before that first route can settle; what it recorded is asserted further down.
+let revealCalls = 0;
+global.window.__gsOnFirstView = () => { revealCalls++; };
 
 // bootLike drives the app the way gs-upgrade would after loading the assets: set
 // the boot hash (entryFor: a real location.hash wins over the meta route,
@@ -391,20 +390,12 @@ async function main() {
   // only until the next route replaces it. The recorder installed at load time
   // captured that reveal.
   // Its assertion pins the reveal contract: the landing is complete when the app
-  // becomes visible, and it does NOT wait for recent activity. That section is
-  // below the fold and costs roughly two thirds of home's fetches, so waiting
-  // for it held the loading state about 1.9s longer for nothing the visitor
-  // could see. It fills in a beat later, as it does in the plain shell.
+  // becomes visible, and the home view publishes no settle promise of its own.
+  // Asserted on a context of this suite's own, which leaves the boot's rendered
+  // view untouched.
   {
     for (let i = 0; i < 60 && revealCalls === 0; i++) await wait(50);
     ok("the app signalled the page-entry reveal", revealCalls === 1, "calls=" + revealCalls);
-    ok("the reveal did not wait for the recent-activity section", revealCards === 0, "cards at reveal=" + revealCards);
-    // That last one is an observation of a race the section lost, not the rule:
-    // it holds only because the fill needs a network round trip. The RULE is
-    // that signalFirstView awaits ctx.viewSettled and the home view publishes
-    // none, so the section can never be part of what the reveal waits for.
-    // Asserted on a context of this suite's own, which leaves the boot's
-    // rendered view (read above) untouched.
     const homeCtx = GS.newContext(base);
     await GS.homeView(homeCtx);
     ok("because the home view publishes no settle promise for the reveal to await",
@@ -599,7 +590,7 @@ async function main() {
     // padding) so the boot and the app that follows read as one design.
     ok("the loading state is painted by the same class, not by markup", /html\.gs-boot body::before\s*\{[^}]*content:\s*"Loading…"[^}]*text-align:\s*center/.test(head), "head=" + head.slice(head.indexOf("<style data-gs-core>"), head.indexOf("</style>")).slice(0, 400));
     // The no-JS contract: the page still reads.
-    ok("the served page is complete without JS (content in the body as served)", /<p class="meta">README<\/p>/.test(front.text) && /Recent activity/.test(front.text));
+    ok("the served page is complete without JS (content in the body as served)", /<p class="meta">README<\/p>/.test(front.text) && /class="home-section"/.test(front.text));
     ok("the front page owns no heading; the README's come first", front.text.indexOf("<h1") > front.text.indexOf('<p class="meta">README</p>'));
 
     // The cloak is conditional, so the condition is worth RUNNING rather than
@@ -715,24 +706,26 @@ async function main() {
   {
     await bootLike(base, "/", null);
     const view = global.__shim.viewNode;
-    const strip = findClass(view, "meta-strip")[0] || { _children: [] };
-    const chips = findClass(strip, "chip").map((n) => global.__shim.textOf(n).trim());
-    const short = (findClass(strip, "hash")[0] || {}) && global.__shim.textOf(findClass(strip, "hash")[0] || null).trim();
-    const subject = global.__shim.textOf(findClass(strip, "meta")[0] || null).split(" · ")[0].trim();
-    // The listing collapses past HOME_FILE_LIMIT: only the rows the app leaves
-    // visible (plus its "Show all N" control) are part of first paint.
-    const shown = findClass(view, "tree-row").filter((r) => r.style.display !== "none").map((r) => global.__shim.textOf(r).trim());
-    const more = global.__shim.textOf(findClass(view, "show-more-label")[0] || null).trim();
+    const kids = (n) => ((n && n._children) || []).filter((c) => c && c.nodeType === 1);
+    const section = findClass(view, "home-section")[0];
+    const names = (rows) => rows.map((r) => global.__shim.textOf(findClass(r, "home-row-subject")[0] || null).trim());
+    const shown = names(kids(section).filter((c) => c._cls && c._cls.has("home-row")));
+    const folded = names(findClass(kids(section).find((c) => c._cls && c._cls.has("home-more")), "home-row"));
+    const headNode = findClass(section, "home-head")[0];
+    const chips = findClass(headNode, "chip").map((n) => global.__shim.textOf(n).trim());
+    const commitText = global.__shim.textOf(findClass(headNode, "home-row-subject")[0] || null).trim();
     const front = await get(base + "index.html");
     const text = pageText(front.text);
-    ok("home view rendered a meta strip to compare", chips.length >= 2 && !!short && !!subject, "chips=" + JSON.stringify(chips));
+    const [pageOpen, pageRest] = front.text.slice(front.text.indexOf('<div class="home-section">')).split('<details class="home-more">');
+    const pageNames = (html) => Array.from((html || "").matchAll(/<a class="home-row"[^>]*><span class="home-row-subject">([^<]*)<\/span>/g)).map((m) => unesc(m[1]));
+    ok("home view rendered the section to compare", chips.length === 2 && shown.length > 0 && !!commitText, "chips=" + JSON.stringify(chips) + " commit=" + commitText);
     ok("front page carries the home view's branch chips", chips.every((c) => text.includes(c)), "chips=" + JSON.stringify(chips));
-    ok("front page carries the home view's latest commit", text.includes(subject) && text.includes(short), "subject=" + subject + " short=" + short);
-    ok("front page lists the same visible root files", shown.length > 0 && shown.every((n) => text.includes(n)), "files=" + JSON.stringify(shown));
-    ok("front page carries the same collapse control", !more || text.includes(more), "more=" + more);
-    // The control names the total, so neither surface repeats it as a sentence.
-    const cut = global.__shim.textOf(findClass(view, "notice")[0] || null).trim();
-    ok("neither surface carries an overflow sentence", !/more not shown/.test(cut) && !/more not shown/.test(text), "notice=" + cut);
+    ok("front page carries the home view's tip commit", text.includes(commitText), "commit=" + commitText);
+    ok("both surfaces show the same two root entries and fold the same rest",
+      shown.length === 2 && JSON.stringify(pageNames(pageOpen)) === JSON.stringify(shown) && JSON.stringify(pageNames((pageRest || "").split("</details>")[0])) === JSON.stringify(folded),
+      "app=" + JSON.stringify([shown, folded]) + " page=" + JSON.stringify([pageNames(pageOpen), pageNames(pageRest)]));
+    ok("both surfaces fade the folded section", findClass(section, "home-fade").length === 1 && /<\/details><div class="home-fade"><\/div>/.test(front.text));
+    ok("neither surface carries a label or activity rows", !/Show all|See more|Recent activity/.test(global.__shim.textOf(view)) && !/Show all|See more|Recent activity/.test(text));
     // The README is PRE-RENDERED into the served page (site_markdown.go, a port
     // of the reader's own grammar), so the boot no longer rewrites markup into
     // prose — the one thing the upgrade still adds here is images it can resolve
@@ -741,7 +734,7 @@ async function main() {
     const md = findClass(view, "markdown")[0];
     const appHeadings = findTag(md, /^h[1-6]$/).map((h) => global.__shim.textOf(h).trim()).filter(Boolean);
     const readmeStart = front.text.indexOf('<p class="meta">README</p>');
-    const readme = readmeStart < 0 ? "" : front.text.slice(readmeStart, front.text.indexOf('<h2 class="home-activity-head">Recent activity</h2>'));
+    const readme = readmeStart < 0 ? "" : front.text.slice(readmeStart, front.text.indexOf("</section>", readmeStart));
     ok("home view renders the README as markdown", !!md && appHeadings.length > 0, "headings=" + JSON.stringify(appHeadings));
     ok("front page carries the same headings as real heading elements",
       !!readme && appHeadings.every((h) => new RegExp("<h[1-6][^>]*>" + h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "</h[1-6]>").test(readme)),
@@ -753,80 +746,6 @@ async function main() {
       /<img src="https:\/\/[^"]+"/.test(readme) && !/<img(?![^>]*src="https:)/.test(readme), "section=" + readme.slice(0, 300));
     ok("front page carries no markdown or markup source as text",
       !/&lt;div align=/.test(readme) && !/## About/.test(readme) && !/&gt; /.test(readme), "section=" + readme.slice(0, 300));
-    // Recent activity closes both surfaces. The rows ARE the guarantee here: the
-    // same items, in the same order, in the same card shape with the same type
-    // glyph, or the upgrade swaps one list for another (the original bug, moved
-    // down the page). Item hrefs are the crawlable item pages — the reason the
-    // section links pages rather than app routes. The section fills in after the
-    // landing's own fetches, so wait for the rows rather than assuming a settle time.
-    for (let i = 0; i < 40 && findClass(view, "card").length === 0; i++) await wait(50);
-    const tgClass = (n) => Array.from((n && n._cls) || []).find((c) => c.indexOf("tg-") === 0) || "";
-    const painted = findClass(view, "card").map((c) => ({
-      glyph: global.__shim.textOf(findClass(c, "type-glyph")[0] || null).trim(),
-      glyphClass: tgClass(findClass(c, "type-glyph")[0]),
-      chip: global.__shim.textOf(findClass(c, "chip")[0] || null).trim(),
-      subject: global.__shim.textOf(findClass(c, "subject")[0] || null).trim(),
-    }));
-    const section = front.text.slice(front.text.indexOf('<h2 class="home-activity-head">Recent activity</h2>'));
-    // A row leads with its glyph, then the one chip slot the type's list row
-    // fills, so the glyph CLASS identifies its kind and the chip rides with it.
-    // A body-only row has no head: the glyph and the marker lead its meta row.
-    const chunks = section.split('<div class="card"').slice(1);
-    const rows = chunks.map((chunk) => {
-      const glyph = /<span class="type-glyph (tg-[a-z-]+)" title="[^"]*">([^<]*)<\/span>/.exec(chunk);
-      const chip = /<span class="chip[^"]*">([^<]*)<\/span>/.exec(chunk);
-      const subject = /<a class="subject" href="([^"]+)">([^<]*)<\/a>/.exec(chunk);
-      const hash = /<a class="hash" href="([^"]+)"/.exec(chunk);
-      return {
-        glyphClass: glyph ? glyph[1] : "", glyph: glyph ? glyph[2] : "", chip: chip ? unesc(chip[1]) : "",
-        href: subject ? subject[1] : (hash ? hash[1] : ""), subject: subject ? unesc(subject[2]) : "",
-      };
-    });
-    ok("every row opens with its card head, or with its meta row when body-only",
-      chunks.every((c) => c.startsWith('><div class="card-head">') || c.startsWith('><span class="meta meta-lead">')),
-      JSON.stringify(chunks.map((c) => c.slice(0, 40))));
-    ok("home view paints recent-activity rows", painted.length > 0, "painted=" + painted.length);
-    ok("front page carries the recent-activity section after the README", front.text.indexOf('<h2 class="home-activity-head">Recent activity</h2>') > front.text.indexOf("README"));
-    ok("front page lists the same activity rows in the same order", rows.length === painted.length && rows.every((r, i) => r.glyphClass === painted[i].glyphClass && r.subject === painted[i].subject),
-      "page=" + JSON.stringify(rows.map((r) => r.glyphClass + ":" + r.subject)) + " app=" + JSON.stringify(painted.map((r) => r.glyphClass + ":" + r.subject)));
-    // The section is capped at the same round ten on both sides (HOME_ACTIVITY_LIMIT
-    // / sitePagesHomeActivity): a summary below the README, not a scrolling log.
-    ok("both surfaces cap the section at ten rows", rows.length === 10 && painted.length === 10, "page=" + rows.length + " app=" + painted.length);
-    // Glyphs are plain text on both sides, so the no-JS page carries the exact
-    // characters the app paints — the card treatment survives the upgrade whole.
-    ok("every row carries a type glyph on both surfaces", rows.every((r) => r.glyph) && painted.every((p) => p.glyph), "page=" + JSON.stringify(rows.map((r) => r.glyph)) + " app=" + JSON.stringify(painted.map((p) => p.glyph)));
-    ok("the glyphs agree row for row", rows.every((r, i) => r.glyph === painted[i].glyph), "page=" + JSON.stringify(rows.map((r) => r.glyph)) + " app=" + JSON.stringify(painted.map((p) => p.glyph)));
-    // A state-bearing row is now identified by its glyph character (○/● issue,
-    // ⑂ pull request), the label having gone with the chip.
-    const stateful = rows.filter((r) => r.glyph === "○" || r.glyph === "●" || r.glyph === "⑂");
-    ok("state-bearing rows carry a tinted glyph class", stateful.length > 0 && stateful.every((r) => /^tg-(open|closed|merged)$/.test(r.glyphClass)), "classes=" + JSON.stringify(rows.map((r) => r.glyph + ":" + r.glyphClass)));
-    // Code commits interleave with the items on both surfaces. They are the rows
-    // that keep the section representative on a repo whose gitmsg corpus is mostly one
-    // extension, so the merge (not just the item set) is what must agree.
-    const codeRows = rows.filter((r) => r.glyphClass === "tg-commit");
-    const itemRows = rows.filter((r) => r.glyphClass !== "tg-commit");
-    ok("the merge interleaves code commits", codeRows.length > 0 && rows.length > codeRows.length, "code=" + codeRows.length + " of " + rows.length);
-    ok("code rows carry the commit glyph", codeRows.every((r) => r.glyph === "◦" && r.glyphClass === "tg-commit"), "glyphs=" + JSON.stringify(codeRows.map((r) => r.glyph + "/" + r.glyphClass)));
-    // Every row is the app's card: glyph, subject, sha on a code row, and the one
-    // chip slot, which no state a tinted glyph already carries may fill.
-    ok("both surfaces fill the row's chip slot alike", rows.every((r, i) => r.chip === painted[i].chip),
-      "page=" + JSON.stringify(rows.map((r) => r.chip)) + " app=" + JSON.stringify(painted.map((p) => p.chip)));
-    ok("no row carries a chip repeating the glyph", stateful.every((r) => r.chip === ""),
-      "page=" + JSON.stringify(stateful.map((r) => r.glyph + ":" + r.chip)));
-    ok("code rows carry the commit's short sha in the meta",
-      codeRows.every((r) => new RegExp(" · <a class=\"hash\" href=\"[^\"]*\">[0-9a-f]{12}</a></span>").test(section.slice(section.indexOf(r.href)))),
-      "hrefs=" + JSON.stringify(codeRows.map((r) => r.href)));
-    ok("item rows link to their crawlable item page", itemRows.every((r) => /^\.\/i\/[0-9a-f]{12}\.html$/.test(r.href)), "hrefs=" + JSON.stringify(itemRows.map((r) => r.href)));
-    // A code commit has no page of its own, so its row deep-links into the app on
-    // the same route the app's own row uses.
-    ok("code rows deep-link into the app", codeRows.every((r) => /index\.html#commit:[0-9a-f]{7,40}@/.test(r.href)), "hrefs=" + JSON.stringify(codeRows.map((r) => r.href)));
-    // The section closes with the same "See more" control on both surfaces: a real
-    // crawlable object on the page (the posts archive IS the page for /timeline),
-    // the app's own timeline route once upgraded.
-    const appMore = findClass(view, "show-more").filter((n) => /See more/.test(global.__shim.textOf(n)));
-    ok("home view closes the section with a See more control", appMore.length === 1 && appMore[0].getAttribute("href") === "#/timeline", "n=" + appMore.length + " href=" + (appMore[0] && appMore[0].getAttribute("href")));
-    ok("front page closes the section with the same affordance over a crawlable page", /<a class="show-more" href="\.\/posts\/index\.html"><span class="show-more-icon"><span class="gs-icon chevron"><svg [^>]*><path [^>]*\/><\/svg><\/span><\/span><span class="show-more-label">See more<\/span><\/a>/.test(section), "tail=" + section.slice(-220));
-    ok("that page is the one the app maps back to /timeline", UP.hashForPath(base, base + "posts/index.html") === "#/timeline");
   }
 
   console.log("\n--- Commits page ↔ booted /commits agree (row for row) ---");

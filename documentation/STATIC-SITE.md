@@ -43,7 +43,7 @@ Values live in the `site` object of the core config ref and reach the bucket as 
 | Key | Example | Validation |
 |---|---|---|
 | `title` | `"My Project"` | plain string, trimmed, up to 200 characters |
-| `description` | `"One sentence for the front page"` | plain string, trimmed, up to 300 characters |
+| `description` | `"One sentence for search results"` | plain string, trimmed, up to 300 characters |
 | `accent`, `accentDark` | `"#0a7"` | `#rgb` or `#rrggbb` |
 | `favicon` | `favicon.png` | shown beside the sidebar title: a key relative to the site root (upload with `gitsocial remote put`) or an absolute `https://` URL, up to 500 characters |
 | `image` | `og-card.png` | `og:image` for every page: a key relative to the site root (upload with `gitsocial remote put`) or an absolute `https://` URL, up to 500 characters |
@@ -75,7 +75,7 @@ Effective when `publish`, `pages` and a valid `url` are all set. Every push then
 - A list page per type, paged oldest-first with `older →` and `← newer` links. Milestones and sprints fold into `issues`.
 - The commits list of the default branch, one row per commit with no diffs. A row is citable as `commits/<n>.html#c-<sha12>`.
 - A file page for each prose document on the default branch, at `f/<path>.html`: markdown (`.md`, `.markdown`, `.mdown`, `.mdx`) and the extensionless convention documents (LICENSE, CONTRIBUTING, CHANGELOG and their siblings). Documents under a dotdir or a vendored, test or fixture directory are left out, and so are submodules, symlinks, the root README and paths with a space or one of `@ : # ? %`. `filesInclude` and `filesExclude` override the selection.
-- The front page: the description, the default branch and its tip, the root file listing, the README and the newest activity.
+- The front page: one section with the branch, the latest commit and the root files, two of them shown and the rest behind a chevron, then the README.
 - `sitemap.xml` with every indexable page, and Atom feeds: `feed.xml` and one per type directory, memos and commits excluded.
 
 What a page shows:

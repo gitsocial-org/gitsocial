@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadHomeActivity, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, homeFilesMoreLabel, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -3965,13 +3965,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return null;
   }
 
-  // HOME_FILE_LIMIT is how many root entries Home shows before the Show all control.
-  const HOME_FILE_LIMIT = 3;
-
   // CHEVRON_SVG holds the trusted inline chevron glyphs, parsed like the icon set.
   const CHEVRON_SVG = {
     down: "<svg fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"m3.5 6 4.5 4.5L12.5 6\"/></svg>",
-    up: "<svg fill=\"none\" viewBox=\"0 0 16 16\"><path stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"m3.5 10 4.5-4.5L12.5 10\"/></svg>",
   };
   const chevronTemplates = new Map();
 
@@ -4014,66 +4010,27 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("span", { class: "gs-icon nav-search-icon" }, [svg]);
   }
 
-  // homeFileList renders the root entries, collapsing past HOME_FILE_LIMIT behind a chevron toggle.
-  function homeFileList(entries, branch) {
+  // homeFileRows renders the root entries as one-line links, directories first.
+  function homeFileRows(entries, branch) {
     const dirs = entries.filter((e) => e.type === "tree").sort((a, b) => a.name.localeCompare(b.name));
     const files = entries.filter((e) => e.type !== "tree").sort((a, b) => a.name.localeCompare(b.name));
-    const all = dirs.concat(files);
-    const box = el("div", {}, []);
-    const listNode = el("div", { class: "tree-list home-list" }, []);
-    const rows = all.map((e) => el("a", { class: "tree-row", href: fileRef(e.name, branch) }, [
-      treeIcon(e), el("span", { class: "mono" }, [e.name]),
+    return dirs.concat(files).map((e) => el("a", { class: "home-row", href: fileRef(e.name, branch) }, [
+      treeIcon(e), el("span", { class: "home-row-subject" }, [e.name]),
     ]));
-    for (const r of rows) listNode.append(r);
-    box.append(listNode);
-    if (all.length <= HOME_FILE_LIMIT) return box;
-    const moreLabel = homeFilesMoreLabel(all.length, HOME_FILE_LIMIT);
-    const fade = el("div", { class: "tree-fade" }, []);
-    const glyph = el("span", { class: "show-more-icon" }, []);
-    const label = el("span", { class: "show-more-label" }, []);
-    const toggle = el("button", { class: "show-more", type: "button" }, [glyph, label]);
-    box.append(toggle);
-    let expanded = false;
-    const apply = () => {
-      rows.forEach((r, i) => { r.style.display = expanded || i < HOME_FILE_LIMIT ? "" : "none"; });
-      glyph.replaceChildren(chevronEl(expanded ? "up" : "down") || document.createTextNode(expanded ? "⌃" : "⌄"));
-      label.textContent = expanded ? "Show less" : moreLabel;
-      if (expanded) fade.remove();
-      else listNode.append(fade);
-    };
-    toggle.addEventListener("click", () => { expanded = !expanded; apply(); });
-    apply();
-    return box;
   }
 
-  // homeActivityRow renders a recent-activity card from index metadata, mirroring the static front page's row.
-  function homeActivityRow(item) {
-    const branch = item._branch || "";
-    const code = item._ext === "code";
-    const nav = { hash: item.commit.hash, branch };
-    // A comment, repost and quote render whole (BODY_ONLY_TYPES), so the row takes the first line of that body and no head.
-    if (!code && isBodyOnly(item, item._ext)) {
-      const first = subjectBody(item.content)[0];
-      const meta = metaRow(item, branch);
-      const marker = cardHeadChips(item.header, item._ext, first).lead;
-      if (marker) meta.prepend(marker);
-      prependGlyph(meta, item, item._ext);
-      return card({ parts: [meta, first ? el("div", { class: "body" }, [first]) : null], nav });
+  // homeHead renders the section's head line: the branch chip, the tip commit as one link, then the branch count by the chevron.
+  function homeHead(branch, latest, branchCount) {
+    const head = el("div", { class: "home-head" }, [el("a", { class: "chip", href: "#branch:" + branch }, [branch])]);
+    if (latest) {
+      const meta = el("span", { class: "meta" }, [authorEl(authorLabel(latest.authorName, latest.authorEmail), latest.authorEmail), " · ", timeEl(latest.authorTime)]);
+      head.append(" ", el("a", { class: "home-commit", href: commitRef(latest.hash, branch) }, [el("span", { class: "home-row-subject" }, [subjectBody(latest.content)[0]]), " ", meta]));
     }
-    const glyph = code ? el("span", { class: "type-glyph tg-commit", title: "commit" }, ["◦"]) : typeGlyphEl(item, item._ext);
-    const title = headSubject(item.header, item._ext, itemSubject(item));
-    const chips = cardHeadChips(item.header, item._ext, title);
-    const head = cardHead(glyph, commitRef(item.commit.hash, branch), title, chips.tail, chips.lead);
-    return card({ parts: [head, metaRow(item, branch)], nav });
+    head.append(" ", el("a", { class: "chip home-branches", href: "#/branches" }, [branchCount + (branchCount === 1 ? " branch" : " branches")]));
+    return head;
   }
 
-  // homeActivityMore renders the trailing link to the full timeline.
-  function homeActivityMore() {
-    const glyph = el("span", { class: "show-more-icon" }, [chevronEl("down") || document.createTextNode("⌄")]);
-    return el("a", { class: "show-more", href: "#/timeline" }, [glyph, el("span", { class: "show-more-label" }, ["See more"])]);
-  }
-
-  // homeView renders the landing: metadata strip, root files, README and recent activity.
+  // homeView renders the landing: the code section, the first HOME_ROWS root entries with the rest behind a chevron, then the README.
   async function homeView(ctx) {
     const head = await headFor(ctx);
     const branch = headBranchName(head);
@@ -4088,31 +4045,17 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const readme = findReadme(entries);
     const commitObj = await getObject(ctx, head.sha);
     const latest = commitObj && commitObj.type === "commit" ? parseCommit(head.sha, commitObj.body) : null;
-    const site = await loadSiteCustomization(ctx);
-    if (site && typeof site.description === "string" && site.description.trim()) wrap.append(el("p", { class: "meta" }, [site.description.trim()]));
-    const strip = el("div", { class: "meta-strip" }, []);
-    strip.append(el("span", { class: "chip" }, [branch]));
-    strip.append(el("a", { class: "chip", href: "#/branches" }, [branches.length + (branches.length === 1 ? " branch" : " branches")]));
-    if (latest) {
-      const m = el("span", { class: "meta" }, [subjectBody(latest.content)[0] + " · ", timeEl(latest.authorTime), " · "]);
-      m.append(el("a", { class: "hash", href: commitRef(latest.hash, branch) }, [latest.short]));
-      strip.append(m);
+    const rows = homeFileRows(entries, branch);
+    const section = el("div", { class: "home-section" }, [homeHead(branch, latest, branches.length)].concat(rows.slice(0, HOME_ROWS)));
+    if (rows.length > HOME_ROWS) {
+      const toggle = el("summary", { class: "home-toggle", "aria-label": "Show all" }, [chevronEl("down") || "⌄"]);
+      section.append(el("details", { class: "home-more" }, [toggle].concat(rows.slice(HOME_ROWS))), el("div", { class: "home-fade" }, []));
     }
-    wrap.append(strip);
-    if (entries.length) wrap.append(homeFileList(entries, branch));
+    wrap.append(section);
     if (readme) {
       const obj = await getContentObject(ctx, readme.sha);
       if (obj) wrap.append(renderMarkdown(stripFrontMatter(new TextDecoder().decode(obj.body)), { ctx, branch, dir: "", tip: head.sha }));
     }
-    const activity = el("div", { class: "home-activity" }, []);
-    wrap.append(activity);
-    // Not awaited and not the settle promise: the section lands below the fold after first paint.
-    loadHomeActivity(ctx).then((items) => {
-      if (!items.length) return;
-      activity.append(el("h2", { class: "home-activity-head" }, ["Recent activity"]));
-      for (const it of items) activity.append(homeActivityRow(it));
-      activity.append(homeActivityMore());
-    }).catch(() => { /* the landing stands on its own */ });
     return [wrap];
   }
 
@@ -4153,6 +4096,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeActivityRow, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

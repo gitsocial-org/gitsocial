@@ -124,17 +124,18 @@ for (const c of FIX.cardSkeleton.cases) {
     header: c.header, content: c.firstLine, author: "Ada", effectiveTime: 1750000000,
     _ext: c.ext, _branch: "gitmsg/" + c.ext,
   };
-  const row = GS.homeActivityRow(it);
+  const row = GS.timelineCard(it);
   const head = (row._children || []).find((n) => n && n._cls && n._cls.has("card-head"));
   if (!c.expectHead.length) {
     eq(!!head, false, c.name + ": a body-only row carries no head");
-    eq(slots(row), FIX.cardSkeleton.bodyOnlyParts.join(","), c.name + ": the meta row, then the body");
+    // The app clamps the body it shows whole, so only the meta row's lead is shared with the page's row.
+    eq(slots(row).split(",")[0], FIX.cardSkeleton.bodyOnlyParts[0], c.name + ": the meta row leads");
     const meta = (row._children || []).find((n) => n && n._cls && n._cls.has("meta"));
     eq(slots(meta).split(",").slice(0, c.expectLead.length).join(","), c.expectLead.join(","), c.name + ": what leads the meta row");
     continue;
   }
   eq(slots(head), c.expectHead.join(","), c.name + ": head slots");
-  eq(slots(row), FIX.cardSkeleton.parts.slice(0, 2).join(","), c.name + ": the head, then the meta row");
+  eq(slots(row).split(",").slice(0, 2).join(","), FIX.cardSkeleton.parts.slice(0, 2).join(","), c.name + ": the head, then the meta row");
 }
 // The chip row is the app's own third part, so the full order shows on a card that fills it.
 const chipped = GS.prCard({
@@ -144,10 +145,8 @@ const chipped = GS.prCard({
 });
 eq(slots(chipped), FIX.cardSkeleton.parts.join(","), "a card that fills every part keeps the fixture's order");
 
-console.log("=== parity invariant: what the front page offers for the root entries it hides ===");
-for (const c of FIX.frontFiles.cases) {
-  eq(GS.homeFilesMoreLabel(c.total, FIX.frontFiles.limit), c.expectLabel, c.name + ": control label");
-}
+console.log("=== parity invariant: the home section's row count ===");
+eq(GS.HOME_ROWS, FIX.homeRows.limit, "the home section shows the fixture's row count");
 
 console.log("=== parity invariant: which files render as prose, and the MDX strip ===");
 for (const c of FIX.markdownPaths) {

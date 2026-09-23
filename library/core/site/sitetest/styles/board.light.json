@@ -6,9 +6,9 @@
       "margin": "0px 0px 9.6px",
       "fontSize": "21px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(26, 26, 26)",
-      "backgroundColor": "rgb(255, 248, 229)",
-      "borderLeftColor": "srgb(0.1 0.1 0.1 / 0.18)",
+      "color": "rgb(0, 0, 0)",
+      "backgroundColor": "srgb(1 1 1 / 0.35)",
+      "borderLeftColor": "srgb(0 0 0 / 0.18)",
       "borderRadius": "10px"
     },
     {
@@ -17,9 +17,9 @@
       "margin": "0px 0px 9.6px",
       "fontSize": "21px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(26, 26, 26)",
-      "backgroundColor": "rgb(255, 248, 229)",
-      "borderLeftColor": "srgb(0.1 0.1 0.1 / 0.18)",
+      "color": "rgb(0, 0, 0)",
+      "backgroundColor": "srgb(1 1 1 / 0.35)",
+      "borderLeftColor": "srgb(0 0 0 / 0.18)",
       "borderRadius": "10px"
     }
   ],
@@ -30,9 +30,9 @@
       "margin": "0px 0px 9.6px",
       "fontSize": "21px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(26, 26, 26)",
-      "backgroundColor": "rgb(255, 248, 229)",
-      "borderLeftColor": "srgb(0.1 0.1 0.1 / 0.18)",
+      "color": "rgb(0, 0, 0)",
+      "backgroundColor": "srgb(1 1 1 / 0.35)",
+      "borderLeftColor": "srgb(0 0 0 / 0.18)",
       "borderRadius": "10px"
     },
     {
@@ -41,9 +41,9 @@
       "margin": "0px 0px 9.6px",
       "fontSize": "21px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(26, 26, 26)",
-      "backgroundColor": "rgb(255, 248, 229)",
-      "borderLeftColor": "srgb(0.1 0.1 0.1 / 0.18)",
+      "color": "rgb(0, 0, 0)",
+      "backgroundColor": "srgb(1 1 1 / 0.35)",
+      "borderLeftColor": "srgb(0 0 0 / 0.18)",
       "borderRadius": "10px"
     }
   ],
@@ -54,9 +54,9 @@
       "margin": "0px",
       "fontSize": "21px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(26, 26, 26)",
+      "color": "rgb(0, 0, 0)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(26, 26, 26)",
+      "borderLeftColor": "rgb(0, 0, 0)",
       "borderRadius": "0px"
     }
   ],
@@ -67,9 +67,9 @@
       "margin": "0px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.38 0.37 0.34)",
-      "backgroundColor": "srgb(0.1 0.1 0.1 / 0.09)",
-      "borderLeftColor": "srgb(0.38 0.37 0.34)",
+      "color": "srgb(0.31 0.3 0.27)",
+      "backgroundColor": "srgb(0 0 0 / 0.08)",
+      "borderLeftColor": "srgb(0.31 0.3 0.27)",
       "borderRadius": "999px"
     }
   ],
@@ -117,8 +117,8 @@
       "margin": "0px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(26, 26, 26)",
-      "backgroundColor": "srgb(0.1 0.1 0.1 / 0.09)",
+      "color": "rgb(0, 0, 0)",
+      "backgroundColor": "srgb(1 1 1 / 0.35)",
       "borderLeftColor": "rgb(0, 170, 119)",
       "borderRadius": "999px"
     },
@@ -128,9 +128,9 @@
       "margin": "0px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.38 0.37 0.34)",
-      "backgroundColor": "srgb(0.93 0.89 0.8)",
-      "borderLeftColor": "srgb(0.1 0.1 0.1 / 0.18)",
+      "color": "srgb(0.31 0.3 0.27)",
+      "backgroundColor": "srgb(0.92 0.89 0.79)",
+      "borderLeftColor": "srgb(0 0 0 / 0.18)",
       "borderRadius": "999px"
     }
   ]
