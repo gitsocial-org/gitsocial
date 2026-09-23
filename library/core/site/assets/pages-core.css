@@ -38,14 +38,14 @@
      dark set as --pd-*, both declared here. The theme gates below only remap
      the active tokens onto one set or the other. */
   :root {
-    --pl-bg: #f8eed5; --pl-text: #1a1a1a; --pl-link: #404ddd;
+    --pl-bg: #f8eed5; --pl-text: #000000; --pl-link: #404ddd;
     --pd-bg: #02041b; --pd-text: #e6e9ed; --pd-link: #9483ed;
     --bg: var(--pl-bg); --text: var(--pl-text); --link: var(--pl-link);
-    --lift: 35%; --lift-hover: 70%;
+    --lift: 35%; --lift-hover: 70%; --code-mix: 8%;
     --open: #1f9d55; --closed: #8957e5; --merged: #8250df;
     --warn: #bf8700; --danger: #cf222e;
     --serif: 'EB Garamond', Georgia, serif;
-    --mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+    --mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace; --mono-ls: -0.02rem;
     /* File-type icon hues from the Pierre @pierre/vscode-icons palette (MIT):
        shade 600 (--pl-*) for the light parchment, shade 400 (--pd-*) for the
        dark background. Light yellow is nudged from Pierre #d5a910 to #a67c00 so
@@ -100,20 +100,20 @@
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: var(--pd-bg); --text: var(--pd-text); --link: var(--pd-link);
-      --lift: 6%; --lift-hover: 12%;
+      --lift: 6%; --lift-hover: 12%; --code-mix: 14%;
       --i-cyan: var(--pd-i-cyan); --i-yellow: var(--pd-i-yellow); --i-orange: var(--pd-i-orange); --i-indigo: var(--pd-i-indigo);
       --i-green: var(--pd-i-green); --i-blue: var(--pd-i-blue); --i-red: var(--pd-i-red); --i-vermilion: var(--pd-i-vermilion);
     }
   }
   html.dark-mode, body.dark-mode {
     --bg: var(--pd-bg); --text: var(--pd-text); --link: var(--pd-link);
-    --lift: 6%; --lift-hover: 12%;
+    --lift: 6%; --lift-hover: 12%; --code-mix: 14%;
     --i-cyan: var(--pd-i-cyan); --i-yellow: var(--pd-i-yellow); --i-orange: var(--pd-i-orange); --i-indigo: var(--pd-i-indigo);
     --i-green: var(--pd-i-green); --i-blue: var(--pd-i-blue); --i-red: var(--pd-i-red); --i-vermilion: var(--pd-i-vermilion);
   }
   html.light-mode, body.light-mode {
     --bg: var(--pl-bg); --text: var(--pl-text); --link: var(--pl-link);
-    --lift: 35%; --lift-hover: 70%;
+    --lift: 35%; --lift-hover: 70%; --code-mix: 8%;
     --i-cyan: var(--pl-i-cyan); --i-yellow: var(--pl-i-yellow); --i-orange: var(--pl-i-orange); --i-indigo: var(--pl-i-indigo);
     --i-green: var(--pl-i-green); --i-blue: var(--pl-i-blue); --i-red: var(--pl-i-red); --i-vermilion: var(--pl-i-vermilion);
   }
@@ -127,7 +127,7 @@
     --panel: color-mix(in srgb, var(--text) 3%, var(--bg));
     --chip: color-mix(in srgb, white var(--lift), transparent);
     --chip-hover: color-mix(in srgb, white var(--lift-hover), transparent);
-    --code-bg: color-mix(in srgb, var(--text) 8%, transparent);
+    --code-bg: color-mix(in srgb, var(--text) var(--code-mix), transparent);
     /* Subtle button surface: a slight shift off the page background so a normal
        (border + transparent) button reads as a control, not flat page. */
     --btn: color-mix(in srgb, var(--text) 5%, var(--bg));
@@ -172,7 +172,7 @@
   .repo-icon { width: 18px; height: 18px; flex: 0 0 auto; border-radius: var(--r-ctl); object-fit: contain; }
   .repo-title {
     flex: 1 1 auto; min-width: 0;
-    font-family: var(--mono); font-weight: 600; font-size: var(--fs-ui);
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-weight: 600; font-size: var(--fs-ui);
     color: var(--muted); word-break: break-word;
   }
   a.repo-title { color: var(--muted); }
@@ -187,14 +187,14 @@
   #nav .nav-group a, .nav-list .nav-group a { margin-left: var(--sp-5); }
   #nav a, #nav .nav-disabled, .nav-list a {
     display: flex; align-items: center; padding: var(--sp-1) var(--sp-3); border-radius: var(--r-ctl);
-    font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); color: var(--muted);
   }
   #nav a:hover, .nav-list a:hover { color: var(--text); text-decoration: none; background: var(--chip); }
   #nav a.active, .nav-list a.active { color: var(--text); font-weight: 600; background: var(--link-t2); }
   .nav-icon {
     flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
     width: 1rem; margin-right: var(--sp-3); color: inherit;
-    font-family: var(--mono); font-size: var(--fs-ui); line-height: 1;
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); line-height: 1;
   }
   .foot-brand { display: inline-flex; align-items: center; gap: var(--sp-3); color: var(--muted); }
   .foot-brand:hover { text-decoration: none; color: var(--text); }
@@ -219,7 +219,7 @@
     display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
     width: 100%; margin-top: var(--sp-3); padding: var(--sp-2);
     background: transparent; border: none; cursor: pointer;
-    font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); color: var(--muted);
   }
   .show-more:hover { color: var(--text); }
   .show-more .gs-icon { width: 1.15rem; height: 1.15rem; color: inherit; }
@@ -279,7 +279,7 @@
   :where(#gs-page, #view) h1 { font-size: var(--fs-h1); line-height: 1; margin: var(--sp-2) 0 var(--sp-1); }
   :where(#gs-page) h2 { font-size: var(--fs-h2); line-height: 1.25; margin: var(--sp-1) 0 var(--sp-2); }
   :where(#gs-page) p { margin: var(--sp-4) 0; }
-  :where(#gs-page) footer, :where(#gs-page) pre, :where(#gs-page) code { font-family: var(--mono); }
+  :where(#gs-page) footer, :where(#gs-page) pre, :where(#gs-page) code { font-family: var(--mono); letter-spacing: var(--mono-ls); }
   :where(#gs-page) footer { font-size: var(--fs-dense); }
   :where(#gs-page) footer a { margin-right: var(--sp-4); }
   :where(#gs-page) section { border-top: 1px solid var(--line); margin-top: var(--sp-5); padding-top: var(--sp-4); }
@@ -288,7 +288,7 @@
     background: var(--panel); padding: var(--sp-3); border: 1px solid var(--line);
   }
   :where(#gs-page) footer { margin-top: var(--sp-6); border-top: 1px solid var(--line); padding-top: var(--sp-4); }
-  :where(#gs-page) ul.files { list-style: none; padding: 0; margin: var(--sp-4) 0; font-family: var(--mono); font-size: var(--fs-ui); }
+  :where(#gs-page) ul.files { list-style: none; padding: 0; margin: var(--sp-4) 0; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); }
   :where(#gs-page) ul.files li { border-top: 1px solid var(--line); padding: var(--sp-2) 0; }
   /* Containment guards, duplicated from pages-full: that sheet loads async on
      the pre-rendered pages, so during its load window wide README content must

@@ -64,7 +64,7 @@
      (layout, a link color, an intentional size). */
   .diff-btn, .version-diff-btn, .gran-btn, .pref-btn, .share-link, .fs-btn {
     background: var(--btn); border: 1px solid var(--line); border-radius: var(--r-ctl);
-    padding: var(--pad-ctl); cursor: pointer; font-family: var(--mono);
+    padding: var(--pad-ctl); cursor: pointer; font-family: var(--mono); letter-spacing: var(--mono-ls);
     font-size: var(--fs-ui); color: var(--muted); line-height: 1.2;
   }
   .diff-btn:hover, .version-diff-btn:hover, .gran-btn:hover, .pref-btn:hover,
@@ -75,7 +75,7 @@
      (flex layout for the count, chip fill, tighter padding, text color). */
   .filter-chip, .load-more, .board-lane-jump, .facet-chip {
     background: var(--btn); border: 1px solid var(--line); border-radius: var(--r-pill);
-    padding: 0.15rem var(--sp-3); cursor: pointer; font-family: var(--mono);
+    padding: 0.15rem var(--sp-3); cursor: pointer; font-family: var(--mono); letter-spacing: var(--mono-ls);
     font-size: var(--fs-ui); color: var(--muted); line-height: 1.2;
   }
   .filter-chip:hover, .load-more:hover, .board-lane-jump:hover { color: var(--text); background: var(--chip); }
@@ -83,7 +83,7 @@
   .view-toggle, .board-col-toggle, .board-col-hide, .body-clamp-toggle,
   .board-more, .facet-more {
     background: transparent; border: none; cursor: pointer;
-    font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); color: var(--muted);
   }
   .view-toggle:hover, .board-col-toggle:hover, .board-col-hide:hover,
   .body-clamp-toggle:hover { color: var(--text); }
@@ -91,7 +91,7 @@
      the UI scale on the panel surface, one shared link-tinted focus shift. */
   .search-input, .tree-search, .contrib-filter {
     border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--panel);
-    color: var(--text); font-family: var(--mono); font-size: var(--fs-ui);
+    color: var(--text); font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui);
   }
   .search-input::placeholder, .tree-search::placeholder, .contrib-filter::placeholder { color: var(--muted); }
   .search-input:focus, .tree-search:focus, .contrib-filter:focus { border-color: color-mix(in srgb, var(--link) 50%, var(--line)); }
@@ -128,11 +128,11 @@
   }
   .theme-icon:hover, .nav-collapse:hover { color: var(--text); }
   .theme-icon svg { width: 13px; height: 13px; display: block; }
-  .nav-collapse { font-family: var(--mono); font-size: var(--fs-md); }
+  .nav-collapse { font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-md); }
   .nav-handle {
     display: none; position: fixed; top: var(--sp-3); left: var(--sp-3); z-index: 6;
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-ctl);
-    color: var(--muted); font-family: var(--mono); font-size: var(--fs-md);
+    color: var(--muted); font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-md);
     padding: var(--sp-1) var(--sp-3); cursor: pointer;
   }
   .nav-handle:hover { color: var(--text); background: var(--chip); }
@@ -157,7 +157,7 @@
   .nav-search .gs-icon { width: 0.85rem; height: 0.85rem; color: inherit; }
   #nav .nav-disabled { color: var(--muted); opacity: 0.4; cursor: default; }
   #nav .nav-disabled::after {
-    content: "M1"; font-family: var(--mono); font-size: var(--fs-dense);
+    content: "M1"; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-dense);
     margin-left: var(--sp-2); opacity: 0.8;
   }
   .content { min-width: 0; }
@@ -181,7 +181,7 @@
     border-color: color-mix(in srgb, var(--link) 45%, var(--line));
     background: var(--chip-hover);
   }
-  /* Subject scale: one semantic element, always weight 600, sized by context —
+  /* Subject scale: one semantic element, weight 600 outside a card, sized by context —
      card = mono at --fs-md, detail = --fs-h1 (it is the page title), diff-head =
      --fs-h4, board-card = --fs-ui. The size tiers live on the context rules
      (.detail/.card here, diff-head and board-card at their own rules below);
@@ -217,7 +217,7 @@
     mask-image: linear-gradient(to bottom, #000 calc(8 * var(--lh-body) * 1em), transparent calc(10 * var(--lh-body) * 1em));
   }
   .body-clamp-toggle { display: block; margin-top: var(--sp-1); padding: 0.15rem 0; }
-  .meta { color: var(--muted); font-family: var(--mono); font-size: var(--fs-ui); display: inline-flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; margin-left: calc(var(--sp-5) + var(--sp-3)); }
+  .meta { color: var(--muted); font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); display: inline-flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; margin-left: calc(var(--sp-5) + var(--sp-3)); }
   /* The indent above aligns a meta row under a card head's subject, past the
      glyph column. A card with no head (post, comment, memo) leads the meta row
      with the glyph itself, which then has to start AT the glyph column like
@@ -225,21 +225,21 @@
   #gs-page .card .meta.meta-lead, .meta.meta-lead { margin-left: 0; }
   /* Under a head the row is a block, so it sits one step below the subject instead of on a body-size line of its own. */
   .card-head + .meta { display: flex; margin-top: var(--sp-1); }
-  .hash { font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted); }
+  .hash { font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); color: var(--muted); }
   /* Type glyphs carry one consistent semantic scheme across every view (timeline,
      search, lists, board, milestones, detail): a state-bearing glyph (issue,
      pull-request) is colored by state (open/closed/merged), and every neutral TYPE
      glyph (release, post, milestone, sprint, memo, …) shares the single muted
      color. This mirrors the TUI, which dims card glyphs and conveys state through
      the state chip. */
-  .type-glyph { display: inline-block; width: 1.1em; margin-right: 0.3em; text-align: center; line-height: 1; vertical-align: middle; font-family: var(--mono); color: var(--muted); }
+  .type-glyph { display: inline-block; width: 1.1em; margin-right: 0.3em; text-align: center; line-height: 1; vertical-align: middle; font-family: var(--mono); letter-spacing: var(--mono-ls); color: var(--muted); }
   .type-glyph.tg-open { color: var(--open); }
   .type-glyph.tg-closed { color: var(--closed); }
   .type-glyph.tg-merged { color: var(--merged); }
   .chip {
     display: inline-block; background: var(--code-bg); border-radius: var(--r-pill);
     padding: 0.05rem var(--sp-3); font-size: var(--fs-ui); color: var(--muted);
-    font-family: var(--mono); font-weight: 500;
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-weight: 500;
   }
   .chip.state { color: #fff; }
   .chip.open { background: var(--open); }
@@ -277,12 +277,12 @@
   /* Definition rows: the trailer list, and a release's commit rows, which take
      the same treatment on both surfaces (a generated page has no .detail). */
   .detail dl, dl.release-notes { margin: var(--sp-3) 0 0; display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-1) var(--sp-4); }
-  .detail dt, .release-notes dt { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); }
+  .detail dt, .release-notes dt { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); letter-spacing: var(--mono-ls); }
   /* A trailer value and a release's commit row are metadata, so they read in their key's voice. */
-  .detail dd, .release-notes dd { margin: 0; font-family: var(--mono); font-size: var(--fs-ui); word-break: break-word; }
+  .detail dd, .release-notes dd { margin: 0; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); word-break: break-word; }
   .detail .subject { font-size: var(--fs-h1); }
-  .detail .card .subject, .card .subject { font-size: var(--fs-md); font-family: var(--mono); }
-  .back { display: inline-block; margin-bottom: var(--sp-4); color: var(--muted); font-family: var(--mono); font-size: var(--fs-ui); }
+  .detail .card .subject, .card .subject { font-size: var(--fs-md); font-family: var(--mono); letter-spacing: var(--mono-ls); font-weight: 400; }
+  .back { display: inline-block; margin-bottom: var(--sp-4); color: var(--muted); font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); }
   /* Detail top bar: the back link on the left, the page's controls on the right,
      on one row so neither disturbs the meta line. */
   .detail-topbar { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
@@ -292,7 +292,7 @@
     flex: 0 0 auto; max-width: 100%; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap;
   }
-  .mono { font-family: var(--mono); }
+  .mono { font-family: var(--mono); letter-spacing: var(--mono-ls); }
   /* File browser: breadcrumb, tree listing, blob view. */
   .breadcrumb { font-size: var(--fs-ui); margin-bottom: var(--sp-4); word-break: break-all; }
   .breadcrumb a { color: var(--link); }
@@ -301,7 +301,7 @@
      Compact vertical rhythm (trees.software density): ~1.6em line boxes. */
   .tree-row {
     display: flex; align-items: center; gap: var(--sp-3); line-height: 1.6;
-    padding: 0.12rem var(--sp-3); font-family: var(--mono); font-size: var(--fs-code); color: var(--text);
+    padding: 0.12rem var(--sp-3); font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-code); color: var(--text);
   }
   .tree-row:hover { background: var(--chip); text-decoration: none; }
   /* Home root listing: collapsed to HOME_FILE_LIMIT rows with a gradient fade
@@ -395,7 +395,7 @@
      line box IS the row rhythm). Anything else is a bug, not a fourth tier. */
   .blob {
     overflow: auto;
-    font-family: var(--mono); font-size: var(--fs-code); line-height: 1.5;
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-code); line-height: 1.5;
   }
   .blob-row { display: flex; }
   .blob-row.hl { background: var(--warn-t1); }
@@ -420,7 +420,7 @@
   .markdown ul, .markdown ol { margin: var(--sp-3) 0 var(--sp-3) var(--sp-5); }
   .markdown li { margin: var(--sp-1) 0; }
   .markdown code {
-    font-family: var(--mono); font-size: 1rem;
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: 1rem;
     background: var(--code-bg); border: 1px solid var(--line);
     padding: 0 var(--sp-2); border-radius: 4px;
   }
@@ -440,12 +440,12 @@
   }
   .markdown del, .markdown s, .markdown strike { text-decoration: line-through; opacity: 0.75; }
   .markdown kbd {
-    font-family: var(--mono); font-size: 0.78em; padding: 0.05rem var(--sp-2);
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: 0.78em; padding: 0.05rem var(--sp-2);
     border: 1px solid var(--line); border-radius: 4px; background: var(--chip);
   }
   .markdown table { border-collapse: collapse; margin: var(--sp-4) 0; display: block; overflow: auto; max-width: 100%; }
-  .markdown th, .markdown td { border: 1px solid var(--line); padding: var(--sp-2) var(--sp-3); text-align: left; }
-  .markdown th { background: var(--chip); font-weight: 600; }
+  .markdown th, .markdown td { border: 1px solid var(--line); padding: var(--sp-2) var(--sp-3); text-align: left; background: var(--chip); }
+  .markdown th { background: color-mix(in srgb, var(--text) 6%, var(--chip)); font-weight: 600; }
   .markdown li.task { list-style: none; margin-left: calc(var(--sp-5) * -1); }
   .markdown li.task input { margin-right: var(--sp-2); }
   .markdown ul ul, .markdown ol ol, .markdown ul ol, .markdown ol ul { margin: var(--sp-1) 0 var(--sp-1) var(--sp-5); }
@@ -460,7 +460,7 @@
      sideways (overflow-x stays as a safety valve for anything unbreakable). */
   .raw-body {
     white-space: pre-wrap; word-break: break-word; overflow-x: auto;
-    font-family: var(--mono); font-size: var(--fs-code); line-height: 1.45;
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-code); line-height: 1.45;
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-panel);
     padding: var(--pad-panel);
   }
@@ -509,13 +509,13 @@
   }
   .diff-file-head:hover { background: var(--chip); }
   .diff-status {
-    flex: 0 0 auto; width: 1.1rem; text-align: center; font-family: var(--mono);
+    flex: 0 0 auto; width: 1.1rem; text-align: center; font-family: var(--mono); letter-spacing: var(--mono-ls);
     font-size: var(--fs-ui); font-weight: 700; border-radius: 4px; color: #fff;
   }
   .diff-status.s-added { background: var(--open); }
   .diff-status.s-deleted { background: var(--danger); }
   .diff-status.s-modified { background: var(--warn); }
-  .diff-path { flex: 1 1 auto; word-break: break-all; font-family: var(--mono); font-size: var(--fs-code); }
+  .diff-path { flex: 1 1 auto; word-break: break-all; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-code); }
   .diff-counts { flex: 0 0 auto; display: inline-flex; gap: var(--sp-3); font-size: var(--fs-ui); }
   .cnt-add { color: var(--open); }
   .cnt-del { color: var(--danger); }
@@ -525,7 +525,7 @@
     background: var(--link-t1);
     padding: 0.15rem var(--sp-3);
   }
-  .diff-line { display: flex; font-family: var(--mono); font-size: var(--fs-ui); line-height: 1.45; }
+  .diff-line { display: flex; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); line-height: 1.45; }
   .diff-line.add { background: var(--open-t1); }
   .diff-line.del { background: var(--danger-t1); }
   .dl-num {
@@ -542,11 +542,11 @@
   .ds-full { grid-column: 1 / -1; }
   .ds-num {
     text-align: right; padding: 0 var(--sp-3); color: var(--muted); user-select: none;
-    font-family: var(--mono); font-size: var(--fs-dense); line-height: 1.45;
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-dense); line-height: 1.45;
   }
   .ds-code {
     white-space: pre-wrap; word-break: break-word; padding: 0 var(--sp-3);
-    font-family: var(--mono); font-size: var(--fs-ui); line-height: 1.45;
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); line-height: 1.45;
   }
   .ds-code.ds-left { border-right: 1px solid var(--line); }
   .ds-num.add, .ds-code.add { background: var(--open-t1); }
@@ -667,7 +667,7 @@
      progress bars, the kanban board, and the in-bucket item search. */
   /* Member rows: flex so the leading state chip sits in a fixed-width slot and
      the subjects line up vertically no matter the chip label's width. */
-  .pm-member { margin-top: var(--sp-2); font-family: var(--mono); font-size: var(--fs-ui); padding-left: var(--sp-1); display: flex; align-items: baseline; gap: var(--sp-3); }
+  .pm-member { margin-top: var(--sp-2); font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); padding-left: var(--sp-1); display: flex; align-items: baseline; gap: var(--sp-3); }
   .pm-member > .chip.state { flex: 0 0 auto; min-width: 4.2rem; text-align: center; }
   .pm-members-head, .pm-subissues-head { margin: var(--sp-4) 0 var(--sp-2); }
   .pm-members, .pm-subissues { margin-top: var(--sp-3); }
@@ -712,7 +712,7 @@
   .board-empty { color: var(--muted); text-align: center; padding: var(--sp-3) 0; font-size: var(--fs-ui); }
   /* A board card is chrome, not prose: mono at the UI size, set tighter than
      the serif body so a wrapped title stays one compact block in the lane. */
-  .card.board-card { margin-bottom: var(--sp-3); padding: var(--sp-3); font-family: var(--mono); line-height: 1; }
+  .card.board-card { margin-bottom: var(--sp-3); padding: var(--sp-3); font-family: var(--mono); letter-spacing: var(--mono-ls); line-height: 1; }
   .card.board-card .subject { font-size: var(--fs-ui); }
   /* Board card title line: glyph + subject as ONE flex child so a long subject
      wraps its text under itself without the glyph splitting onto its own row in a
@@ -739,7 +739,7 @@
     cursor: pointer; display: flex; align-items: center; gap: var(--sp-2);
     position: sticky; top: 0; z-index: 2; background: var(--bg);
   }
-  .board-lane-caret { flex: 0 0 auto; font-family: var(--mono); }
+  .board-lane-caret { flex: 0 0 auto; font-family: var(--mono); letter-spacing: var(--mono-ls); }
   /* In-bucket item search (#/search): input, grouped results, highlighted marks. */
   .search-input { width: 100%; padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3); }
   .search-status { margin-bottom: var(--sp-3); }
@@ -747,7 +747,7 @@
   .facet-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); }
   .search-sort { margin: 0 0 var(--sp-3); }
   /* Freshness pill: fixed and unobtrusive; a click reloads for the new push. */
-  .update-pill { position: fixed; right: var(--sp-4); bottom: var(--sp-4); z-index: 50; font-family: var(--mono); font-size: var(--fs-ui); color: var(--bg); background: var(--link); border: none; border-radius: var(--r-pill); padding: var(--sp-2) var(--sp-4); cursor: pointer; box-shadow: 0 2px 10px color-mix(in srgb, var(--link) 40%, transparent); }
+  .update-pill { position: fixed; right: var(--sp-4); bottom: var(--sp-4); z-index: 50; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); color: var(--bg); background: var(--link); border: none; border-radius: var(--r-pill); padding: var(--sp-2) var(--sp-4); cursor: pointer; box-shadow: 0 2px 10px color-mix(in srgb, var(--link) 40%, transparent); }
   .facet-label { flex: 0 0 auto; min-width: 4.2rem; }
   .facet-chip { display: inline-flex; align-items: baseline; gap: var(--sp-2); color: var(--text); background: var(--chip); padding: 0.1rem var(--sp-3); }
   .facet-chip:hover { border-color: var(--link); }
@@ -763,7 +763,7 @@
   .contrib { margin: var(--sp-3) 0 var(--sp-4); }
   .contrib-row {
     display: flex; align-items: center; justify-content: space-between;
-    padding: var(--pad-row); font-family: var(--mono); font-size: var(--fs-ui); border-top: 1px solid var(--line);
+    padding: var(--pad-row); font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); border-top: 1px solid var(--line);
   }
   .contrib-list .contrib-row:first-child { border-top: none; }
   .contrib-name { word-break: break-word; }
@@ -792,7 +792,7 @@
      bolder text, no left-border indicator (which also shifted the row 3px). */
   .version-row.active { background: var(--link-t2); font-weight: 600; }
   .version-row-meta { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; color: var(--muted); flex: 1 1 auto; }
-  .chip.version-label { color: var(--text); font-family: var(--mono); }
+  .chip.version-label { color: var(--text); font-family: var(--mono); letter-spacing: var(--mono-ls); }
   .version-diff-ctl { margin-left: auto; }
   .version-diff-pane:not(:empty) { border-top: 1px solid var(--line); }
   .version-diff { overflow: auto; }
@@ -823,7 +823,7 @@
   .suggestion { margin-top: var(--sp-2); }
   .suggestion-head { font-size: var(--fs-ui); color: var(--muted); margin-bottom: var(--sp-1); }
   pre.suggestion-code { background: var(--code-bg); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--sp-3); overflow: auto; }
-  pre.suggestion-code code { font-family: var(--mono); font-size: var(--fs-code); }
+  pre.suggestion-code code { font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-code); }
   .diff-offscreen { border-top: 1px solid var(--line); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-ui); }
   .diff-offscreen > .card { margin-bottom: var(--sp-2); }
   /* Sidebar footer: fixed to the viewport bottom, spanning the sidebar's own
@@ -857,7 +857,7 @@
     flex: 1 1 6rem; min-width: 6rem; background: var(--panel); border: 1px solid var(--line);
     border-radius: var(--r-panel); padding: var(--sp-3); text-align: center;
   }
-  .stat-value { font-family: var(--mono); font-size: var(--fs-h3); font-weight: 600; }
+  .stat-value { font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-h3); font-weight: 600; }
   .stat-value-text { font-size: var(--fs-ui); font-weight: 600; padding-top: var(--sp-2); }
   .stat-label { font-size: var(--fs-ui); color: var(--muted); margin-top: 0.1rem; }
   .activity-plot { display: flex; align-items: flex-start; gap: var(--sp-2); }
@@ -933,7 +933,7 @@
      font — display:flex + align-items:center pins the text box to the row center. */
   .mobile-title {
     display: flex; align-items: center; min-width: 0;
-    font-family: var(--mono); font-size: var(--fs-ui); line-height: 1; color: var(--muted);
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); line-height: 1; color: var(--muted);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .mobile-title:hover { color: var(--text); text-decoration: none; }
@@ -979,7 +979,7 @@
 
   /* Page-level actions above a list (compare links, "browse files"). */
   .page-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); align-items: baseline; margin: var(--sp-1) 0 var(--sp-4); }
-  .action-link { font-family: var(--mono); font-size: var(--fs-ui); color: var(--link); }
+  .action-link { font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); color: var(--link); }
   .compare-link { margin-left: var(--sp-3); font-size: var(--fs-ui); }
 
   /* Compare page: base/head pickers, then a PR-style commits + files diff. */
@@ -998,7 +998,7 @@
      and the row must overflow into .graph-scroll instead of crushing the text. */
   .graph-text-col { flex: 1 1 auto; min-width: 22rem; }
   .graph-line { display: flex; align-items: center; overflow: hidden; border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent); }
-  .graph-row-text { display: flex; align-items: baseline; flex-wrap: nowrap; gap: var(--sp-3); min-width: 0; width: 100%; font-family: var(--mono); font-size: var(--fs-ui); }
+  .graph-row-text { display: flex; align-items: baseline; flex-wrap: nowrap; gap: var(--sp-3); min-width: 0; width: 100%; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); }
   .graph-subject { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* One fixed-height row must stay one line: a long branch name (dependabot/…)
      gets a single-line ellipsis cap instead of wrapping over neighboring rows,
