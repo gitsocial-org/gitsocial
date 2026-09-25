@@ -90,8 +90,8 @@
     {
       "shape": "",
       "padding": "0px",
-      "margin": "0px 6.3px 0px 0px",
-      "fontSize": "21px",
+      "margin": "0px 4.56px 0px 0px",
+      "fontSize": "15.2px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
       "color": "rgb(137, 87, 229)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -101,8 +101,8 @@
     {
       "shape": "",
       "padding": "0px",
-      "margin": "0px 6.3px 0px 0px",
-      "fontSize": "21px",
+      "margin": "0px 4.56px 0px 0px",
+      "fontSize": "15.2px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
       "color": "rgb(31, 157, 85)",
       "backgroundColor": "rgba(0, 0, 0, 0)",

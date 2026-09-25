@@ -194,7 +194,7 @@
      it — so subject text and any wrapped chips share one left edge. */
   .card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); }
   .card-head .subject { flex: 1 1 0; min-width: 0; }
-  .card-head .type-glyph { margin-right: 0; }
+  .card-head .type-glyph { margin-right: 0; font-size: var(--fs-md); width: calc(var(--sp-5) + var(--sp-3) - var(--sp-2)); }
   /* A detail head is a card head at page scale. */
   .card-head > h1.subject { font-size: var(--fs-h1); line-height: 1; margin: var(--sp-2) 0 var(--sp-1); }
   .card .body { white-space: pre-wrap; word-break: break-word; margin-top: var(--sp-2); }
