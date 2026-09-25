@@ -285,8 +285,9 @@ async function main() {
     for (const [theme, flags] of Object.entries(THEMES)) {
       const got = capture(bin, hash, flags);
       if (!got) { ok(route.name + " " + theme + ": probe returned data", false, "no data-gs-styles on " + hash); continue; }
-      if (route.name === "issues") { listCards[theme] = got[".card"]; listMetas[theme] = got[".meta"]; listChips[theme] = got[".chip"]; listEdited[theme] = got[".edited"]; }
-      if (route.name === "timeline") timelineCards[theme] = got[".card"];
+      if (route.name === "issues") { listCards[theme] = got[".card"]; listMetas[theme] = got[".meta"]; }
+      // The timeline shows items in every state, so the edited marker is captured there, not on a list that opens on Open.
+      if (route.name === "timeline") { timelineCards[theme] = got[".card"]; listChips[theme] = got[".chip"]; listEdited[theme] = got[".edited"]; }
       if (route.name === "branch-missing") errNotices[theme] = got[".err"];
       if (route.name === "pr-detail") {
         feedbackCards[theme] = got[".card.feedback"];

@@ -2823,21 +2823,24 @@
   // COMMITS_PAGE_SIZE is one commits list page's row count and must match the page layer's sitePagesListSize.
   const COMMITS_PAGE_SIZE = 100;
 
-  // SITE_PAGES_KEY is the HTML page layer's manifest, which publishes the commits list's pagination.
+  // SITE_PAGES_KEY is the HTML page layer's manifest, which publishes the commits list's pagination and the sidebar's item counts.
   const SITE_PAGES_KEY = ".gitsocial/site/pages.json";
+
+  // loadPagesDoc reads the page layer's manifest once per context; null when the layer is off or the read fails.
+  function loadPagesDoc(ctx) {
+    if (!ctx.pagesDoc) {
+      ctx.pagesDoc = fetchText(ctx.base, SITE_PAGES_KEY).then((text) => (text ? JSON.parse(text) : null)).catch(() => null);
+    }
+    return ctx.pagesDoc;
+  }
 
   // loadCommitsLayout reads the commits list's published partition from the page manifest; a fast path, with loadCommitsPage deriving it when absent.
   async function loadCommitsLayout(ctx) {
     if (ctx.commitsLayout !== undefined) return ctx.commitsLayout;
-    let layout = null;
-    try {
-      const text = await fetchText(ctx.base, SITE_PAGES_KEY);
-      const doc = text ? JSON.parse(text) : null;
-      const c = doc && doc.commits;
-      if (c) layout = { sealed: Math.max(0, c.sealed | 0), frontier: String(c.frontier || ""), total: Math.max(0, c.total | 0) };
-    } catch (e) { layout = null; }
-    ctx.commitsLayout = layout;
-    return layout;
+    const doc = await loadPagesDoc(ctx);
+    const c = doc && doc.commits;
+    ctx.commitsLayout = c ? { sealed: Math.max(0, c.sealed | 0), frontier: String(c.frontier || ""), total: Math.max(0, c.total | 0) } : null;
+    return ctx.commitsLayout;
   }
 
   // loadCommitsPage returns one page of the default branch's commit list, page 0 being the mutable head, drained only as deep as that page needs.
@@ -2917,6 +2920,23 @@
     const windowItems = merged.slice(0, need);
     const hydrated = hydrateItems(ctx, windowItems).catch(() => { /* a body that fails to read leaves its card on the index subject */ });
     return { items: windowItems, truncated: more || merged.length > need, hydrated };
+  }
+
+  // NAV_COUNT_FORMAT shortens a sidebar count past a thousand to one decimal (12.3K), in one locale on every viewer.
+  const NAV_COUNT_FORMAT = typeof Intl !== "undefined" ? new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }) : null;
+
+  // compactCount formats a sidebar count: exact under a thousand, compact above.
+  function compactCount(n) {
+    return n < 1000 || !NAV_COUNT_FORMAT ? String(n) : NAV_COUNT_FORMAT.format(n);
+  }
+
+  // loadNavCounts returns the sidebar counts by nav key, each from a source the route already pays for or one manifest read; a key without a source is absent.
+  async function loadNavCounts(ctx) {
+    const [{ branches }, tags, doc] = await Promise.all([listBranches(ctx), listTags(ctx), loadPagesDoc(ctx)]);
+    const counts = { branches: branches.length, tags: tags.length };
+    if (doc && doc.commits) counts.commits = Math.max(0, doc.commits.total | 0);
+    for (const [key, n] of Object.entries((doc && doc.items) || {})) counts[key] = Math.max(0, n | 0);
+    return counts;
   }
 
   // HOME_ROWS is how many root entries the home section shows before its chevron, mirroring the page layer's sitePagesHomeRows.
@@ -4144,7 +4164,7 @@
     reviewSummary, suggestionBody,
     loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadBranchLogIndexed, loadCompareCommitsWindow, loadGraphWindow, orderGraphWindow, assignGraphLanes, GRAPH_WINDOW,
     loadItemsIndex, loadOlderItemShards, olderItemBytes, loadBodyIndex, extWalkState, indexCommit, metaCommit, hydrateItem, hydrateItems,
-    loadTimelineItems, loadTimelineWindow, HOME_ROWS, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
+    loadTimelineItems, loadTimelineWindow, HOME_ROWS, compactCount, loadNavCounts, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
     loadCommitsPage, loadCommitsLayout, COMMITS_PAGE_SIZE,
     manifestFor, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
     parseTree, getTree, resolvePath, listBranches, listTags, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,

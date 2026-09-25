@@ -191,6 +191,7 @@
   }
   #nav a:hover, .nav-list a:hover { color: var(--text); text-decoration: none; background: var(--chip); }
   #nav a.active, .nav-list a.active { color: var(--text); font-weight: 600; background: var(--link-t2); }
+  .nav-count { margin-left: auto; padding-left: var(--sp-2); font-size: var(--fs-dense); font-weight: 400; color: var(--muted); }
   .nav-icon {
     flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
     width: 1rem; margin-right: var(--sp-3); color: inherit;
@@ -208,16 +209,15 @@
     width: 1rem; height: 1rem; flex: 0 0 auto; color: var(--muted); vertical-align: -0.15em;
   }
   .gs-icon svg { width: 100%; height: 100%; display: block; }
-  /* The home section heads both landings: a head line, one-line root entries, the rest behind a details chevron at its top right. */
-  .home-section { position: relative; }
+  /* The home section heads both landings: a head line, then one-line root entries, the rest behind a details chevron at the files' top right. */
+  .home-files { position: relative; padding-right: var(--sp-5); }
   .home-head {
-    display: flex; align-items: center; gap: var(--sp-3); padding-right: var(--sp-5);
+    display: flex; align-items: center; gap: var(--sp-3);
     font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); color: var(--muted);
   }
   .home-head .chip { flex: 0 0 auto; }
   .home-commit { display: flex; align-items: center; gap: var(--sp-3); flex: 1 1 auto; min-width: 0; color: var(--text); }
   .home-commit .meta { flex: 0 0 auto; margin: 0; }
-  .home-branches { margin-left: auto; }
   .home-row {
     display: flex; align-items: center; gap: var(--sp-3); line-height: 1.6;
     font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-code); color: var(--text);
@@ -233,13 +233,9 @@
   .home-toggle:hover { color: var(--text); }
   .home-toggle .gs-icon { width: 1.15rem; height: 1.15rem; color: inherit; }
   .home-more[open] > .home-toggle .gs-icon { transform: rotate(180deg); }
-  .home-section:has(> .home-more:not([open])) :is(.home-row, .home-commit) { color: var(--muted); font-size: var(--fs-ui); }
-  .home-section:has(> .home-more:not([open])) :is(.home-row, .home-commit):hover { color: var(--text); }
-  .home-section:has(> .home-more:not([open])) .home-head .chip { font-weight: 400; }
-  @media (max-width: 720px) {
-    .home-head { flex-wrap: wrap; }
-    .home-commit { order: 1; flex-basis: 100%; }
-  }
+  .home-section:has(.home-more:not([open])) :is(.home-row, .home-commit) { color: var(--muted); font-size: var(--fs-ui); }
+  .home-section:has(.home-more:not([open])) :is(.home-row, .home-commit):hover { color: var(--text); }
+  .home-section:has(.home-more:not([open])) .home-head .chip { font-weight: 400; }
   /* The pre-rendered page shell. Nav and content are siblings under #gs-page
      (there is no wrapper element to make them two columns of a grid), so the
      sidebar column is RESERVED as left padding and the nav is positioned into

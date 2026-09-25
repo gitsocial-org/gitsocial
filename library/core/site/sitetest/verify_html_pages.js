@@ -38,11 +38,13 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("front carries the site title", /Thread Demo/.test(front.text));
   // The front page IS the app's home landing (the upgrade re-renders the same
   // thing): one section, its head line, the root entries, then the README.
-  ok("the head line is the branch chip, the tip commit, then the branch count, each a link",
-    /<div class="home-head"><a class="chip" href="[^"]*index\.html#branch:main">main<\/a> <a class="home-commit" href="[^"]*index\.html#commit:[0-9a-f]{12}@main"><span class="home-row-subject">Add python and rust sources<\/span> <span class="meta"><span class="author"[^>]*>[^<]+<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span><\/span><\/a> <a class="chip home-branches" href="[^"]*index\.html#\/branches">\d+ branch(es)?<\/a><\/div>/.test(front.text));
+  ok("the head line is the branch chip, then the tip commit, each a link",
+    /<div class="home-head"><a class="chip" href="[^"]*index\.html#branch:main">⎇ main<\/a> <a class="home-commit" href="[^"]*index\.html#commit:[0-9a-f]{12}@main"><span class="home-row-subject">Add python and rust sources<\/span> <span class="meta"><span class="author"[^>]*>[^<]+<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span><\/span><\/a><\/div>/.test(front.text));
+  // The sidebar counts are the app's alone: a count baked into a sealed page would go stale.
+  ok("a served page's sidebar carries no counts", !/nav-count/.test(front.text.replace(/<style data-gs-core>[\s\S]*?<\/style>/, "")));
   ok("front lists the root files as one-line links", /<a class="home-row" href="[^"]*index\.html#file:notes\.txt@main"><span class="home-row-subject">notes\.txt<\/span><\/a>/.test(front.text));
   ok("the section shows two rows and folds the rest behind its chevron, under a fade",
-    /<\/div>\n(<a class="home-row"[^\n]*\n){2}<details class="home-more"><summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg [^]*?<\/details><div class="home-fade"><\/div>/.test(front.text));
+    /<div class="home-files">(<a class="home-row"[^\n]*?<\/a>\n){2}<details class="home-more"><summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg [^]*?<\/details><div class="home-fade"><\/div><\/div>/.test(front.text));
   ok("the section carries no label and no activity rows", !/>Show all|>See more|Recent activity/.test(front.text));
   ok("the README follows the section", front.text.indexOf("Showcase fixture.") > front.text.indexOf('class="home-section"'));
   // The pages' styling is the shell's own two sheets: the inlined core (tokens,

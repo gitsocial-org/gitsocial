@@ -561,6 +561,9 @@ func TestSitePages_IncrementalDeltaPartition(t *testing.T) {
 	if manifest.Ext["social"] != tip {
 		t.Error("the manifest must record the consumed tip")
 	}
+	if manifest.Items == nil {
+		t.Error("the incremental pass must write the sidebar counts")
+	}
 }
 
 func TestSitePages_BootstrapCursorResume(t *testing.T) {
@@ -583,6 +586,9 @@ func TestSitePages_BootstrapCursorResume(t *testing.T) {
 	if manifest == nil || manifest.Cursor == nil || manifest.Cursor.Done["social"] != 3 {
 		t.Fatalf("cursor = %+v, want done social=3", manifest.Cursor)
 	}
+	if manifest.Items != nil {
+		t.Error("a bootstrap in flight must leave the sidebar counts absent")
+	}
 	// The head list claims only what exists: the newest three.
 	head := getKey(t, client, "posts/index.html")
 	if !strings.Contains(head, "budgeted post 7") || strings.Contains(head, "budgeted post 0") {
@@ -598,6 +604,9 @@ func TestSitePages_BootstrapCursorResume(t *testing.T) {
 	manifest, _ = readSitePagesManifest(client, "")
 	if manifest.Cursor != nil {
 		t.Error("completed bootstrap must clear the cursor")
+	}
+	if manifest.Items == nil {
+		t.Error("a completed bootstrap must write the sidebar counts")
 	}
 	for i := 0; i < 8; i++ {
 		if !strings.Contains(getKey(t, client, "posts/index.html"), fmt.Sprintf("budgeted post %d", i)) {
@@ -801,7 +810,7 @@ func TestSitePages_FrontHome(t *testing.T) {
 	if strings.Contains(front, `class="notice"`) {
 		t.Error("a small README must not be marked truncated")
 	}
-	if !strings.Contains(front, `<a class="chip" href="https://example.com/index.html#branch:main">main</a> <a class="home-commit" href="https://example.com/index.html#commit:`+head[:12]+`@main"><span class="home-row-subject">readme</span> <span class="meta"><span class="author" title="t@example.com">T</span> · <span class="reltime"`) {
+	if !strings.Contains(front, `<a class="chip" href="https://example.com/index.html#branch:main">⎇ main</a> <a class="home-commit" href="https://example.com/index.html#commit:`+head[:12]+`@main"><span class="home-row-subject">readme</span> <span class="meta"><span class="author" title="t@example.com">T</span> · <span class="reltime"`) {
 		t.Error("the head line must carry the branch chip, then the tip commit as one link")
 	}
 	if !strings.Contains(front, `<a class="home-row" href="https://example.com/index.html#file:README.md@main"><span class="home-row-subject">README.md</span></a>`) {
@@ -907,7 +916,7 @@ func TestSitePages_FrontHomeIgnoresLocalBranch(t *testing.T) {
 		t.Error("the front page carried a README the bucket has no tip for")
 	}
 	// The head line still stands: the chip names the branch, and no tip commit is claimed.
-	if !strings.Contains(front, `<a class="chip" href="https://example.com/index.html#branch:main">main</a>`) {
+	if !strings.Contains(front, `<a class="chip" href="https://example.com/index.html#branch:main">⎇ main</a>`) {
 		t.Error("front page must still carry the default-branch chip")
 	}
 	if strings.Contains(front, `class="home-commit"`) {

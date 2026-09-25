@@ -27,8 +27,8 @@
   ],
   ".home-head": [
     {
-      "shape": "a.chip > a.home-commit > a.chip.home-branches",
-      "padding": "0px 19.2px 0px 0px",
+      "shape": "a.chip > a.home-commit",
+      "padding": "0px",
       "margin": "0px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",

@@ -201,8 +201,8 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}<footer><a href="{{.Chrome.Base}}f/index.html">← files</a> <a href="{{.Chrome.Base}}index.html">home</a></footer>
 {{template "foot"}}{{end}}{{define "front"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
-{{with .Home}}<div class="home-section"><div class="home-head"><a class="chip" href="{{.BranchHref}}">{{.Branch}}</a>{{with .Latest}} <a class="home-commit" href="{{.Href}}"><span class="home-row-subject">{{.Subject}}</span> <span class="meta">{{template "bits" .Meta}}</span></a>{{end}} <a class="chip home-branches" href="{{.BranchesHref}}">{{.Branches}}</a></div>
-{{range .Files}}{{template "filerow" .}}{{end}}{{if .MoreFiles}}<details class="home-more">{{template "hometoggle"}}{{range .MoreFiles}}{{template "filerow" .}}{{end}}</details><div class="home-fade"></div>
+{{with .Home}}<div class="home-section"><div class="home-head"><a class="chip" href="{{.BranchHref}}">⎇ {{.Branch}}</a>{{with .Latest}} <a class="home-commit" href="{{.Href}}"><span class="home-row-subject">{{.Subject}}</span> <span class="meta">{{template "bits" .Meta}}</span></a>{{end}}</div>
+{{if .Files}}<div class="home-files">{{range .Files}}{{template "filerow" .}}{{end}}{{if .MoreFiles}}<details class="home-more">{{template "hometoggle"}}{{range .MoreFiles}}{{template "filerow" .}}{{end}}</details><div class="home-fade"></div>{{end}}</div>
 {{end}}</div>
 {{end}}{{with .Home}}{{if .Readme}}<section><p class="meta">README</p>
 {{.Readme.HTML}}{{if .Readme.Truncated}}<p class="notice">Truncated. The full file is in the repository.</p>
@@ -379,14 +379,12 @@ type siteFrontPageData struct {
 
 // siteFrontHome is the front page's code block and README, in the app's home order.
 type siteFrontHome struct {
-	Branch       string           // default branch name
-	BranchHref   string           // app link to the branch's log
-	Branches     string           // "N branches", the app's branch-count chip
-	BranchesHref string           // app link behind that chip
-	Latest       *siteFrontCommit // default branch tip (nil when unreadable)
-	Files        []siteFrontFile  // the root entries the code block shows, directories first
-	MoreFiles    []siteFrontFile  // the root entries behind its chevron
-	Readme       *siteFrontReadme
+	Branch     string           // default branch name
+	BranchHref string           // app link to the branch's log
+	Latest     *siteFrontCommit // default branch tip (nil when unreadable)
+	Files      []siteFrontFile  // the root entries the code block shows, directories first
+	MoreFiles  []siteFrontFile  // the root entries behind its chevron
+	Readme     *siteFrontReadme
 }
 
 // siteFrontCommit is the default branch's tip on the front page's head line.

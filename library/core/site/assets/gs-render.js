@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -2326,8 +2326,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   const RELEASE_DETAIL_SKIP = ["artifacts", "artifact-url", "checksums", "sbom", "signed-by"];
   const ISSUE_STATES = [{ key: "all", label: "All" }, { key: "open", label: "Open" }, { key: "closed", label: "Closed" }];
   const PR_STATES = [{ key: "all", label: "All" }, { key: "open", label: "Open" }, { key: "merged", label: "Merged" }, { key: "closed", label: "Closed" }];
-  // filterState is the per-tab state filter selection, kept out of the route.
-  const filterState = { issues: "all", prs: "all" };
+  // A chip with states matches any of them; the sidebar counts open milestones and sprints the same way (siteItemCounts).
+  const MILESTONE_STATES = [{ key: "all", label: "All" }, { key: "open", label: "Open" }, { key: "closed", label: "Closed" }, { key: "cancelled", label: "Cancelled", states: ["cancelled", "canceled"] }];
+  const SPRINT_STATES = [{ key: "all", label: "All" }, { key: "open", label: "Open", states: ["planned", "active", "open"] }, { key: "completed", label: "Completed" }, { key: "cancelled", label: "Cancelled", states: ["cancelled", "canceled"] }];
+  // filterState is the per-tab state filter selection, kept out of the route; each list opens on the work left, the number its sidebar count shows.
+  const filterState = { issues: "open", prs: "open", milestones: "open", sprints: "open" };
 
   // assetRow renders one asset entry: a link when it has a gated href, else selectable mono text.
   function assetRow(name, href, tag) {
@@ -2515,11 +2518,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     // render applies the selected state filter.
     function render() {
       const sel = filterState[tab] || "all";
-      const shown = sel === "all" ? items : items.filter((it) => ((it.header && it.header.state) || "open") === sel);
+      const chosen = states.find((s) => s.key === sel);
+      const shown = !chosen || sel === "all" ? items : items.filter((it) => (chosen.states || [sel]).includes((it.header && it.header.state) || "open"));
       let page = 1;
       // paint draws the current page with a Load more for the rest.
       function paint() {
-        listBox.replaceChildren(...renderList(shown.slice(0, page * PAGE), cardFn, emptyText));
+        listBox.replaceChildren(...renderList(shown.slice(0, page * PAGE), cardFn, items.length ? "Nothing matches this filter." : emptyText));
         if (moreWrap) { moreWrap.remove(); moreWrap = null; }
         const remaining = shown.length - page * PAGE;
         if (remaining > 0) {
@@ -2533,7 +2537,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       for (const c of chips) c.classList.toggle("active", c._key === sel);
     }
     for (const s of states) {
-      const n = s.key === "all" ? counts.total : (counts.byState[s.key] || 0);
+      const n = s.key === "all" ? counts.total : (s.states || [s.key]).reduce((sum, k) => sum + (counts.byState[k] || 0), 0);
       const chip = el("button", { class: "filter-chip", type: "button" }, [s.label + " " + n]);
       chip._key = s.key;
       chip.addEventListener("click", () => { filterState[tab] = s.key; render(); });
@@ -2614,14 +2618,16 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const g = groupPM(pmItems);
     const groups = dedupePmGroups(g.milestones, g.byMilestone, compareVersionDesc);
     if (!groups.length) return [el("div", { class: "empty" }, [LIST_EMPTY.milestones])];
-    return groups.map((x) => pmGroupCard(x.item, x.members, "milestone"));
+    const members = new Map(groups.map((x) => [x.item, x.members]));
+    return filteredListView(groups.map((x) => x.item), (it) => pmGroupCard(it, members.get(it), "milestone"), "milestones", MILESTONE_STATES, LIST_EMPTY.milestones);
   }
   // sprintsBody renders one deduped card per sprint, newest first.
   function sprintsBody(pmItems) {
     const g = groupPM(pmItems);
     const groups = dedupePmGroups(g.sprints, g.bySprint);
     if (!groups.length) return [el("div", { class: "empty" }, [LIST_EMPTY.sprints])];
-    return groups.map((x) => pmGroupCard(x.item, x.members, "sprint"));
+    const members = new Map(groups.map((x) => [x.item, x.members]));
+    return filteredListView(groups.map((x) => x.item), (it) => pmGroupCard(it, members.get(it), "sprint"), "sprints", SPRINT_STATES, LIST_EMPTY.sprints);
   }
 
   // ---- PM board / milestone-sprint detail / sub-issues ----
@@ -4019,23 +4025,21 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     ]));
   }
 
-  // homeHead renders the section's head line: the branch chip, the tip commit as one link, then the branch count by the chevron.
-  function homeHead(branch, latest, branchCount) {
-    const head = el("div", { class: "home-head" }, [el("a", { class: "chip", href: "#branch:" + branch }, [branch])]);
+  // homeHead renders the section's head line: the branch chip, then the tip commit as one link.
+  function homeHead(branch, latest) {
+    const head = el("div", { class: "home-head" }, [el("a", { class: "chip", href: "#branch:" + branch }, ["⎇ " + branch])]);
     if (latest) {
       const meta = el("span", { class: "meta" }, [authorEl(authorLabel(latest.authorName, latest.authorEmail), latest.authorEmail), " · ", timeEl(latest.authorTime)]);
       head.append(" ", el("a", { class: "home-commit", href: commitRef(latest.hash, branch) }, [el("span", { class: "home-row-subject" }, [subjectBody(latest.content)[0]]), " ", meta]));
     }
-    head.append(" ", el("a", { class: "chip home-branches", href: "#/branches" }, [branchCount + (branchCount === 1 ? " branch" : " branches")]));
     return head;
   }
 
-  // homeView renders the landing: the code section, the first HOME_ROWS root entries with the rest behind a chevron, then the README.
+  // homeView renders the landing: the head line, the first HOME_ROWS root entries with the rest behind their chevron, then the README.
   async function homeView(ctx) {
     const head = await headFor(ctx);
     const branch = headBranchName(head);
     const wrap = el("div", { class: "detail" }, []);
-    const { branches } = await listBranches(ctx);
     if (!branch || !head.sha) {
       wrap.append(el("div", { class: "empty" }, ["No default branch found."]));
       return [wrap];
@@ -4046,10 +4050,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const commitObj = await getObject(ctx, head.sha);
     const latest = commitObj && commitObj.type === "commit" ? parseCommit(head.sha, commitObj.body) : null;
     const rows = homeFileRows(entries, branch);
-    const section = el("div", { class: "home-section" }, [homeHead(branch, latest, branches.length)].concat(rows.slice(0, HOME_ROWS)));
-    if (rows.length > HOME_ROWS) {
-      const toggle = el("summary", { class: "home-toggle", "aria-label": "Show all" }, [chevronEl("down") || "⌄"]);
-      section.append(el("details", { class: "home-more" }, [toggle].concat(rows.slice(HOME_ROWS))), el("div", { class: "home-fade" }, []));
+    const section = el("div", { class: "home-section" }, [homeHead(branch, latest)]);
+    if (rows.length) {
+      const files = el("div", { class: "home-files" }, rows.slice(0, HOME_ROWS));
+      if (rows.length > HOME_ROWS) {
+        const toggle = el("summary", { class: "home-toggle", "aria-label": "Show all" }, [chevronEl("down") || "⌄"]);
+        files.append(el("details", { class: "home-more" }, [toggle].concat(rows.slice(HOME_ROWS))), el("div", { class: "home-fade" }, []));
+      }
+      section.append(files);
     }
     wrap.append(section);
     if (readme) {
@@ -4057,6 +4065,29 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       if (obj) wrap.append(renderMarkdown(stripFrontMatter(new TextDecoder().decode(obj.body)), { ctx, branch, dir: "", tip: head.sha }));
     }
     return [wrap];
+  }
+
+  // NAV_COUNT_NOUNS names each counted nav item in its count's title, singular then plural.
+  const NAV_COUNT_NOUNS = {
+    issues: ["issue", "issues"], milestones: ["milestone", "milestones"], sprints: ["sprint", "sprints"],
+    prs: ["pull request", "pull requests"], releases: ["release", "releases"], memos: ["memo", "memos"],
+    commits: ["commit", "commits"], branches: ["branch", "branches"], tags: ["tag", "tags"],
+  };
+
+  // updateNavCounts writes each sidebar count beside its nav item, the exact number in its title; a failed read leaves the sidebar as it was.
+  async function updateNavCounts(ctx) {
+    if (typeof document === "undefined" || !document.querySelectorAll) return;
+    let counts;
+    try { counts = await loadNavCounts(ctx); } catch (e) { return; }
+    for (const a of Array.from(document.querySelectorAll("#nav a[data-nav]"))) {
+      const key = a.getAttribute("data-nav");
+      const nouns = NAV_COUNT_NOUNS[key];
+      const n = counts[key];
+      const old = a.querySelector(".nav-count");
+      if (old) old.remove();
+      if (!nouns || n === undefined) continue;
+      a.append(el("span", { class: "nav-count", title: n.toLocaleString("en") + " " + nouns[n === 1 ? 0 : 1] }, [compactCount(n)]));
+    }
   }
 
   // codeSidebarTarget maps a code or file route to the sidebar tree's active path, else null.
@@ -4096,6 +4127,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

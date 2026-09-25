@@ -119,13 +119,18 @@ async function main() {
 
   // Instrument fetch: count code-object (loose commit) GETs.
   const realFetch = global.fetch;
-  let looseGets = 0;
+  let looseGets = 0, fetches = 0;
   const looseRe = /objects\/[0-9a-f]{2}\/[0-9a-f]{38}$/;
-  global.fetch = async (url, opts) => { if (looseRe.test(String(url).split("?")[0])) looseGets++; return realFetch(url, opts); };
+  global.fetch = async (url, opts) => { fetches++; if (looseRe.test(String(url).split("?")[0])) looseGets++; return realFetch(url, opts); };
 
   require("./shim.js");
   require("../assets/icons.js");
   const GS = require("../assets/gs-app.js");
+  // Requiring gs-app auto-runs the home route, which reads the tip commit loose; drain it so the counts below are the reader's own.
+  for (let seen = -1, still = Date.now(), end = Date.now() + 15000; Date.now() - still < 400 && Date.now() < end;) {
+    if (fetches !== seen) { seen = fetches; still = Date.now(); }
+    await new Promise((r) => setTimeout(r, 50));
+  }
 
   // ---- 1. indexed bucket: code timeline sources from the index, ZERO loose GETs ----
   {

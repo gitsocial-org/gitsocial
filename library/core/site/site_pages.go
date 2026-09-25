@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 const (
@@ -60,6 +61,7 @@ type sitePagesManifest struct {
 	Counts   map[string]int    `json:"counts,omitempty"`   // sealed list pages per type dir
 	Frontier map[string]string `json:"frontier,omitempty"` // per type dir: sha12 of the newest sealed list entry (sealing boundary)
 	Commits  *siteCommitsState `json:"commits,omitempty"`  // the commits list's published pagination (site_pages_commits.go)
+	Items    map[string]int    `json:"items,omitempty"`    // non-retracted top-level items per list, the app's sidebar counts
 	Files    *siteFilesState   `json:"files,omitempty"`    // the file layer's published document set (site_pages_files.go)
 	SiteHash string            `json:"siteHash,omitempty"` // hash of the site identity (title/url/description) stamped into every page
 }
@@ -340,27 +342,11 @@ func readSiteFrontHome(src *objstore.LocalCommitSource, site sitePageSite, refs 
 	if defaultBranch == "" {
 		return nil
 	}
-	// The app's chip counts every refs/heads/* the bucket carries, plus the default branch when the listing lags it.
-	branches := 0
-	for ref := range refs {
-		if strings.HasPrefix(ref, "refs/heads/") {
-			branches++
-		}
-	}
-	if _, ok := refs[localBranchRef(defaultBranch)]; !ok {
-		branches++
-	}
-	label := " branches"
-	if branches == 1 {
-		label = " branch"
-	}
 	tip := siteBucketBranchTip(refs, defaultBranch)
 	home := &siteFrontHome{
-		Branch:       defaultBranch,
-		BranchHref:   sitePageAppURL(site, "branch:"+defaultBranch),
-		Branches:     strconv.Itoa(branches) + label,
-		BranchesHref: sitePageAppURL(site, "/branches"),
-		Latest:       readSiteFrontLatest(src, site, tip, defaultBranch),
+		Branch:     defaultBranch,
+		BranchHref: sitePageAppURL(site, "branch:"+defaultBranch),
+		Latest:     readSiteFrontLatest(src, site, tip, defaultBranch),
 	}
 	entries := readSiteRootTree(src, tip)
 	home.Files = buildSiteFrontFiles(entries, site, defaultBranch)
@@ -554,7 +540,7 @@ func generateSitePages(client *objstore.Client, prefix string, site sitePageSite
 	}
 	manifest := &sitePagesManifest{Version: sitePagesVersion, Ext: tips, Commits: commits, Files: filesState, SiteHash: sitePageSiteHash(site)}
 	if complete {
-		manifest.Counts, manifest.Frontier = counts, frontier
+		manifest.Counts, manifest.Frontier, manifest.Items = counts, frontier, siteItemCounts(roots)
 	} else {
 		manifest.Cursor = &sitePagesCursor{Done: done}
 	}
@@ -655,11 +641,65 @@ func incrementalSitePages(client *objstore.Client, prefix string, site sitePageS
 			return false, err
 		}
 	}
-	manifest := &sitePagesManifest{Version: sitePagesVersion, Ext: tips, Counts: counts, Frontier: frontier, Commits: commits, Files: filesState, SiteHash: sitePageSiteHash(site)}
+	manifest := &sitePagesManifest{Version: sitePagesVersion, Ext: tips, Counts: counts, Frontier: frontier, Commits: commits, Files: filesState, Items: siteItemCounts(roots), SiteHash: sitePageSiteHash(site)}
 	if err := putSitePagesManifest(client, prefix, manifest); err != nil {
 		return false, err
 	}
 	return commits.Pending || sitePagesFilesPending(manifest), nil
+}
+
+// siteItemCounts counts the open items per app list: issues and pull requests in state open, milestones open and sprints planned or active, each merged as the app's dedupePmGroups merges them; releases and memos count whole.
+func siteItemCounts(roots map[string][]*sitePageItem) map[string]int {
+	counts := map[string]int{"issues": 0, "milestones": 0, "sprints": 0, "prs": 0, "releases": 0, "memos": 0}
+	groups := map[string]*sitePageItem{}
+	for ext, rs := range roots {
+		for _, it := range rs {
+			if it.Retracted {
+				continue
+			}
+			state := pageItemField(it, "state")
+			switch t := pageItemType(it); {
+			case ext == "pm" && (t == "milestone" || t == "sprint"):
+				key := t + "\x00" + sitePmGroupKey(it)
+				if g := groups[key]; g == nil || pageEffectiveTime(it.Msg) > pageEffectiveTime(g.Msg) {
+					groups[key] = it
+				}
+			case ext == "pm" || (ext == "review" && t == "pull-request"):
+				if state == "" || state == "open" {
+					counts[map[string]string{"pm": "issues", "review": "prs"}[ext]]++
+				}
+			case ext == "release":
+				counts["releases"]++
+			case ext == "memo":
+				counts["memos"]++
+			}
+		}
+	}
+	for _, it := range groups {
+		switch state := pageItemField(it, "state"); pageItemType(it) {
+		case "milestone":
+			if state == "" || state == "open" {
+				counts["milestones"]++
+			}
+		case "sprint":
+			if state == "" || state == "planned" || state == "active" {
+				counts["sprints"]++
+			}
+		}
+	}
+	return counts
+}
+
+// sitePmGroupKey names the group a milestone or sprint belongs to: its origin URL, else its subject, else its hash. Mirrors dedupePmGroups in gs-render.js.
+func sitePmGroupKey(it *sitePageItem) string {
+	if u := pageItemField(it, "origin-url"); u != "" {
+		return u
+	}
+	subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
+	if s := siteSubjectText(subject); s != "" {
+		return s
+	}
+	return it.Msg.SHA
 }
 
 // sitePageEntriesSince returns the entries appended after a consumed tip; found is false when the tip has left the corpus.

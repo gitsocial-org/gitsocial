@@ -70,6 +70,11 @@ for (const c of FIX.rowGlyphs) {
   eq(g.getAttribute("title"), c.expectTitle, c.name + ": glyph title");
 }
 
+console.log("=== a sidebar count is exact under a thousand and compact above ===");
+for (const [n, want] of [[999, "999"], [1000, "1K"], [1234, "1.2K"], [12322, "12.3K"], [999999, "1M"], [1200000, "1.2M"]]) {
+  eq(GS.compactCount(n), want, n + " reads " + want);
+}
+
 console.log("=== card dispatch and navigation ===");
 const branchOf = (node) => (findClass(node, "subject")[0].getAttribute("href") || "").split("@")[1];
 eq(branchOf(GS.timelineCard(Object.assign(item("1", { type: "issue", state: "open" }, "An issue"), { _ext: "pm" }))), "gitmsg/pm", "a pm item routes to the pm branch");
@@ -169,6 +174,9 @@ function rest() {
   const many = Array.from({ length: 150 }, (_, i) => item("h", { type: "pull-request", state: i < 40 ? "merged" : "open" }, "PR " + i));
   const filtered = GS.filteredListView(many, (it) => GS.prCard(it), "prs", GS.PR_STATES, "No pull requests in this repository.")[0];
   eq(findClass(filtered, "filter-chip").map(textOf), ["All 150", "Open 110", "Merged 40", "Closed 0"], "each state chip carries its exact count");
+  ok(findClass(filtered, "filter-chip")[1]._cls.has("active"), "the list opens on the Open filter");
+  eq(textOf(findClass(filtered, "load-more")[0]), "Load more (10)", "the open rows page like any other");
+  fire(findClass(filtered, "filter-chip")[0], "click");
   eq(findClass(filtered, "card").length, 100, "the first page holds 100 rows");
   eq(textOf(findClass(filtered, "load-more")[0]), "Load more (50)", "the control names how many are left");
   fire(findClass(filtered, "load-more")[0], "click");
@@ -178,7 +186,9 @@ function rest() {
   eq(findClass(filtered, "card").length, 40, "selecting a state filters the list");
   ok(findClass(filtered, "filter-chip")[2]._cls.has("active"), "the selected chip is marked active");
   fire(findClass(filtered, "filter-chip")[3], "click");
-  eq(findClass(filtered, "empty").map(textOf), ["No pull requests in this repository."], "a state with no rows shows the empty sentence");
+  eq(findClass(filtered, "empty").map(textOf), ["Nothing matches this filter."], "a state with no rows says the filter matched nothing");
+  const none = GS.filteredListView([], (it) => GS.prCard(it), "prs", GS.PR_STATES, "No pull requests in this repository.")[0];
+  eq(findClass(none, "empty").map(textOf), ["No pull requests in this repository."], "an empty list keeps the empty sentence");
   fire(findClass(filtered, "filter-chip")[0], "click");
 
   console.log("=== board swimlanes ===");

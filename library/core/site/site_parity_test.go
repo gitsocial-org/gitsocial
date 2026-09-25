@@ -12,6 +12,8 @@ package site
 
 import (
 	"encoding/json"
+	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -129,6 +131,20 @@ type parityCardSkeleton struct {
 	Cases         []parityCardSkeletonCase `json:"cases"`
 }
 
+// parityItemCounts pins the sidebar count per list for a set of top-level items.
+type parityItemCounts struct {
+	Items []struct {
+		Ext       string `json:"ext"`
+		Type      string `json:"type"`
+		State     string `json:"state"`
+		Subject   string `json:"subject"`
+		Origin    string `json:"origin"`
+		TS        int64  `json:"ts"`
+		Retracted bool   `json:"retracted"`
+	} `json:"items"`
+	Expect map[string]int `json:"expect"`
+}
+
 // parityHomeRows pins how many root entries the home section shows before its chevron.
 type parityHomeRows struct {
 	Limit int `json:"limit"`
@@ -199,6 +215,7 @@ type parityFixtures struct {
 	ReleaseAssets  []parityReleaseAssetsCase `json:"releaseAssets"`
 	CardSkeleton   parityCardSkeleton        `json:"cardSkeleton"`
 	HomeRows       parityHomeRows            `json:"homeRows"`
+	ItemCounts     parityItemCounts          `json:"itemCounts"`
 	MarkdownPaths  []parityMarkdownPath      `json:"markdownPaths"`
 	MDXStrip       []parityMDXStripCase      `json:"mdxStrip"`
 	FrontMatter    []parityMDXStripCase      `json:"frontMatter"`
@@ -498,6 +515,26 @@ func TestParityCardSkeleton(t *testing.T) {
 func TestParityHomeRows(t *testing.T) {
 	if f := loadParityFixtures(t); f.HomeRows.Limit != sitePagesHomeRows {
 		t.Errorf("home rows = %d, fixture %d", sitePagesHomeRows, f.HomeRows.Limit)
+	}
+}
+
+// TestParityItemCounts asserts the manifest's open counts against the fixture unit_parity.js renders through the app's own list views.
+func TestParityItemCounts(t *testing.T) {
+	f := loadParityFixtures(t)
+	roots := map[string][]*sitePageItem{}
+	for i, c := range f.ItemCounts.Items {
+		fields := map[string]string{}
+		for k, v := range map[string]string{"type": c.Type, "state": c.State, "origin-url": c.Origin} {
+			if v != "" {
+				fields[k] = v
+			}
+		}
+		sha := fmt.Sprintf("%040d", i)
+		msg := &sitePageMsg{Ext: c.Ext, SHA: sha, Short: sha[:12], Message: c.Subject, TS: c.TS, Header: &protocol.Header{Ext: c.Ext, Fields: fields}}
+		roots[c.Ext] = append(roots[c.Ext], &sitePageItem{Msg: msg, Resolved: msg, Retracted: c.Retracted})
+	}
+	if got := siteItemCounts(roots); !maps.Equal(got, f.ItemCounts.Expect) {
+		t.Errorf("item counts = %v, want %v", got, f.ItemCounts.Expect)
 	}
 }
 

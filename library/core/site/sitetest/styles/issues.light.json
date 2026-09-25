@@ -10,17 +10,6 @@
       "backgroundColor": "srgb(1 1 1 / 0.35)",
       "borderLeftColor": "srgb(0 0 0 / 0.18)",
       "borderRadius": "10px"
-    },
-    {
-      "shape": "div.card-head > span.meta",
-      "padding": "9.6px 14.4px",
-      "margin": "0px 0px 9.6px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
-      "color": "rgb(0, 0, 0)",
-      "backgroundColor": "srgb(1 1 1 / 0.35)",
-      "borderLeftColor": "srgb(0 0 0 / 0.18)",
-      "borderRadius": "10px"
     }
   ],
   ".card-head": [
@@ -73,33 +62,9 @@
   ],
   ".meta": [
     {
-      "shape": "span.author > span.reltime > a.hash > span.edited",
-      "padding": "0px",
-      "margin": "3.2px 0px 0px 28.8px",
-      "fontSize": "12.8px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.31 0.3 0.27)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.31 0.3 0.27)",
-      "borderRadius": "0px"
-    },
-    {
       "shape": "span.author > span.reltime > a.hash",
       "padding": "0px",
       "margin": "3.2px 0px 0px 28.8px",
-      "fontSize": "12.8px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.31 0.3 0.27)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.31 0.3 0.27)",
-      "borderRadius": "0px"
-    }
-  ],
-  ".edited": [
-    {
-      "shape": "",
-      "padding": "0px",
-      "margin": "0px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
       "color": "srgb(0.31 0.3 0.27)",
@@ -146,17 +111,6 @@
     }
   ],
   ".type-glyph": [
-    {
-      "shape": "",
-      "padding": "0px",
-      "margin": "0px",
-      "fontSize": "15.2px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(137, 87, 229)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(137, 87, 229)",
-      "borderRadius": "0px"
-    },
     {
       "shape": "",
       "padding": "0px",

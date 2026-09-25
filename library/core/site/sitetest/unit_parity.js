@@ -14,6 +14,8 @@ const GS = require("../assets/gs-core.js");
 require("../assets/gs-render.js");
 const FIX = JSON.parse(fs.readFileSync(path.join(__dirname, "parity_fixtures.json"), "utf8"));
 let pass = 0, fail = 0;
+// findCls collects the element nodes under node that carry the class.
+function findCls(node, cls, out) { out = out || []; if (node && node._cls && node._cls.has(cls)) out.push(node); for (const c of (node && node._children) || []) if (c && c.nodeType === 1) findCls(c, cls, out); return out; }
 function eq(a, b, msg) { if (a === b) { pass++; } else { fail++; console.log("FAIL", msg, "got", JSON.stringify(a), "want", JSON.stringify(b)); } }
 
 // readerSubject mirrors the reader's subject derivation: cleanContent strips the
@@ -147,6 +149,29 @@ eq(slots(chipped), FIX.cardSkeleton.parts.join(","), "a card that fills every pa
 
 console.log("=== parity invariant: the home section's row count ===");
 eq(GS.HOME_ROWS, FIX.homeRows.limit, "the home section shows the fixture's row count");
+
+console.log("=== parity invariant: the sidebar counts are the rows the app's lists open on ===");
+{
+  const live = FIX.itemCounts.items.filter((c) => !c.retracted).map((c, i) => {
+    const header = {};
+    if (c.type) header.type = c.type;
+    if (c.state) header.state = c.state;
+    if (c.origin) header["origin-url"] = c.origin;
+    const hash = String(i).padStart(40, "0");
+    return { ext: c.ext, commit: { hash, short: hash.slice(0, 12), authorName: "Ada", authorTime: c.ts, refs: [] }, header, content: c.subject, author: "Ada", effectiveTime: c.ts };
+  });
+  const of = (ext) => live.filter((it) => it.ext === ext);
+  const cards = (nodes) => nodes.reduce((n, node) => n + findCls(node, "card").length, 0);
+  const got = {
+    issues: cards(GS.issuesBody(of("pm"), null)),
+    milestones: cards(GS.milestonesBody(of("pm"))),
+    sprints: cards(GS.sprintsBody(of("pm"))),
+    prs: cards(GS.filteredListView(of("review"), (it) => GS.prCard(it), "prs", GS.PR_STATES, "")),
+    releases: of("release").length,
+    memos: of("memo").length,
+  };
+  eq(JSON.stringify(got), JSON.stringify(FIX.itemCounts.expect), "the manifest's counts are the rows each list opens on");
+}
 
 console.log("=== parity invariant: which files render as prose, and the MDX strip ===");
 for (const c of FIX.markdownPaths) {

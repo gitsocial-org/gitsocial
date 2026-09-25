@@ -709,8 +709,9 @@ async function main() {
     const kids = (n) => ((n && n._children) || []).filter((c) => c && c.nodeType === 1);
     const section = findClass(view, "home-section")[0];
     const names = (rows) => rows.map((r) => global.__shim.textOf(findClass(r, "home-row-subject")[0] || null).trim());
-    const shown = names(kids(section).filter((c) => c._cls && c._cls.has("home-row")));
-    const folded = names(findClass(kids(section).find((c) => c._cls && c._cls.has("home-more")), "home-row"));
+    const filesBox = findClass(section, "home-files")[0];
+    const shown = names(kids(filesBox).filter((c) => c._cls && c._cls.has("home-row")));
+    const folded = names(findClass(kids(filesBox).find((c) => c._cls && c._cls.has("home-more")), "home-row"));
     const headNode = findClass(section, "home-head")[0];
     const chips = findClass(headNode, "chip").map((n) => global.__shim.textOf(n).trim());
     const commitText = global.__shim.textOf(findClass(headNode, "home-row-subject")[0] || null).trim();
@@ -718,7 +719,7 @@ async function main() {
     const text = pageText(front.text);
     const [pageOpen, pageRest] = front.text.slice(front.text.indexOf('<div class="home-section">')).split('<details class="home-more">');
     const pageNames = (html) => Array.from((html || "").matchAll(/<a class="home-row"[^>]*><span class="home-row-subject">([^<]*)<\/span>/g)).map((m) => unesc(m[1]));
-    ok("home view rendered the section to compare", chips.length === 2 && shown.length > 0 && !!commitText, "chips=" + JSON.stringify(chips) + " commit=" + commitText);
+    ok("home view rendered the section to compare", chips.length === 1 && shown.length > 0 && !!commitText, "chips=" + JSON.stringify(chips) + " commit=" + commitText);
     ok("front page carries the home view's branch chips", chips.every((c) => text.includes(c)), "chips=" + JSON.stringify(chips));
     ok("front page carries the home view's tip commit", text.includes(commitText), "commit=" + commitText);
     ok("both surfaces show the same two root entries and fold the same rest",

@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -415,6 +415,8 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     // A pushed site customization (title/accent/favicon) overrides these defaults.
     setDocTitle(name);
     applySiteCustomization(ctx, name);
+    // Not awaited: the counts fill in beside the nav and never hold the first route.
+    updateNavCounts(ctx);
     wireNavSearch();
     startFreshnessWatch(ctx);
     const run = () => route(ctx);
