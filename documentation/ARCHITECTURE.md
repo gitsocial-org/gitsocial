@@ -31,7 +31,7 @@ bin/gitsocial tui
 
 ### Test and lint
 
-`scripts/check.sh` is the gate, in two tiers. `--quick` runs the prose check, the import check, `go vet`, `golangci-lint` and every test except the guarded ones; the pre-push hook runs it on every push. Without `--quick` it sets `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too, writes the coverage profile and checks the floors; run it before merging to `main` and at release.
+`scripts/check.sh` is the gate, in two tiers. `--quick` runs the prose check, the import check, `go vet`, `golangci-lint` and every test except the guarded ones; the pre-push hook runs it on every push that carries code, and skips a push of `gitmsg/*` data alone. Without `--quick` it sets `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too, writes the coverage profile and checks the floors; run it before merging to `main` and at release.
 
 ```bash
 scripts/check.sh --quick                    # the push tier

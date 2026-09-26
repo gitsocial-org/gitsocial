@@ -6,7 +6,7 @@ The two test tiers, every gate stage, the supported platforms, and the flags, en
 
 ## Tiers
 
-`scripts/check.sh` is the gate, in two tiers. `--quick` runs every test except the guarded ones, and the pre-push hook runs it on every push. Without `--quick` it sets `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too, writes the coverage profile and checks the floors. Run the full tier before merging to `main` and at release.
+`scripts/check.sh` is the gate, in two tiers. `--quick` runs every test except the guarded ones, and the pre-push hook runs it on every push that carries code, and skips a push of `gitmsg/*` data alone. Without `--quick` it sets `GITSOCIAL_TEST_FULL=1`, so the guarded tests run too, writes the coverage profile and checks the floors. Run the full tier before merging to `main` and at release.
 
 | Tier | Command | Runs |
 |---|---|---|
@@ -128,7 +128,7 @@ Windows installs through the Scoop bucket the [README](../README.md#installation
 |---|---|---|
 | `GITSOCIAL_TEST_FULL` | the full tier, `scripts/coverage.sh`, `scripts/release.sh` | runs the guarded tests |
 | `GITSOCIAL_COVERDIR` | the full tier, `scripts/coverage.sh` | the directory the child processes write coverage data into, and the switch for the `-cover` build |
-| `GITSOCIAL_PUSH_RANGES` | `scripts/hooks/pre-push` | the commit range the subject and `comment-heavy` checks read; else `@{upstream}..HEAD`, else neither runs |
+| `GITSOCIAL_PUSH_RANGES` | `scripts/hooks/pre-push` | the pushed code commits, without `gitmsg/*` data, that the subject and `comment-heavy` checks read; else `@{upstream}..HEAD`, else neither runs |
 | `GITSOCIAL_SKIP_GATE` | the user | skips the pre-push gate once |
 | `GS_COVER_PROFILE` | the user | re-reports that profile instead of running the suite |
 | `DAYS` | the user | the churn window of the import report, in days; 90 by default |
