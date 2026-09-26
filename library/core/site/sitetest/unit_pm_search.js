@@ -120,14 +120,14 @@ ok(GS.searchableText(perExt.pm[0]).indexOf("fix dark mode toggle") !== -1 && GS.
 const importedMeta = {
   sha: (H("f") + "0".repeat(40)).slice(0, 40),
   author: "gitsocial-importer", email: "importer@localhost", ts: 9,
-  header: 'GitMsg: v="0.1" ext="pm" type="issue" state="open" origin-author-name="Mitchell Hashimoto" origin-author-email="m@mitchellh.com"',
+  header: 'GitMsg: v="0.1" ext="pm" type="issue" state="open" origin-author-name="Uma Upstream" origin-author-email="uma@example.com"',
   subject: "Imported issue",
 };
 const importedItem = GS.resolveItems([GS.metaCommit(importedMeta)])[0];
-eq(importedItem.author, "Mitchell Hashimoto", "resolved author is the origin (upstream) name, not the importer");
+eq(importedItem.author, "Uma Upstream", "resolved author is the origin (upstream) name, not the importer");
 const importedExt = { pm: [importedItem], review: [], social: [], release: [], memo: [] };
-eq(GS.searchItemsFaceted("author:m@mitchellh.com", importedExt, null).total, 1, "author:<origin-email> matches imported content (analytics deep-link)");
-eq(GS.searchItemsFaceted("author:Mitchell", importedExt, null).total, 1, "author:<origin-name substring> matches too");
+eq(GS.searchItemsFaceted("author:uma@example.com", importedExt, null).total, 1, "author:<origin-email> matches imported content (analytics deep-link)");
+eq(GS.searchItemsFaceted("author:Uma", importedExt, null).total, 1, "author:<origin-name substring> matches too");
 eq(GS.searchItemsFaceted("author:importer@localhost", importedExt, null).total, 1, "author:<git-commit-email> still matches (committer identity kept in the blob)");
 eq(GS.searchItemsFaceted("author:nobody@example.com", importedExt, null).total, 0, "author: with an unrelated email matches nothing");
 

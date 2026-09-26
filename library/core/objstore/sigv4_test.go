@@ -77,7 +77,7 @@ func TestSignRequest_encodesPathPerSigV4(t *testing.T) {
 func TestObjectURL_WireMatchesSignature(t *testing.T) {
 	keys := []string{
 		"refs/heads/main",
-		"ghostty/f/pkg/afl++/LICENSE.html",
+		"site/f/pkg/afl++/LICENSE.html",
 		"artifacts/1.0.0+build.5/tool",
 		"site/a b/c.html",
 		"site/q&a/what's~this.html",

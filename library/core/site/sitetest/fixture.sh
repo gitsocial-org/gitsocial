@@ -202,7 +202,7 @@ git -C "$W" push -q origin feature/notes-expand
 git -C "$W" push -q origin 'refs/tags/*:refs/tags/*'
 git -C "$W" push -q origin 'refs/heads/gitmsg/*:refs/heads/gitmsg/*'
 gg social list create curated -n "Curated Follows" >/dev/null
-gg social list add curated https://github.com/meshtastic/firmware -b main >/dev/null
+gg social list add curated https://github.com/acme/widgets -b main >/dev/null
 gg social list add curated "s3://$HOST/other-demo" -b main >/dev/null
 # forks: register more than the site's FORKS_CAP (10) so the config page's forks
 # section exercises the "Show all N forks" expand control + filter (G5). Each

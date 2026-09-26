@@ -123,7 +123,7 @@ async function item5() {
   const dt = textOf(viewNode);
   ok("list detail shows the name", /Curated Follows/.test(dt));
   ok("list detail renders foreign members as labeled text (repo chip)", findClass(viewNode, "chip").some((c) => textOf(c) === "repo"), dt.slice(0, 160));
-  ok("list detail shows the meshtastic firmware member ref", /meshtastic\/firmware#branch:main/.test(dt), dt.slice(0, 200));
+  ok("list detail shows the acme widgets member ref", /acme\/widgets#branch:main/.test(dt), dt.slice(0, 200));
   // no-list bucket empty state
   await render(EMPTY, "#/lists");
   ok("no-list bucket renders 'No lists'", /No lists in this repository\./.test(textOf(viewNode)), textOf(viewNode).slice(0, 60));
