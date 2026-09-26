@@ -166,8 +166,8 @@ console.log("=== parity invariant: the sidebar counts are the rows the app's lis
     issues: cards(GS.issuesBody(of("pm"), null)),
     milestones: cards(GS.milestonesBody(of("pm"))),
     sprints: cards(GS.sprintsBody(of("pm"))),
-    prs: cards(GS.filteredListView(of("review"), (it) => GS.prCard(it), "prs", GS.PR_STATES, "")),
-    releases: of("release").length,
+    prs: cards(GS.filteredListView(of("review").filter((it) => it.header.type === "pull-request"), (it) => GS.prCard(it), "prs", GS.PR_STATES, "")),
+    releases: of("release").filter((it) => it.header.type === "release").length,
     memos: of("memo").length,
   };
   eq(JSON.stringify(got), JSON.stringify(FIX.itemCounts.expect), "the manifest's counts are the rows each list opens on");

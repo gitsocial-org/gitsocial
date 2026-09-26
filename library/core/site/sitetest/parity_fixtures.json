@@ -402,15 +402,18 @@
       { "ext": "pm", "type": "sprint", "state": "active", "subject": "Sprint 2", "ts": 11 },
       { "ext": "pm", "type": "sprint", "state": "completed", "subject": "Sprint 3", "ts": 12 },
       { "ext": "pm", "type": "sprint", "state": "cancelled", "subject": "Sprint 4", "ts": 13 },
+      { "ext": "pm", "type": "sprint", "state": "open", "subject": "Sprint 5", "ts": 13 },
       { "ext": "review", "type": "pull-request", "state": "open", "subject": "Open PR", "ts": 14 },
       { "ext": "review", "type": "pull-request", "state": "merged", "subject": "Merged PR", "ts": 15 },
       { "ext": "review", "type": "pull-request", "state": "closed", "subject": "Closed PR", "ts": 16 },
+      { "ext": "review", "type": "", "state": "open", "subject": "Typeless review message", "ts": 16 },
+      { "ext": "release", "type": "", "subject": "Typeless release message", "ts": 17 },
       { "ext": "release", "type": "release", "subject": "v0.1", "ts": 17 },
       { "ext": "release", "type": "release", "subject": "v0.0", "ts": 18, "retracted": true },
       { "ext": "memo", "type": "memo", "subject": "A memo", "ts": 19 },
       { "ext": "social", "type": "post", "subject": "A post", "ts": 20 }
     ],
-    "expect": { "issues": 2, "milestones": 2, "sprints": 2, "prs": 1, "releases": 1, "memos": 1 }
+    "expect": { "issues": 2, "milestones": 2, "sprints": 3, "prs": 1, "releases": 1, "memos": 1 }
   },
   "releaseNotes": [
     { "name": "a block of commit lines becomes rows", "body": "abc1234 Fix the walk\ndef5678 Add a retry budget", "expect": [{ "notes": [{ "hash": "abc1234", "text": "Fix the walk" }, { "hash": "def5678", "text": "Add a retry budget" }] }] },

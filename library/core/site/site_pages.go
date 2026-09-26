@@ -29,7 +29,7 @@ const (
 	sitePagesManifestKey = ".gitsocial/site/pages.json"
 	// sitePagesVersion is the page layer's schema version; bump it when a page
 	// head or its sealed markup changes.
-	sitePagesVersion = 32
+	sitePagesVersion = 33
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -648,7 +648,7 @@ func incrementalSitePages(client *objstore.Client, prefix string, site sitePageS
 	return commits.Pending || sitePagesFilesPending(manifest), nil
 }
 
-// siteItemCounts counts the open items per app list: issues and pull requests in state open, milestones open and sprints planned or active, each merged as the app's dedupePmGroups merges them; releases and memos count whole.
+// siteItemCounts counts the open items per app list: issues and pull requests in state open, milestones open and sprints planned, active or open, each merged as the app's dedupePmGroups merges them; releases and memos count whole. A pull request or release counts only with its literal type, as the app's lists filter.
 func siteItemCounts(roots map[string][]*sitePageItem) map[string]int {
 	counts := map[string]int{"issues": 0, "milestones": 0, "sprints": 0, "prs": 0, "releases": 0, "memos": 0}
 	groups := map[string]*sitePageItem{}
@@ -664,11 +664,11 @@ func siteItemCounts(roots map[string][]*sitePageItem) map[string]int {
 				if g := groups[key]; g == nil || pageEffectiveTime(it.Msg) > pageEffectiveTime(g.Msg) {
 					groups[key] = it
 				}
-			case ext == "pm" || (ext == "review" && t == "pull-request"):
+			case ext == "pm" || (ext == "review" && pageItemField(it, "type") == "pull-request"):
 				if state == "" || state == "open" {
 					counts[map[string]string{"pm": "issues", "review": "prs"}[ext]]++
 				}
-			case ext == "release":
+			case ext == "release" && pageItemField(it, "type") == "release":
 				counts["releases"]++
 			case ext == "memo":
 				counts["memos"]++
@@ -682,7 +682,7 @@ func siteItemCounts(roots map[string][]*sitePageItem) map[string]int {
 				counts["milestones"]++
 			}
 		case "sprint":
-			if state == "" || state == "planned" || state == "active" {
+			if state == "" || state == "planned" || state == "active" || state == "open" {
 				counts["sprints"]++
 			}
 		}
