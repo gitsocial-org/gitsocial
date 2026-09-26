@@ -26,7 +26,7 @@ Subject line requirements:
 - `original`: Reference to original content being commented on, reposted, or quoted
 - `reply-to`: Reference to parent comment in nested discussions
 
-Field order: `type`, `edits`, `retracted` (core fields per GITMSG.md), then `reply-to`, then `original`.
+Field order: `reply-to`, then `original`.
 
 ### 1.3. Reference Sections
 

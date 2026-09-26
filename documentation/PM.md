@@ -67,7 +67,7 @@ gitsocial fork add <fork-url>
 gitsocial fetch
 ```
 
-Issues opened on a registered fork appear in `pm issue list` and raise notifications. An edit made from another repository is a proposal until the owner accepts it.
+Issues opened on a registered fork appear in `pm issue list` and raise notifications. Editing, closing or assigning one adopts it: the first change copies the issue into this repository, carrying `adopts`, and later changes edit the copy. An edit made from another repository is a proposal until the owner accepts it.
 
 ## Board
 

@@ -253,7 +253,7 @@ Every extension table is keyed by `(repo_url, hash, branch)` into `core_commits`
 
 `core_commits.edits` stores the raw header value; `core_commits_version` is authoritative. Use `cache.ResolveToCanonical` and `cache.GetLatestVersion`.
 
-Edit resolution is gated to same-repo edits (GITMSG.md §1.5), so a cross-repo edit is an inert proposal until the owner acts. `proposals.Accept` writes the owner's own same-repo mirror edit carrying `accepts=<proposal>`, which wins resolution and derives `core_edit_acceptances` on processing. `proposals.Decline` publishes a marker at `refs/gitmsg/core/declines/*`. Both clear the proposer's marker; accept takes precedence.
+Edit resolution is gated to same-repo edits (GITMSG.md §1.5), so a cross-repo edit is an inert proposal until the owner acts. `proposals.Accept` writes the owner's own same-repo mirror edit carrying `accepts=<proposal>`, which wins resolution and derives `core_edit_acceptances` on processing. `proposals.Decline` publishes a marker at `refs/gitmsg/core/declines/*`. Both clear the proposer's marker; accept takes precedence. A change to an item of a registered fork adopts it instead (GITMSG.md §1.5): the first change writes a copy on this repository's branch carrying `adopts=<original>` and a `GitMsg-Ref:` snapshot of its author, and every later change edits the copy.
 
 ### Resolved views
 

@@ -134,7 +134,7 @@ gitsocial personal status
 
 ### gitsocial fork
 
-Registers other repositories as forks of this one. Issues and pull requests filed in a fork appear here; an edit to another repository's item stays a proposal until its owner accepts it.
+Registers other repositories as forks of this one. Issues and pull requests filed in a fork appear here, and changing one adopts it into this repository; an edit to another repository's item stays a proposal until its owner accepts it.
 
 ```
 gitsocial fork add <url>

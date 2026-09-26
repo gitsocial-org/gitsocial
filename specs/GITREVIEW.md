@@ -16,7 +16,6 @@ For general comments on a pull request, see Section 1.6.
 ### 1.2. Pull Request Fields
 
 Fields (in header order):
-- `accepts`: Reference to the cross-repository proposal this edit accepts (OPTIONAL, core field, GITMSG.md Section 1.5)
 - `state`: MUST be `open`, `merged`, or `closed`
 - `draft`: MAY be `true` to indicate the pull request is not ready for review (OPTIONAL)
 - `base`: Target branch reference (`<repo-url>#branch:<name>` or `#branch:<name>`)
@@ -29,9 +28,8 @@ Fields (in header order):
 - `merge-head`: Head branch commit hash at merge time, 12 characters (REQUIRED on `state="merged"` edits, MUST NOT appear otherwise)
 - `reviewers`: MAY contain comma-separated reviewer email addresses
 - `labels`: MAY contain comma-separated scoped values (e.g. `labels="kind/bug,priority/high"`) (OPTIONAL, core field)
-- `adopts`: Reference to the fork pull request this upstream copy adopts, per Section 1.5 (OPTIONAL)
 
-Field order: `accepts`, `state`, `draft`, `base`, `base-tip`, `head`, `head-tip`, `depends-on`, `closes`, `merge-base`, `merge-head`, `reviewers`, `labels`, `adopts`.
+Field order: `state`, `draft`, `base`, `base-tip`, `head`, `head-tip`, `depends-on`, `closes`, `merge-base`, `merge-head`, `reviewers`, `labels`.
 
 The `head` and `base` fields support full repository URLs, enabling cross-forge contributions (e.g., GitLab to GitHub).
 
@@ -69,7 +67,7 @@ Implementations SHOULD include `base-tip` and `head-tip` when creating or editin
 
 When transitioning to `state="merged"`, implementations MUST include `merge-base` with the common ancestor commit hash (12 characters) and `merge-head` with the head branch tip commit hash (12 characters), both computed before the merge. These two fields are the only durable record of the merged commit range — `head-tip` and `base-tip` describe the live branches at edit time, but the head branch may be deleted afterward, leaving `merge-base..merge-head` as the sole reconstruction path for the diff. Implementations MUST refuse to record a `state="merged"` edit when either field cannot be computed (e.g., the head branch is missing or the merge-base is unreachable).
 
-When resolving a cross-repository pull request (fork PR) by merge or close, implementations SHOULD first copy it to the upstream review branch, carrying `adopts="<fork-pr-ref>"` (naming the fork PR) and a `GitMsg-Ref:` trailer preserving the original author's identity. The resolving edit then references the local copy as canonical, ensuring the upstream has a self-contained record that survives fork deletion.
+When resolving a cross-repository pull request (fork PR) by merge or close, implementations SHOULD first adopt it (GITMSG.md Section 1.5): a copy on the upstream review branch carrying `adopts="<fork-pr-ref>"` and a `GitMsg-Ref:` trailer preserving the original author's identity. The resolving edit then references the local copy as canonical, ensuring the upstream has a self-contained record that survives fork deletion.
 
 Feedback messages MAY be edited or retracted using core versioning.
 
@@ -129,7 +127,7 @@ Configuration MAY include: `require-review` (boolean, default `false`).
   "display": "GitReview",
   "description": "Code contribution and review extension for GitMsg",
   "types": ["pull-request", "feedback"],
-  "fields": ["adopts", "base", "base-tip", "closes", "commit", "depends-on", "draft", "file", "head", "head-tip", "merge-base", "merge-head", "new-line", "new-line-end", "old-line", "old-line-end", "pull-request", "review-state", "reviewers", "state", "suggestion"]
+  "fields": ["base", "base-tip", "closes", "commit", "depends-on", "draft", "file", "head", "head-tip", "merge-base", "merge-head", "new-line", "new-line-end", "old-line", "old-line-end", "pull-request", "review-state", "reviewers", "state", "suggestion"]
 }
 ```
 
@@ -154,8 +152,6 @@ Configuration MAY include: `require-review` (boolean, default `false`).
 | `merge-base` | 12-character hash; required when `state="merged"`, prohibited otherwise |
 | `merge-head` | 12-character hash; required when `state="merged"`, prohibited otherwise |
 | `suggestion` | `true` |
-| `adopts` | pull request reference; permitted on a `pull-request` copy |
-| `accepts` | proposal reference, core field per GITMSG.md Section 1.5 |
 
 ## Appendix: Examples
 
@@ -246,7 +242,7 @@ Step 1 - Copy fork PR to upstream (preserves original author via GitMsg-Ref):
 ```
 Add dark mode support
 
-GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="https://gitlab.com/alice/repo#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0"
+GitMsg: ext="review"; type="pull-request"; adopts="https://gitlab.com/alice/repo#commit:abc123456789@gitmsg/review"; state="open"; base="#branch:main"; base-tip="f1e2d3c4b5a6"; head="https://gitlab.com/alice/repo#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0"
 GitMsg-Ref: ext="review"; type="pull-request"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="https://gitlab.com/alice/repo#commit:abc123456789@gitmsg/review"; v="0.1.0"
  > Add dark mode support
 ```

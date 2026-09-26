@@ -33,10 +33,12 @@ Field order in the `GitMsg:` trailer value MUST be:
 1. `ext` (REQUIRED, first); `ext-v` (if present, immediately after `ext`)
 2. `type` (if present)
 3. `edits` (if present)
-4. `retracted` (if present, boolean modifier for `edits`)
-5. Origin fields in alphabetical order (if present): `origin-author-email`, `origin-author-name`, `origin-platform`, `origin-time`, `origin-url`
-6. Extension-specific fields and `labels` in the order defined by the extension (alphabetical by default). Extensions SHOULD order fields for human readability since headers appear in git commit messages — group related fields and lead with the most important (e.g., state first, categorization last).
-7. `v` (REQUIRED, last)
+4. `accepts` (if present)
+5. `adopts` (if present)
+6. `retracted` (if present, boolean modifier for `edits`)
+7. Origin fields in alphabetical order (if present): `origin-author-email`, `origin-author-name`, `origin-platform`, `origin-time`, `origin-url`
+8. Extension-specific fields and `labels` in the order defined by the extension (alphabetical by default). Extensions SHOULD order fields for human readability since headers appear in git commit messages — group related fields and lead with the most important (e.g., state first, categorization last).
+9. `v` (REQUIRED, last)
 
 Extensions SHOULD include semantic reference fields in the `GitMsg:` trailer for performance and searchability. Header reference field values MUST match corresponding `GitMsg-Ref:` trailer `ref` field values.
 
@@ -128,6 +130,22 @@ A proposal with neither is pending. An accepting mirror MUST take precedence ove
 
 ```
 GitMsg: ext="pm"; type="issue"; edits="#commit:abc123456789@gitmsg/pm"; accepts="https://github.com/alice/fork#commit:def456789abc@gitmsg/pm"; v="0.1.0"
+```
+
+A repository MAY adopt a message from another repository, typically one of its registered forks (Section 3.1), by authoring a copy on its own branch for the extension, carrying `adopts="<original-ref>"`:
+
+- The copy MUST contain complete content and MUST carry a `GitMsg-Ref:` trailer for the adopted message, preserving its author's identity
+- Origin fields (Section 1.9) of the adopted message MUST be copied unchanged
+- `adopts` MUST reference the adopted message's original, not an edit of it
+- The copy is a new original: its own commit hash is its canonical ID, and later changes MUST be same-repository edits of the copy
+- The copy MUST NOT change the adopted message's resolved state, and later edits of the adopted message in its own repository do not change the copy
+- A repository SHOULD adopt a message of a repository it registers as a fork the first time it changes it, instead of authoring a cross-repository edit; a change to any other repository's message stays a proposal
+- A repository MUST NOT adopt the same original twice
+
+```
+GitMsg: ext="pm"; type="issue"; adopts="https://github.com/alice/fork#commit:def456789abc@gitmsg/pm"; state="open"; assignees="bob@example.com"; v="0.1.0"
+GitMsg-Ref: ext="pm"; type="issue"; author="Alice"; email="alice@example.com"; time="2025-01-20T10:00:00Z"; ref="https://github.com/alice/fork#commit:def456789abc@gitmsg/pm"; v="0.1.0"
+ > Crash on startup
 ```
 
 ### 1.6. Mentions
@@ -288,7 +306,7 @@ Core fields (`type`, `author`, `email`, `time`, `ref`, `edits`, `retracted`, `la
 - Continuation line: `^ > .*$` or `^ >$`
 - Required Fields: `ext="[a-z][a-z0-9_-]*(/[a-z][a-z0-9_-]*)?"`, `v="\d+\.\d+\.\d+"`
 - Optional Fields: `ext-v="\d+\.\d+\.\d+"` (for third-party extensions)
-- Versioning Fields: `edits="<reference>"`, `retracted="true"` (boolean, requires `edits`)
+- Versioning Fields: `edits="<reference>"`, `accepts="<reference>"`, `adopts="<reference>"`, `retracted="true"` (boolean, requires `edits`)
 - Origin Fields: `origin-author-email="<email>"`, `origin-author-name="<name>"`, `origin-platform="<string>"`, `origin-time="<ISO 8601>"`, `origin-url="<URL>"`
 - Extension Name: `^[a-z][a-z0-9_-]*(/[a-z][a-z0-9_-]*)?$` (second segment for third-party extensions)
 - Version: `^\d+\.\d+\.\d+$`
