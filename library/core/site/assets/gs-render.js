@@ -2472,16 +2472,24 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }).catch(() => { /* enrichment is best-effort; the base detail already painted */ });
   }
 
+  // detailTab names an item's nav tab: a milestone or sprint has its own list, every other item its branch's tab.
+  function detailTab(cv, item) {
+    const type = (item.header && item.header.type) || "";
+    return cv.ext === "pm" && (type === "milestone" || type === "sprint") ? type + "s" : cv.tab;
+  }
+
   // itemDetail paints the base detail as soon as the item resolves, then enriches sections in the background.
-  // paint is the caller's generation-guarded setView, so a superseded search never repaints over a newer view.
-  async function itemDetail(ctx, hash, branch, paint) {
+  // paint is the caller's generation-guarded setView, so a superseded search never repaints over a newer view; onTab, guarded the same way, takes the item's nav tab.
+  async function itemDetail(ctx, hash, branch, paint, onTab) {
     const cv = COMMIT_VIEW[branch];
     const show = paint || setView;
     const onProgress = (visited) => show([el("div", { class: "loading" }, ["Searching history… (" + visited + " commits scanned)"])]);
     const { item, items } = await findItemDeep(ctx, cv.ext, hash, onProgress);
     if (!item) return [el("div", { class: "err" }, [cv.label + " not found."])];
+    const tab = detailTab(cv, item);
+    if (onTab) onTab(tab);
     const skip = cv.ext === "release" ? RELEASE_DETAIL_SKIP : [];
-    const nodes = detailView(item, { tab: cv.tab, branch }, skip, ctx);
+    const nodes = detailView(item, { tab, branch }, skip, ctx);
     const root = nodes[0];
     for (const e of embeddedRefs(item.commit, item.header)) root.append(embeddedBlock(e));
     if (cv.ext === "release") {
