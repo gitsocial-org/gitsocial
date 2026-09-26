@@ -30,6 +30,7 @@ type prDetailView struct {
 	loaded         bool
 	diffLoaded     bool
 	pr             *review.PullRequest
+	adoptable      bool // a registered fork's pull request to this repository, read once per load
 	reviews        []review.Feedback
 	comments       []social.Post
 	diffStats      git.DiffStats
@@ -205,6 +206,7 @@ func (v *prDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		preserveCursor := v.pr != nil && msg.pr != nil && v.pr.ID == msg.pr.ID && v.focusID == ""
 		v.loaded = true
 		v.pr = msg.pr
+		v.adoptable = v.pr != nil && v.pr.Repository != v.workspaceURL && v.isLocalPR() && v.targetsWorkspace()
 		v.reviews = msg.reviews
 		for idx, comments := range msg.reviewComments {
 			for i := range comments {
@@ -310,6 +312,11 @@ func (v *prDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 					v.confirm.Show(prompt, false, func() tea.Cmd { return v.doClose() })
 					return nil
 				}
+			case "A":
+				if v.pr != nil && v.adoptable {
+					v.confirm.Show("Adopt this pull request from "+protocol.GetDisplayName(v.pr.Repository)+"?", false, v.doAdopt)
+					return nil
+				}
 			case "h":
 				if v.pr != nil && (v.pr.IsEdited || v.pr.HasProposedEdits) {
 					prID := v.pr.ID
@@ -362,7 +369,7 @@ func (v *prDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				}
 				v.choice.Show("Action?", choices, v.runAction)
 				return func() tea.Msg { return nil }
-			case "A":
+			case "s":
 				return v.applySuggestion()
 			}
 		}
@@ -871,6 +878,19 @@ func (v *prDetailView) doClose() tea.Cmd {
 	}
 }
 
+// doAdopt adopts a registered fork's pull request; the update handler opens the workspace copy.
+func (v *prDetailView) doAdopt() tea.Cmd {
+	prID := v.pr.ID
+	workdir := v.workdir
+	return func() tea.Msg {
+		result := review.AdoptPR(workdir, prID)
+		if !result.Success {
+			return prUpdatedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
+		}
+		return prUpdatedMsg{PR: result.Data, Adopted: true}
+	}
+}
+
 // doMarkReady takes the pull request out of draft.
 func (v *prDetailView) doMarkReady() tea.Cmd {
 	prID := v.pr.ID
@@ -1122,8 +1142,12 @@ func (v *prDetailView) Render(state *tuicore.State) string {
 		}
 		// M (merge) is bound to a letter reserved for a global sidebar shortcut,
 		// so force-show it here when available — it is otherwise invisible despite
-		// being the primary action for accepting a PR.
-		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.ReviewPRDetail, v.sourceIndex+1, v.sourceTotal, exclude, map[string]bool{"M": true})
+		// being the primary action for accepting a PR. A (adopt) is force-shown the same way.
+		include := map[string]bool{"M": true}
+		if v.adoptable {
+			include["A"] = true
+		}
+		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.ReviewPRDetail, v.sourceIndex+1, v.sourceTotal, exclude, include)
 	}
 	return wrapper.Render(content, footer)
 }
@@ -1180,6 +1204,10 @@ func renderPRCard(pr *review.PullRequest, width int, selected bool, searchQuery 
 	lines = append(lines, selectionBar+styles.Label.Render("State")+stateStr)
 	if !opts.version {
 		lines = append(lines, tuicore.RenderOriginRows(pr.Origin, styles, selectionBar, anchors, opts.showEmail)...)
+		if pr.Adopts != "" {
+			adopted := protocol.ParseRef(pr.Adopts)
+			lines = append(lines, selectionBar+styles.Label.Render("Adopted from")+anchors.MarkLink(adopted.Repository, protocol.CommitURL(adopted.Repository, adopted.Value), tuicore.LocReviewPRDetail(pr.Adopts)))
+		}
 	}
 	displayAuthor := pr.Author
 	displayTime := pr.Timestamp
@@ -1640,6 +1668,7 @@ func (v *prDetailView) Bindings() []tuicore.Binding {
 		return true, ctx.StartPush()
 	}
 	return []tuicore.Binding{
+		{Key: "A", Label: "adopt", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "d", Label: "diff", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "r", Label: "review", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "c", Label: "comment", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
@@ -1649,7 +1678,7 @@ func (v *prDetailView) Bindings() []tuicore.Binding {
 		{Key: "a", Label: "actions", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "h", Label: "history", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "v", Label: "raw", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: tuicore.RawViewHandler},
-		{Key: "A", Label: "apply suggestion", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
+		{Key: "s", Label: "apply suggestion", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "/", Label: "search", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "left", Label: "prev", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},
 		{Key: "right", Label: "next", Contexts: []tuicore.Context{tuicore.ReviewPRDetail}, Handler: noop},

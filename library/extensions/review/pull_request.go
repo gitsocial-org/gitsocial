@@ -133,6 +133,20 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "review")
+	// A change to a registered fork's pull request lands on the workspace copy, adopting it first (GITMSG.md 1.5).
+	if existing.RepoURL != repoURL {
+		if copied := adoptedPRCopy(repoURL, existing.RepoURL, existing.Hash); copied != nil {
+			existing = copied
+		} else if adoptablePR(workdir, repoURL, existing) {
+			hash, err := homeForkPR(workdir, repoURL, prRef, existing, ReviewItemToPullRequest(*existing))
+			if err != nil {
+				return result.Err[PullRequest]("COMMIT_FAILED", err.Error())
+			}
+			if existing, err = GetReviewItem(repoURL, hash, branch); err != nil {
+				return result.Err[PullRequest]("GET_FAILED", err.Error())
+			}
+		}
+	}
 
 	pr := ReviewItemToPullRequest(*existing)
 	createOpts := CreatePROptions{
@@ -276,6 +290,10 @@ func homeForkPR(workdir, repoURL, prRef string, existing *ReviewItem, pr PullReq
 	if existing.RepoURL == repoURL {
 		return prRef, nil
 	}
+	// A repository adopts an original once (GITMSG.md 1.5); a later merge or close reuses the copy.
+	if copied := adoptedPRCopy(repoURL, existing.RepoURL, existing.Hash); copied != nil {
+		return copied.Hash, nil
+	}
 	branch := gitmsg.GetExtBranch(workdir, "review")
 	copyOpts := CreatePROptions{
 		Base: protocol.LocalizeRef(protocol.EnsureBranchRef(pr.Base), repoURL),
@@ -288,6 +306,11 @@ func homeForkPR(workdir, repoURL, prRef string, existing *ReviewItem, pr PullReq
 		Closes:    pr.Closes,
 		Reviewers: pr.Reviewers,
 		Origin:    existing.Origin,
+		// The copy carries the original's full current state, so adopting changes nothing but the owner.
+		Draft:     pr.IsDraft,
+		Labels:    pr.Labels,
+		MergeBase: pr.MergeBase,
+		MergeHead: pr.MergeHead,
 	}
 	for i, ref := range copyOpts.Closes {
 		copyOpts.Closes[i] = protocol.LocalizeRef(ref, repoURL)
@@ -304,7 +327,7 @@ func homeForkPR(workdir, repoURL, prRef string, existing *ReviewItem, pr PullReq
 		Fields:   map[string]string{"type": string(ItemTypePullRequest)},
 		Metadata: protocol.QuoteContent(joinSubjectBody(pr.Subject, pr.Body)),
 	}}
-	content := buildPRContentWithState(pr.Subject, pr.Body, copyOpts, "", PRStateOpen, refs)
+	content := buildPRContentWithState(pr.Subject, pr.Body, copyOpts, "", pr.State, refs)
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
 		return "", fmt.Errorf("copy fork PR: %w", err)
@@ -322,6 +345,7 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 	if err != nil {
 		return result.Err[PullRequest]("NOT_FOUND", "pull request not found")
 	}
+	existing, prRef = throughAdoptedCopy(repoURL, existing, prRef)
 	pr := ReviewItemToPullRequest(*existing)
 	if pr.State != PRStateOpen {
 		return result.Err[PullRequest]("INVALID_STATE", fmt.Sprintf("cannot merge: pull request is %s", pr.State))
@@ -484,6 +508,7 @@ func ClosePR(workdir, prRef string) Result[PullRequest] {
 	if err != nil {
 		return result.Err[PullRequest]("NOT_FOUND", "pull request not found")
 	}
+	existing, prRef = throughAdoptedCopy(repoURL, existing, prRef)
 	pr := ReviewItemToPullRequest(*existing)
 	if pr.State != PRStateOpen {
 		return result.Err[PullRequest]("INVALID_STATE", fmt.Sprintf("cannot close: pull request is %s", pr.State))
@@ -549,6 +574,7 @@ func UpdatePRTips(workdir, prRef string) Result[PullRequest] {
 	if err != nil {
 		return result.Err[PullRequest]("NOT_FOUND", "pull request not found")
 	}
+	existing, prRef = throughAdoptedCopy(repoURL, existing, prRef)
 	pr := ReviewItemToPullRequest(*existing)
 	if pr.State != PRStateOpen {
 		return result.Err[PullRequest]("INVALID_STATE", fmt.Sprintf("cannot update: pull request is %s", pr.State))

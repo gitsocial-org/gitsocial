@@ -562,6 +562,7 @@
 | Key | Action |
 |-----|--------|
 | SectionList navigation | (see Shared Navigation) |
+| `A` | Adopt |
 | `d` | Diff |
 | `r` | Review |
 | `c` | Comment |
@@ -570,7 +571,7 @@
 | `a` | Actions |
 | `h` | History |
 | `v` | Raw |
-| `A` | Apply suggestion |
+| `s` | Apply suggestion |
 | `/` | Search |
 | `left` | Prev |
 | `right` | Next |

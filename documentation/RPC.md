@@ -586,6 +586,13 @@ Params:
 
 Result: `PullRequest`
 
+#### review.adoptPR
+
+Params:
+- `ref` (string, required): Ref of a registered fork's pull request to this repository
+
+Result: `PullRequest`, the workspace copy; a pull request adopted before returns its copy
+
 #### review.retractPR
 
 Params:
@@ -1221,6 +1228,7 @@ The Milestone fields, with `Start` and `End` (RFC 3339) in place of `Due`, and `
 | `MergedBy`, `ClosedBy`, `OriginalAuthor` | Author | `null` when unset |
 | `MergedAt`, `ClosedAt`, `OriginalTime` | string | RFC 3339; the zero time when unset |
 | `Origin` | object | `null` when native |
+| `Adopts` | string | the fork pull request this copy adopts, empty when native |
 
 ### Feedback
 

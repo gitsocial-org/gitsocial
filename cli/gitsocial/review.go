@@ -134,6 +134,7 @@ func newReviewPRCmd() *cobra.Command {
 		newReviewPRUpdateCmd(),
 		newReviewPRMergeCmd(),
 		newReviewPRCloseCmd(),
+		newReviewPRAdoptCmd(),
 		newReviewPRRetractCmd(),
 		newReviewPRDiffCmd(),
 		newReviewPRSyncCmd(),
@@ -594,6 +595,34 @@ func newReviewPRCloseCmd() *cobra.Command {
 			} else {
 				PrintSuccess(cmd, "Pull request closed")
 			}
+			return nil
+		},
+	}
+}
+
+// newReviewPRAdoptCmd builds the command that adopts a registered fork's pull request into this repository.
+func newReviewPRAdoptCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "adopt <pr-ref>",
+		Short: "Adopt a registered fork's pull request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !EnsureGitRepo(cmd) {
+				return exit(ExitNotRepo)
+			}
+			cfg := GetConfig(cmd)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
+			}
+			result := review.AdoptPR(cfg.WorkDir, args[0])
+			if !result.Success {
+				PrintError(cmd, result.Error.Text())
+				return exit(ExitError)
+			}
+			if cfg.JSONOutput {
+				return PrintJSON(cmd, result.Data)
+			}
+			PrintSuccess(cmd, "Pull request adopted: "+result.Data.ID)
 			return nil
 		},
 	}
@@ -1186,9 +1215,21 @@ func printPRDetails(out io.Writer, workdir string, pr review.PullRequest) {
 	} else {
 		fmt.Fprintf(out, "State: %s\n", pr.State)
 	}
-	authorName, authorEmail, created := ResolveDisplayIdentity(pr.Author.Name, pr.Author.Email, pr.Timestamp, pr.Origin)
-	fmt.Fprintf(out, "Author: %s\n", FormatAuthorWithVerification(authorName, authorEmail, pr.Repository, protocol.ParseRef(pr.ID).Value))
+	// An adopted copy names its original author, verified against the original's own commit.
+	author, when, verifyRepo, verifyHash := pr.Author, pr.Timestamp, pr.Repository, protocol.ParseRef(pr.ID).Value
+	if pr.OriginalAuthor != nil {
+		adopted := protocol.ParseRef(pr.Adopts)
+		author, verifyRepo, verifyHash = *pr.OriginalAuthor, adopted.Repository, adopted.Value
+		if !pr.OriginalTime.IsZero() {
+			when = pr.OriginalTime
+		}
+	}
+	authorName, authorEmail, created := ResolveDisplayIdentity(author.Name, author.Email, when, pr.Origin)
+	fmt.Fprintf(out, "Author: %s\n", FormatAuthorWithVerification(authorName, authorEmail, verifyRepo, verifyHash))
 	fmt.Fprintf(out, "Created: %s\n", created.Format(time.RFC3339))
+	if pr.Adopts != "" {
+		fmt.Fprintf(out, "Adopted from: %s\n", pr.Adopts)
+	}
 	var observation *review.PRObservation
 	if pr.State == review.PRStateOpen {
 		observation = review.ObserveLivePR(workdir, pr)

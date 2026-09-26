@@ -21,6 +21,7 @@ func RegisterReviewMethods(s *Server) {
 	s.registry.Register("review.updatePR", s.requireInit(reviewUpdatePR(s)))
 	s.registry.Register("review.mergePR", s.requireInit(reviewMergePR(s)))
 	s.registry.Register("review.closePR", s.requireInit(reviewClosePR(s)))
+	s.registry.Register("review.adoptPR", s.requireInit(reviewAdoptPR(s)))
 	s.registry.Register("review.retractPR", s.requireInit(reviewRetractPR(s)))
 	s.registry.Register("review.markReady", s.requireInit(reviewMarkReady(s)))
 	s.registry.Register("review.convertToDraft", s.requireInit(reviewConvertToDraft(s)))
@@ -175,6 +176,13 @@ func reviewMergePR(s *Server) HandlerFunc {
 			}
 		}
 		return fromResult(res)
+	}, s)
+}
+
+// reviewAdoptPR handles review.adoptPR, adopting a registered fork's pull request at a ref.
+func reviewAdoptPR(s *Server) HandlerFunc {
+	return refAction(func(workdir, ref string) (any, *RPCError) {
+		return fromResult(review.AdoptPR(workdir, ref))
 	}, s)
 }
 

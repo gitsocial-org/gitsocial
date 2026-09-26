@@ -219,8 +219,18 @@ func getDependents(hash string) []PullRequest {
 	if err != nil {
 		return nil
 	}
+	// A copy and the original it adopts both carry the depends-on, so the original collapses into its copy.
+	adopted := map[string]bool{}
+	for _, item := range items {
+		if ref := protocol.ParseRef(item.Adopts); ref.Type == protocol.RefTypeCommit && ref.Value != "" {
+			adopted[adoptedPRKey(ref.Repository, ref.Value)] = true
+		}
+	}
 	prs := make([]PullRequest, 0, len(items))
 	for _, item := range items {
+		if adopted[adoptedPRKey(item.RepoURL, item.Hash)] {
+			continue
+		}
 		pr := ReviewItemToPullRequest(item)
 		// The LIKE match is broad, so each candidate is checked against the parsed refs.
 		for _, dep := range pr.DependsOn {

@@ -433,9 +433,10 @@ type prCreatedMsg struct {
 // prUpdatedMsg is sent when a pull request is updated. Warn carries a
 // non-fatal follow-up problem (e.g. merged locally but the base push failed).
 type prUpdatedMsg struct {
-	PR   review.PullRequest
-	Warn string
-	Err  error
+	PR      review.PullRequest
+	Warn    string
+	Err     error
+	Adopted bool // the change adopted a registered fork's pull request
 }
 
 // prRetractedMsg is sent when a pull request is retracted.
@@ -528,10 +529,12 @@ func handlePRUpdated(msg prUpdatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return false, nil
 	}
 	verb := "Updated"
-	switch msg.PR.State {
-	case review.PRStateMerged:
+	switch {
+	case msg.Adopted:
+		verb = "Adopted"
+	case msg.PR.State == review.PRStateMerged:
 		verb = "Merged"
-	case review.PRStateClosed:
+	case msg.PR.State == review.PRStateClosed:
 		verb = "Closed"
 	}
 	var msgCmd tea.Cmd

@@ -27,6 +27,7 @@ gitsocial review pr diff <ref> [--from <n> --to <m>]   # range-diff between two 
 gitsocial review pr sync <ref> [--strategy rebase|merge]
 gitsocial review pr merge <ref> [--strategy ff|squash|rebase|merge]
 gitsocial review pr close <ref>
+gitsocial review pr adopt <ref>                        # a registered fork's pull request, copied into this repository
 gitsocial review pr retract <ref>
 gitsocial review pr draft <ref> | ready <ref>
 gitsocial review pr stack <ref> | rebase-stack <ref> | sync-stack <ref>

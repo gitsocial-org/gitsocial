@@ -89,6 +89,7 @@ type PullRequest struct {
 	OriginalAuthor   *Author
 	OriginalTime     time.Time
 	Origin           *protocol.Origin
+	Adopts           string // the fork pull request this copy adopts, GITMSG.md 1.5
 }
 
 type Feedback struct {

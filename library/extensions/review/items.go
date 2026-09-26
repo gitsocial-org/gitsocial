@@ -463,6 +463,15 @@ func GetFeedbackForPR(prRepoURL, prHash, prBranch string) Result[[]Feedback] {
 	if err != nil {
 		return result.Err[[]Feedback]("QUERY_FAILED", err.Error())
 	}
+	// Feedback on an adopted original counts for its copy, since an approval is a merge condition.
+	if pr, err := GetReviewItem(prRepoURL, prHash, prBranch); err == nil && pr.Adopts != "" {
+		if orig := protocol.ParseRef(pr.Adopts); orig.Type == protocol.RefTypeCommit && orig.Value != "" {
+			q.PRRepoURL, q.PRHash, q.PRBranch = orig.Repository, orig.Value, orig.Branch
+			if more, err := getReviewItems(q); err == nil {
+				items = append(items, more...)
+			}
+		}
+	}
 	feedback := make([]Feedback, len(items))
 	for i, item := range items {
 		feedback[i] = reviewItemToFeedback(item)
@@ -593,6 +602,7 @@ func ReviewItemToPullRequest(item ReviewItem) PullRequest {
 		Comments:         item.Comments,
 	}
 	pr.Origin = item.Origin
+	pr.Adopts = item.Adopts
 	if item.Adopts != "" {
 		for _, ref := range item.References {
 			if ref.Ext == "review" && ref.Ref == item.Adopts {
