@@ -50,7 +50,7 @@ GitMsg-Ref: ext="release"; type="release"; author="Alice"; email="alice@example.
  > Release v1.0.0
 ```
 
-## 2. Config
+## 2. Configuration
 
 Configuration MUST be stored at `refs/gitmsg/release/config`:
 

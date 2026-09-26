@@ -9,7 +9,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 ### 1.1. Types
 
 - `pull-request`: Propose code changes
-- `feedback`: Code review activity (inline comment, verdict, suggestion, or combination)
+- `feedback`: Code review activity (inline comment, review state, suggestion, or combination)
 
 For general comments on a pull request, see Section 1.6.
 
@@ -22,7 +22,7 @@ Fields (in header order):
 - `base-tip`: Base branch commit hash at time of creation or update, 12 characters (OPTIONAL)
 - `head`: Source branch reference (`<repo-url>#branch:<name>` or `#branch:<name>`)
 - `head-tip`: Head branch commit hash at time of creation or update, 12 characters (OPTIONAL)
-- `depends-on`: MAY contain comma-separated pull request references that this PR depends on (OPTIONAL)
+- `depends-on`: MAY contain comma-separated pull request references that this pull request depends on (OPTIONAL)
 - `closes`: MAY contain comma-separated issue references to close on merge
 - `merge-base`: Common ancestor commit hash, 12 characters (REQUIRED on `state="merged"` edits, MUST NOT appear otherwise)
 - `merge-head`: Head branch commit hash at merge time, 12 characters (REQUIRED on `state="merged"` edits, MUST NOT appear otherwise)
@@ -55,8 +55,8 @@ Inline feedback (with code-location fields) MUST include `file`, `commit`, and a
 ### 1.4. Message Rules
 
 - Pull requests with `closes` SHOULD auto-close referenced issues when merged via core versioning
-- Pull requests with `depends-on` SHOULD NOT be merged until all referenced PRs are merged. Implementations SHOULD enforce bottom-up merge ordering within a stack
-- When a pull request with dependents is merged, implementations SHOULD retarget dependent PRs whose `base` matches the merged PR's `head` to point to the merged PR's `base` instead
+- Pull requests with `depends-on` SHOULD NOT be merged until all referenced pull requests are merged. Implementations SHOULD enforce bottom-up merge ordering within a stack
+- When a pull request with dependents is merged, implementations SHOULD retarget dependent pull requests whose `base` matches the merged pull request's `head` to point to its `base` instead
 - Suggestions MUST include the replacement code in the message body as a fenced code block (`` ```suggestion ... ``` ``)
 
 ### 1.5. Editing and Retracting
@@ -67,7 +67,7 @@ Implementations SHOULD include `base-tip` and `head-tip` when creating or editin
 
 When transitioning to `state="merged"`, implementations MUST include `merge-base` with the common ancestor commit hash (12 characters) and `merge-head` with the head branch tip commit hash (12 characters), both computed before the merge. These two fields are the only durable record of the merged commit range — `head-tip` and `base-tip` describe the live branches at edit time, but the head branch may be deleted afterward, leaving `merge-base..merge-head` as the sole reconstruction path for the diff. Implementations MUST refuse to record a `state="merged"` edit when either field cannot be computed (e.g., the head branch is missing or the merge-base is unreachable).
 
-When resolving a cross-repository pull request (fork PR) by merge or close, implementations SHOULD first adopt it (GITMSG.md Section 1.5): a copy on the upstream review branch carrying `adopts="<fork-pr-ref>"` and a `GitMsg-Ref:` trailer preserving the original author's identity. The resolving edit then references the local copy as canonical, ensuring the upstream has a self-contained record that survives fork deletion.
+When resolving a cross-repository pull request (a pull request of a registered fork) by merge or close, implementations SHOULD first adopt it (GITMSG.md Section 1.5): a copy on the review branch of the base repository carrying `adopts="<fork-pr-ref>"` and a `GitMsg-Ref:` trailer preserving the original author's identity. The resolving edit then edits the local copy, ensuring the base repository has a self-contained record that survives fork deletion.
 
 Feedback messages MAY be edited or retracted using core versioning.
 
@@ -87,7 +87,7 @@ Nested comment threads use GitSocial's `reply-to` field.
 
 ### 1.7. Comment Anchoring
 
-Inline reviews are anchored to specific file locations at a specific commit. When the PR branch is rebased or updated, implementations SHOULD attempt to map comment locations to the new commit:
+Inline reviews are anchored to specific file locations at a specific commit. When the head branch is rebased or updated, implementations SHOULD attempt to map comment locations to the new commit:
 
 1. Match the file and surrounding context lines
 2. If no match, mark the comment as outdated
@@ -103,7 +103,7 @@ Implementations SHOULD derive pull request review state from `feedback` commits 
 
 Implementations MAY enforce additional merge requirements via configuration.
 
-## 2. Config
+## 2. Configuration
 
 Configuration MUST be stored at `refs/gitmsg/review/config`:
 
@@ -235,9 +235,9 @@ Add dark mode support
 GitMsg: ext="review"; type="pull-request"; state="open"; base="https://github.com/bob/repo#branch:main"; base-tip="f1e2d3c4b5a6"; head="https://gitlab.com/alice/repo#branch:dark-mode"; head-tip="a1b2c3d4e5f6"; v="0.1.0"
 ```
 
-### Merge Cross-Repo Pull Request
+### Merge Cross-Repository Pull Request
 
-Step 1 - Copy fork PR to upstream (preserves original author via GitMsg-Ref):
+Step 1 - Adopt the fork's pull request (preserves its author via GitMsg-Ref):
 
 ```
 Add dark mode support

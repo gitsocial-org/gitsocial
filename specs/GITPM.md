@@ -75,11 +75,11 @@ Issues MAY declare dependency and informational relationships using `blocks`, `b
 - Direct child: `root` field MUST reference the parent issue (no `parent` field needed)
 - Nested child: MUST include both `parent` (immediate parent) and `root` (top-level issue) fields
 
-Closing or deleting an issue SHOULD NOT automatically cascade to children. Child issues remain unchanged by default.
+Closing or retracting an issue SHOULD NOT automatically cascade to children. Child issues remain unchanged by default.
 
 ### 1.8. Comments
 
-Implementations MUST use GitSocial for PM item comments (issues, milestones, sprints). The `original` field references the PM item commit:
+Implementations MUST use GitSocial for comments on issues, milestones and sprints. The `original` field references the issue, milestone or sprint commit:
 
 ```
 Love this idea, I'll start on it.
@@ -107,7 +107,7 @@ GitMsg-Ref: ext="pm"; type="sprint"; author="Alice"; email="alice@example.com"; 
  > Sprint 23: UX Polish
 ```
 
-## 2. Config
+## 2. Configuration
 
 Configuration MUST be stored at `refs/gitmsg/pm/config`.
 
@@ -201,7 +201,7 @@ Add dark mode support
 GitMsg: ext="pm"; type="issue"; edits="#commit:abc123456789@gitmsg/pm"; state="closed"; labels="kind/feature,priority/high,status/done"; v="0.1.0"
 ```
 
-Delete issue:
+Retract issue:
 ```
 GitMsg: ext="pm"; edits="#commit:abc123456789@gitmsg/pm"; retracted="true"; v="0.1.0"
 ```

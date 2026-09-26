@@ -30,14 +30,16 @@ Field order: `reply-to`, then `original`.
 
 ### 1.3. Reference Sections
 
+A thread is a post and the comments whose `original` references it.
+
 Reference structure requirements:
 - Comments: `original` field MUST reference the thread's first post, not intermediate comments
 - Nested comments: MUST include both `reply-to` (parent comment) and `original` (first post) fields
 - Reposts: MUST reference original posts (not other reposts) using `original` field
 
-### 1.4. Editing and Deleting
+### 1.4. Editing and Retracting
 
-Messages MAY be edited or deleted using core versioning (GITMSG.md 1.5).
+Messages MAY be edited or retracted using core versioning (GITMSG.md 1.5).
 
 ## 2. Lists
 
@@ -120,7 +122,7 @@ Hello world! (updated)
 GitMsg: ext="social"; type="post"; edits="#commit:abc123456789@main"; v="0.1.0"
 ```
 
-### Delete Post
+### Retract Post
 
 ```
 GitMsg: ext="social"; edits="#commit:abc123456789@main"; retracted="true"; v="0.1.0"

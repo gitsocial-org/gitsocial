@@ -6,7 +6,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 ## 1. Messages
 
-Messages are immutable Git commits.
+Messages are immutable Git commits. A regular commit is a commit without a `GitMsg:` trailer.
 
 ### 1.1. Basic Structure
 
@@ -21,7 +21,7 @@ GitMsg-Ref: ext="<extension>"; author="<author>"; email="<email>"; time="<timest
  > Referenced content on each line
 ```
 
-GitMsg uses standard git trailers (`git-interpret-trailers(1)`) as the message envelope. The `GitMsg:` trailer carries message metadata. `GitMsg-Ref:` trailers carry reference sections with quoted content as continuation lines (lines starting with a space).
+GitMsg uses standard git trailers (`git-interpret-trailers(1)`). The `GitMsg:` trailer is the header and carries message metadata. `GitMsg-Ref:` trailers carry reference sections with quoted content as continuation lines (lines starting with a space).
 
 ### 1.2. Header Requirements
 
@@ -107,8 +107,8 @@ Messages MAY be edited or retracted using the `edits` field.
 - Edits MUST be stored on the same branch as the original message
 - Edit commits MUST contain complete replacement content
 - Latest edit by timestamp is current version; tie-breaker: commit hash lexicographically descending
-- Original commit hash remains the canonical ID
-- `retracted="true"` modifier marks message as deleted; SHOULD be hidden from normal views
+- The original is the first version of a message; its commit hash is the canonical ID
+- `retracted="true"` modifier marks message as retracted; SHOULD be hidden from normal views
 - Retracted messages MAY omit the `type` field
 
 ```
@@ -121,12 +121,12 @@ GitMsg: ext="social"; edits="#commit:abc123456789@main"; retracted="true"; v="0.
 
 Implementations MUST resolve references by locating the original commit, finding all same-repository edits (those whose repository equals the original's), and returning the latest (or retracted state).
 
-A cross-repository edit (whose repository differs from the original's) is a "proposal" and MUST NOT change resolved state. The original's owner:
+A cross-repository edit (whose repository differs from the original's) is a "proposal" and MUST NOT change resolved state. The owner, the repository of the original:
 
-- MAY accept a proposal by authoring a same-repository edit carrying `accepts="<proposal-ref>"`; the mirror resolves normally and SHOULD carry a matching `GitMsg-Ref:` snapshot preserving the proposer's identity and content
+- MAY accept a proposal by authoring a same-repository edit carrying `accepts="<proposal-ref>"`; the accepting edit resolves normally and SHOULD carry a matching `GitMsg-Ref:` snapshot preserving the proposer's identity and content
 - MAY decline a proposal by publishing a marker at `refs/gitmsg/core/declines/<hash>` whose subject is the proposal ref
 
-A proposal with neither is pending. An accepting mirror MUST take precedence over a decline marker for the same proposal.
+A proposal with neither is pending. An accepting edit MUST take precedence over a decline marker for the same proposal.
 
 ```
 GitMsg: ext="pm"; type="issue"; edits="#commit:abc123456789@gitmsg/pm"; accepts="https://github.com/alice/fork#commit:def456789abc@gitmsg/pm"; v="0.1.0"
@@ -169,25 +169,25 @@ Messages MAY use `vocab/<name>` labels to declare a formal taxonomy, with `<name
 
 ### 1.8. Commit Trailers
 
-Regular commits (without `GitMsg:` trailers) MAY use git trailers to reference GitMsg items. Implementations MUST recognize these trailer keys:
+Regular commits (without `GitMsg:` trailers) MAY use git trailers to reference GitMsg messages. Implementations MUST recognize these trailer keys:
 
 - `Fixes:`, `Closes:`, `Resolves:`, `Implements:` — closing references
 - `Refs:` — non-closing reference
 
-Trailer values MUST be a GitMsg reference, a URL, or an opaque external identifier (e.g., `PROJ-123`). Each reference MUST use a separate trailer line. Implementations SHOULD scan for trailers containing GitMsg references during fetch and surface them in the referenced item's activity.
+Trailer values MUST be a GitMsg reference, a URL, or an opaque external identifier (e.g., `PROJ-123`). Each reference MUST use a separate trailer line. Implementations SHOULD scan for trailers containing GitMsg references during fetch and surface them in the referenced message's activity.
 
-Closing trailers MUST NOT trigger state changes. Only structured GitMsg messages (e.g., pull requests with `closes` field) control item state. Implementations MAY ignore unresolvable external identifiers.
+Closing trailers MUST NOT trigger state changes. Only structured GitMsg messages (e.g., pull requests with `closes` field) control message state. Implementations MAY ignore unresolvable external identifiers.
 
 ### 1.9. Origin
 
 Messages MAY include origin fields to indicate content imported from external platforms. Origin fields provide machine-readable provenance metadata and are OPTIONAL.
 
 Available origin fields:
-- `origin-author-email`: Original author email address (e.g., `alice@example.com`)
-- `origin-author-name`: Original author display name (e.g., `Alice Smith`)
+- `origin-author-email`: Author email address on the source platform (e.g., `alice@example.com`)
+- `origin-author-name`: Author display name on the source platform (e.g., `Alice Smith`)
 - `origin-platform`: Source platform name (e.g., `github`, `gitlab`)
-- `origin-time`: Original creation timestamp in ISO 8601 format
-- `origin-url`: URL to the original item on the source platform
+- `origin-time`: Creation timestamp on the source platform in ISO 8601 format
+- `origin-url`: URL of the content on the source platform
 
 All origin fields are OPTIONAL and independent. Implementations SHOULD include `origin-url` when available for traceability. Origin fields MUST NOT be modified during edits of imported content.
 
@@ -197,7 +197,7 @@ GitMsg: ext="pm"; type="issue"; origin-author-email="alice@example.com"; origin-
 
 ## 2. Lists
 
-Lists are mutable collections stored at `refs/gitmsg/<extension>/lists/<id>`. Lists use state-based storage where each update creates a new commit with complete state as JSON.
+A list names the repositories that a user follows. Lists are mutable collections stored at `refs/gitmsg/<extension>/lists/<id>`. Lists use state-based storage where each update creates a new commit with complete state as JSON.
 
 ```json
 {
@@ -211,7 +211,7 @@ Lists are mutable collections stored at `refs/gitmsg/<extension>/lists/<id>`. Li
 
 Lists MUST include: `version`, `id` (matching `[a-zA-Z0-9_-]{1,40}`), `name`, `repositories` (array of references).
 
-Lists MAY include: `source` (reference to source list, `<url>#list:<id>`). When present, list syncs with source.
+Lists MAY include: `source` (reference to source list, `<url>#list:<id>`). A list with `source` follows the changes of the source list.
 
 ### 2.1. All-Branch Following
 
@@ -234,13 +234,13 @@ Extensions define message types and operations. Messages with `GitMsg:` trailers
 
 Core protocol configuration MUST be stored at `refs/gitmsg/core/config` as JSON. Implementations MAY store arbitrary keys.
 
-Core configuration MAY include: `forks` (array of repository URLs for cross-fork collaboration).
+Core configuration MAY include: `forks` (array of repository URLs). A registered fork is a repository in `forks`.
 
 ### 3.2. Identity Verification
 
-A signed commit is "verified" when its `(signing key, author email)` pair is attested by an external authority. Verification is a property of the binding, not of an individual commit: once a `(key, email)` binding is verified, every signed commit matching that binding is verified.
+A binding is the `(signing key, author email)` pair of a commit. An attestation source is an external authority that attests bindings. A signed commit is "verified" when a source attests its binding. Verification is a property of the binding, not of an individual commit: once a `(key, email)` binding is verified, every signed commit matching that binding is verified.
 
-Implementations MUST NOT reject unsigned commits; unsigned commits are unverified. Implementations MAY consult any number of attestation sources; sources attest the binding independently. A binding is verified when at least one source affirms it, and an implementation MUST NOT treat a non-affirmative response from one source as evidence against another.
+Implementations MUST NOT reject unsigned commits; unsigned commits are unverified. Implementations MAY consult any number of attestation sources; sources attest the binding independently. A binding is verified when at least one source attests it, and an implementation MUST NOT treat a negative response from one source as evidence against another.
 
 This protocol defines one attestation source: the domain-owner well-known endpoint. For commits whose author email is on a domain the user controls, implementations MAY fetch `https://<domain>/.well-known/gitmsg-id.json`. The response MUST be a JSON document of the form:
 
@@ -274,7 +274,7 @@ Extension names MUST use the form `<name>`, and third-party extensions MUST use 
 
 ### 3.4. Content Branch
 
-Messages with a `GitMsg:` trailer MUST be stored on the `gitmsg/<extension-name>` branch. Implementations MUST only scan that branch for the extension's messages.
+Messages with a `GitMsg:` trailer MUST be stored on the `gitmsg/<extension-name>` branch, the content branch of the extension. Implementations MUST only scan that branch for the extension's messages.
 
 Exception: `social` messages MAY be stored on any branch (see GITSOCIAL.md 2).
 
