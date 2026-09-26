@@ -63,9 +63,10 @@ type siteMetaEntry struct {
 	Branch string `json:"branch,omitempty"`
 	// Parents is a code entry's parent shas, which the repository graph needs.
 	Parents []string `json:"parents,omitempty"`
-	// AdoptedAuthor and AdoptedEmail name an adopted copy's original author, from its GitMsg-Ref; omitempty keeps every other entry byte-identical.
+	// AdoptedAuthor, AdoptedEmail and AdoptedTime name an adopted copy's original author and time, from its GitMsg-Ref; omitempty keeps every other entry byte-identical.
 	AdoptedAuthor string `json:"adoptedAuthor,omitempty"`
 	AdoptedEmail  string `json:"adoptedEmail,omitempty"`
+	AdoptedTime   string `json:"adoptedTime,omitempty"`
 }
 
 // entrySHA implements shardEntry for the metadata index corpus.
@@ -103,25 +104,25 @@ type walkedItem struct {
 // metaOf projects a walked commit into a metadata-index entry.
 func metaOf(w walkedItem) siteMetaEntry {
 	e := siteMetaEntry{SHA: w.SHA, Author: w.Author, Email: w.Email, TS: w.TS, Header: w.Header, Subject: subjectOf(w.Message)}
-	e.AdoptedAuthor, e.AdoptedEmail = adoptedAuthorOf(w)
+	e.AdoptedAuthor, e.AdoptedEmail, e.AdoptedTime = adoptedOf(w)
 	return e
 }
 
-// adoptedAuthorOf reads an adopted copy's original author from the GitMsg-Ref its adopts field names (GITMSG.md 1.5).
-func adoptedAuthorOf(w walkedItem) (name, email string) {
+// adoptedOf reads an adopted copy's original author and time from the GitMsg-Ref its adopts field names (GITMSG.md 1.5).
+func adoptedOf(w walkedItem) (name, email, at string) {
 	if !strings.Contains(w.Header, `adopts="`) {
-		return "", ""
+		return "", "", ""
 	}
 	msg := protocol.ParseMessage(w.Message)
 	if msg == nil || msg.Header.Fields["adopts"] == "" {
-		return "", ""
+		return "", "", ""
 	}
 	for _, ref := range msg.References {
 		if ref.Ref == msg.Header.Fields["adopts"] {
-			return ref.Author, ref.Email
+			return ref.Author, ref.Email, ref.Time
 		}
 	}
-	return "", ""
+	return "", "", ""
 }
 
 // siteLinkRefDefRE matches a CommonMark link reference definition line, which renders as nothing.

@@ -442,12 +442,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       row.append(" · ", el("a", { class: "hash", href: commitRef(c.hash, branch) }, [c.short]));
     }
     if (item.edited) row.append(" · ", editedBit(item.editorName, item.editedTime || when));
-    // An adopted copy names the repository it came from, linked when browsable (sitePageAdoptedBit).
-    if (h.adopts) {
-      const repo = refRepoUrl(h.adopts);
-      row.append(" · ", el(/^https:\/\//.test(repo) ? "a" : "span", /^https:\/\//.test(repo) ? { class: "adopted", href: repo } : { class: "adopted" }, ["adopted from " + repo]));
-    }
+    if (h.adopts) row.append(" · ", adoptedBit(h.adopts));
     return row;
+  }
+
+  // adoptedBit names the repository an adopted copy came from, linked when browsable (sitePageAdoptedBit).
+  function adoptedBit(adopts) {
+    const repo = refRepoUrl(adopts);
+    return /^https:\/\//.test(repo) ? el("a", { class: "adopted", href: repo }, ["adopted from " + repo]) : el("span", { class: "adopted" }, ["adopted from " + repo]);
   }
 
   // stateChip renders a state pill; each state needs a solid background class for its white text.
@@ -820,9 +822,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // versionMetaRow renders a version's meta row; the state pill rides the detail head, not this row.
   function versionMetaRow(v, branch) {
     const when = v.effectiveTime || (v.commit && v.commit.authorTime);
-    const row = el("span", { class: "meta" }, [authorEl(v.author || "unknown", effectiveAuthorEmail(v.commit, v.header)), " · ", timeEl(when), " · "]);
+    const email = v.authorEmail != null ? v.authorEmail : effectiveAuthorEmail(v.commit, v.header);
+    const row = el("span", { class: "meta" }, [authorEl(v.author || "unknown", email), " · ", timeEl(when), " · "]);
     row.append(el("a", { class: "hash", href: commitRef(v.commit.hash, branch) }, [v.commit.short]));
     if (v.edited) row.append(" · ", editedBit(v.editorName, when));
+    if (v.header && v.header.adopts) row.append(" · ", adoptedBit(v.header.adopts));
     return row;
   }
 
@@ -932,7 +936,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // TRAILER_SKIP are the header fields another component on a detail page carries: the route, the head's chips and the meta row.
   const TRAILER_SKIP = {
-    v: 1, ext: 1, type: 1, state: 1, draft: 1, retracted: 1, tag: 1, version: 1, prerelease: 1,
+    v: 1, ext: 1, type: 1, state: 1, draft: 1, retracted: 1, tag: 1, version: 1, prerelease: 1, adopts: 1,
     "origin-author-name": 1, "origin-author-email": 1, "origin-time": 1, "origin-platform": 1, "origin-url": 1,
   };
 

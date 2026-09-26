@@ -33,8 +33,13 @@ commit("d3", "d2", 1750000200, "Cache the walk\n\nThe second version of the body
 commit("d4", "d3", 1750000300, "A child task", { ext: "pm", type: "issue", state: "closed", parent: ref("d1", "pm"), milestone: ref("d2", "pm") });
 commit("e1", null, 1750000400, "Release notes", { ext: "release", type: "release", tag: "v1.2", version: "1.2.0", artifacts: "gitsocial-linux.tar.gz,gitsocial-mac.tar.gz", "artifact-url": "https://example.com/dl", checksums: "SHA256SUMS", sbom: "sbom.json", "signed-by": "ada@example.com", "origin-platform": "github", "origin-url": "https://example.com/releases/9", "origin-author-name": "Ada Lovelace", "origin-time": "2026-01-02T03:04:05Z" });
 commit("f1", null, 1750000500, "A comment on the issue", { ext: "social", type: "comment", original: ref("d1", "pm") });
+// c9 is an adopted copy, its raw message the parity fixture's, so its GitMsg-Ref names the original author and time.
+const ADOPTED = require("./parity_fixtures.json").adopted;
+ctx.objects.set(sha("c9"), { type: "commit", body: enc.encode("tree " + sha("a1") + "\nparent " + sha("d4") + "\nauthor " + ADOPTED.committer + " <" + ADOPTED.committerEmail + "> 1750000600 +0000\n\n" + ADOPTED.message + "\n") });
+// ca edits the adopted copy, the usual case: every later change edits the copy.
+commit("ca", "c9", 1750000700, "Crash on startup", { ext: "pm", state: "closed", edits: ref("c9", "pm") });
 ctx.manifest = Promise.resolve({
-  "refs/heads/gitmsg/pm": sha("d4"),
+  "refs/heads/gitmsg/pm": sha("ca"),
   "refs/heads/gitmsg/release": sha("e1"),
   "refs/heads/gitmsg/social": sha("f1"),
 });
@@ -137,6 +142,17 @@ async function main() {
   eq(keys(release), ["origin"], "a release lists one row: its head, chips and assets section carry the rest, the origin fields fold into one");
   eq(findTag(findTag(release, "dd")[0], "a").map((a) => a.getAttribute("href")), ["https://example.com/releases/9"],
     "the origin row links to the imported item");
+
+  console.log("=== an adopted copy's detail ===");
+  const adopted = (await GS.itemDetail(ctx, sha("c9"), "gitmsg/pm"))[0];
+  await tick(60);
+  const meta = findClass(adopted, "detail-meta")[0];
+  eq(findClass(meta, "author").map((n) => textOf(n) + " " + n.getAttribute("title")), [ADOPTED.expectAuthor + " alice@example.com"], "the edited copy names the original author and their email, not the editor's");
+  eq(findClass(meta, "adopted").map(textOf), [ADOPTED.expectAdopted], "the detail names the repository it came from, as a row does");
+  fire(findClass(adopted, "version-row")[1], "click");
+  const when = findClass(meta, "reltime").map((n) => n.getAttribute("title")).join();
+  ok(when.startsWith("2025-01-"), "the detail shows the original time, not the copy's June commit", when);
+  eq(keys(adopted).indexOf("adopts"), -1, "the meta row carries adopts, so no field row repeats it");
 
   console.log("=== the configuration page ===");
   document.body._cls = new Set();

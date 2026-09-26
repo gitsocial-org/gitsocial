@@ -742,10 +742,12 @@
     return { url, name: m ? m[1] : "" };
   }
 
-  // effectiveTime returns an item's display timestamp, preferring an imported item's origin-time over the git author time.
+  // effectiveTime returns an item's display timestamp: origin-time, then an adopted copy's original time, then the git author time. Mirrors pageEffectiveTime in site_pages_thread.go.
   function effectiveTime(commit, header) {
-    const ot = header && header["origin-time"];
-    if (ot) { const ms = Date.parse(ot); if (!isNaN(ms)) return Math.floor(ms / 1000); }
+    const adopted = adoptedOf(commit, header);
+    for (const t of [header && header["origin-time"], adopted && adopted.time]) {
+      if (t) { const ms = Date.parse(t); if (!isNaN(ms)) return Math.floor(ms / 1000); }
+    }
     return (commit && commit.authorTime) || 0;
   }
 
@@ -771,18 +773,18 @@
     if (header["origin-author-name"]) return header["origin-author-name"];
     const h = originHandle(header["origin-author-email"]);
     if (h) return h;
-    const adopted = adoptedAuthorOf(commit, header);
+    const adopted = adoptedOf(commit, header);
     if (adopted) return adopted.name || adopted.email || "unknown";
     return (commit && (commit.authorName || commit.authorEmail)) || "unknown";
   }
 
-  // adoptedAuthorOf returns an adopted copy's original author, from the index entry or the GitMsg-Ref its adopts field names; null for any other item. Mirrors pageDisplayAuthor in site_pages_thread.go.
-  function adoptedAuthorOf(commit, header) {
+  // adoptedOf returns an adopted copy's original author and time, from the index entry or the GitMsg-Ref its adopts field names; null for any other item. Mirrors adoptedOf in site_items.go.
+  function adoptedOf(commit, header) {
     if (!commit || !(header && header.adopts)) return null;
-    if (commit.adoptedAuthor || commit.adoptedEmail) return { name: commit.adoptedAuthor || "", email: commit.adoptedEmail || "" };
+    if (commit.adoptedAuthor || commit.adoptedEmail) return { name: commit.adoptedAuthor || "", email: commit.adoptedEmail || "", time: commit.adoptedTime || "" };
     // A GitMsg-Ref missing a required field is no reference at all (GITMSG.md 1.3), as protocol.ParseRefSection drops it.
     const ref = (commit.refs || []).find((r) => r.ref === header.adopts && r.ext && r.v && r.author && r.email && r.time);
-    return ref ? { name: ref.author || "", email: ref.email || "" } : null;
+    return ref ? { name: ref.author || "", email: ref.email || "", time: ref.time } : null;
   }
 
   // authorLabel picks a meta row's author label: the display name, else the email, else "unknown".
@@ -794,16 +796,16 @@
   function effectiveAuthorEmail(commit, header) {
     header = header || {};
     if (header["origin-author-email"]) return header["origin-author-email"];
-    const adopted = adoptedAuthorOf(commit, header);
+    const adopted = adoptedOf(commit, header);
     return adopted ? adopted.email : (commit && commit.authorEmail) || "";
   }
 
   // eqFold compares two strings case-insensitively after trimming.
   function eqFold(a, b) { return (a || "").trim().toLowerCase() === (b || "").trim().toLowerCase(); }
 
-  // makeVersion builds one entry of an item's version list.
-  function makeVersion(commit, header, isEdit, author, editorName, effTime, content) {
-    return { commit, header, content, rawMessage: commit.rawMessage, author, editorName, edited: isEdit, effectiveTime: effTime };
+  // makeVersion builds one entry of an item's version list; author and authorEmail are the canonical's, whichever version it is.
+  function makeVersion(commit, header, isEdit, author, authorEmail, editorName, effTime, content) {
+    return { commit, header, content, rawMessage: commit.rawMessage, author, authorEmail, editorName, edited: isEdit, effectiveTime: effTime };
   }
 
   // buildVersions returns an item's ordered version list: the canonical first, then each edit oldest first.
@@ -814,12 +816,12 @@
       for (const k of ORIGIN_KEYS) { if (canonHeader[k] !== undefined) h[k] = canonHeader[k]; else delete h[k]; }
       return h;
     };
-    const out = [makeVersion(canon, Object.assign({}, canonHeader), false, author, "", effectiveTime(canon, canonHeader), canon.content)];
+    const out = [makeVersion(canon, Object.assign({}, canonHeader), false, author, canonEmail, "", effectiveTime(canon, canonHeader), canon.content)];
     for (const e of edits) {
       const editEmail = effectiveAuthorEmail(e, e.gitmsg);
       const editorName = eqFold(editEmail, canonEmail) ? "" : effectiveAuthor(e, e.gitmsg);
       const content = e.content || canon.content;
-      out.push(makeVersion(e, mergeHeader(e.gitmsg), true, author, editorName, effectiveTime(e, e.gitmsg || {}), content));
+      out.push(makeVersion(e, mergeHeader(e.gitmsg), true, author, canonEmail, editorName, effectiveTime(e, e.gitmsg || {}), content));
     }
     return out;
   }
@@ -1003,7 +1005,7 @@
       authorName: e.author || "", authorEmail: e.email || "", authorTime: e.ts || 0,
       content: "", rawMessage: header, subject: String(e.subject || ""),
       gitmsg: parseGitmsg(header), refs: [], hollow: true,
-      adoptedAuthor: e.adoptedAuthor || "", adoptedEmail: e.adoptedEmail || "",
+      adoptedAuthor: e.adoptedAuthor || "", adoptedEmail: e.adoptedEmail || "", adoptedTime: e.adoptedTime || "",
     };
   }
 
@@ -4174,7 +4176,7 @@
   const core = {
     deriveBase, repoTitle, fetchBytes, fetchText, fetchRange, inflate, parseLooseObject, objectKey,
     getObject, getContentObject, getStateObject, getPackedObject, packNames, bucketIsPacked, packMapShard, packIdxOpen, packIdxLookup, packIdxFind, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
-    walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, parseBranchField, resolveItems, adoptedAuthorOf,
+    walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, parseBranchField, resolveItems, adoptedOf,
     buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail, authorLabel,
     feedbackLine, feedbackAnchorKey, feedbackVerdict, feedbackAnchorLabel, hunkLineKeys, anchorFeedback, prFeedback,
     reviewSummary, suggestionBody,

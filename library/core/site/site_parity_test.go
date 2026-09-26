@@ -147,15 +147,25 @@ type parityItemCounts struct {
 
 // parityAdopted pins an adopted copy's row and a cross-repository edit neither renderer lists.
 type parityAdopted struct {
-	Message        string   `json:"message"`
-	Committer      string   `json:"committer"`
-	CommitterEmail string   `json:"committerEmail"`
-	ExpectAuthor   string   `json:"expectAuthor"`
-	ExpectBits     []string `json:"expectBits"`
-	ExpectAdopted  string   `json:"expectAdopted"`
-	ExpectHref     string   `json:"expectHref"`
-	CrossRepoEdit  string   `json:"crossRepoEdit"`
-	MessageNoEmail string   `json:"messageNoEmail"`
+	Message           string   `json:"message"`
+	Committer         string   `json:"committer"`
+	CommitterEmail    string   `json:"committerEmail"`
+	ExpectAuthor      string   `json:"expectAuthor"`
+	ExpectBits        []string `json:"expectBits"`
+	ExpectAdopted     string   `json:"expectAdopted"`
+	ExpectHref        string   `json:"expectHref"`
+	CrossRepoEdit     string   `json:"crossRepoEdit"`
+	MessageNoEmail    string   `json:"messageNoEmail"`
+	ExpectTime        int64    `json:"expectTime"`
+	MessageOriginTime string   `json:"messageOriginTime"`
+	ExpectOriginTime  int64    `json:"expectOriginTime"`
+	MessageBadTime    string   `json:"messageBadTime"`
+	ExpectEntry       struct {
+		AdoptedAuthor string `json:"adoptedAuthor"`
+		AdoptedEmail  string `json:"adoptedEmail"`
+		AdoptedTime   string `json:"adoptedTime"`
+	} `json:"expectEntry"`
+	PlainIssueTime int64 `json:"plainIssueTime"`
 }
 
 // parityHomeRows pins how many root entries the home section shows before its chevron.
@@ -552,13 +562,43 @@ func TestParityItemCounts(t *testing.T) {
 	}
 }
 
-// TestParityAdopted asserts an adopted copy indexes and renders under its original author with the adopted-from bit, and a cross-repository edit is no item, against the fixture unit_parity.js also asserts.
+// parityAdoptedMsg indexes a fixture message as the page layer reads it back: through its metadata entry.
+func parityAdoptedMsg(f parityAdopted, message string) *sitePageMsg {
+	sha := strings.Repeat("a", 40)
+	e := metaOf(walkedItem{SHA: sha, Author: f.Committer, Email: f.CommitterEmail, TS: 1750000000, Header: extractHeaderLine(message), Message: message})
+	return &sitePageMsg{Ext: "pm", SHA: sha, Short: sha[:12], Author: e.Author, Email: e.Email, TS: e.TS, Subject: e.Subject,
+		Header: protocol.ParseHeader(e.Header), AdoptedAuthor: e.AdoptedAuthor, AdoptedEmail: e.AdoptedEmail, AdoptedTime: e.AdoptedTime}
+}
+
+// TestParityAdopted asserts an adopted copy indexes and renders under its original author and time with the adopted-from bit, and a cross-repository edit is no item, against the fixture unit_parity.js also asserts.
 func TestParityAdopted(t *testing.T) {
 	f := loadParityFixtures(t).Adopted
-	sha := strings.Repeat("a", 40)
-	entry := metaOf(walkedItem{SHA: sha, Author: f.Committer, Email: f.CommitterEmail, TS: 1750000000, Header: extractHeaderLine(f.Message), Message: f.Message})
-	msg := &sitePageMsg{Ext: "pm", SHA: sha, Short: sha[:12], Author: entry.Author, Email: entry.Email, TS: entry.TS, Subject: entry.Subject,
-		Header: protocol.ParseHeader(entry.Header), AdoptedAuthor: entry.AdoptedAuthor, AdoptedEmail: entry.AdoptedEmail}
+	msg := parityAdoptedMsg(f, f.Message)
+	if got := [3]string{msg.AdoptedAuthor, msg.AdoptedEmail, msg.AdoptedTime}; got != [3]string{f.ExpectEntry.AdoptedAuthor, f.ExpectEntry.AdoptedEmail, f.ExpectEntry.AdoptedTime} {
+		t.Errorf("index entry adopted fields = %q, want %+v", got, f.ExpectEntry)
+	}
+	entry, err := json.Marshal(metaOf(walkedItem{SHA: msg.SHA, Header: extractHeaderLine(f.Message), Message: f.Message}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{`"adoptedAuthor":`, `"adoptedEmail":`, `"adoptedTime":`} {
+		if !strings.Contains(string(entry), key) {
+			t.Errorf("index entry %s lacks %s, the key the app reads", entry, key)
+		}
+	}
+	plain := sitePageMsg{Ext: "pm", SHA: strings.Repeat("c", 40), Short: strings.Repeat("c", 12), TS: f.PlainIssueTime, Header: protocol.ParseHeader(`GitMsg: ext="pm"; type="issue"; v="0.1.0"`)}
+	if roots := buildSitePageThreads(map[string][]sitePageMsg{"pm": {*msg, plain}}); len(roots["pm"]) != 2 || roots["pm"][0].Msg.SHA != plain.SHA {
+		t.Errorf("list order puts the adopted copy first, want it below the plain issue by its original time")
+	}
+	for _, c := range []struct {
+		name    string
+		message string
+		want    int64
+	}{{"snapshot", f.Message, f.ExpectTime}, {"origin-time", f.MessageOriginTime, f.ExpectOriginTime}, {"unparsable", f.MessageBadTime, 1750000000}} {
+		if got := pageEffectiveTime(parityAdoptedMsg(f, c.message)); got != c.want {
+			t.Errorf("%s: effective time = %d, want %d", c.name, got, c.want)
+		}
+	}
 	meta := siteRowMeta(&sitePageItem{Msg: msg, Resolved: msg}, "../i/"+msg.Short+".html")
 	if got := strings.Join(parityBitClasses(meta, len(meta)), ","); got != strings.Join(f.ExpectBits, ",") {
 		t.Errorf("row bits = %q, want %q", got, strings.Join(f.ExpectBits, ","))
@@ -570,7 +610,7 @@ func TestParityAdopted(t *testing.T) {
 		t.Errorf("adopted bit = %+v, want %q linking %q", last, f.ExpectAdopted, f.ExpectHref)
 	}
 	// A GitMsg-Ref with no email is no reference, so the row falls back to the committer on both renderers.
-	bare := metaOf(walkedItem{SHA: sha, Author: f.Committer, Email: f.CommitterEmail, TS: 1750000000, Header: extractHeaderLine(f.MessageNoEmail), Message: f.MessageNoEmail})
+	bare := metaOf(walkedItem{SHA: msg.SHA, Author: f.Committer, Email: f.CommitterEmail, TS: 1750000000, Header: extractHeaderLine(f.MessageNoEmail), Message: f.MessageNoEmail})
 	bareMsg := &sitePageMsg{Author: bare.Author, Email: bare.Email, Header: protocol.ParseHeader(bare.Header), AdoptedAuthor: bare.AdoptedAuthor, AdoptedEmail: bare.AdoptedEmail}
 	if bit := sitePageAuthorBit(bareMsg); bit.Text != f.Committer || bit.Title != f.CommitterEmail {
 		t.Errorf("author bit for an invalid GitMsg-Ref = %+v, want the committer %q", bit, f.Committer)

@@ -152,10 +152,11 @@ console.log("=== parity invariant: an adopted copy's row and a cross-repository 
   const A = FIX.adopted;
   const sha = "a".repeat(40);
   const header = A.message.split("\n").find((l) => l.startsWith("GitMsg: "));
-  const fromIndex = GS.metaCommit({ sha, author: A.committer, email: A.committerEmail, ts: 1750000000, header, subject: "Crash on startup", adoptedAuthor: A.expectAuthor, adoptedEmail: "alice@example.com" });
+  const fromIndex = GS.metaCommit({ sha, author: A.committer, email: A.committerEmail, ts: 1750000000, header, subject: "Crash on startup", ...A.expectEntry });
   const fromBody = GS.indexCommit({ sha, author: A.committer, email: A.committerEmail, ts: 1750000000, message: A.message });
   for (const [name, c] of [["an index entry", fromIndex], ["a full message", fromBody]]) {
-    const item = { commit: c, header: c.gitmsg, content: "Crash on startup", author: GS.effectiveAuthor(c, c.gitmsg), effectiveTime: 1750000000 };
+    eq(GS.effectiveTime(c, c.gitmsg), A.expectTime, name + ": the row shows the original time");
+    const item = { commit: c, header: c.gitmsg, content: "Crash on startup", author: GS.effectiveAuthor(c, c.gitmsg), effectiveTime: GS.effectiveTime(c, c.gitmsg) };
     const row = GS.metaRow(item, "gitmsg/pm");
     const bits = (row._children || []).filter((n) => n && n.nodeType === 1);
     eq(bits.map((n) => String(n.className || "").split(/\s+/)[0]).join(","), A.expectBits.join(","), name + ": the row's bits");
@@ -165,6 +166,11 @@ console.log("=== parity invariant: an adopted copy's row and a cross-repository 
     const adopted = bits[bits.length - 1];
     eq(adopted.getAttribute("href"), A.expectHref, name + ": the adopted bit links the fork");
   }
+  const plain = GS.indexCommit({ sha: "c".repeat(40), author: A.committer, email: A.committerEmail, ts: A.plainIssueTime, message: "A plain issue\n\nGitMsg: ext=\"pm\"; type=\"issue\"; v=\"0.1.0\"" });
+  eq(GS.resolveItems([fromBody, plain]).map((it) => it.commit.hash[0]).join(","), "c,a", "a list sorts the copy by its original time, below a plain issue created after it");
+  const timeOf = (message) => { const c = GS.indexCommit({ sha, author: A.committer, email: A.committerEmail, ts: 1750000000, message }); return GS.effectiveTime(c, c.gitmsg); };
+  eq(timeOf(A.messageOriginTime), A.expectOriginTime, "origin-time wins over the adopted time");
+  eq(timeOf(A.messageBadTime), 1750000000, "a snapshot time that does not parse falls back to the git time");
   const bare = GS.indexCommit({ sha, author: A.committer, email: A.committerEmail, ts: 1750000000, message: A.messageNoEmail });
   eq(GS.effectiveAuthor(bare, bare.gitmsg) + " " + GS.effectiveAuthorEmail(bare, bare.gitmsg), A.committer + " " + A.committerEmail, "a GitMsg-Ref with no email is no reference, so the row falls back to the committer");
   const edit = GS.indexCommit({ sha: "b".repeat(40), author: A.committer, email: A.committerEmail, ts: 1750000001, message: A.crossRepoEdit });

@@ -30,9 +30,10 @@ type sitePageMsg struct {
 	Subject string
 	Message string           // full raw commit message from the bodies corpus
 	Header  *protocol.Header // nil for plain commits (implicit posts)
-	// AdoptedAuthor and AdoptedEmail name an adopted copy's original author (siteMetaEntry)
+	// AdoptedAuthor, AdoptedEmail and AdoptedTime name an adopted copy's original author and time (siteMetaEntry)
 	AdoptedAuthor string
 	AdoptedEmail  string
+	AdoptedTime   string
 }
 
 // sitePageItem is one resolved item: the canonical message plus the latest same-repo version's content and state.
@@ -105,9 +106,9 @@ func pageLocalCommitHash(ref string) string {
 	return hash
 }
 
-// pageEffectiveTime returns a message's display time: origin-time over the git author time, mirroring the shell.
+// pageEffectiveTime returns a message's display time: origin-time, then an adopted copy's original time, then the git author time. Mirrors effectiveTime in gs-core.js.
 func pageEffectiveTime(m *sitePageMsg) int64 {
-	if t := pageHeaderField(m, "origin-time"); t != "" {
+	for _, t := range []string{pageHeaderField(m, "origin-time"), m.AdoptedTime} {
 		if ts, err := time.Parse(time.RFC3339, t); err == nil {
 			return ts.Unix()
 		}
@@ -316,7 +317,7 @@ func readSitePagesMeta(client *objstore.Client, prefix, ext string, items *siteS
 		msgs = append(msgs, sitePageMsg{
 			Ext: ext, SHA: e.SHA, Short: e.SHA[:12], Idx: len(msgs), Author: e.Author, Email: e.Email,
 			TS: e.TS, Subject: e.Subject, Header: protocol.ParseHeader(e.Header),
-			AdoptedAuthor: e.AdoptedAuthor, AdoptedEmail: e.AdoptedEmail,
+			AdoptedAuthor: e.AdoptedAuthor, AdoptedEmail: e.AdoptedEmail, AdoptedTime: e.AdoptedTime,
 		})
 	}
 	return msgs, nil
