@@ -1,6 +1,6 @@
 # Style Guide
 
-One register for everything in this repository, the one `README.md` and `specs/` already use: short sentences that say what, not why.
+All text in this repository uses one register, the register of `README.md` and `specs/`: short sentences that say what, not why.
 
 [Where things go](#where-things-go) · [Prose rules](#prose-rules) · [Help text](#help-text) · [Errors](#errors) · [Documentation](#documentation) · [Comments](#comments) · [Commits](#commits) · [Tests](#tests) · [Checks](#checks)
 
@@ -19,13 +19,17 @@ One register for everything in this repository, the one `README.md` and `specs/`
 
 Apply to help, errors, TUI hints, site strings, log lines, guides, comments and commit messages.
 
-- One idea per sentence, under 20 words.
+- Follow [ASD-STE100](https://www.asd-ste100.org/) where this guide does not say otherwise. Take technical words from `specs/`, RFC 2119, git and established software terms (idempotent, cache, rebase), and use each word with one meaning.
+- One idea per sentence. Aim for 25 words or fewer; a longer sentence is fine when it holds one idea, such as a list of steps or a condition and its result. A semicolon can join two short, closely related clauses.
+- Do not start sentence after sentence with the same subject. Join the sentences, or use a list.
+- Avoid ambiguous connectors: "once" for "after", "since" or "as" for "because", "while" for "although", "via", "e.g.", "i.e.", "etc.". "so" is fine for a result.
 - Imperative for instructions, present tense for behavior.
 - No em-dashes. Use a comma, a colon, or a new sentence.
 - Parentheses hold a literal or a short aside, never a second sentence.
 - No intensifiers or narration: exactly, deliberately, silently, loudly, forever, by construction, honest, genuinely, precisely, the whole.
 - "never" and "always" only in a rule, not in a description.
 - Name a file, function or flag when the reader has to go there. Otherwise say it in words.
+- Say where a thing is with "is on" (a branch), "is at" (a ref or path) or "is in" (a file or config), not "lives".
 - Counts and sizes go in tables; defaults go in flag help; prose carries neither.
 - No "we", no "note that", no rhetorical questions.
 
@@ -101,7 +105,7 @@ Examples, before and after (`[em-dash]` stands for the original's em-dash):
 - `no S3 credentials for %s [em-dash] store them with:\n  gitsocial config credentials set %s`
 - `no S3 credentials for %s: run gitsocial config credentials set %s`
 - `%s exists but is not a git repository [em-dash] refusing to touch it; pick another --dir or remove it`
-- `%s is not a git repository: pick another --dir`
+- `%s is not a git repository: choose another --dir`
 - `invalid --state %q (valid: open, closed, merged, all)`
 - `invalid --state %q: use open, closed, merged or all`
 - `branch %q not found in refs/remotes/origin (run \`git fetch\`?)`
@@ -123,9 +127,11 @@ Rules:
 - A guide sentence tells the reader what to type or what they will see. A sentence that starts with "because", "so that" or "the reason" belongs in the commit body, or goes.
 - A reference row is one line. If it needs a paragraph, it is two rows or a guide sentence.
 - Specs keep the RFC register and never reference this implementation.
-- Every doc opens with one sentence saying what it covers; the site uses it as the page's description. One line of section links follows it, `[Sources](#sources) · [Commands](#commands)`. The first section starts right after, with no other text before it.
+- Docs use the RFC 2119 words in lowercase, with the RFC meaning: must, must not, should, may.
+- Every doc opens with one sentence about its subject: what the subject is or what it does, with the subject as the first words. The site uses this sentence as the page's description. One line of section links follows it, `[Sources](#sources) · [Commands](#commands)`. The first section starts right after, with no other text before it.
+- Write about the subject, not about the doc. Not "this doc", "this section" or "below": the headings and the section links show the structure.
 - A term the doc coins is defined where it first appears.
-- Link, do not repeat. One explanation lives in one place.
+- Link, do not repeat. One explanation is in one place.
 
 Example, the `commits/` bullet in `STATIC-SITE.md`, 300 words before the rewrite, becomes two things. The reasoning (why commits get no page of their own) stays in the commit that introduced the layer.
 
@@ -147,7 +153,7 @@ Not in comments: why a design was chosen, what was tried, version history, threa
 - a constraint the next editor must respect: one line at the point of constraint;
 - how a mechanism works: a reference row in the owning doc;
 - why this over the alternatives: the commit body;
-- nothing, since git history keeps the deleted text.
+- nothing: git history keeps the deleted text.
 
 Examples:
 
@@ -178,13 +184,13 @@ After, three commits: `S3: upload bucket writes in parallel with retry`, with a 
 
 ## Checks
 
-`scripts/prose-check.sh` is stage 0 of `scripts/check.sh`. It counts eleven rules and fails when any count rises above `scripts/prose-baseline.txt`. After a sweep lowers a count, `--update` accepts the new baseline; `--list <rule>` prints the offending lines. Commit subjects over 72 characters in the pushed range fail outright. `comment-heavy` reads only the commits dated 2026-09-16 or later.
+`scripts/prose-check.sh` is stage 0 of `scripts/check.sh`. It counts the rules in the table and fails when a count rises above `scripts/prose-baseline.txt`. After a count falls, `--update` accepts the new baseline; `--list <rule>` prints the lines that a rule counts. A commit subject in the pushed range over the [Commits](#commits) limit fails with no baseline.
 
 | Rule | Counts |
 |---|---|
 | `emdash` | em-dashes in any tracked file |
 | `comment-block-go`, `comment-block-js`, `comment-block-css`, `comment-block-html` | comment blocks over 3 lines, outside package docs |
-| `comment-heavy` | a commit in the pushed range whose net new comment lines, added minus removed, outnumber its added code lines |
+| `comment-heavy` | a commit in the pushed range, dated 2026-09-16 or later, whose net new comment lines, added minus removed, outnumber its added code lines |
 | `confidence` | a line carrying one of the intensifiers the prose rules ban, in any tracked file but this one |
 | `func-comment` | a function in non-test Go with no comment line above it |
 | `short-long` | a cobra `Short` over 50 characters |
