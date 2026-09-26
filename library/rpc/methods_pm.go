@@ -16,6 +16,7 @@ func RegisterPMMethods(s *Server) {
 	s.registry.Register("pm.updateIssue", s.requireInit(pmUpdateIssue(s)))
 	s.registry.Register("pm.closeIssue", s.requireInit(pmCloseIssue(s)))
 	s.registry.Register("pm.reopenIssue", s.requireInit(pmReopenIssue(s)))
+	s.registry.Register("pm.adoptIssue", s.requireInit(pmAdoptIssue(s)))
 	s.registry.Register("pm.retractIssue", s.requireInit(pmRetractIssue(s)))
 	s.registry.Register("pm.getLinks", s.requireInit(pmGetLinks()))
 	s.registry.Register("pm.isBlocked", s.requireInit(pmIsBlocked()))
@@ -183,6 +184,13 @@ func pmUpdateIssue(s *Server) HandlerFunc {
 func pmCloseIssue(s *Server) HandlerFunc {
 	return refAction(func(workdir, ref string) (any, *RPCError) {
 		return fromResult(pm.CloseIssue(workdir, ref))
+	}, s)
+}
+
+// pmAdoptIssue handles pm.adoptIssue, adopting a registered fork's issue at a ref.
+func pmAdoptIssue(s *Server) HandlerFunc {
+	return refAction(func(workdir, ref string) (any, *RPCError) {
+		return fromResult(pm.AdoptIssue(workdir, ref))
 	}, s)
 }
 

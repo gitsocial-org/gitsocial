@@ -81,6 +81,9 @@ type Issue struct {
 	IsUnpushed       bool
 	Comments         int
 	Origin           *protocol.Origin
+	Adopts           string    // the fork original this copy adopts, GITMSG.md 1.5
+	OriginalAuthor   *Author   // the adopted original's author, from the copy's GitMsg-Ref
+	OriginalTime     time.Time // the adopted original's time
 }
 
 type Milestone struct {

@@ -147,6 +147,30 @@ const chipped = GS.prCard({
 });
 eq(slots(chipped), FIX.cardSkeleton.parts.join(","), "a card that fills every part keeps the fixture's order");
 
+console.log("=== parity invariant: an adopted copy's row and a cross-repository edit ===");
+{
+  const A = FIX.adopted;
+  const sha = "a".repeat(40);
+  const header = A.message.split("\n").find((l) => l.startsWith("GitMsg: "));
+  const fromIndex = GS.metaCommit({ sha, author: A.committer, email: A.committerEmail, ts: 1750000000, header, subject: "Crash on startup", adoptedAuthor: A.expectAuthor, adoptedEmail: "alice@example.com" });
+  const fromBody = GS.indexCommit({ sha, author: A.committer, email: A.committerEmail, ts: 1750000000, message: A.message });
+  for (const [name, c] of [["an index entry", fromIndex], ["a full message", fromBody]]) {
+    const item = { commit: c, header: c.gitmsg, content: "Crash on startup", author: GS.effectiveAuthor(c, c.gitmsg), effectiveTime: 1750000000 };
+    const row = GS.metaRow(item, "gitmsg/pm");
+    const bits = (row._children || []).filter((n) => n && n.nodeType === 1);
+    eq(bits.map((n) => String(n.className || "").split(/\s+/)[0]).join(","), A.expectBits.join(","), name + ": the row's bits");
+    const text = (n) => n.textContent;
+    eq(text(bits[0]), A.expectAuthor, name + ": the row names the original author");
+    eq(text(bits[bits.length - 1]), A.expectAdopted, name + ": the adopted bit names the fork");
+    const adopted = bits[bits.length - 1];
+    eq(adopted.getAttribute("href"), A.expectHref, name + ": the adopted bit links the fork");
+  }
+  const bare = GS.indexCommit({ sha, author: A.committer, email: A.committerEmail, ts: 1750000000, message: A.messageNoEmail });
+  eq(GS.effectiveAuthor(bare, bare.gitmsg) + " " + GS.effectiveAuthorEmail(bare, bare.gitmsg), A.committer + " " + A.committerEmail, "a GitMsg-Ref with no email is no reference, so the row falls back to the committer");
+  const edit = GS.indexCommit({ sha: "b".repeat(40), author: A.committer, email: A.committerEmail, ts: 1750000001, message: A.crossRepoEdit });
+  eq(GS.resolveItems([edit]).length, 0, "a cross-repository edit is no item");
+}
+
 console.log("=== parity invariant: the home section's row count ===");
 eq(GS.HOME_ROWS, FIX.homeRows.limit, "the home section shows the fixture's row count");
 

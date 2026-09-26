@@ -145,6 +145,19 @@ type parityItemCounts struct {
 	Expect map[string]int `json:"expect"`
 }
 
+// parityAdopted pins an adopted copy's row and a cross-repository edit neither renderer lists.
+type parityAdopted struct {
+	Message        string   `json:"message"`
+	Committer      string   `json:"committer"`
+	CommitterEmail string   `json:"committerEmail"`
+	ExpectAuthor   string   `json:"expectAuthor"`
+	ExpectBits     []string `json:"expectBits"`
+	ExpectAdopted  string   `json:"expectAdopted"`
+	ExpectHref     string   `json:"expectHref"`
+	CrossRepoEdit  string   `json:"crossRepoEdit"`
+	MessageNoEmail string   `json:"messageNoEmail"`
+}
+
 // parityHomeRows pins how many root entries the home section shows before its chevron.
 type parityHomeRows struct {
 	Limit int `json:"limit"`
@@ -215,6 +228,7 @@ type parityFixtures struct {
 	ReleaseAssets  []parityReleaseAssetsCase `json:"releaseAssets"`
 	CardSkeleton   parityCardSkeleton        `json:"cardSkeleton"`
 	HomeRows       parityHomeRows            `json:"homeRows"`
+	Adopted        parityAdopted             `json:"adopted"`
 	ItemCounts     parityItemCounts          `json:"itemCounts"`
 	MarkdownPaths  []parityMarkdownPath      `json:"markdownPaths"`
 	MDXStrip       []parityMDXStripCase      `json:"mdxStrip"`
@@ -535,6 +549,35 @@ func TestParityItemCounts(t *testing.T) {
 	}
 	if got := siteItemCounts(roots); !maps.Equal(got, f.ItemCounts.Expect) {
 		t.Errorf("item counts = %v, want %v", got, f.ItemCounts.Expect)
+	}
+}
+
+// TestParityAdopted asserts an adopted copy indexes and renders under its original author with the adopted-from bit, and a cross-repository edit is no item, against the fixture unit_parity.js also asserts.
+func TestParityAdopted(t *testing.T) {
+	f := loadParityFixtures(t).Adopted
+	sha := strings.Repeat("a", 40)
+	entry := metaOf(walkedItem{SHA: sha, Author: f.Committer, Email: f.CommitterEmail, TS: 1750000000, Header: extractHeaderLine(f.Message), Message: f.Message})
+	msg := &sitePageMsg{Ext: "pm", SHA: sha, Short: sha[:12], Author: entry.Author, Email: entry.Email, TS: entry.TS, Subject: entry.Subject,
+		Header: protocol.ParseHeader(entry.Header), AdoptedAuthor: entry.AdoptedAuthor, AdoptedEmail: entry.AdoptedEmail}
+	meta := siteRowMeta(&sitePageItem{Msg: msg, Resolved: msg}, "../i/"+msg.Short+".html")
+	if got := strings.Join(parityBitClasses(meta, len(meta)), ","); got != strings.Join(f.ExpectBits, ",") {
+		t.Errorf("row bits = %q, want %q", got, strings.Join(f.ExpectBits, ","))
+	}
+	if meta[0].Text != f.ExpectAuthor {
+		t.Errorf("row author = %q, want %q", meta[0].Text, f.ExpectAuthor)
+	}
+	if last := meta[len(meta)-1]; last.Text != f.ExpectAdopted || last.Href != f.ExpectHref {
+		t.Errorf("adopted bit = %+v, want %q linking %q", last, f.ExpectAdopted, f.ExpectHref)
+	}
+	// A GitMsg-Ref with no email is no reference, so the row falls back to the committer on both renderers.
+	bare := metaOf(walkedItem{SHA: sha, Author: f.Committer, Email: f.CommitterEmail, TS: 1750000000, Header: extractHeaderLine(f.MessageNoEmail), Message: f.MessageNoEmail})
+	bareMsg := &sitePageMsg{Author: bare.Author, Email: bare.Email, Header: protocol.ParseHeader(bare.Header), AdoptedAuthor: bare.AdoptedAuthor, AdoptedEmail: bare.AdoptedEmail}
+	if bit := sitePageAuthorBit(bareMsg); bit.Text != f.Committer || bit.Title != f.CommitterEmail {
+		t.Errorf("author bit for an invalid GitMsg-Ref = %+v, want the committer %q", bit, f.Committer)
+	}
+	edit := sitePageMsg{Ext: "pm", SHA: strings.Repeat("b", 40), Short: strings.Repeat("b", 12), Header: protocol.ParseHeader(extractHeaderLine(f.CrossRepoEdit))}
+	if roots := buildSitePageThreads(map[string][]sitePageMsg{"pm": {edit}}); len(roots["pm"]) != 0 {
+		t.Errorf("a cross-repository edit became %d items, want none", len(roots["pm"]))
 	}
 }
 

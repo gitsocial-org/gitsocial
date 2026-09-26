@@ -183,6 +183,7 @@ func newPMIssueCmd() *cobra.Command {
 		newPMIssueEditCmd(),
 		newPMIssueCloseCmd(),
 		newPMIssueReopenCmd(),
+		newPMIssueAdoptCmd(),
 		newPMIssueCommentCmd(),
 		newPMIssueCommentsCmd(),
 	)
@@ -639,6 +640,31 @@ func newPMIssueCloseCmd() *cobra.Command {
 			} else {
 				PrintSuccess(cmd, "Issue closed")
 			}
+			return nil
+		},
+	}
+}
+
+// newPMIssueAdoptCmd builds the command that adopts a registered fork's issue into this repository.
+func newPMIssueAdoptCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "adopt <issue-id>",
+		Short: "Adopt a registered fork's issue",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !EnsureGitRepo(cmd) {
+				return exit(ExitNotRepo)
+			}
+			cfg := GetConfig(cmd)
+			result := pm.AdoptIssue(cfg.WorkDir, args[0])
+			if !result.Success {
+				PrintError(cmd, result.Error.Text())
+				return exit(ExitError)
+			}
+			if cfg.JSONOutput {
+				return PrintJSON(cmd, result.Data)
+			}
+			PrintSuccess(cmd, "Issue adopted: "+result.Data.ID)
 			return nil
 		},
 	}
@@ -1716,12 +1742,24 @@ func printIssueDetails(out io.Writer, issue pm.Issue) {
 		stateDisplay = "closed"
 	}
 
-	authorName, authorEmail, created := ResolveDisplayIdentity(issue.Author.Name, issue.Author.Email, issue.Timestamp, issue.Origin)
+	// An adopted copy names its original author, verified against the original's own commit.
+	author, when, verifyRepo, verifyHash := issue.Author, issue.Timestamp, issue.Repository, protocol.ParseRef(issue.ID).Value
+	if issue.OriginalAuthor != nil {
+		adopted := protocol.ParseRef(issue.Adopts)
+		author, verifyRepo, verifyHash = *issue.OriginalAuthor, adopted.Repository, adopted.Value
+		if !issue.OriginalTime.IsZero() {
+			when = issue.OriginalTime
+		}
+	}
+	authorName, authorEmail, created := ResolveDisplayIdentity(author.Name, author.Email, when, issue.Origin)
 	fmt.Fprintf(out, "Issue: %s\n", issue.ID)
 	fmt.Fprintf(out, "State: %s\n", stateDisplay)
 	fmt.Fprintf(out, "Subject: %s\n", issue.Subject)
-	fmt.Fprintf(out, "Author: %s\n", FormatAuthorWithVerification(authorName, authorEmail, issue.Repository, protocol.ParseRef(issue.ID).Value))
+	fmt.Fprintf(out, "Author: %s\n", FormatAuthorWithVerification(authorName, authorEmail, verifyRepo, verifyHash))
 	fmt.Fprintf(out, "Created: %s\n", created.Format(time.RFC3339))
+	if issue.Adopts != "" {
+		fmt.Fprintf(out, "Adopted from: %s\n", issue.Adopts)
+	}
 
 	if len(issue.Labels) > 0 {
 		var labelStrs []string

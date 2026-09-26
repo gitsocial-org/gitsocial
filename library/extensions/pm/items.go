@@ -48,6 +48,9 @@ type PMItem struct {
 	IsVirtual        bool
 	// Derived from social_interactions
 	Comments int
+	// Adopts names the original this copy adopts, and AdoptedRefs carries the copy's own GitMsg-Ref trailers, both read from its raw message
+	Adopts      string
+	AdoptedRefs []protocol.Ref
 }
 
 var baseSelectFromView = cache.ResolvedSelect("pm_items_resolved", `v.type, v.state,
@@ -492,12 +495,14 @@ func GetIssuesWithForks(workspaceURL, workspaceBranch string, forkURLs, states [
 	if err != nil {
 		return result.Err[[]Issue]("QUERY_FAILED", err.Error())
 	}
+	// A fork original the workspace has adopted collapses into its copy.
+	adopted := adoptedOriginals(workspaceURL)
 	// Deduplicate by hash: workspace items take priority over fork duplicates
 	// (can happen when forks are created via git clone --mirror)
 	seen := make(map[string]bool, len(items))
 	issues := make([]Issue, 0, len(items))
 	for _, item := range items {
-		if seen[item.Hash] {
+		if seen[item.Hash] || (item.RepoURL != workspaceURL && adopted[adoptedKey(item.RepoURL, item.Hash)]) {
 			continue
 		}
 		seen[item.Hash] = true
@@ -584,6 +589,11 @@ func scanResolvedRow(s cache.RowScanner) (*PMItem, error) {
 	item.EditOf, item.Comments = meta.EditOf, meta.Comments
 	item.IsVirtual, item.IsRetracted = meta.IsVirtual, meta.IsRetracted
 	item.IsEdited, item.HasProposedEdits = meta.IsEdited, meta.HasProposed
+	if meta.RawMessage.Valid {
+		if msg := protocol.ParseMessage(meta.RawMessage.String); msg != nil && msg.Header.Fields["adopts"] != "" {
+			item.Adopts, item.AdoptedRefs = msg.Header.Fields["adopts"], msg.References
+		}
+	}
 	return &item, nil
 }
 
@@ -763,7 +773,7 @@ func PMItemToIssue(item PMItem) Issue {
 	subject, body := protocol.SplitSubjectBody(item.Content)
 	id := protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch)
 
-	return Issue{
+	issue := Issue{
 		ID:         id,
 		Repository: item.RepoURL,
 		Branch:     item.Branch,
@@ -791,6 +801,11 @@ func PMItemToIssue(item PMItem) Issue {
 		Comments:         item.Comments,
 		Origin:           item.Origin,
 	}
+	if item.Adopts != "" {
+		issue.Adopts = item.Adopts
+		issue.OriginalAuthor, issue.OriginalTime = adoptedAuthor(item.Adopts, item.AdoptedRefs)
+	}
+	return issue
 }
 
 // PMItemToMilestone converts a PMItem to a Milestone.

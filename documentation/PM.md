@@ -24,6 +24,7 @@ gitsocial pm issue show <ref>
 gitsocial pm issue edit <ref> [--subject ...] [--body ...] [--state ...] [-l ...] [-a ...]
 gitsocial pm issue close <ref>
 gitsocial pm issue reopen <ref>
+gitsocial pm issue adopt <ref>                 # a registered fork's issue, copied into this repository
 gitsocial pm issue comment <ref> "Repro steps below"
 gitsocial pm issue comments <ref>
 ```
@@ -67,7 +68,7 @@ gitsocial fork add <fork-url>
 gitsocial fetch
 ```
 
-Issues opened on a registered fork appear in `pm issue list` and raise notifications. Editing, closing or assigning one adopts it: the first change copies the issue into this repository, carrying `adopts`, and later changes edit the copy. An edit made from another repository is a proposal until the owner accepts it.
+Issues opened on a registered fork appear in `pm issue list` and raise notifications. `pm issue adopt` copies one into this repository unchanged, and editing, closing or assigning one adopts it the same way; the copy carries `adopts`, and later changes edit it. An edit made from another repository is a proposal until the owner accepts it.
 
 ## Board
 

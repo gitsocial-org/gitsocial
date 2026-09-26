@@ -25,6 +25,7 @@ type issueDetailView struct {
 	height           int
 	issueID          string
 	issue            *pm.Issue
+	adoptable        bool // a registered fork's issue, read once per load since the check reads the fork registry
 	milestone        *pm.Milestone
 	sprint           *pm.Sprint
 	parent           *pm.Issue
@@ -179,6 +180,7 @@ func (v *issueDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		v.loaded = true
 		if msg.Err == nil {
 			v.issue = msg.Issue
+			v.adoptable = v.issue != nil && v.issue.Repository != v.workspaceURL && pm.IsRegisteredFork(v.workdir, v.issue.Repository)
 			v.milestone = msg.Milestone
 			v.sprint = msg.Sprint
 			v.parent = msg.Parent
@@ -272,12 +274,21 @@ func (v *issueDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 				}
 			case "C":
 				if v.issue != nil && v.issue.State == pm.StateOpen {
-					proposed := v.issue.Repository != v.workspaceURL
+					// A registered fork's issue is adopted by the close; any other repository's gets a proposal.
+					foreign := v.issue.Repository != v.workspaceURL
+					proposed := foreign && !pm.IsRegisteredFork(v.workdir, v.issue.Repository)
 					prompt := "Close this issue?"
 					if proposed {
 						prompt = "Propose closing this issue on " + protocol.GetDisplayName(v.issue.Repository) + "?"
+					} else if foreign {
+						prompt = "Adopt and close this issue from " + protocol.GetDisplayName(v.issue.Repository) + "?"
 					}
 					v.confirm.Show(prompt, false, func() tea.Cmd { return v.closeIssue(proposed) })
+					return nil
+				}
+			case "A":
+				if v.issue != nil && v.adoptable {
+					v.confirm.Show("Adopt this issue from "+protocol.GetDisplayName(v.issue.Repository)+"?", false, v.adoptIssue)
 					return nil
 				}
 			case "left":
@@ -430,18 +441,49 @@ func (v *issueDetailView) buildSections() {
 	v.sectionList.SetSections(sections)
 }
 
-// closeIssue closes the issue and reloads it, carrying whether the close was only a proposal.
+// closeIssue closes the issue and reloads it, or opens the copy when the close adopted a fork's issue.
 func (v *issueDetailView) closeIssue(proposed bool) tea.Cmd {
-	issueID := v.issue.ID
+	issueID, workdir := v.issue.ID, v.workdir
+	adopted := ""
 	return tea.Sequence(
 		func() tea.Msg {
-			result := pm.CloseIssue("", issueID)
+			result := pm.CloseIssue(workdir, issueID)
 			if !result.Success {
 				return issueClosedMsg{ID: issueID, Proposed: proposed, Err: fmt.Errorf("%s", result.Error.Text())}
 			}
-			return issueClosedMsg{ID: issueID, Proposed: proposed}
+			if result.Data.ID != issueID {
+				adopted = result.Data.ID
+			}
+			return issueClosedMsg{ID: result.Data.ID, Proposed: proposed}
 		},
-		v.loadIssue(),
+		func() tea.Msg {
+			if adopted != "" {
+				return tuicore.NavigateMsg{Location: tuicore.LocPMIssueDetail(adopted), Action: tuicore.NavReplace}
+			}
+			return v.loadIssue()()
+		},
+	)
+}
+
+// adoptIssue adopts a registered fork's issue and opens the workspace copy.
+func (v *issueDetailView) adoptIssue() tea.Cmd {
+	issueID, workdir := v.issue.ID, v.workdir
+	adopted := ""
+	return tea.Sequence(
+		func() tea.Msg {
+			result := pm.AdoptIssue(workdir, issueID)
+			if !result.Success {
+				return issueAdoptedMsg{ID: issueID, Err: fmt.Errorf("%s", result.Error.Text())}
+			}
+			adopted = result.Data.ID
+			return issueAdoptedMsg{ID: adopted}
+		},
+		func() tea.Msg {
+			if adopted == "" {
+				return nil
+			}
+			return tuicore.NavigateMsg{Location: tuicore.LocPMIssueDetail(adopted), Action: tuicore.NavReplace}
+		},
 	)
 }
 
@@ -510,7 +552,12 @@ func (v *issueDetailView) Render(state *tuicore.State) string {
 	} else if v.confirm.IsActive() {
 		footer = v.confirm.Render()
 	} else {
-		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.PMIssueDetail, v.sourceIndex+1, v.sourceTotal, exclude, nil)
+		// A (adopt) is bound to a letter the footer hides, so force-show it where it applies.
+		var include map[string]bool
+		if v.adoptable {
+			include = map[string]bool{"A": true}
+		}
+		footer = tuicore.RenderFooterWithPosition(state.Registry, tuicore.PMIssueDetail, v.sourceIndex+1, v.sourceTotal, exclude, include)
 	}
 	return wrapper.Render(content, footer)
 }
@@ -556,6 +603,10 @@ func renderIssueCard(issue *pm.Issue, milestone *pm.Milestone, sprint *pm.Sprint
 	lines = append(lines, selectionBar+styles.Label.Render("State")+stateStr)
 	if !opts.version {
 		lines = append(lines, tuicore.RenderOriginRows(issue.Origin, styles, selectionBar, anchors, opts.showEmail)...)
+	}
+	if issue.Adopts != "" {
+		adopted := protocol.ParseRef(issue.Adopts)
+		lines = append(lines, selectionBar+styles.Label.Render("Adopted from")+anchors.MarkLink(adopted.Repository, protocol.CommitURL(adopted.Repository, adopted.Value), tuicore.LocPMIssueDetail(issue.Adopts)))
 	}
 	if len(issue.Assignees) > 0 {
 		lines = append(lines, selectionBar+styles.Label.Render("Assignees")+styles.Value.Render(formatAssignees(issue.Assignees, contributorNames)))
@@ -700,16 +751,24 @@ func (v *issueDetailView) Title() string {
 	if v.issue == nil {
 		return "○  Issue"
 	}
-	author := v.issue.Author.Name
-	if v.showEmail && v.issue.Author.Email != "" {
-		author += " <" + v.issue.Author.Email + ">"
+	// An adopted copy names its original author, and an import origin names the author on the source platform.
+	displayAuthor, displayTime := v.issue.Author, v.issue.Timestamp
+	if v.issue.OriginalAuthor != nil {
+		displayAuthor = *v.issue.OriginalAuthor
+		if !v.issue.OriginalTime.IsZero() {
+			displayTime = v.issue.OriginalTime
+		}
+	}
+	author := displayAuthor.Name
+	if v.showEmail && displayAuthor.Email != "" {
+		author += " <" + displayAuthor.Email + ">"
 	}
 	if v.issue.Origin != nil {
 		if a := tuicore.FormatOriginAuthorDisplay(v.issue.Origin, v.showEmail); a != "" {
 			author = a
 		}
 	}
-	timestamp := tuicore.FormatTime(v.issue.Timestamp)
+	timestamp := tuicore.FormatTime(displayTime)
 	if v.issue.Origin != nil && v.issue.Origin.Time != "" {
 		timestamp = tuicore.FormatOriginTime(v.issue.Origin.Time)
 	}
@@ -731,6 +790,7 @@ func (v *issueDetailView) Bindings() []tuicore.Binding {
 		return true, ctx.StartPush()
 	}
 	return []tuicore.Binding{
+		{Key: "A", Label: "adopt", Contexts: []tuicore.Context{tuicore.PMIssueDetail}, Handler: noop},
 		{Key: "c", Label: "comment", Contexts: []tuicore.Context{tuicore.PMIssueDetail}, Handler: noop},
 		{Key: "n", Label: "sub-issue", Contexts: []tuicore.Context{tuicore.PMIssueDetail}, Handler: noop},
 		{Key: "e", Label: "edit", Contexts: []tuicore.Context{tuicore.PMIssueDetail}, Handler: noop},

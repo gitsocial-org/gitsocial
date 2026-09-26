@@ -364,6 +364,7 @@
 | Key | Action |
 |-----|--------|
 | SectionList navigation | (see Shared Navigation) |
+| `A` | Adopt |
 | `c` | Comment |
 | `n` | Sub-issue |
 | `e` | Edit |

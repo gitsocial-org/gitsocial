@@ -261,6 +261,8 @@ func handlePMMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return handleSprintCreated(msg, ctx)
 	case issueClosedMsg:
 		return handleStateChange(msg.Err, "Issue closed", "Close proposed (awaiting acceptance)", msg.Proposed, ctx)
+	case issueAdoptedMsg:
+		return handleStateChange(msg.Err, "Issue adopted", "", false, ctx)
 	case milestoneClosedMsg:
 		return handleStateChange(msg.Err, "Milestone closed", "Close proposed (awaiting acceptance)", msg.Proposed, ctx)
 	case sprintCompletedMsg:

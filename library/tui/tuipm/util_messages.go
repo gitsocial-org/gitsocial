@@ -25,6 +25,12 @@ type issueClosedMsg struct {
 	Err      error
 }
 
+// issueAdoptedMsg signals that a registered fork's issue was adopted into a workspace copy, ID naming the copy.
+type issueAdoptedMsg struct {
+	ID  string
+	Err error
+}
+
 // milestoneClosedMsg signals a milestone close (Proposed = cross-repo proposal).
 type milestoneClosedMsg struct {
 	ID       string

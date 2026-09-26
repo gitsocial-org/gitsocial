@@ -95,6 +95,13 @@ func issueToCardWithOptions(issue pm.Issue, opts issueToCardOptions) tuicore.Car
 			subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: t})
 		}
 	}
+	if issue.Adopts != "" {
+		adopted := "adopted from " + protocol.ParseRef(issue.Adopts).Repository
+		if issue.OriginalAuthor != nil && issue.OriginalAuthor.Name != "" {
+			adopted += " · " + issue.OriginalAuthor.Name
+		}
+		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: adopted})
+	}
 	if ref := tuicore.BuildRef(issue.ID, issue.Repository, issue.Branch, false); ref != "" {
 		loc := tuicore.LocRepository(issue.Repository, issue.Branch)
 		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: ref, Link: &loc})

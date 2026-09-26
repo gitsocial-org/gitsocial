@@ -30,6 +30,8 @@ type CreateIssueOptions struct {
 	// Accepts names the cross-repo proposal this same-repo mirror edit accepts;
 	// emitted as the accepts= header field (GITMSG.md §1.5).
 	Accepts string
+	// Adopts names the fork original this copy adopts (GITMSG.md §1.5).
+	Adopts string
 }
 
 // CreateIssue creates a new issue on the PM branch.
@@ -115,6 +117,12 @@ func UpdateIssue(workdir, issueRef string, opts UpdateIssueOptions) Result[Issue
 	if err != nil {
 		return result.Err[Issue]("NOT_FOUND", "issue not found")
 	}
+	// A change to a fork original the workspace has adopted edits the copy instead (GITMSG.md 1.5).
+	if existing.RepoURL != repoURL {
+		if copied := findAdoptedCopy(repoURL, existing.RepoURL, existing.Hash); copied != nil {
+			existing = copied
+		}
+	}
 
 	branch := gitmsg.GetExtBranch(workdir, "pm")
 
@@ -167,6 +175,13 @@ func UpdateIssue(workdir, issueRef string, opts UpdateIssueOptions) Result[Issue
 
 	subject := issue.Subject
 	body := issue.Body
+	// The first change to a registered fork's issue adopts it; any other repository's issue gets a proposal.
+	adopt := existing.RepoURL != repoURL && IsRegisteredFork(workdir, existing.RepoURL)
+	forkRef := protocol.CreateRef(protocol.RefTypeCommit, existing.Hash, existing.RepoURL, existing.Branch)
+	var adoptedRef protocol.Ref
+	if adopt {
+		adoptedRef = adoptedRefSection(existing, subject, body, forkRef)
+	}
 
 	if opts.State != nil {
 		createOpts.State = *opts.State
@@ -226,7 +241,13 @@ func UpdateIssue(workdir, issueRef string, opts UpdateIssueOptions) Result[Issue
 		refs = []protocol.Ref{*opts.Attribution}
 		createOpts.Accepts = opts.Attribution.Ref
 	}
-	content := buildIssueContentWithEdits(subject, body, createOpts, canonicalRef, refs)
+	var content string
+	if adopt {
+		createOpts.Adopts = forkRef
+		content = buildIssueContentWithEdits(subject, body, createOpts, "", append([]protocol.Ref{adoptedRef}, refs...))
+	} else {
+		content = buildIssueContentWithEdits(subject, body, createOpts, canonicalRef, refs)
+	}
 
 	hash, err := git.CreateCommitOnBranch(workdir, branch, content)
 	if err != nil {
@@ -235,6 +256,13 @@ func UpdateIssue(workdir, issueRef string, opts UpdateIssueOptions) Result[Issue
 
 	if err := cacheIssueFromCommit(workdir, repoURL, hash, branch); err != nil {
 		return result.Err[Issue]("CACHE_FAILED", err.Error())
+	}
+	if adopt {
+		copied, err := GetPMItem(repoURL, hash, branch)
+		if err != nil {
+			return result.Err[Issue]("GET_FAILED", err.Error())
+		}
+		return result.Ok(PMItemToIssue(*copied))
 	}
 
 	// Return the canonical issue with updated content
@@ -316,6 +344,9 @@ func buildIssueContentWithEdits(subject, body string, opts CreateIssueOptions, e
 	}
 	if opts.Accepts != "" {
 		fields["accepts"] = opts.Accepts
+	}
+	if opts.Adopts != "" {
+		fields["adopts"] = opts.Adopts
 	}
 	if len(opts.Assignees) > 0 {
 		fields["assignees"] = strings.Join(opts.Assignees, ",")

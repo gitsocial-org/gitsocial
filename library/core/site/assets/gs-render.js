@@ -442,6 +442,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       row.append(" · ", el("a", { class: "hash", href: commitRef(c.hash, branch) }, [c.short]));
     }
     if (item.edited) row.append(" · ", editedBit(item.editorName, item.editedTime || when));
+    // An adopted copy names the repository it came from, linked when browsable (sitePageAdoptedBit).
+    if (h.adopts) {
+      const repo = refRepoUrl(h.adopts);
+      row.append(" · ", el(/^https:\/\//.test(repo) ? "a" : "span", /^https:\/\//.test(repo) ? { class: "adopted", href: repo } : { class: "adopted" }, ["adopted from " + repo]));
+    }
     return row;
   }
 

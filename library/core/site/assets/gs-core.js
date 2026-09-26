@@ -771,7 +771,18 @@
     if (header["origin-author-name"]) return header["origin-author-name"];
     const h = originHandle(header["origin-author-email"]);
     if (h) return h;
+    const adopted = adoptedAuthorOf(commit, header);
+    if (adopted) return adopted.name || adopted.email || "unknown";
     return (commit && (commit.authorName || commit.authorEmail)) || "unknown";
+  }
+
+  // adoptedAuthorOf returns an adopted copy's original author, from the index entry or the GitMsg-Ref its adopts field names; null for any other item. Mirrors pageDisplayAuthor in site_pages_thread.go.
+  function adoptedAuthorOf(commit, header) {
+    if (!commit || !(header && header.adopts)) return null;
+    if (commit.adoptedAuthor || commit.adoptedEmail) return { name: commit.adoptedAuthor || "", email: commit.adoptedEmail || "" };
+    // A GitMsg-Ref missing a required field is no reference at all (GITMSG.md 1.3), as protocol.ParseRefSection drops it.
+    const ref = (commit.refs || []).find((r) => r.ref === header.adopts && r.ext && r.v && r.author && r.email && r.time);
+    return ref ? { name: ref.author || "", email: ref.email || "" } : null;
   }
 
   // authorLabel picks a meta row's author label: the display name, else the email, else "unknown".
@@ -782,7 +793,9 @@
   // effectiveAuthorEmail returns the identity email an item is attributed to, origin email over git email.
   function effectiveAuthorEmail(commit, header) {
     header = header || {};
-    return header["origin-author-email"] || (commit && commit.authorEmail) || "";
+    if (header["origin-author-email"]) return header["origin-author-email"];
+    const adopted = adoptedAuthorOf(commit, header);
+    return adopted ? adopted.email : (commit && commit.authorEmail) || "";
   }
 
   // eqFold compares two strings case-insensitively after trimming.
@@ -858,6 +871,8 @@
     for (const [target, edit] of editsFor) {
       if (byShort.has(target) || consumed.has(target)) continue;
       if (edit.gitmsg.retracted === "true") continue;
+      // An edit of another repository's item is a proposal to it (GITMSG.md 1.5), never an item of this one.
+      if (refRepoUrl(edit.gitmsg.edits)) continue;
       const h = Object.assign({}, edit.gitmsg);
       const author = effectiveAuthor(edit, edit.gitmsg);
       // Orphan edits: the collected edits become the version chain, the first standing in for the missing canonical.
@@ -988,6 +1003,7 @@
       authorName: e.author || "", authorEmail: e.email || "", authorTime: e.ts || 0,
       content: "", rawMessage: header, subject: String(e.subject || ""),
       gitmsg: parseGitmsg(header), refs: [], hollow: true,
+      adoptedAuthor: e.adoptedAuthor || "", adoptedEmail: e.adoptedEmail || "",
     };
   }
 
@@ -4158,7 +4174,7 @@
   const core = {
     deriveBase, repoTitle, fetchBytes, fetchText, fetchRange, inflate, parseLooseObject, objectKey,
     getObject, getContentObject, getStateObject, getPackedObject, packNames, bucketIsPacked, packMapShard, packIdxOpen, packIdxLookup, packIdxFind, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
-    walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, parseBranchField, resolveItems,
+    walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, parseBranchField, resolveItems, adoptedAuthorOf,
     buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail, authorLabel,
     feedbackLine, feedbackAnchorKey, feedbackVerdict, feedbackAnchorLabel, hunkLineKeys, anchorFeedback, prFeedback,
     reviewSummary, suggestionBody,

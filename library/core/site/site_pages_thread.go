@@ -30,6 +30,9 @@ type sitePageMsg struct {
 	Subject string
 	Message string           // full raw commit message from the bodies corpus
 	Header  *protocol.Header // nil for plain commits (implicit posts)
+	// AdoptedAuthor and AdoptedEmail name an adopted copy's original author (siteMetaEntry)
+	AdoptedAuthor string
+	AdoptedEmail  string
 }
 
 // sitePageItem is one resolved item: the canonical message plus the latest same-repo version's content and state.
@@ -112,9 +115,12 @@ func pageEffectiveTime(m *sitePageMsg) int64 {
 	return m.TS
 }
 
-// pageDisplayAuthor returns a message's display author, preferring the origin provenance of imported content.
+// pageDisplayAuthor returns a message's display author: an adopted copy's original author, then the origin provenance of imported content over both. Mirrors effectiveAuthor in gs-core.js.
 func pageDisplayAuthor(m *sitePageMsg) (name, email string) {
 	name, email = m.Author, m.Email
+	if m.AdoptedAuthor != "" || m.AdoptedEmail != "" {
+		name, email = m.AdoptedAuthor, m.AdoptedEmail
+	}
 	if o := protocol.ExtractOrigin(m.Header); o != nil {
 		if n := protocol.OriginDisplayAuthor(o); n != "" {
 			name = n
@@ -310,6 +316,7 @@ func readSitePagesMeta(client *objstore.Client, prefix, ext string, items *siteS
 		msgs = append(msgs, sitePageMsg{
 			Ext: ext, SHA: e.SHA, Short: e.SHA[:12], Idx: len(msgs), Author: e.Author, Email: e.Email,
 			TS: e.TS, Subject: e.Subject, Header: protocol.ParseHeader(e.Header),
+			AdoptedAuthor: e.AdoptedAuthor, AdoptedEmail: e.AdoptedEmail,
 		})
 	}
 	return msgs, nil

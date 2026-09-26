@@ -706,6 +706,20 @@ func sitePageEditorName(it *sitePageItem) string {
 	return sitePageAuthorLabel(editName, editEmail)
 }
 
+// sitePageAdoptedBit names the repository an adopted copy came from, linked when it is browsable; ok is false for any other item.
+func sitePageAdoptedBit(it *sitePageItem) (sitePageBit, bool) {
+	adopts := pageHeaderField(it.Msg, "adopts")
+	if adopts == "" {
+		return sitePageBit{}, false
+	}
+	repo := protocol.ParseRef(adopts).Repository
+	bit := sitePageBit{Class: "adopted", Text: "adopted from " + repo}
+	if strings.HasPrefix(repo, "https://") {
+		bit.Href = repo
+	}
+	return bit, true
+}
+
 // sitePageEditedBit builds the edited marker: the edit's precise time in its title, and the editor when it is not the author.
 func sitePageEditedBit(it *sitePageItem) sitePageBit {
 	text := "edited"
@@ -744,6 +758,9 @@ func siteItemPageMeta(it *sitePageItem) []sitePageBit {
 	}
 	if it.Edited && !it.Retracted {
 		bits = append(bits, sitePageEditedBit(it))
+	}
+	if bit, ok := sitePageAdoptedBit(it); ok {
+		bits = append(bits, bit)
 	}
 	bits = append(bits, sitePageTextBit(sitePageTypeLabel(t)))
 	switch t {
@@ -1088,6 +1105,9 @@ func siteRowMeta(it *sitePageItem, href string) []sitePageBit {
 	}
 	if it.Edited && !it.Retracted {
 		meta = append(meta, sitePageEditedBit(it))
+	}
+	if bit, ok := sitePageAdoptedBit(it); ok {
+		meta = append(meta, bit)
 	}
 	return meta
 }

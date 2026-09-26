@@ -140,7 +140,7 @@ Under `.gitsocial/site/`, read by the app in place of object walks, together wit
 | Key | Content |
 |---|---|
 | `version` | shell version marker, a hash of the raw assets |
-| `items/<ext>/` | per-extension metadata index: sealed shards, a mutable head, a manifest |
+| `items/<ext>/` | per-extension metadata index: sealed shards, a mutable head, a manifest; an adopted copy's entry also names its original author |
 | `bodies/<ext>/` | message bodies, loaded on demand |
 | `items/code/` | one index of plain commits across code branches, with parent shas and no bodies |
 | `pages.json` | page-layer manifest: schema version, consumed tips, bootstrap cursor, list and commits partitions, the sidebar's item counts |
@@ -157,6 +157,7 @@ The shell and the pages:
 - A configured accent is stamped per push as a `:root` override after the inlined core, so the shell version comes from the binary alone.
 - `index.html` has two owners: the page layer while it is effective, the shell otherwise. Every effective rebuild reclaims it.
 - The page layer and the app render markdown with one grammar, ported between JS and Go and asserted equal.
+- An adopted copy (GITMSG.md §1.5) shows its original author and the repository it came from on both renderers. A cross-repository edit is a proposal, so neither lists it.
 - File discovery reads the default branch's tree from the pusher's local odb. A tree it cannot read carries the published set forward.
 - A changed default branch rewrites every page.
 - The sidebar counts are the app's alone. Branches and tags come from `refs.json`; commits and the item counts come from `pages.json`, which carries the item counts only after a complete pass. An item count is the open work, the rows its list opens on: Issues, Pull Requests, Milestones and Sprints open on their Open filter. A generated page's sidebar carries no count, since a sealed page is not rewritten when a count moves.

@@ -321,6 +321,13 @@ Params:
 
 Result: `Issue`
 
+#### pm.adoptIssue
+
+Params:
+- `ref` (string, required): Ref of a registered fork's issue
+
+Result: `Issue`, the workspace copy; an issue adopted before returns its copy
+
 #### pm.retractIssue
 
 Params:
@@ -1183,6 +1190,9 @@ Times are RFC 3339 strings. Refs are strings in `#commit:hash@branch` or `url#co
 | `IsEdited`, `HasProposedEdits`, `IsRetracted`, `IsUnpushed` | bool | |
 | `Comments` | int | |
 | `Origin` | object | `null` when native |
+| `Adopts` | string | the fork issue this copy adopts, empty when native |
+| `OriginalAuthor` | Author | the adopted issue's author, `null` when native |
+| `OriginalTime` | string | RFC 3339, the adopted issue's time |
 
 ### Milestone
 
