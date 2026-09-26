@@ -510,3 +510,15 @@ func TestCreateRefSection_socialFieldOrdering(t *testing.T) {
 		t.Errorf("ref should come before v: ref=%d, v=%d", refIdx, vIdx)
 	}
 }
+
+// TestCreateHeader_CoreFieldOrder pins the core fields ahead of every extension field in GITMSG 1.2 order.
+func TestCreateHeader_CoreFieldOrder(t *testing.T) {
+	got := CreateHeader(Header{Ext: "pm", V: "0.1.0", FieldOrder: []string{"state"}, Fields: map[string]string{
+		"type": "issue", "edits": "#commit:aaaaaaaaaaaa@gitmsg/pm", "accepts": "https://f.example/r#commit:bbbbbbbbbbbb@gitmsg/pm",
+		"adopts": "https://f.example/r#commit:cccccccccccc@gitmsg/pm", "retracted": "true", "origin-url": "https://x.example/1", "state": "open",
+	}})
+	want := `GitMsg: ext="pm"; type="issue"; edits="#commit:aaaaaaaaaaaa@gitmsg/pm"; accepts="https://f.example/r#commit:bbbbbbbbbbbb@gitmsg/pm"; adopts="https://f.example/r#commit:cccccccccccc@gitmsg/pm"; retracted="true"; origin-url="https://x.example/1"; state="open"; v="0.1.0"`
+	if got != want {
+		t.Errorf("header =\n%s\nwant\n%s", got, want)
+	}
+}

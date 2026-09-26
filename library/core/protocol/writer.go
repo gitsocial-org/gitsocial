@@ -15,7 +15,7 @@ func CreateHeader(header Header) string {
 		fields = append(fields, fmt.Sprintf(`ext-v="%s"`, ev))
 	}
 
-	// Field order per GITMSG.md: ext, ext-v, type, edits, accepts, retracted, origin, extension-specific, v
+	// Field order per GITMSG.md: ext, ext-v, type, edits, accepts, adopts, retracted, origin, extension-specific, v
 	if t, ok := header.Fields["type"]; ok {
 		fields = append(fields, fmt.Sprintf(`type="%s"`, t))
 	}
@@ -24,6 +24,9 @@ func CreateHeader(header Header) string {
 	}
 	if a, ok := header.Fields["accepts"]; ok {
 		fields = append(fields, fmt.Sprintf(`accepts="%s"`, a))
+	}
+	if a, ok := header.Fields["adopts"]; ok {
+		fields = append(fields, fmt.Sprintf(`adopts="%s"`, a))
 	}
 	if r, ok := header.Fields["retracted"]; ok && r == "true" {
 		fields = append(fields, `retracted="true"`)
@@ -37,7 +40,7 @@ func CreateHeader(header Header) string {
 	}
 
 	// Extension-declared priority fields (before alphabetical remainder)
-	placed := map[string]bool{"type": true, "edits": true, "accepts": true, "retracted": true, "ext-v": true}
+	placed := map[string]bool{"type": true, "edits": true, "accepts": true, "adopts": true, "retracted": true, "ext-v": true}
 	for _, k := range header.FieldOrder {
 		if v, ok := header.Fields[k]; ok {
 			fields = append(fields, fmt.Sprintf(`%s="%s"`, k, v))

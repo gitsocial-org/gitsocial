@@ -421,11 +421,11 @@ func TestProcessReviewCommit_feedbackWithNoBranchInPRRef(t *testing.T) {
 	}
 }
 
-// specPRFieldOrder is GITREVIEW.md 1.2's field order behind the core header prelude.
+// specPRFieldOrder is GITREVIEW.md 1.2's field order behind the core header prelude of GITMSG.md 1.2.
 var specPRFieldOrder = []string{
-	"ext", "type", "edits", "accepts", "retracted",
+	"ext", "type", "edits", "accepts", "adopts", "retracted",
 	"state", "draft", "base", "base-tip", "head", "head-tip",
-	"depends-on", "closes", "merge-base", "merge-head", "reviewers", "labels", "adopts", "v",
+	"depends-on", "closes", "merge-base", "merge-head", "reviewers", "labels", "v",
 }
 
 // assertPRFieldOrder reports header fields that appear out of the spec's order, or are unknown.
