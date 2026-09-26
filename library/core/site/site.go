@@ -288,6 +288,9 @@ func rebuildSite(client *objstore.Client, prefix string, src *objstore.LocalComm
 	if err := writeSiteCustomization(client, prefix, refs, ov, src); err != nil {
 		return false, err
 	}
+	if err := writeSiteTags(client, prefix, refs, src); err != nil {
+		return false, err
+	}
 	defaultBranch := readSiteDefaultBranch(client, prefix)
 	if err := rebuildSiteItems(client, prefix, refs, defaultBranch, src, progress); err != nil {
 		return false, err

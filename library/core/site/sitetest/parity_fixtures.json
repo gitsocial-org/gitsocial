@@ -502,5 +502,11 @@
     "releases": "Releases",
     "memos": "Memos",
     "commits": "Commits"
-  }
+  },
+  "tagOrder": [
+    { "name": "hash suffixes tie and sort by date", "tags": [{ "name": "v3.1.0.7a1b2c3", "time": 100 }, { "name": "v3.1.0.41f0e9d", "time": 200 }, { "name": "v3.0.9.aa11bb2", "time": 50 }], "expect": ["v3.1.0.41f0e9d", "v3.1.0.7a1b2c3", "v3.0.9.aa11bb2"] },
+    { "name": "a plain version joins its hash-suffixed group", "tags": [{ "name": "v2.0", "time": 10 }, { "name": "v2.0.abcdef1", "time": 20 }], "expect": ["v2.0.abcdef1", "v2.0"] },
+    { "name": "equal dates keep name order", "tags": [{ "name": "v4.0.2222222", "time": 5 }, { "name": "v4.0.1111111", "time": 5 }], "expect": ["v4.0.1111111", "v4.0.2222222"] },
+    { "name": "versions first, suffix after plain, names by code point", "tags": [{ "name": "alpha", "time": 0 }, { "name": "v1.0-light", "time": 0 }, { "name": "Beta", "time": 0 }, { "name": "v1.2", "time": 0 }, { "name": "zeta", "time": 0 }, { "name": "v1.10", "time": 0 }, { "name": "v1.0", "time": 0 }], "expect": ["v1.10", "v1.2", "v1.0", "v1.0-light", "zeta", "alpha", "Beta"] }
+  ]
 }

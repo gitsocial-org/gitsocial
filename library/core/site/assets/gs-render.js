@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, peelTag, listMemberRef, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, peelTag, listMemberRef, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -3570,17 +3570,51 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return nodes;
   }
 
-  // tagsView renders one card per tag linking to its commit detail.
+  // TAGS_PAGE is the number of tag rows one window of the Tags page adds.
+  const TAGS_PAGE = 100;
+
+  // tagsView renders the tags a window at a time, with the date, author and commit count the tags artifact carries, and adds release chips once the release index loads.
   async function tagsView(ctx) {
-    const tags = await listTags(ctx);
+    const { tags, complete } = await orderedTags(ctx);
     if (!tags.length) return [el("div", { class: "empty" }, ["No tags in this repository."])];
-    return [countHead(tags.length, "tag")].concat(tags.map((t) => {
+    const heads = new Map();
+    let releases = null;
+    // addReleaseChip links a drawn tag row to the release that names its tag.
+    const addReleaseChip = (name) => {
+      const head = heads.get(name), rel = releases && releases.get(name);
+      if (head && rel) head.append(el("a", { class: "chip", href: commitRef(rel.commit.hash, "gitmsg/release") }, ["release"]));
+    };
+    // row renders one tag card.
+    const row = (t) => {
       const head = el("div", { class: "card-head" }, [
         el("a", { class: "subject mono", href: "#tag:" + t.name }, [t.name]),
         el("a", { class: "hash", href: "#tag:" + t.name }, [t.sha.slice(0, 12)]),
       ]);
-      return cardTagNav(card({ parts: [head] }), t.name);
-    }));
+      heads.set(t.name, head);
+      addReleaseChip(t.name);
+      const parts = [head];
+      const e = t.entry;
+      if (e) {
+        const meta = el("span", { class: "meta meta-lead" }, [authorEl(e.author, e.email), " · ", timeEl(e.time)]);
+        if (complete && typeof e.count === "number") meta.append(" · " + e.count + (e.count === 1 ? " commit" : " commits"));
+        parts.push(meta);
+      }
+      return cardTagNav(card({ parts }), t.name);
+    };
+    let shown = TAGS_PAGE;
+    const windowOf = () => ({ items: tags.slice(0, shown), truncated: tags.length > shown });
+    const list = pagedListView(windowOf(),
+      (items, box) => { heads.clear(); box.replaceChildren(...items.map(row)); },
+      async () => { shown += TAGS_PAGE; return windowOf(); });
+    loadExtItemsAll(ctx, "release").then((items) => {
+      releases = new Map();
+      for (const it of items) {
+        const tag = it.header.tag || "";
+        if ((it.header.type || "") === "release" && tag && !releases.has(tag)) releases.set(tag, it);
+      }
+      for (const name of heads.keys()) addReleaseChip(name);
+    }).catch(() => { /* the chips are best-effort; the list already painted */ });
+    return [countHead(tags.length, "tag")].concat(list);
   }
 
   // cardTagNav makes a tag card navigate to its #tag: route, sparing inner links and selections.
@@ -3601,9 +3635,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return m ? { name: m[1], email: m[2], time: parseInt(m[3], 10) } : null;
   }
 
-  // tagDetail renders a tag page: header, commits since the previous tag, and the three-dot diff against it.
+  // tagDetail renders a tag page: header, commits since the previous tag, and the three-dot diff against it, which enriches in the background.
   async function tagDetail(ctx, name) {
-    const tags = await listTags(ctx);
+    const { tags } = await orderedTags(ctx);
     const t = tags.find((x) => x.name === name);
     if (!t) return [el("div", { class: "err" }, ["Tag not found: " + name])];
     const peeled = await peelTag(ctx, t.sha);
@@ -3628,21 +3662,20 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
     const idx = tags.findIndex((x) => x.name === name);
     const prev = idx >= 0 ? tags[idx + 1] : undefined;
-    const prevCommit = prev ? (await peelTag(ctx, prev.sha)).commit : null;
+    const prevCommit = !prev ? null : prev.entry ? prev.entry.commit : (await peelTag(ctx, prev.sha)).commit;
     if (prevCommit) wrap.append(el("div", { class: "page-actions" }, [
       el("a", { class: "action-link", href: compareRef(prev.name, name) }, ["⇄ compare with " + prev.name]),
     ]));
     wrap.append(await tagCommitsSection(ctx, prev, prevCommit, peeled.commit));
 
-    if (prevCommit && prevCommit !== peeled.commit) {
+    if (prevCommit && prevCommit !== peeled.commit) enrichDetail(wrap, async () => {
       const mb = await resolveMergeBase(ctx, peeled.commit, prevCommit, DETAIL_WALK_CAP);
       const headTree = await commitTree(ctx, peeled.commit);
       const baseTree = await commitTree(ctx, mb || prevCommit);
-      if (headTree && baseTree) {
-        const entries = await diffTrees(ctx, baseTree, headTree);
-        wrap.append(diffSection(ctx, entries, "Files changed since " + prev.name, mb ? [] : ["no common ancestor — raw two-dot diff"]));
-      }
-    }
+      if (!headTree || !baseTree) return null;
+      const entries = await diffTrees(ctx, baseTree, headTree);
+      return diffSection(ctx, entries, "Files changed since " + prev.name, mb ? [] : ["no common ancestor — raw two-dot diff"]);
+    });
     return [wrap];
   }
 

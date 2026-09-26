@@ -1646,13 +1646,21 @@
     return tags;
   }
 
+  // TAG_HASH_SUFFIX matches a commit-hash component at the end of a tag name (v<version>.<hash>); it is not part of the version.
+  const TAG_HASH_SUFFIX = /[.+-][0-9a-f]{7,40}$/;
+
   // tagVersionKey extracts a tag name's dotted version as a number array; null when the name carries none.
   function tagVersionKey(name) {
-    const m = /^v?(\d+(?:\.\d+)*)/.exec(String(name || ""));
+    const m = /^v?(\d+(?:\.\d+)*)/.exec(String(name || "").replace(TAG_HASH_SUFFIX, ""));
     return m ? m[1].split(".").map(Number) : null;
   }
 
-  // compareTagsDesc orders tags highest version first, non-version tags after them by name descending.
+  // compareNames orders two names by UTF-16 code unit, the Go writer's byte order for every name without a character above U+E000.
+  function compareNames(a, b) {
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+
+  // compareTagsDesc orders tags highest version first, non-version tags after them by name descending; site_tags.go mirrors it.
   function compareTagsDesc(a, b) {
     const va = tagVersionKey(a.name), vb = tagVersionKey(b.name);
     if (va && vb) {
@@ -1663,16 +1671,72 @@
       const sa = tagVersionSuffix(a.name), sb = tagVersionSuffix(b.name);
       if (!sa && sb) return -1;
       if (sa && !sb) return 1;
-      return a.name.localeCompare(b.name);
+      return compareNames(a.name, b.name);
     }
     if (va) return -1;
     if (vb) return 1;
-    return b.name.localeCompare(a.name);
+    return compareNames(b.name, a.name);
   }
 
   // tagVersionSuffix returns the text after a tag name's leading numeric version.
   function tagVersionSuffix(name) {
-    return String(name || "").replace(/^v?\d+(?:\.\d+)*/, "");
+    return String(name || "").replace(TAG_HASH_SUFFIX, "").replace(/^v?\d+(?:\.\d+)*/, "");
+  }
+
+  // tagTime returns a tag's date: the tagger time of an annotated tag, else the author time of its commit; 0 when unreadable.
+  async function tagTime(ctx, sha) {
+    const peeled = await peelTag(ctx, sha);
+    const m = /> (\d+) [+-]\d{4}$/.exec(peeled.tagger);
+    if (m) return parseInt(m[1], 10);
+    const obj = peeled.commit ? await getObject(ctx, peeled.commit) : null;
+    return obj && obj.type === "commit" ? parseCommit(peeled.commit, obj.body).authorTime : 0;
+  }
+
+  // orderTagTies sorts each group of tags that differ only by a commit-hash suffix by date, newest first, in the group's own slots; a fresh artifact entry spares the peel.
+  async function orderTagTies(ctx, tags, fresh) {
+    const groups = new Map();
+    tags.forEach((t, i) => {
+      const key = t.name.replace(TAG_HASH_SUFFIX, "");
+      groups.set(key, (groups.get(key) || []).concat(i));
+    });
+    const ties = [...groups.values()].filter((slots) => slots.length > 1);
+    const dated = await Promise.all(ties.map((slots) => Promise.all(slots.map(async (i) => ({ tag: tags[i], time: fresh && fresh.has(tags[i].name) ? fresh.get(tags[i].name).time : await tagTime(ctx, tags[i].sha) })))));
+    const out = tags.slice();
+    ties.forEach((slots, g) => {
+      const sorted = dated[g].slice().sort((a, b) => b.time - a.time);
+      slots.forEach((slot, j) => { out[slot] = sorted[j].tag; });
+    });
+    return out;
+  }
+
+  // loadSiteTags fetches the push-written tags artifact once per context; null when the bucket carries none or another version.
+  async function loadSiteTags(ctx) {
+    if (ctx.siteTags !== undefined) return ctx.siteTags;
+    let doc = null;
+    const text = await fetchText(ctx.base, ".gitsocial/site/tags.json");
+    if (text) { try { const p = JSON.parse(text); if (p && p.version === 1 && Array.isArray(p.tags)) doc = p; } catch { doc = null; } }
+    ctx.siteTags = doc;
+    return doc;
+  }
+
+  // freshTagEntries maps each tag name to its artifact entry, only where the entry's sha is the tag's sha now.
+  async function freshTagEntries(ctx, tags) {
+    const doc = await loadSiteTags(ctx);
+    const want = new Map(tags.map((t) => [t.name, t.sha]));
+    return new Map(((doc && doc.tags) || []).filter((e) => e && want.get(e.name) === e.sha).map((e) => [e.name, e]));
+  }
+
+  // orderedTags lists the tags in display order, each with its fresh artifact entry or null; complete means the artifact covers every tag and each entry's prev is the next row, so its order and counts hold.
+  async function orderedTags(ctx) {
+    const tags = await listTags(ctx);
+    const fresh = await freshTagEntries(ctx, tags);
+    if (tags.length && fresh.size === tags.length) {
+      const entries = ctx.siteTags.tags.filter((e) => fresh.get(e.name) === e);
+      const chained = entries.every((e, i) => (e.prev || "") === (i + 1 < entries.length ? entries[i + 1].name : ""));
+      if (chained) return { tags: entries.map((e) => ({ name: e.name, ref: "refs/tags/" + e.name, sha: e.sha, entry: e })), complete: true };
+    }
+    const ordered = await orderTagTies(ctx, tags, fresh);
+    return { tags: ordered.map((t) => Object.assign({}, t, { entry: fresh.get(t.name) || null })), complete: false };
   }
 
   // resolveCompareRef resolves a compare side to a commit sha, branch first unless the manifest lists only the tag.
@@ -4185,7 +4249,7 @@
     loadTimelineItems, loadTimelineWindow, HOME_ROWS, compactCount, loadNavCounts, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
     loadCommitsPage, loadCommitsLayout, COMMITS_PAGE_SIZE,
     manifestFor, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
-    parseTree, getTree, resolvePath, listBranches, listTags, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
+    parseTree, getTree, resolvePath, listBranches, listTags, orderTagTies, orderedTags, loadSiteTags, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, resolveMergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,

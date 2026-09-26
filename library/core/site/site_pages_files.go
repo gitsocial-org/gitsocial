@@ -5,7 +5,6 @@ package site
 import (
 	"fmt"
 	"html/template"
-	"os/exec"
 	"path"
 	"sort"
 	"strconv"
@@ -432,17 +431,7 @@ func siteFileLastCommitTimes(src *objstore.LocalCommitSource, tip string) map[st
 	if src == nil || tip == "" {
 		return times
 	}
-	args := []string{}
-	if workdir := src.Workdir(); workdir != "" {
-		args = append(args, "-C", workdir)
-	}
-	args = append(args, "log", "--format=%ct", "--name-only", "--no-renames", tip)
-	cmd := exec.Command("git", args...)
-	cmd.Env = append(cmd.Environ(), "GIT_NO_LAZY_FETCH=1")
-	if gitDir := src.GitDir(); gitDir != "" {
-		cmd.Env = append(cmd.Env, "GIT_DIR="+gitDir)
-	}
-	out, err := cmd.Output()
+	out, err := siteGitCommand(src, "log", "--format=%ct", "--name-only", "--no-renames", tip).Output()
 	if err != nil {
 		return times
 	}

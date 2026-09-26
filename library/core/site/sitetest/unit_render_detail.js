@@ -133,6 +133,25 @@ async function main() {
   const bare = GS.releaseCard({ commit: { hash: sha("e2"), short: short("e2"), authorTime: 1, refs: [] }, header: { type: "release", tag: "v9" }, content: "v9", effectiveTime: 1, author: "Ada" });
   ok(!!bare, "a release with no assets still renders its card");
 
+  console.log("=== the tags page reads the tags artifact ===");
+  // tagsCtx is a read context over the seeded objects with two tags and the given tags artifact.
+  const tagsCtx = (doc) => Object.assign({}, ctx, { walks: {}, siteTags: doc, manifest: Promise.resolve({ "refs/heads/gitmsg/release": sha("e1"), "refs/tags/v1.2": sha("b2"), "refs/tags/v1.1": sha("b1") }) });
+  const tagEntry = (name, id, count, prev) => ({ name, sha: sha(id), commit: sha(id), time: 1750000400, author: "Ada", email: "ada@example.com", prev, count });
+  const tagRows = (nodes) => nodes.flatMap((n) => findClass(n, "card"));
+  const tagsPage = await GS.tagsView(tagsCtx({ version: 1, tags: [tagEntry("v1.2", "b2", 3, "v1.1"), tagEntry("v1.1", "b1", 1)] }));
+  eq(tagRows(tagsPage).map((r) => textOf(findClass(r, "subject")[0])), ["v1.2", "v1.1"], "the rows follow the artifact order");
+  eq(tagRows(tagsPage).flatMap((r) => findClass(r, "chip")).length, 0, "the page paints before the release chips");
+  ok(/Ada.*3 commits/.test(text(tagRows(tagsPage)[0])), "a covered tag shows its author, date and commit count", text(tagRows(tagsPage)[0]));
+  await tick(60);
+  const chip = findClass(tagRows(tagsPage)[0], "chip")[0];
+  ok(chip && textOf(chip) === "release" && chip.getAttribute("href") === "#commit:" + sha("e1") + "@gitmsg/release", "a tag a release names links to the release", chip && chip.getAttribute("href"));
+  eq(findClass(tagRows(tagsPage)[1], "chip").length, 0, "a tag no release names gets no chip");
+  const brokenPage = await GS.tagsView(tagsCtx({ version: 1, tags: [tagEntry("v1.2", "b2", 3, "v1.15"), tagEntry("v1.15", "b3", 2, "v1.1"), tagEntry("v1.1", "b1", 1)] }));
+  ok(/Ada/.test(text(tagRows(brokenPage)[0])) && !/commits/.test(text(tagRows(brokenPage)[0])), "a count whose previous tag is not the next row is not shown", text(tagRows(brokenPage)[0]));
+  const stalePage = await GS.tagsView(tagsCtx({ version: 1, tags: [tagEntry("v1.2", "b2", 3, "v1.1"), tagEntry("v1.1", "c1", 1)] }));
+  ok(/Ada/.test(text(tagRows(stalePage)[0])) && !/commits/.test(text(tagRows(stalePage)[0])), "a partial artifact keeps the fresh author and date but no count", text(tagRows(stalePage)[0]));
+  ok(!/Ada/.test(text(tagRows(stalePage)[1])), "a stale tags entry falls back to the bare row", text(tagRows(stalePage)[1]));
+
   console.log("=== the trailer list ===");
   const keys = (node) => findTag(node, "dt").map(textOf);
   const fresh = (await GS.itemDetail(ctx, sha("d1"), "gitmsg/pm"))[0];

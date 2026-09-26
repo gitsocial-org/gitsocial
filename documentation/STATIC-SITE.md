@@ -147,6 +147,7 @@ The app reads the artifacts under `.gitsocial/site/`, and the bucket's ref list 
 | `site-config.json` | the customization values |
 | `pm-config.json` | the resolved PM board |
 | `stats.json` | a stats blob written by the CLI from the workdir |
+| `tags.json` | each tag's commit, date, author, previous tag and its commit, and the commit count since it, in display order, from the local object database |
 | `push-state` | skip digest for push-time maintenance |
 
 ### Invariants
@@ -160,6 +161,10 @@ The shell and the pages:
 - An adopted copy (GITMSG.md §1.5) shows its original author and time, and the repository it came from, on both renderers. Neither renderer lists a cross-repository edit, which is a proposal.
 - File discovery reads the default branch's tree from the local object database of the pusher and, when it cannot read the tree, keeps the published set.
 - A changed default branch rewrites every page.
+- The Tags page shows each tag's date and author, its commit count since the previous tag, and a release chip for a tag that a release names.
+- The Tags page uses a `tags.json` entry only when its sha is the tag's sha in `refs.json`; for any other tag it reads the tag objects. It shows commit counts only when the file covers every tag and the previous tag of each entry is the next row.
+- A push from a clone that does not have a tag keeps that tag's entry while its sha is the same in `refs.json`.
+- The version order of tags has one definition in two places, `compareSiteTagsDesc` and `compareTagsDesc`, and a hash suffix (`v<version>.<hash>`) is not part of the version. Tags that differ only by that suffix are in date order.
 - Only the app shows sidebar counts: branches and tags come from `refs.json`, and commits and the item counts from `pages.json`, which carries the item counts only after a complete pass.
 - An item count is the open work, the rows that its list shows first: Issues, Pull Requests, Milestones and Sprints show their Open filter first. The sidebar of a generated page carries no count.
 

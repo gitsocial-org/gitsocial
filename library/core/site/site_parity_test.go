@@ -222,6 +222,16 @@ type parityMDXStripCase struct {
 	Expect string `json:"expect"`
 }
 
+// parityTagOrderCase pins the display order of a set of tag names and dates.
+type parityTagOrderCase struct {
+	Name string `json:"name"`
+	Tags []struct {
+		Name string `json:"name"`
+		Time int64  `json:"time"`
+	} `json:"tags"`
+	Expect []string `json:"expect"`
+}
+
 // parityFixtures is the shared fixture file shape.
 type parityFixtures struct {
 	MessageCases   []parityMessageCase       `json:"messageCases"`
@@ -245,6 +255,7 @@ type parityFixtures struct {
 	FrontMatter    []parityMDXStripCase      `json:"frontMatter"`
 	ListEmpty      map[string]string         `json:"listEmpty"`
 	ListHeadings   map[string]string         `json:"listHeadings"`
+	TagOrder       []parityTagOrderCase      `json:"tagOrder"`
 }
 
 // loadParityFixtures reads the shared JSON fixtures the JS half also consumes.

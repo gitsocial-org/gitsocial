@@ -231,5 +231,13 @@ const headings = Object.entries(GS.LIST_HEADINGS).sort().map((e) => e.join("="))
 const fixtureHeadings = Object.entries(FIX.listHeadings).sort().map((e) => e.join("=")).join(",");
 eq(headings, fixtureHeadings, "LIST_HEADINGS matches the page layer's nav labels");
 
-console.log("\n" + pass + " passed, " + fail + " failed");
-process.exit(fail ? 1 : 0);
+console.log("=== parity invariant: tag display order ===");
+(async () => {
+  for (const c of FIX.tagOrder) {
+    const tags = c.tags.map((t) => ({ name: t.name, sha: "" })).sort(GS.compareTagsDesc);
+    const dates = new Map(c.tags.map((t) => [t.name, { time: t.time }]));
+    eq(JSON.stringify((await GS.orderTagTies(null, tags, dates)).map((t) => t.name)), JSON.stringify(c.expect), c.name + ": tag order");
+  }
+  console.log("\n" + pass + " passed, " + fail + " failed");
+  process.exit(fail ? 1 : 0);
+})();

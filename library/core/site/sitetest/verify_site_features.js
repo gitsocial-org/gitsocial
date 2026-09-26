@@ -3,7 +3,7 @@
 //   issue/PR cards carry enrichment chips (labels/assignee/priority/counts/origin)
 //   search deep-link (#/search/<q>) initializes AND executes the query
 //   a detail page's back link returns to where the user came from
-//   the Tags page lists tags; a tag route resolves to the commit (annotated peeled)
+//   the Tags page lists tags with the pushed tags.json values; a tag route resolves to the commit (annotated peeled)
 //   the board group-by control renders swimlane lanes
 //   the shell ships lazy-loaded grammars/prism-<lang>.js; the old bundle is gone
 //   the branch compare view (#/compare:<base>...<head>) diffs three-dot and lists commits
@@ -79,6 +79,9 @@ async function main() {
   await route("#/tags");
   const tagNames = findClass(viewNode, "subject").map(textOf);
   ok("tags page lists the pushed tags (v1.0 annotated, v1.0-light lightweight)", tagNames.includes("v1.0") && tagNames.includes("v1.0-light"), tagNames.join(","));
+  const tagsDoc = await GS.loadSiteTags(GS.newContext(BASE));
+  ok("the push publishes tags.json with every tag in display order", !!tagsDoc && tagsDoc.tags.map((t) => t.name).join(",") === "v1.0,v1.0-light,v0.9", JSON.stringify(tagsDoc && tagsDoc.tags.map((t) => t.name)));
+  ok("tags page rows carry the artifact's commit counts", /\d+ commits?/.test(textOf(viewNode)), textOf(viewNode).slice(0, 160));
   await route("#tag:v1.0");
   ok("annotated tag v1.0 peels to its commit (detail renders, not 'unreachable')", findClass(viewNode, "detail").length > 0 && !/unreachable|not found/i.test(textOf(viewNode)), textOf(viewNode).slice(0, 80));
   ok("annotated tag shows its annotation message", /First public release/.test(textOf(viewNode)) || findClass(viewNode, "tag-annotation").length > 0, textOf(viewNode).slice(0, 80));

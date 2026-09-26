@@ -9,7 +9,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
 )
 
-// PostPushMaintenance maintains the site after a push: the shell, the config artifacts, the item indexes, the front page and the skip marker.
+// PostPushMaintenance maintains the site after a push: the shell, the config and tags artifacts, the item indexes, the front page and the skip marker.
 func PostPushMaintenance(out objstore.PushOutcome) {
 	client, prefix := out.Client, out.Prefix
 	// A thin bucket publishes no site, since the site reads a history it does not carry.
@@ -53,6 +53,9 @@ func PostPushMaintenance(out objstore.PushOutcome) {
 		}
 		if err := writeSiteCustomization(client, prefix, out.Refs, out.Override, src); err != nil {
 			fmt.Fprintf(os.Stderr, "gitsocial s3: site customization: %v\n", err)
+		}
+		if err := writeSiteTags(client, prefix, out.Refs, src); err != nil {
+			fmt.Fprintf(os.Stderr, "gitsocial s3: site tags: %v\n", err)
 		}
 	}
 	updatePushedSiteItems(out, src)
