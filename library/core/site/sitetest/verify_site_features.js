@@ -103,6 +103,38 @@ async function main() {
   ok("oldest tag lists its full history in the commits section", oldestRows.length > 0, String(oldestRows.length));
   ok("oldest tag has no diff section (nothing to diff against)", findClass(viewNode, "diff-section").length === 0, String(findClass(viewNode, "diff-section").length));
 
+  // ---- the tag range document equals the app's own computation, and the tag page reads it ----
+  const rangeCtx = GS.newContext(BASE);
+  const rangeTags = (await GS.orderedTags(rangeCtx)).tags;
+  const light = rangeTags.find((t) => t.name === "v1.0-light");
+  const lightPrev = rangeTags[rangeTags.indexOf(light) + 1];
+  const rangeDoc = await GS.loadTagRange(rangeCtx, light.entry, lightPrev.entry.commit);
+  ok("the push publishes a range document for a tag with a previous tag", !!rangeDoc && light.entry.range === 1, JSON.stringify(light.entry));
+  if (rangeDoc) {
+    const walkCtx = GS.newContext(BASE);
+    const head = light.entry.commit, prevHead = lightPrev.entry.commit;
+    const walked = (await GS.loadCompareCommitsWindow(walkCtx, prevHead, head, false)).items;
+    const byHash = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+    const docRows = rangeDoc.commits.map((c) => [c[0], c[1], c[2]]).sort(byHash);
+    const walkRows = walked.map((c) => [c.hash, c.authorTime, c.content.split("\n")[0]]).sort(byHash);
+    ok("its commits, times and first lines equal the app's range", docRows.length > 0 && JSON.stringify(docRows) === JSON.stringify(walkRows), JSON.stringify(docRows) + " vs " + JSON.stringify(walkRows));
+    ok("its commits are newest first", rangeDoc.commits.every((c, i) => i === 0 || rangeDoc.commits[i - 1][1] >= c[1]));
+    const mb = await GS.resolveMergeBase(walkCtx, head, prevHead, GS.DETAIL_WALK_CAP);
+    ok("its merge base equals the app's", rangeDoc.mergeBase === (mb || ""), rangeDoc.mergeBase + " vs " + mb);
+    const byPath = (a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+    const walkedFiles = (await GS.diffTrees(walkCtx, await GS.commitTree(walkCtx, mb || prevHead), await GS.commitTree(walkCtx, head))).slice().sort(byPath);
+    const docFiles = GS.tagRangeFiles(rangeDoc).slice().sort(byPath);
+    ok("its files equal the app's diff", docFiles.length > 0 && JSON.stringify(docFiles) === JSON.stringify(walkedFiles), JSON.stringify(docFiles) + " vs " + JSON.stringify(walkedFiles));
+  }
+  const pageFetch = global.fetch;
+  const rangeReads = [];
+  global.fetch = (url, opts) => { rangeReads.push(String(url)); return pageFetch(url, opts); };
+  await route("#tag:v1.0-light", true);
+  global.fetch = pageFetch;
+  // A commit walk reads a packmap shard per commit and the index reads the code index; the diff view's own blob reads are not counted.
+  const walkReads = rangeReads.filter((u) => /\/packmap\/|\/items\/code\//.test(u));
+  ok("the tag page reads its lists from the document: one packmap shard for the tagged commit, no index", walkReads.length <= 1 && findClass(viewNode, "pm-member").length > 0 && findClass(viewNode, "diff-section").length > 0, walkReads.join(" | "));
+
   // ---- search deep-link initializes and executes ----
   await route("#/search/" + encodeURIComponent("onboarding"));
   const input = findClass(viewNode, "search-input")[0];

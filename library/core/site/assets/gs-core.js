@@ -1800,6 +1800,37 @@
     return new Map(((doc && doc.tags) || []).filter((e) => e && want.get(e.name) === e.sha).map((e) => [e.name, e]));
   }
 
+  // loadTagRange fetches the push-written range document of a tag entry when it flags one for this previous commit; null sends the page to its walk.
+  async function loadTagRange(ctx, entry, prevCommit) {
+    if (!entry || entry.range !== 1 || !prevCommit || entry.prevCommit !== prevCommit) return null;
+    const key = ".gitsocial/site/ranges/v1/" + prevCommit + ".." + entry.commit + ".json";
+    if (ctx.walks[key] === undefined) {
+      ctx.walks[key] = fetchText(ctx.base, key).then((text) => {
+        const doc = text ? JSON.parse(text) : null;
+        return doc && Array.isArray(doc.files) ? doc : null;
+      }).catch((e) => { if (e && e.forbidden) throw e; return null; });
+    }
+    return ctx.walks[key];
+  }
+
+  // tagRangeWindow pages a range document's commits as loadCompareCommitsWindow pages a walk; null when the document left them out.
+  function tagRangeWindow(doc) {
+    if (!doc || !Array.isArray(doc.commits)) return null;
+    const all = doc.commits.map(([hash, authorTime, line]) => ({ hash, short: hash.slice(0, 12), authorTime, content: line }));
+    let shown = 0;
+    return (extend) => {
+      shown = extend ? shown + WALK_CAP : Math.max(shown, WALK_CAP);
+      return { items: all.slice(0, shown), truncated: all.length > shown };
+    };
+  }
+
+  // tagRangeFiles turns a range document's files into diffTrees records.
+  function tagRangeFiles(doc) {
+    const out = doc.files.map((f) => ({ path: f.path, status: f.status, shaA: f.shaA || null, shaB: f.shaB || null, modeA: f.modeA || null, modeB: f.modeB || null }));
+    if (doc.truncated) out.truncated = true;
+    return out;
+  }
+
   // orderedTags lists the tags in display order, each with its fresh artifact entry or null; complete means the artifact covers every tag and each entry's prev is the next row, so its order and counts hold.
   async function orderedTags(ctx) {
     const tags = await listTags(ctx);
@@ -4299,7 +4330,7 @@
     loadTimelineItems, loadTimelineWindow, HOME_ROWS, compactCount, loadNavCounts, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
     loadCommitsPage, loadCommitsLayout, COMMITS_PAGE_SIZE,
     manifestFor, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
-    parseTree, getTree, resolvePath, listBranches, listTags, orderTagTies, orderedTags, loadSiteTags, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
+    parseTree, getTree, resolvePath, listBranches, listTags, orderTagTies, orderedTags, loadSiteTags, loadTagRange, tagRangeWindow, tagRangeFiles, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, resolveMergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,

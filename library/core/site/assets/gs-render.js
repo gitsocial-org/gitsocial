@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, peelTag, listMemberRef, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, peelTag, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -3666,9 +3666,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (prevCommit) wrap.append(el("div", { class: "page-actions" }, [
       el("a", { class: "action-link", href: compareRef(prev.name, name) }, ["⇄ compare with " + prev.name]),
     ]));
-    wrap.append(await tagCommitsSection(ctx, prev, prevCommit, peeled.commit));
+    const range = await loadTagRange(ctx, t.entry, prevCommit);
+    wrap.append(await tagCommitsSection(ctx, prev, prevCommit, peeled.commit, tagRangeWindow(range)));
 
-    if (prevCommit && prevCommit !== peeled.commit) enrichDetail(wrap, async () => {
+    if (prevCommit && prevCommit !== peeled.commit && range) {
+      wrap.append(diffSection(ctx, tagRangeFiles(range), "Files changed since " + prev.name, range.mergeBase ? [] : ["no common ancestor — raw two-dot diff"]));
+    } else if (prevCommit && prevCommit !== peeled.commit) enrichDetail(wrap, async () => {
       const mb = await resolveMergeBase(ctx, peeled.commit, prevCommit, DETAIL_WALK_CAP);
       const headTree = await commitTree(ctx, peeled.commit);
       const baseTree = await commitTree(ctx, mb || prevCommit);
@@ -3687,20 +3690,21 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     ]);
   }
 
-  // tagCommitsSection lists the commits a tag introduces over the previous tag, paged; the oldest tag lists its history.
-  async function tagCommitsSection(ctx, prev, prevCommit, commit) {
+  // tagCommitsSection lists the commits a tag introduces over the previous tag, paged from the range document when there is one; the oldest tag lists its history.
+  async function tagCommitsSection(ctx, prev, prevCommit, commit, fromRange) {
+    const load = (extend) => fromRange ? fromRange(extend) : loadCompareCommitsWindow(ctx, prevCommit || "", commit, extend);
     const countEl = el("span", {}, ["0"]);
     const label = prevCommit ? "Commits since " + prev.name : "Commits";
     const head = el("div", { class: "pm-members-head" }, [label + " (", countEl, ")"]);
     const wrap = el("div", { class: "pm-members" }, [head]);
-    const first = await loadCompareCommitsWindow(ctx, prevCommit || "", commit, false);
+    const first = await load(false);
     if (!first.items.length) wrap.append(el("div", { class: "empty" }, [prevCommit ? "No commits since " + prev.name + "." : "No commits."]));
     else for (const n of pagedListView(first,
       (commits, box) => {
         countEl.textContent = String(commits.length);
         box.replaceChildren(...commits.map(commitMemberRow));
       },
-      () => loadCompareCommitsWindow(ctx, prevCommit || "", commit, true))) wrap.append(n);
+      () => load(true))) wrap.append(n);
     return wrap;
   }
 

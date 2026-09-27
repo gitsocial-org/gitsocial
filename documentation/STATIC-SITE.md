@@ -147,7 +147,8 @@ The app reads the artifacts under `.gitsocial/site/`, and the bucket's ref list 
 | `site-config.json` | the customization values |
 | `pm-config.json` | the resolved PM board |
 | `stats.json` | a stats blob written by the CLI from the workdir |
-| `tags.json` | each tag's commit, date, author, previous tag and its commit, and the commit count since it, in display order, from the local object database |
+| `tags.json` | each tag's commit, date, author, previous tag and its commit, the commit count since it, and whether its range document is written, in display order, from the local object database |
+| `ranges/v1/<prev>..<commit>.json` | one range document for each pair of adjacent tag commits: the merge base, the commits since the previous tag (up to 2,000) and the files changed (up to 1,000); immutable |
 | `push-state` | skip digest for push-time maintenance |
 
 ### Invariants
@@ -164,6 +165,7 @@ The shell and the pages:
 - The Tags page shows each tag's date and author, its commit count since the previous tag, and a release chip for a tag that a release names.
 - The Tags page uses a `tags.json` entry only when its sha is the tag's sha in `refs.json`; for any other tag it reads the tag objects. It shows commit counts only when the file covers every tag and the previous tag of each entry is the next row.
 - A push from a clone that does not have a tag keeps that tag's entry while its sha is the same in `refs.json`.
+- The tag page reads its commits and files from the range document when the `tags.json` entry flags one for the commit of the previous row, and walks objects otherwise. A push writes the range documents before `tags.json`, and flags only the documents that it wrote or found flagged for the same pair. A shallow clone writes none.
 - The version order of tags has one definition in two places, `compareSiteTagsDesc` and `compareTagsDesc`, and a hash suffix (`v<version>.<hash>`) is not part of the version. Tags that differ only by that suffix are in date order.
 - When the code index does not hold both tips of a compare, a tag page or a pull request diff, the app walks commit objects as `git rev-list base..head` does, newest committer time first. The number of reads follows the range, not the history. A range longer than 2,000 reads shows as truncated, with no commit from under the base.
 - Only the app shows sidebar counts: branches and tags come from `refs.json`, and commits and the item counts from `pages.json`, which carries the item counts only after a complete pass.

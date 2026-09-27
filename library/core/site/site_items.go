@@ -198,8 +198,13 @@ func siteStripLinkRefDefs(content string) string {
 	return strings.TrimLeft(strings.Join(kept, "\n"), "\n")
 }
 
-// subjectOf returns a message's subject line: the content with the GitMsg trailer block stripped, then its first line.
+// subjectOf returns a message's subject line: the first content line as a title shows it.
 func subjectOf(message string) string {
+	return siteSubjectText(contentFirstLine(message))
+}
+
+// contentFirstLine returns the first line of a message's content, the GitMsg trailer block stripped; it mirrors gs-render.js subjectBody over cleanContent.
+func contentFirstLine(message string) string {
 	content := message
 	if strings.HasPrefix(message, "GitMsg: ") {
 		content = ""
@@ -207,8 +212,8 @@ func subjectOf(message string) string {
 		content = message[:i]
 	}
 	content = strings.TrimSpace(siteStripLinkRefDefs(strings.ReplaceAll(content, "\r", "")))
-	subject, _, _ := strings.Cut(content, "\n")
-	return siteSubjectText(subject)
+	line, _, _ := strings.Cut(content, "\n")
+	return line
 }
 
 // bodyOf projects a walked commit into a bodies-corpus entry.

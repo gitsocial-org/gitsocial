@@ -1,9 +1,11 @@
-// site_tags_test.go - the tags artifact: order, counts since the previous tag, omitted entries, shallow repos and reuse
+// site_tags_test.go - the tags artifact: order, counts since the previous tag, omitted entries, shallow repos, reuse and range documents
 
 package site
 
 import (
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
@@ -147,6 +149,86 @@ func TestSiteTags_NoTagsDeletesArtifact(t *testing.T) {
 	var doc siteTags
 	if found, _ := objstore.ReadCompressedJSON(client, siteTagsKey, &doc); found {
 		t.Errorf("artifact still present after the last tag went: %+v", doc)
+	}
+}
+
+// readRange reads the range document of a pair; found is false when the bucket has none.
+func readRange(t *testing.T, client *objstore.Client, prevCommit, commit string) (siteRange, bool) {
+	t.Helper()
+	var doc siteRange
+	found, err := objstore.ReadCompressedJSON(client, siteRangeKey("", prevCommit, commit), &doc)
+	if err != nil {
+		t.Fatalf("read range: %v", err)
+	}
+	return doc, found
+}
+
+func TestSiteTags_RangeMatchesGit(t *testing.T) {
+	dir, refs := tagsFixture(t)
+	client, _ := testClient(t)
+	doc := writeAndReadTags(t, client, dir, refs)
+	top, oldest := doc.Tags[0], doc.Tags[2]
+	if top.Range != siteRangeVersion || oldest.Range != 0 {
+		t.Fatalf("range flags = %d, %d, want %d on v1.1 and none on the oldest tag", top.Range, oldest.Range, siteRangeVersion)
+	}
+	r, found := readRange(t, client, top.PrevCommit, top.Commit)
+	if !found || r.MergeBase != top.PrevCommit {
+		t.Fatalf("range = %+v found=%v, want merge base %s", r, found, top.PrevCommit)
+	}
+	want := strings.Fields(gitRun(t, dir, "rev-list", top.Commit, "^"+top.PrevCommit))
+	if len(r.Commits) != len(want) || r.Commits[0][0] != want[0] || r.Commits[0][2] != "commit 4" {
+		t.Errorf("commits = %v, want %v with subject \"commit 4\" first", r.Commits, want)
+	}
+	wantFiles := []siteRangeFile{
+		{Path: "file-03.txt", Status: "added", ShaB: gitRun(t, dir, "rev-parse", "main:file-03.txt"), ModeB: "100644"},
+		{Path: "file-04.txt", Status: "added", ShaB: gitRun(t, dir, "rev-parse", "main:file-04.txt"), ModeB: "100644"},
+	}
+	if !reflect.DeepEqual(r.Files, wantFiles) || r.Truncated {
+		t.Errorf("files = %+v, want %+v", r.Files, wantFiles)
+	}
+}
+
+func TestSiteTags_RangesReused(t *testing.T) {
+	dir, refs := tagsFixture(t)
+	client, bucket := testClient(t)
+	doc := writeAndReadTags(t, client, dir, refs)
+	key := siteRangeKey("", doc.Tags[0].PrevCommit, doc.Tags[0].Commit)
+	again := writeAndReadTags(t, client, dir, refs)
+	if n := bucket.PutCount(key); n != 1 || again.Tags[0].Range != siteRangeVersion {
+		t.Errorf("range document written %d times, flag %d; want one write and the flag kept", n, again.Tags[0].Range)
+	}
+}
+
+func TestSiteTags_RangeFailureOmitsFlag(t *testing.T) {
+	dir, refs := tagsFixture(t)
+	client, bucket := testClient(t)
+	v11, v10 := gitRun(t, dir, "rev-parse", "main"), gitRun(t, dir, "rev-parse", "main~2")
+	bucket.FailPut(siteRangeKey("", v10, v11))
+	doc := writeAndReadTags(t, client, dir, refs)
+	if doc.Tags[0].Range != 0 || doc.Tags[1].Range != siteRangeVersion {
+		t.Errorf("range flags = %d, %d; want none where the document failed and the flag where it was written", doc.Tags[0].Range, doc.Tags[1].Range)
+	}
+}
+
+func TestSiteTags_ShallowKeepsOnlyMatchingRangeFlags(t *testing.T) {
+	dir, refs := tagsFixture(t)
+	client, _ := testClient(t)
+	doc := writeAndReadTags(t, client, dir, refs)
+	doc.Tags[1].PrevCommit = "0123456789abcdef0123456789abcdef01234567"
+	data, err := objstore.CompressJSON(doc, objstore.BrotliQualityFull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := objstore.PutCompressed(client, siteTagsKey, data, ""); err != nil {
+		t.Fatal(err)
+	}
+	shallow := t.TempDir()
+	gitRun(t, shallow, "clone", "-q", "--depth", "1", "--no-single-branch", "file://"+dir, ".")
+	gitRun(t, shallow, "fetch", "-q", "--depth", "1", "origin", "refs/tags/v1.1:refs/tags/v1.1")
+	gitRun(t, shallow, "tag", "-d", "v1.0")
+	again := writeAndReadTags(t, client, shallow, refs)
+	if len(again.Tags) != 3 || again.Tags[0].Range != siteRangeVersion || again.Tags[1].Range != 0 {
+		t.Errorf("entries = %+v; want v1.1 keeping its flag and the carried v1.0, whose pair changed, without one", again.Tags)
 	}
 }
 
