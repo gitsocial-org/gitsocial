@@ -210,7 +210,7 @@ func TestSiteTags_RangeFailureOmitsFlag(t *testing.T) {
 	}
 }
 
-func TestSiteTags_ShallowKeepsOnlyMatchingRangeFlags(t *testing.T) {
+func TestSiteTags_ShallowKeepsOnlyMatchingFlagsAndCounts(t *testing.T) {
 	dir, refs := tagsFixture(t)
 	client, _ := testClient(t)
 	doc := writeAndReadTags(t, client, dir, refs)
@@ -228,7 +228,23 @@ func TestSiteTags_ShallowKeepsOnlyMatchingRangeFlags(t *testing.T) {
 	gitRun(t, shallow, "tag", "-d", "v1.0")
 	again := writeAndReadTags(t, client, shallow, refs)
 	if len(again.Tags) != 3 || again.Tags[0].Range != siteRangeVersion || again.Tags[1].Range != 0 {
-		t.Errorf("entries = %+v; want v1.1 keeping its flag and the carried v1.0, whose pair changed, without one", again.Tags)
+		t.Fatalf("entries = %+v; want v1.1 keeping its flag and the carried v1.0, whose pair changed, without one", again.Tags)
+	}
+	if tagCount(again.Tags[0]) != 2 || tagCount(again.Tags[1]) != -1 {
+		t.Errorf("counts = %d, %d; want v1.1 keeping its 2 and the carried v1.0 without a count", tagCount(again.Tags[0]), tagCount(again.Tags[1]))
+	}
+}
+
+func TestSiteTags_CarriedLastTagDropsItsLink(t *testing.T) {
+	dir, refs := tagsFixture(t)
+	client, _ := testClient(t)
+	writeAndReadTags(t, client, dir, refs)
+	delete(refs, "refs/tags/v0.9")
+	gitRun(t, dir, "tag", "-d", "v1.0")
+	again := writeAndReadTags(t, client, dir, refs)
+	last := again.Tags[len(again.Tags)-1]
+	if len(again.Tags) != 2 || last.Name != "v1.0" || last.Prev != "" || last.PrevCommit != "" || tagCount(last) != 3 || last.Range != 0 {
+		t.Errorf("entries = %+v; want the carried v1.0 last, with no previous tag or range flag and the count of its history", again.Tags)
 	}
 }
 

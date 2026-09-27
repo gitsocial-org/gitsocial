@@ -182,7 +182,7 @@ func siteRepoShallow(src *objstore.LocalCommitSource) bool {
 	return err != nil || strings.TrimSpace(string(out)) != "false"
 }
 
-// fillSiteTagCounts links each entry to the next one and counts the commits between them, copying a count whose two commits did not change.
+// fillSiteTagCounts links each entry to the next one and counts the commits between them, copying a count whose two commits did not change; a shallow clone only copies.
 func fillSiteTagCounts(src *objstore.LocalCommitSource, entries, prior []siteTagEntry, shallow bool) {
 	old := map[string]siteTagEntry{}
 	for _, e := range prior {
@@ -190,14 +190,16 @@ func fillSiteTagCounts(src *objstore.LocalCommitSource, entries, prior []siteTag
 	}
 	for i := range entries {
 		e := &entries[i]
+		// A carried entry arrives with its prior link and count, which hold only for its prior pair.
+		e.Prev, e.PrevCommit, e.Count = "", "", nil
 		if i+1 < len(entries) {
 			e.Prev, e.PrevCommit = entries[i+1].Name, entries[i+1].Commit
 		}
-		if shallow {
-			continue
-		}
 		if o, ok := old[e.Name]; ok && o.Count != nil && o.Commit == e.Commit && o.PrevCommit == e.PrevCommit {
 			e.Count = o.Count
+			continue
+		}
+		if shallow {
 			continue
 		}
 		args := []string{"rev-list", "--count", e.Commit}
