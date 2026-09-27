@@ -64,12 +64,12 @@ func newIssueForm(workdir string) *issueForm {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 
 	var milestones []pm.Milestone
-	if res := pm.GetMilestones("", "", []string{"open"}, "", 100); res.Success {
+	if res := pm.GetMilestones(repoURL, "", []string{"open"}, "", 100); res.Success {
 		milestones = res.Data
 	}
 
 	var sprints []pm.Sprint
-	if res := pm.GetSprints("", "", []string{"planned", "active"}, "", 100); res.Success {
+	if res := pm.GetSprints(repoURL, "", []string{"planned", "active"}, "", 100); res.Success {
 		sprints = res.Data
 	}
 
@@ -79,7 +79,7 @@ func newIssueForm(workdir string) *issueForm {
 	}
 
 	var issues []pm.Issue
-	if res := pm.GetIssues("", "", []string{"open"}, "", 200); res.Success {
+	if res := pm.GetIssuesWithForks(repoURL, gitmsg.GetForks(workdir), []string{"open"}, "", 200); res.Success {
 		issues = res.Data
 	}
 
@@ -131,12 +131,12 @@ func newIssueEditForm(workdir string, issue pm.Issue) *issueForm {
 	}
 
 	var milestones []pm.Milestone
-	if res := pm.GetMilestones("", "", []string{"open"}, "", 100); res.Success {
+	if res := pm.GetMilestones(repoURL, "", []string{"open"}, "", 100); res.Success {
 		milestones = res.Data
 	}
 
 	var sprints []pm.Sprint
-	if res := pm.GetSprints("", "", []string{"planned", "active"}, "", 100); res.Success {
+	if res := pm.GetSprints(repoURL, "", []string{"planned", "active"}, "", 100); res.Success {
 		sprints = res.Data
 	}
 
@@ -146,7 +146,7 @@ func newIssueEditForm(workdir string, issue pm.Issue) *issueForm {
 	}
 
 	var issues []pm.Issue
-	if res := pm.GetIssues("", "", []string{"open"}, "", 200); res.Success {
+	if res := pm.GetIssuesWithForks(repoURL, gitmsg.GetForks(workdir), []string{"open"}, "", 200); res.Success {
 		issues = res.Data
 	}
 

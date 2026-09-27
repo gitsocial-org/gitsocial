@@ -100,7 +100,7 @@ func TestGetIssuesWithForks_CollapsesAdopted(t *testing.T) {
 	if !copied.Success {
 		t.Fatalf("UpdateIssue: %s", copied.Error.Message)
 	}
-	list := GetIssuesWithForks(gitmsg.ResolveRepoURL(workdir), gitmsg.GetExtBranch(workdir, "pm"), gitmsg.GetForks(workdir), nil, "", 0)
+	list := GetIssuesWithForks(gitmsg.ResolveRepoURL(workdir), gitmsg.GetForks(workdir), nil, "", 0)
 	if !list.Success {
 		t.Fatalf("GetIssuesWithForks: %s", list.Error.Message)
 	}

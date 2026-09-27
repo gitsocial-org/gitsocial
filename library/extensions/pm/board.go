@@ -130,11 +130,10 @@ func GetBoardViewByID(workdir string, boardID string) Result[BoardView] {
 	pmConfig := GetPMConfig(workdir)
 	boardConfig := ResolveBoardConfig(pmConfig, boardID)
 
-	branch := gitmsg.GetExtBranch(workdir, "pm")
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 
 	forks := gitmsg.GetForks(workdir)
-	issueResult := GetIssuesWithForks(repoURL, branch, forks, nil, "", 1000)
+	issueResult := GetIssuesWithForks(repoURL, forks, nil, "", 1000)
 	if !issueResult.Success {
 		return result.Err[BoardView]("QUERY_FAILED", issueResult.Error.Message)
 	}

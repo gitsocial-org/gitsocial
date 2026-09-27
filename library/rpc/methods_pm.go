@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 )
 
@@ -56,15 +57,18 @@ func pmGetIssues(s *Server) HandlerFunc {
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		repoURL := p.RepoURL
-		if repoURL == "" {
-			repoURL = s.session.RepoURL
-		}
 		limit := p.Limit
 		if limit == 0 {
 			limit = 1000
 		}
-		return fromResult(pm.GetIssues(repoURL, p.Branch, p.States, "", limit))
+		if p.RepoURL != "" {
+			return fromResult(pm.GetIssues(p.RepoURL, p.Branch, p.States, "", limit))
+		}
+		issues, err := pm.GetWorkspaceIssues(pm.PMQuery{States: p.States, Branch: p.Branch, Limit: limit}, s.session.RepoURL, gitmsg.GetForks(s.session.Workdir))
+		if err != nil {
+			return nil, appError(CodeAppInternal, "QUERY_FAILED", err.Error())
+		}
+		return issues, nil
 	}
 }
 

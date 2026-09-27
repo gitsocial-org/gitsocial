@@ -95,8 +95,10 @@ func newPMStatusCmd() *cobra.Command {
 			}
 
 			// Get issue counts
-			openCount, _ := pm.CountIssues([]string{"open"})
-			closedCount, _ := pm.CountIssues([]string{"closed"})
+			workspaceURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
+			forks := gitmsg.GetForks(cfg.WorkDir)
+			openCount := pm.CountIssuesWithForks(workspaceURL, forks, []string{"open"})
+			closedCount := pm.CountIssuesWithForks(workspaceURL, forks, []string{"closed"})
 
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, map[string]interface{}{
@@ -264,25 +266,20 @@ Sort by created, due or priority, each with :asc or :desc.`,
 				}
 			}
 
-			items, err := pm.GetPMItems(q)
+			issues, err := listIssues(cfg.WorkDir, q)
 			if err != nil {
 				PrintError(cmd, err.Error())
 				return exit(ExitError)
 			}
 
 			if cfg.JSONOutput {
-				issues := make([]pm.Issue, len(items))
-				for i, item := range items {
-					issues[i] = pm.PMItemToIssue(item)
-				}
 				return PrintJSON(cmd, issues)
 			} else {
-				if len(items) == 0 {
+				if len(issues) == 0 {
 					fmt.Fprintln(cmd.OutOrStdout(), "No issues found")
 					return nil
 				}
-				for _, item := range items {
-					issue := pm.PMItemToIssue(item)
+				for _, issue := range issues {
 					printIssueLine(cmd.OutOrStdout(), issue)
 				}
 			}
@@ -295,10 +292,26 @@ Sort by created, due or priority, each with :asc or :desc.`,
 	cmd.Flags().StringVarP(&labels, "labels", "l", "", "Filter by comma-separated labels")
 	cmd.Flags().StringVarP(&filter, "filter", "f", "", "Filter query, such as state:open priority:high")
 	cmd.Flags().StringVar(&sort, "sort", "", "Sort by created, due or priority, with :asc or :desc")
-	cmd.Flags().StringVarP(&repoURL, "repo", "r", "", "Repository URL, default the current workspace")
+	cmd.Flags().StringVarP(&repoURL, "repo", "r", "", "Repository URL, default the workspace and its forks")
 	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch name, default the configured PM branch")
 
 	return cmd
+}
+
+// listIssues runs an issue query on the --repo repository, or on the workspace and its registered forks.
+func listIssues(workdir string, q pm.PMQuery) ([]pm.Issue, error) {
+	if q.RepoURL == "" {
+		return pm.GetWorkspaceIssues(q, gitmsg.ResolveRepoURL(workdir), gitmsg.GetForks(workdir))
+	}
+	items, err := pm.GetPMItems(q)
+	if err != nil {
+		return nil, err
+	}
+	issues := make([]pm.Issue, len(items))
+	for i, item := range items {
+		issues[i] = pm.PMItemToIssue(item)
+	}
+	return issues, nil
 }
 
 // newPMIssueShowCmd builds the command that shows one issue.
@@ -805,6 +818,7 @@ func newPMMilestoneListCmd() *cobra.Command {
 		Short: "List milestones",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
+			listRepo := repoURL
 			if repoURL != "" {
 				fetchResult := pm.FetchRepository(cfg.CacheDir, repoURL, branch)
 				if !fetchResult.Success {
@@ -818,6 +832,7 @@ func newPMMilestoneListCmd() *cobra.Command {
 				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 					slog.Debug("sync workspace", "error", err)
 				}
+				listRepo = gitmsg.ResolveRepoURL(cfg.WorkDir)
 			}
 
 			var states []string
@@ -829,7 +844,7 @@ func newPMMilestoneListCmd() *cobra.Command {
 				states = []string{string(pm.StateOpen)}
 			}
 
-			result := pm.GetMilestones(repoURL, branch, states, "", limit)
+			result := pm.GetMilestones(listRepo, branch, states, "", limit)
 			if !result.Success {
 				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
@@ -1209,6 +1224,7 @@ func newPMSprintListCmd() *cobra.Command {
 		Short: "List sprints",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := GetConfig(cmd)
+			listRepo := repoURL
 			if repoURL != "" {
 				fetchResult := pm.FetchRepository(cfg.CacheDir, repoURL, branch)
 				if !fetchResult.Success {
@@ -1222,6 +1238,7 @@ func newPMSprintListCmd() *cobra.Command {
 				if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
 					slog.Debug("sync workspace", "error", err)
 				}
+				listRepo = gitmsg.ResolveRepoURL(cfg.WorkDir)
 			}
 
 			var states []string
@@ -1238,7 +1255,7 @@ func newPMSprintListCmd() *cobra.Command {
 				states = []string{string(pm.SprintStatePlanned), string(pm.SprintStateActive)}
 			}
 
-			result := pm.GetSprints(repoURL, branch, states, "", limit)
+			result := pm.GetSprints(listRepo, branch, states, "", limit)
 			if !result.Success {
 				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)

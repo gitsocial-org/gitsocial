@@ -260,7 +260,7 @@ Result: `LogEntry[]`
 #### pm.getIssues
 
 Params:
-- `repoURL` (string): Repository URL (default: workspace)
+- `repoURL` (string): Repository URL (default: the workspace and its registered forks)
 - `branch` (string): Branch
 - `states` (string[]): Filter: `"open"`, `"closed"`, `"canceled"`
 - `limit` (int): Max results; 0 means 1000

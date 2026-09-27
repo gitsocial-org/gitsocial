@@ -122,7 +122,7 @@ func (v *issuesView) loadIssues() tea.Cmd {
 			states = []string{"open"}
 		}
 		forks := gitmsg.GetForks(workdir)
-		result := pm.GetIssuesWithForks(repoURL, branch, forks, states, "", limit+1)
+		result := pm.GetIssuesWithForks(repoURL, forks, states, "", limit+1)
 		if !result.Success {
 			return issuesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}
@@ -135,7 +135,7 @@ func (v *issuesView) loadIssues() tea.Cmd {
 			}
 		}
 		contributorNames := buildContributorNameMap(workdir)
-		total := pm.CountIssuesWithForks(repoURL, branch, forks, states)
+		total := pm.CountIssuesWithForks(repoURL, forks, states)
 		return issuesLoadedMsg{Issues: issues, ContributorNames: contributorNames, HasMore: hasMore, Total: total}
 	}
 }
@@ -156,7 +156,7 @@ func (v *issuesView) loadMoreIssues() tea.Cmd {
 			states = []string{"open"}
 		}
 		forks := gitmsg.GetForks(workdir)
-		result := pm.GetIssuesWithForks(repoURL, branch, forks, states, cursor, tuicore.PageSize+1)
+		result := pm.GetIssuesWithForks(repoURL, forks, states, cursor, tuicore.PageSize+1)
 		if !result.Success {
 			return issuesLoadedMsg{Err: fmt.Errorf("%s", result.Error.Text())}
 		}

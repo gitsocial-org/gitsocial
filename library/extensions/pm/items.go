@@ -300,6 +300,7 @@ type PMQuery struct {
 	Types     []string
 	States    []string
 	RepoURL   string
+	RepoURLs  []string
 	Branch    string
 	Labels    []string
 	Assignee  string
@@ -361,6 +362,14 @@ func GetPMItems(q PMQuery) ([]PMItem, error) {
 		if q.RepoURL != "" {
 			where = append(where, "v.repo_url = ?")
 			args = append(args, q.RepoURL)
+		}
+
+		if len(q.RepoURLs) > 0 {
+			ph := strings.Repeat("?,", len(q.RepoURLs))
+			where = append(where, "v.repo_url IN ("+ph[:len(ph)-1]+")")
+			for _, u := range q.RepoURLs {
+				args = append(args, u)
+			}
 		}
 
 		if q.Branch != "" {
@@ -468,6 +477,13 @@ func GetPMItemsCount(q PMQuery) (int, error) {
 			where = append(where, "v.repo_url = ?")
 			args = append(args, q.RepoURL)
 		}
+		if len(q.RepoURLs) > 0 {
+			ph := strings.Repeat("?,", len(q.RepoURLs))
+			where = append(where, "v.repo_url IN ("+ph[:len(ph)-1]+")")
+			for _, u := range q.RepoURLs {
+				args = append(args, u)
+			}
+		}
 		if q.Branch != "" {
 			where = append(where, "v.branch = ?")
 			args = append(args, q.Branch)
@@ -482,11 +498,6 @@ func GetPMItemsCount(q PMQuery) (int, error) {
 		err := db.QueryRow(query, args...).Scan(&count)
 		return count, err
 	})
-}
-
-// CountIssues returns the number of issues matching the given states.
-func CountIssues(states []string) (int, error) {
-	return GetPMItemsCount(PMQuery{Types: []string{string(ItemTypeIssue)}, States: states})
 }
 
 // GetIssues retrieves issues with optional filtering.
@@ -510,84 +521,50 @@ func GetIssues(repoURL, branch string, states []string, cursor string, limit int
 	return result.Ok(issues)
 }
 
-// GetIssuesWithForks retrieves issues from the workspace and registered forks.
-// Unlike PRs, fork issues don't need base-ref filtering — all issues from registered forks are included.
-func GetIssuesWithForks(workspaceURL, workspaceBranch string, forkURLs, states []string, cursor string, limit int) Result[[]Issue] {
-	if len(forkURLs) == 0 {
-		return GetIssues(workspaceURL, workspaceBranch, states, cursor, limit)
-	}
-	repoURLs := append([]string{workspaceURL}, forkURLs...)
-	items, err := cache.QueryLocked(func(db *sql.DB) ([]PMItem, error) {
-		ph := strings.Repeat("?,", len(repoURLs))
-		ph = ph[:len(ph)-1]
-		var args []interface{}
-		var where []string
-		where = append(where, "v.type = ?")
-		args = append(args, string(ItemTypeIssue))
-		where = append(where, "v.repo_url IN ("+ph+")")
-		for _, u := range repoURLs {
-			args = append(args, u)
-		}
-		if len(states) > 0 {
-			sph := strings.Repeat("?,", len(states))
-			sph = sph[:len(sph)-1]
-			where = append(where, "v.state IN ("+sph+")")
-			for _, s := range states {
-				args = append(args, s)
-			}
-		}
-		if cursor != "" {
-			where = append(where, "v.timestamp < ?")
-			args = append(args, cursor)
-		}
-		where = append(where, "NOT v.is_edit_commit")
-		where = append(where, "NOT v.is_retracted")
-		sqlQuery := baseSelectFromView + " WHERE " + strings.Join(where, " AND ") + " ORDER BY v.timestamp DESC"
-		if limit > 0 {
-			sqlQuery += " LIMIT ?"
-			args = append(args, limit)
-		}
-		rows, err := db.Query(sqlQuery, args...)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		var result []PMItem
-		for rows.Next() {
-			item, err := scanResolvedRow(rows)
-			if err != nil {
-				return nil, err
-			}
-			result = append(result, *item)
-		}
-		return result, rows.Err()
-	})
+// GetWorkspaceIssues returns the issues a query matches in the workspace and its registered forks; an adopted fork original collapses into its copy.
+func GetWorkspaceIssues(q PMQuery, workspaceURL string, forkURLs []string) ([]Issue, error) {
+	q.Types = []string{string(ItemTypeIssue)}
+	q.RepoURL = ""
+	q.RepoURLs = append([]string{workspaceURL}, forkURLs...)
+	items, err := GetPMItems(q)
 	if err != nil {
-		return result.Err[[]Issue]("QUERY_FAILED", err.Error())
+		return nil, err
 	}
-	// A fork original the workspace has adopted collapses into its copy.
 	adopted := adoptedOriginals(workspaceURL)
-	// Deduplicate by hash: workspace items take priority over fork duplicates
-	// (can happen when forks are created via git clone --mirror)
+	// A fork mirror repeats workspace hashes, and the workspace row wins.
+	inWorkspace := make(map[string]bool, len(items))
+	for _, item := range items {
+		if item.RepoURL == workspaceURL {
+			inWorkspace[item.Hash] = true
+		}
+	}
 	seen := make(map[string]bool, len(items))
 	issues := make([]Issue, 0, len(items))
 	for _, item := range items {
-		if seen[item.Hash] || (item.RepoURL != workspaceURL && adopted[adoptedKey(item.RepoURL, item.Hash)]) {
+		if item.RepoURL != workspaceURL && (inWorkspace[item.Hash] || adopted[adoptedKey(item.RepoURL, item.Hash)]) {
+			continue
+		}
+		if seen[item.Hash] {
 			continue
 		}
 		seen[item.Hash] = true
 		issues = append(issues, PMItemToIssue(item))
 	}
+	return issues, nil
+}
+
+// GetIssuesWithForks retrieves issues from the workspace and registered forks, newest first.
+func GetIssuesWithForks(workspaceURL string, forkURLs, states []string, cursor string, limit int) Result[[]Issue] {
+	issues, err := GetWorkspaceIssues(PMQuery{States: states, Cursor: cursor, Limit: limit}, workspaceURL, forkURLs)
+	if err != nil {
+		return result.Err[[]Issue]("QUERY_FAILED", err.Error())
+	}
 	return result.Ok(issues)
 }
 
 // CountIssuesWithForks counts issues from workspace and forks.
-func CountIssuesWithForks(workspaceURL, workspaceBranch string, forkURLs, states []string) int {
-	if len(forkURLs) == 0 {
-		count, _ := CountIssues(states)
-		return count
-	}
-	res := GetIssuesWithForks(workspaceURL, workspaceBranch, forkURLs, states, "", 0)
+func CountIssuesWithForks(workspaceURL string, forkURLs, states []string) int {
+	res := GetIssuesWithForks(workspaceURL, forkURLs, states, "", 0)
 	if !res.Success {
 		return 0
 	}
