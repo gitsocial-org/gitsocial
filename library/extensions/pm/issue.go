@@ -85,7 +85,7 @@ func GetIssue(issueRef string) Result[Issue] {
 	}
 	item, err := GetPMItemByHashPrefix(hash, string(ItemTypeIssue))
 	if err != nil {
-		return result.Err[Issue]("NOT_FOUND", "issue not found: "+issueRef)
+		return result.Err[Issue]("NOT_FOUND", notFoundMessage("issue", issueRef, err))
 	}
 	return result.Ok(PMItemToIssue(*item))
 }

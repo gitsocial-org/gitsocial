@@ -58,7 +58,7 @@ func GetSprint(sprintRef string) Result[Sprint] {
 	}
 	item, err := GetPMItemByHashPrefix(hash, string(ItemTypeSprint))
 	if err != nil {
-		return result.Err[Sprint]("NOT_FOUND", "sprint not found: "+sprintRef)
+		return result.Err[Sprint]("NOT_FOUND", notFoundMessage("sprint", sprintRef, err))
 	}
 	return result.Ok(PMItemToSprint(*item))
 }

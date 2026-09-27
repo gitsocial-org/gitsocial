@@ -51,6 +51,10 @@ Examples:
 			// Fast dispatch: detect which extension owns this hash via raw table lookup,
 			// then call only the matching getter instead of trying all 4 sequentially.
 			if hits, err := cache.DetectExtension(bareRef); err == nil && len(hits) > 0 {
+				if first, other := ambiguousHashes(hits); other != "" {
+					PrintError(cmd, fmt.Sprintf("hash %q is ambiguous between %s and %s: use a longer prefix", bareRef, first, other))
+					return exit(ExitError)
+				}
 				if shown, err := showByExtension(cmd, cfg, workspaceURL, hits[0]); shown || err != nil {
 					return err
 				}
@@ -76,6 +80,23 @@ Examples:
 			return exit(ExitError)
 		},
 	}
+}
+
+// ambiguousHashes returns the hashes of two hits of different items, or "" as the second when every hit is one item or its edits.
+func ambiguousHashes(hits []cache.ExtensionHit) (string, string) {
+	canonical := func(hit cache.ExtensionHit) string {
+		if _, hash, _, err := cache.ResolveToCanonical(hit.RepoURL, hit.Hash, hit.Branch); err == nil {
+			return hash
+		}
+		return hit.Hash
+	}
+	first := canonical(hits[0])
+	for _, hit := range hits[1:] {
+		if canonical(hit) != first {
+			return hits[0].Hash, hit.Hash
+		}
+	}
+	return hits[0].Hash, ""
 }
 
 // showByExtension dispatches to the correct extension getter using the full PK from DetectExtension.

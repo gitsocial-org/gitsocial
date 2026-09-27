@@ -882,6 +882,38 @@ func TestGetMemoItemByRef_acceptsTildeForm(t *testing.T) {
 	}
 }
 
+// TestGetSingleMemo_ambiguousPrefix refuses a hash prefix that two memos share and names both hashes.
+func TestGetSingleMemo_ambiguousPrefix(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://example.com/test/ambiguous"
+	hashes := []string{"a1b2c3d4e5f6", "a1f6e5d4c3b2"}
+	for _, hash := range hashes {
+		if err := cache.InsertCommits([]cache.Commit{{
+			Hash: hash, RepoURL: repoURL, Branch: MemoBranch,
+			AuthorName: "Test User", AuthorEmail: "test@test.com",
+			Message:   buildMemoContent("memo "+hash, "", CreateMemoOptions{}, ""),
+			Timestamp: time.Now(),
+		}}); err != nil {
+			t.Fatalf("InsertCommits: %v", err)
+		}
+		if err := InsertMemoItem(MemoItem{RepoURL: repoURL, Hash: hash, Branch: MemoBranch, Type: "memo"}); err != nil {
+			t.Fatalf("InsertMemoItem: %v", err)
+		}
+	}
+	res := GetSingleMemo("a1", "", nil)
+	if res.Success || res.Error.Code != "NOT_FOUND" {
+		t.Fatalf("GetSingleMemo() of an ambiguous prefix = %+v, want NOT_FOUND", res)
+	}
+	for _, hash := range hashes {
+		if !strings.Contains(res.Error.Message, hash) {
+			t.Errorf("the message should name %s, got %q", hash, res.Error.Message)
+		}
+	}
+	if got := GetSingleMemo("a1b", "", nil); !got.Success || got.Data.Subject != "memo a1b2c3d4e5f6" {
+		t.Errorf("GetSingleMemo() of a prefix matching one memo = %+v", got)
+	}
+}
+
 // TestSessionInfo_JSONCollapsesHomePath verifies SessionInfo.MarshalJSON
 // tilde-collapses Path on serialization while leaving the struct field
 // absolute for internal callers (gc, sync).

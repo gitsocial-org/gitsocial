@@ -10,7 +10,7 @@ import (
 func GetMemoComments(memoRef, workspaceURL string) Result[[]social.Post] {
 	item, err := GetMemoItemByRef(memoRef, workspaceURL)
 	if err != nil {
-		return result.Err[[]social.Post]("NOT_FOUND", "memo not found: "+memoRef)
+		return result.Err[[]social.Post]("NOT_FOUND", notFoundMessage("memo not found: "+memoRef, err))
 	}
 	posts, err := social.GetComments(item.RepoURL, item.Hash, item.Branch, memoRef)
 	if err != nil {

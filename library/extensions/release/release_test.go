@@ -418,6 +418,35 @@ func TestGetSingleRelease_byPrefix(t *testing.T) {
 	}
 }
 
+// TestGetSingleRelease_ambiguousPrefix refuses a prefix that two releases share, unless a tag matches the ref.
+func TestGetSingleRelease_ambiguousPrefix(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://example.com/test/ambiguous"
+	hashes := []string{"a1b2c3d4e5f6", "a1f6e5d4c3b2"}
+	for _, hash := range hashes {
+		insertReleaseTestCommit(t, repoURL, hash)
+		if err := InsertReleaseItem(ReleaseItem{RepoURL: repoURL, Hash: hash, Branch: releaseTestBranch, Tag: cache.ToNullString("v-" + hash)}); err != nil {
+			t.Fatalf("InsertReleaseItem() error = %v", err)
+		}
+	}
+	res := GetSingleRelease("a1")
+	if res.Success || res.Error.Code != "NOT_FOUND" {
+		t.Fatalf("GetSingleRelease() of an ambiguous prefix = %+v, want NOT_FOUND", res)
+	}
+	for _, hash := range hashes {
+		if !strings.Contains(res.Error.Message, hash) {
+			t.Errorf("the message should name %s, got %q", hash, res.Error.Message)
+		}
+	}
+	insertReleaseTestCommit(t, repoURL, "c0c0c0c0c0c0")
+	if err := InsertReleaseItem(ReleaseItem{RepoURL: repoURL, Hash: "c0c0c0c0c0c0", Branch: releaseTestBranch, Tag: cache.ToNullString("a1")}); err != nil {
+		t.Fatalf("InsertReleaseItem() error = %v", err)
+	}
+	if got := GetSingleRelease("a1"); !got.Success || got.Data.Tag != "a1" {
+		t.Errorf("GetSingleRelease() of a tag that is also an ambiguous prefix = %+v, want tag a1", got)
+	}
+}
+
 func TestGetSingleRelease_notFound(t *testing.T) {
 	setupTestDB(t)
 	res := GetSingleRelease("nonexistent")

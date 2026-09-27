@@ -35,7 +35,7 @@ func PromoteMemo(workdir, memoRef string, target Tier) Result[Memo] {
 	inheritedURLs := ListInherits(workdir)
 	existing, err := GetMemoItemByRef(memoRef, workspaceURL)
 	if err != nil {
-		return result.Err[Memo]("NOT_FOUND", "memo not found")
+		return result.Err[Memo]("NOT_FOUND", notFoundMessage("memo not found", err))
 	}
 	sourceTier := TierForRepoURL(existing.RepoURL, workspaceURL, inheritedURLs)
 	srcRank := promoteRank(sourceTier)

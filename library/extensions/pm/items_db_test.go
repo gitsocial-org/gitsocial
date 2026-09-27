@@ -2,6 +2,7 @@
 package pm
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -374,5 +375,33 @@ func TestGetPMItemByRef(t *testing.T) {
 	}
 	if item.Hash != hash {
 		t.Errorf("Hash = %q, want %q", item.Hash, hash)
+	}
+}
+
+// TestGetIssue_ambiguousPrefix refuses a prefix that two issues share and ignores a milestone that shares it.
+func TestGetIssue_ambiguousPrefix(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://example.com/test/ambiguous"
+	items := map[string]string{"a1b2c3d4e5f6": "issue", "a1f6e5d4c3b2": "issue", "a1c3c3c3c3c3": "milestone"}
+	for hash, typ := range items {
+		insertPMTestCommit(t, repoURL, hash)
+		if err := InsertPMItem(PMItem{RepoURL: repoURL, Hash: hash, Branch: pmTestBranch, Type: typ, State: "open"}); err != nil {
+			t.Fatalf("InsertPMItem() error = %v", err)
+		}
+	}
+	res := GetIssue("a1")
+	if res.Success || res.Error.Code != "NOT_FOUND" {
+		t.Fatalf("GetIssue() of an ambiguous prefix = %+v, want NOT_FOUND", res)
+	}
+	for _, hash := range []string{"a1b2c3d4e5f6", "a1f6e5d4c3b2"} {
+		if !strings.Contains(res.Error.Message, hash) {
+			t.Errorf("the message should name %s, got %q", hash, res.Error.Message)
+		}
+	}
+	if got := GetIssue("a1b"); !got.Success {
+		t.Errorf("GetIssue() of a prefix matching one issue failed: %s", got.Error.Message)
+	}
+	if got := GetMilestone("a1"); !got.Success {
+		t.Errorf("GetMilestone() of a prefix matching one milestone failed: %s", got.Error.Message)
 	}
 }

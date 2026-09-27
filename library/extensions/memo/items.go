@@ -3,6 +3,8 @@ package memo
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -106,14 +108,40 @@ func GetMemoItemByRef(refStr, defaultRepoURL string) (*MemoItem, error) {
 	return GetMemoItemByHashPrefix(hash)
 }
 
-// GetMemoItemByHashPrefix retrieves a memo by hash prefix.
+// GetMemoItemByHashPrefix retrieves a memo by hash prefix, refusing a prefix that several memos share.
 func GetMemoItemByHashPrefix(hashPrefix string) (*MemoItem, error) {
+	hashes, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
+		rows, err := db.Query(`SELECT DISTINCT hash FROM memo_items_resolved
+			WHERE hash LIKE ? ESCAPE '\' AND NOT is_edit_commit AND NOT is_retracted
+			LIMIT 2`, cache.EscapeLike(hashPrefix)+"%")
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var out []string
+		for rows.Next() {
+			var hash string
+			if err := rows.Scan(&hash); err != nil {
+				return nil, err
+			}
+			out = append(out, hash)
+		}
+		return out, rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get memo by hash prefix: %w", err)
+	}
+	if len(hashes) == 0 {
+		return nil, sql.ErrNoRows
+	}
+	if len(hashes) > 1 {
+		return nil, fmt.Errorf("hash %q is ambiguous between %s and %s: use a longer prefix", hashPrefix, hashes[0], hashes[1])
+	}
 	return cache.QueryLocked(func(db *sql.DB) (*MemoItem, error) {
 		query := baseSelectFromView + `
-			WHERE v.hash LIKE ? AND NOT v.is_edit_commit AND NOT v.is_retracted
+			WHERE v.hash = ? AND NOT v.is_edit_commit AND NOT v.is_retracted
 			ORDER BY v.timestamp DESC LIMIT 1`
-		row := db.QueryRow(query, cache.EscapeLike(hashPrefix)+"%")
-		return scanResolvedRow(row)
+		return scanResolvedRow(db.QueryRow(query, hashes[0]))
 	})
 }
 
@@ -314,9 +342,17 @@ func GetMemos(q MemoQuery) Result[[]Memo] {
 func GetSingleMemo(memoRef, workspaceURL string, inheritedURLs []string) Result[Memo] {
 	item, err := GetMemoItemByRef(memoRef, workspaceURL)
 	if err != nil {
-		return result.Err[Memo]("NOT_FOUND", "memo not found: "+memoRef)
+		return result.Err[Memo]("NOT_FOUND", notFoundMessage("memo not found: "+memoRef, err))
 	}
 	return result.Ok(MemoItemToMemo(*item, workspaceURL, inheritedURLs))
+}
+
+// notFoundMessage returns the message for a missing memo, or the lookup error itself, such as an ambiguous hash prefix.
+func notFoundMessage(missing string, err error) string {
+	if errors.Is(err, sql.ErrNoRows) {
+		return missing
+	}
+	return err.Error()
 }
 
 // MemoItemToMemo converts a MemoItem into the public Memo shape.

@@ -77,7 +77,7 @@ func EditMemo(workdir, memoRef string, opts EditMemoOptions) Result[Memo] {
 	inheritedURLs := ListInherits(workdir)
 	existing, err := GetMemoItemByRef(memoRef, workspaceURL)
 	if err != nil {
-		return result.Err[Memo]("NOT_FOUND", "memo not found")
+		return result.Err[Memo]("NOT_FOUND", notFoundMessage("memo not found", err))
 	}
 
 	sourceTier := TierForRepoURL(existing.RepoURL, workspaceURL, inheritedURLs)
@@ -145,7 +145,7 @@ func RetractMemo(workdir, memoRef string) Result[bool] {
 	inheritedURLs := ListInherits(workdir)
 	existing, err := GetMemoItemByRef(memoRef, workspaceURL)
 	if err != nil {
-		return result.Err[bool]("NOT_FOUND", "memo not found")
+		return result.Err[bool]("NOT_FOUND", notFoundMessage("memo not found", err))
 	}
 	sourceTier := TierForRepoURL(existing.RepoURL, workspaceURL, inheritedURLs)
 	if sourceTier == TierExternal || sourceTier == TierInherited {

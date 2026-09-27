@@ -75,7 +75,7 @@ func GetMilestone(milestoneRef string) Result[Milestone] {
 	}
 	item, err := GetPMItemByHashPrefix(hash, string(ItemTypeMilestone))
 	if err != nil {
-		return result.Err[Milestone]("NOT_FOUND", "milestone not found: "+milestoneRef)
+		return result.Err[Milestone]("NOT_FOUND", notFoundMessage("milestone", milestoneRef, err))
 	}
 	return result.Ok(PMItemToMilestone(*item))
 }

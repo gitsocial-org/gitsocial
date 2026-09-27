@@ -3,6 +3,7 @@ package release
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 
@@ -243,14 +244,40 @@ func GetArtifactURL(rel Release, filename string) string {
 	return base + "/" + filename
 }
 
-// GetReleaseItemByHashPrefix retrieves a release item by hash prefix using direct SQL.
+// GetReleaseItemByHashPrefix retrieves a release item by hash prefix, refusing a prefix that several items share.
 func GetReleaseItemByHashPrefix(hashPrefix string) (*ReleaseItem, error) {
+	hashes, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
+		rows, err := db.Query(`SELECT DISTINCT hash FROM release_items_resolved
+			WHERE hash LIKE ? ESCAPE '\' AND NOT is_edit_commit AND NOT is_retracted
+			LIMIT 2`, cache.EscapeLike(hashPrefix)+"%")
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var out []string
+		for rows.Next() {
+			var hash string
+			if err := rows.Scan(&hash); err != nil {
+				return nil, err
+			}
+			out = append(out, hash)
+		}
+		return out, rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get release item by hash prefix: %w", err)
+	}
+	if len(hashes) == 0 {
+		return nil, sql.ErrNoRows
+	}
+	if len(hashes) > 1 {
+		return nil, fmt.Errorf("hash %q is ambiguous between %s and %s: use a longer prefix", hashPrefix, hashes[0], hashes[1])
+	}
 	return cache.QueryLocked(func(db *sql.DB) (*ReleaseItem, error) {
 		query := baseSelectFromView + `
-			WHERE v.hash LIKE ? AND NOT v.is_edit_commit AND NOT v.is_retracted
+			WHERE v.hash = ? AND NOT v.is_edit_commit AND NOT v.is_retracted
 			ORDER BY v.timestamp DESC LIMIT 1`
-		row := db.QueryRow(query, cache.EscapeLike(hashPrefix)+"%")
-		return scanResolvedRow(row)
+		return scanResolvedRow(db.QueryRow(query, hashes[0]))
 	})
 }
 

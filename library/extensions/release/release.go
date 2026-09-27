@@ -2,7 +2,9 @@
 package release
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -216,7 +218,8 @@ func GetSingleRelease(releaseRef string) Result[Release] {
 	if hash == "" {
 		hash = releaseRef
 	}
-	if item, err := GetReleaseItemByHashPrefix(hash); err == nil {
+	item, hashErr := GetReleaseItemByHashPrefix(hash)
+	if hashErr == nil {
 		return result.Ok(ReleaseItemToRelease(*item))
 	}
 	// Try full ref match (handles full refs like repo#commit:hash@branch and prefixes thereof)
@@ -228,6 +231,9 @@ func GetSingleRelease(releaseRef string) Result[Release] {
 	// Fall back to tag or version match
 	if item, err := GetReleaseItemByTagOrVersion(releaseRef); err == nil {
 		return result.Ok(ReleaseItemToRelease(*item))
+	}
+	if !errors.Is(hashErr, sql.ErrNoRows) {
+		return result.Err[Release]("NOT_FOUND", hashErr.Error())
 	}
 	return result.Err[Release]("NOT_FOUND", "release not found: "+releaseRef)
 }

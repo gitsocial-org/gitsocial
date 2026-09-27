@@ -16,17 +16,19 @@ func TestSmoke(t *testing.T) {
 	f := getFixture(t)
 	h := New(t, f.Workdir, f.CacheDir)
 	shortcuts := globalShortcuts(h)
+	at := smokeLocations(f)
 
 	t.Run("AllKeysAllViews", func(t *testing.T) {
 		for _, meta := range tuicore.AllViewMetas() {
 			t.Run(meta.Path, func(t *testing.T) {
-				h.Navigate(meta.Path)
+				loc := at(meta.Path)
+				h.NavigateTo(loc)
 				assertNotEmpty(t, h.Rendered())
 				bound := boundKeys(h, meta.Context)
 				for _, key := range ownKeys(h, meta.Context, shortcuts) {
-					pressOnView(t, h, meta.Path, key)
+					pressOnView(t, h, loc, key)
 				}
-				pressOnView(t, h, meta.Path, unboundKey(bound))
+				pressOnView(t, h, loc, unboundKey(bound))
 			})
 		}
 	})
@@ -38,8 +40,8 @@ func TestSmoke(t *testing.T) {
 					continue
 				}
 				pressed[b.Key] = true
-				h.Navigate(meta.Path)
-				pressOnView(t, h, meta.Path, b.Key)
+				h.NavigateTo(at(meta.Path))
+				pressOnView(t, h, at(meta.Path), b.Key)
 			}
 		}
 		if len(pressed) != len(shortcuts) {
@@ -67,17 +69,37 @@ func TestSmoke(t *testing.T) {
 }
 
 // pressOnView presses one key, requires a render, and returns to the view.
-func pressOnView(t *testing.T, h *Harness, path, key string) {
+func pressOnView(t *testing.T, h *Harness, loc tuicore.Location, key string) {
 	t.Helper()
 	h.SendKey(key)
 	if strings.TrimSpace(stripANSI(h.Rendered())) == "" {
-		t.Errorf("%s: empty render after key %q", path, key)
+		t.Errorf("%s: empty render after key %q", loc.Path, key)
 	}
 	if dialogOpen(h) {
 		h.SendKey("n")
 	}
-	if h.CurrentPath() != path {
-		h.Navigate(path)
+	if h.CurrentPath() != loc.Path {
+		h.NavigateTo(loc)
+	}
+}
+
+// smokeLocations returns the location for a view path, with a fixture item for the views that load one by ref.
+func smokeLocations(f *Fixture) func(path string) tuicore.Location {
+	locs := make(map[string]tuicore.Location)
+	for _, loc := range []tuicore.Location{
+		tuicore.LocPMIssueDetail(f.IssueID), tuicore.LocPMEditIssue(f.IssueID),
+		tuicore.LocPMMilestoneDetail(f.MilestoneID), tuicore.LocPMEditMilestone(f.MilestoneID),
+		tuicore.LocPMSprintDetail(f.SprintID), tuicore.LocPMEditSprint(f.SprintID),
+		tuicore.LocReleaseDetail(f.ReleaseID), tuicore.LocReleaseEdit(f.ReleaseID), tuicore.LocReleaseSBOM(f.ReleaseID),
+		tuicore.LocMemoDetail(f.MemoID),
+	} {
+		locs[loc.Path] = loc
+	}
+	return func(path string) tuicore.Location {
+		if loc, ok := locs[path]; ok {
+			return loc
+		}
+		return tuicore.Location{Path: path}
 	}
 }
 

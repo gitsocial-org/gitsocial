@@ -3,6 +3,8 @@ package pm
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -214,16 +216,49 @@ func GetPMItemByRef(refStr string, defaultRepoURL string) (*PMItem, error) {
 	return GetPMItem(ref.RepoURL, ref.Hash, ref.Branch)
 }
 
-// GetPMItemByHashPrefix finds a PM item by hash prefix and type using direct SQL.
+// GetPMItemByHashPrefix finds a PM item by hash prefix and type, refusing a prefix that several items share.
 func GetPMItemByHashPrefix(hashPrefix, itemType string) (*PMItem, error) {
+	hashes, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
+		rows, err := db.Query(`SELECT DISTINCT hash FROM pm_items_resolved
+			WHERE hash LIKE ? ESCAPE '\' AND type = ? AND NOT is_edit_commit AND NOT is_retracted
+			LIMIT 2`, cache.EscapeLike(hashPrefix)+"%", itemType)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var out []string
+		for rows.Next() {
+			var hash string
+			if err := rows.Scan(&hash); err != nil {
+				return nil, err
+			}
+			out = append(out, hash)
+		}
+		return out, rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get pm item by hash prefix: %w", err)
+	}
+	if len(hashes) == 0 {
+		return nil, sql.ErrNoRows
+	}
+	if len(hashes) > 1 {
+		return nil, fmt.Errorf("hash %q is ambiguous between %s and %s: use a longer prefix", hashPrefix, hashes[0], hashes[1])
+	}
 	return cache.QueryLocked(func(db *sql.DB) (*PMItem, error) {
 		query := baseSelectFromView + `
-			WHERE v.hash LIKE ? AND v.type = ?
-			  AND NOT v.is_edit_commit AND NOT v.is_retracted
+			WHERE v.hash = ? AND v.type = ? AND NOT v.is_edit_commit AND NOT v.is_retracted
 			ORDER BY v.timestamp DESC LIMIT 1`
-		row := db.QueryRow(query, cache.EscapeLike(hashPrefix)+"%", itemType)
-		return scanResolvedRow(row)
+		return scanResolvedRow(db.QueryRow(query, hashes[0], itemType))
 	})
+}
+
+// notFoundMessage names an ambiguous hash prefix, and the ref itself otherwise.
+func notFoundMessage(kind, ref string, err error) string {
+	if errors.Is(err, sql.ErrNoRows) {
+		return kind + " not found: " + ref
+	}
+	return err.Error()
 }
 
 type PMQuery struct {
