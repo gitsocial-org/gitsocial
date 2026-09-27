@@ -121,7 +121,14 @@
     // The cache holds the in-flight promise, so concurrent readers of one sha share a single fetch.
     const pending = (async () => {
       if (await bucketIsPacked(ctx)) {
-        const packed = await getPackedObject(ctx, sha, content);
+        // A commit the pack map misses is most likely loose, so its one loose read comes before the probe of every pack index.
+        if (!content) {
+          const mapped = await getMappedObject(ctx, sha);
+          if (mapped !== null) return mapped;
+          const loose = await getLooseObject(ctx, sha);
+          return loose !== null ? loose : probePacks(ctx, sha);
+        }
+        const packed = await probePacks(ctx, sha);
         // A miss in every pack still has a loose key to try: a bucket may carry objects loose until its next seal.
         return packed !== null ? packed : getLooseObject(ctx, sha);
       }
@@ -571,13 +578,20 @@
 
   // getPackedObject resolves one object out of the packfiles: the pack map for commits and tags, then each pack's index for the rest.
   async function getPackedObject(ctx, sha, content) {
-    const map = content ? null : await packMapShard(ctx, sha);
+    const mapped = content ? null : await getMappedObject(ctx, sha);
+    return mapped !== null ? mapped : probePacks(ctx, sha);
+  }
+
+  // getMappedObject reads a commit or tag at the range its pack map shard records, or null when the shard has no entry.
+  async function getMappedObject(ctx, sha) {
+    const map = await packMapShard(ctx, sha);
     const at = map && map.offsets[sha];
-    if (at) {
-      const name = map.packs[at[0]];
-      if (name) return readPackEntry(ctx, name, at[1], at[1] + at[2]);
-    }
-    // Trees and blobs have no map entry; packs are probed most recently hit first, since a diff reads from the packs of both of its sides.
+    const name = at && map.packs[at[0]];
+    return name ? readPackEntry(ctx, name, at[1], at[1] + at[2]) : null;
+  }
+
+  // probePacks finds an object through each pack's index; packs are probed most recently hit first, since a diff reads from the packs of both of its sides.
+  async function probePacks(ctx, sha) {
     const names = await packNames(ctx);
     const hits = ctx.packs.hits;
     const ordered = hits.concat(names.filter((n) => !hits.includes(n)));

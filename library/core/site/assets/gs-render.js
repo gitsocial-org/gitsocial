@@ -1048,7 +1048,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return (commits.find((c) => c.hash.startsWith(hash)) || {}).hash || null;
   }
 
-  // commitDetail renders a raw commit's detail page with its changes.
+  // commitDetail paints a raw commit's detail page, then appends its changes in the background.
   async function commitDetail(ctx, hash, branch) {
     const sha = await resolveCommitRouteSha(ctx, hash, branch);
     const obj = sha ? await getObject(ctx, sha) : null;
@@ -1070,7 +1070,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       trailerList(dl, c.gitmsg, []);
       wrap.append(dl);
     }
-    wrap.append(await commitChangesSection(ctx, c));
+    enrichDetail(wrap, () => commitChangesSection(ctx, c));
     return [wrap];
   }
 
