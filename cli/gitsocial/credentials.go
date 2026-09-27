@@ -78,7 +78,8 @@ func newCredentialsSetCmd() *cobra.Command {
 		Use:   "set <remote-or-host>",
 		Short: "Store a key pair for an endpoint host",
 		Long: `Store an S3 key pair for a remote, resolved to its endpoint host, or for
-a bare endpoint host. Reads two lines from stdin, the access key then the
+a bare endpoint host. A remote name needs a repository; an endpoint host
+works in any directory. Reads two lines from stdin, the access key then the
 secret key, so it works interactively and piped:
 
   gitsocial config credentials set r2
@@ -87,9 +88,6 @@ secret key, so it works interactively and piped:
 The file is written with 0600 permissions.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !EnsureGitRepo(cmd) {
-				return exit(ExitNotRepo)
-			}
 			cfg := GetConfig(cmd)
 			host, err := resolveCredentialHost(cfg.WorkDir, args[0])
 			if err != nil {
