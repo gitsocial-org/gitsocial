@@ -14,6 +14,8 @@ Each issue, pull request or comment is a commit with GitMsg trailers on a `gitms
 
 ## Install
 
+GitSocial needs git 2.38 or later.
+
 ### macOS / Linux with Homebrew
 
 ```bash
