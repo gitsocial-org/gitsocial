@@ -19,7 +19,7 @@ const enc = new TextEncoder();
 const sha = (s) => (s + "0".repeat(40)).slice(0, 40);
 const short = (s) => sha(s).slice(0, 12);
 const ref = (s, branch) => "#commit:" + short(s) + "@gitmsg/" + branch;
-const ctx = { base: "http://seeded/", objects: new Map(), refMisses: new Set(), treeExpanded: new Set(), walks: {}, packs: { names: [], packed: null, maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), lastHit: null } };
+const ctx = { base: "http://seeded/", objects: new Map(), refMisses: new Set(), treeExpanded: new Set(), walks: {}, packs: { names: [], packed: null, maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), hits: [] } };
 // commit seeds one gitmsg commit: a message, its GitMsg header fields and a parent.
 function commit(id, parent, when, message, fields) {
   const header = "GitMsg: v=\"0.1.0\" " + Object.keys(fields).map((k) => k + "=\"" + fields[k] + "\"").join(" ");

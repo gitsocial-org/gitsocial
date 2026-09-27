@@ -32,7 +32,7 @@ function treeBody(entries) {
   for (const p of parts) { out.set(p, o); o += p.length; }
   return out;
 }
-const ctx = { base: "http://seeded/", objects: new Map(), refMisses: new Set(), treeExpanded: new Set(), walks: {}, packs: { names: [], packed: null, maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), lastHit: null } };
+const ctx = { base: "http://seeded/", objects: new Map(), refMisses: new Set(), treeExpanded: new Set(), walks: {}, packs: { names: [], packed: null, maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), hits: [] } };
 const put = (s, type, body) => ctx.objects.set(sha(s), { type, body: typeof body === "string" ? enc.encode(body) : body });
 
 const middle = Array.from({ length: 18 }, (_, i) => "line " + (i + 2)).join("\n");

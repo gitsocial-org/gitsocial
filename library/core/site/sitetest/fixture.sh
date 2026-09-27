@@ -383,7 +383,7 @@ mkdir -p "$W/data"
 git init -q -b main "$W"
 ident "Ada Lovelace" "ada@example.com"
 printf '# packed-demo\n\nEvery git object here lives in a packfile.\n' >"$W/README.md"
-for i in $(seq 1 800); do
+for i in $(seq 1 3000); do
 	printf 'sample record %03d for the packed content corpus\n' "$i" >"$W/data/record-$i.txt"
 done
 gcommit "Initial commit: README"
@@ -428,7 +428,7 @@ done
 [ "$deltas" -gt 0 ] || { echo "packed-demo carries no deltified objects; the pack reader's delta path would go untested" >&2; exit 1; }
 [ "$depth" -gt 1 ] || { echo "packed-demo's deepest delta chain is $depth; the reader's chain walk would go untested" >&2; exit 1; }
 idxbytes=$(wc -c <"$(ls -S "$served"/packed-demo/objects/pack/*.idx | head -1)")
-[ "$idxbytes" -gt 16384 ] || { echo "packed-demo's largest pack index is $idxbytes bytes; too small to show the reader's ranged index path beating a whole download" >&2; exit 1; }
+[ "$idxbytes" -gt 65536 ] || { echo "packed-demo's largest pack index is $idxbytes bytes; at 64 KiB or less the reader reads it whole, so its ranged index path would go untested" >&2; exit 1; }
 
 # ---- refdelta-demo: the same objects in a REF_DELTA pack.
 # gitsocial always packs with --delta-base-offset, so its own buckets only ever

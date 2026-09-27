@@ -206,6 +206,8 @@
 
   // IDX_HEAD_BYTES is the leading slice a pack index is opened with, sized so a small index arrives whole in that one request.
   const IDX_HEAD_BYTES = 4096;
+  // IDX_WHOLE_BYTES is the largest index read whole after its head, since a few slice reads of it cost more requests than its bytes.
+  const IDX_WHOLE_BYTES = 65536;
   // IDX_SHA_START is where a v2 index's sorted sha table begins.
   const IDX_SHA_START = 8 + 256 * 4;
 
@@ -233,16 +235,26 @@
     idx.sorted = offsets.slice().sort((a, b) => a - b);
   }
 
-  // packIdxOpen reads a pack index's head, cached per context; an index that fits in the head request is adopted whole.
+  // packIdxOpen reads a pack index's head, cached per context; an index up to IDX_WHOLE_BYTES is adopted whole.
   async function packIdxOpen(ctx, name) {
     if (ctx.packs.idx.has(name)) return ctx.packs.idx.get(name);
     const promise = (async () => {
       const got = await fetchRange(ctx.base, "objects/pack/" + name + ".idx", 0, IDX_HEAD_BYTES);
       if (got === null) return null;
       const idx = parsePackIdxHead(got.bytes, got.total || got.bytes.length);
-      if (got.bytes.length >= idx.total && idx.total >= idx.ofsStart + idx.count * 4) {
-        idx.shas = got.bytes.subarray(IDX_SHA_START, IDX_SHA_START + idx.count * 20);
-        setPackIdxOffsets(idx, got.bytes.subarray(idx.ofsStart));
+      let bytes = got.bytes;
+      if (bytes.length < idx.total && idx.total <= IDX_WHOLE_BYTES) {
+        // A failed rest read leaves the index to slice reads, as a head-only open does.
+        const rest = await fetchRange(ctx.base, "objects/pack/" + name + ".idx", bytes.length, idx.total).catch(() => null);
+        if (rest !== null) {
+          bytes = new Uint8Array(got.bytes.length + rest.bytes.length);
+          bytes.set(got.bytes);
+          bytes.set(rest.bytes, got.bytes.length);
+        }
+      }
+      if (bytes.length >= idx.total && idx.total >= idx.ofsStart + idx.count * 4) {
+        idx.shas = bytes.subarray(IDX_SHA_START, IDX_SHA_START + idx.count * 20);
+        setPackIdxOffsets(idx, bytes.subarray(idx.ofsStart));
       }
       return idx;
     })();
@@ -565,13 +577,14 @@
       const name = map.packs[at[0]];
       if (name) return readPackEntry(ctx, name, at[1], at[1] + at[2]);
     }
-    // Trees and blobs have no map entry; the pack that answered last is probed first, since content reads cluster.
+    // Trees and blobs have no map entry; packs are probed most recently hit first, since a diff reads from the packs of both of its sides.
     const names = await packNames(ctx);
-    const ordered = ctx.packs.lastHit ? [ctx.packs.lastHit, ...names.filter((n) => n !== ctx.packs.lastHit)] : names;
+    const hits = ctx.packs.hits;
+    const ordered = hits.concat(names.filter((n) => !hits.includes(n)));
     for (const name of ordered) {
       const found = await packIdxLookup(ctx, name, sha);
       if (found === null) continue;
-      ctx.packs.lastHit = name;
+      if (hits[0] !== name) ctx.packs.hits = [name].concat(hits.filter((n) => n !== name));
       return readPackEntry(ctx, name, found.offset, found.end);
     }
     return null;
@@ -1578,7 +1591,7 @@
 
   function newContext(base) {
     // newContext builds the per-session read context: the object cache, ref misses, tree expansion, walk states and the packfile reader state.
-    return { base, objects: new Map(), refMisses: new Set(), treeExpanded: new Set(), walks: {}, packs: { names: null, packed: null, maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), lastHit: null } };
+    return { base, objects: new Map(), refMisses: new Set(), treeExpanded: new Set(), walks: {}, packs: { names: null, packed: null, maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), hits: [] } };
   }
 
   // ---- Trees, paths, branches (DOM-free, testable) ----

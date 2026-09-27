@@ -5,8 +5,8 @@
 // Three read paths have to work there, and the split is what the design is for:
 // a commit or tag is located by the pack map (one Range GET, no index,
 // no delta chain, because the commits pack is written with --depth=0), a tree or
-// blob goes through the pack index — range-read via its fanout, never
-// downloaded whole — and may resolve OFS_DELTA / REF_DELTA bases, and a
+// blob goes through the pack index — read whole up to 64 KiB, range-read via its
+// fanout above that — and may resolve OFS_DELTA / REF_DELTA bases, and a
 // state-ref commit resolves out of the same packs (state objects pack like
 // everything else; the loose fallback only covers not-yet-sealed buckets).
 //
@@ -18,6 +18,10 @@ require("./shim.js");
 require("../assets/icons.js");
 const GS = require("../assets/gs-app.js");
 const crypto = require("crypto");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const { createServer } = require("./serve.js");
 const { viewNode, textOf, setHash } = global.__shim;
 const ORIGIN = process.env.GS_SITE_ORIGIN || "http://localhost:8000";
 const BASE = ORIGIN + "/packed-demo/";
@@ -59,6 +63,26 @@ async function drain(quietMs, maxMs) {
 function gitSha(obj) {
   const head = Buffer.from(obj.type + " " + obj.body.length + "\0", "binary");
   return crypto.createHash("sha1").update(Buffer.concat([head, Buffer.from(obj.body)])).digest("hex");
+}
+
+// writeSyntheticIdx writes a v2 pack index of count random shas at offsets 12 + 100 * rank, and returns its name and sorted shas.
+function writeSyntheticIdx(root, count) {
+  const shas = Array.from({ length: count }, () => crypto.randomBytes(20).toString("hex")).sort();
+  const buf = Buffer.alloc(8 + 1024 + count * 28 + 40);
+  buf.writeUInt32BE(0xff744f63, 0);
+  buf.writeUInt32BE(2, 4);
+  for (let b = 0, i = 0; b < 256; b++) {
+    while (i < count && parseInt(shas[i].slice(0, 2), 16) <= b) i++;
+    buf.writeUInt32BE(i, 8 + b * 4);
+  }
+  shas.forEach((sha, i) => {
+    Buffer.from(sha, "hex").copy(buf, 1032 + i * 20);
+    buf.writeUInt32BE(12 + i * 100, 1032 + count * 24 + i * 4);
+  });
+  const name = "pack-" + crypto.randomBytes(20).toString("hex");
+  fs.mkdirSync(path.join(root, "objects", "pack"), { recursive: true });
+  fs.writeFileSync(path.join(root, "objects", "pack", name + ".idx"), buf);
+  return { name, shas };
 }
 
 // readsBack asserts that a sha read through getObject reconstructs to that same
@@ -209,7 +233,8 @@ async function main() {
   const heads = idxRows.filter((r) => /^bytes=0-\d/.test(r.range));
   const tables = idxRows.filter((r) => /^bytes=\d+-$/.test(r.range));
   const slices = idxRows.filter((r) => !heads.includes(r) && !tables.includes(r));
-  const sliceBound = biggest / 256 + 64;
+  // Four times the mean share of one first byte, since the shas do not spread evenly over the 256 bytes.
+  const sliceBound = biggest / 64 + 64;
   ok("the cold read really searched a big index (" + idxBytes + " of " + biggest + " bytes over " + idxRows.length + " ranges)",
     biggest > 4 * IDX_HEAD_BYTES && slices.length > 0, "biggest index " + biggest + ", " + slices.length + " sha-table reads");
   ok("each pack's index is opened at most once (" + heads.length + " head reads over " + names.length + " packs)",
@@ -308,6 +333,26 @@ async function main() {
   await wait(700);
   const fetches = since(at).length;
   ok("packed post detail ≤ 30 fetches (measured " + fetches + ")", fetches <= 30, "measured " + fetches);
+
+  // ---- an index up to 64 KiB is read whole; a bigger one stays range-read ----
+  const idxRoot = fs.mkdtempSync(path.join(os.tmpdir(), "gs-packidx-"));
+  const idxServer = createServer(idxRoot);
+  await new Promise((r) => idxServer.listen(0, "127.0.0.1", r));
+  const idxBase = "http://127.0.0.1:" + idxServer.address().port + "/";
+  for (const [label, count, whole] of [["a 29 KB index", 1000, true], ["an 81 KB index", 2900, false]]) {
+    const { name, shas } = writeSyntheticIdx(idxRoot, count);
+    const idxCtx = GS.newContext(idxBase);
+    const picks = [0, 1, 2, 3, 4].map((k) => Math.floor((k + 0.5) * count / 5));
+    at = mark();
+    const found = [];
+    for (const i of picks) found.push(await GS.packIdxLookup(idxCtx, name, shas[i]));
+    const reads = since(at).filter((r) => r.url.endsWith(name + ".idx"));
+    ok(label + " finds each sha at its offset", found.every((f, k) => f && f.offset === 12 + picks[k] * 100), JSON.stringify(found));
+    if (whole) ok(label + " costs two reads, the head and the rest", reads.length === 2, reads.map((r) => r.range).join(" | "));
+    else ok(label + " is range-read, not downloaded", reads.length > 2 && reads.every((r) => r.bytes <= 4096), reads.map((r) => r.range + " " + r.bytes).join(" | "));
+  }
+  idxServer.close();
+  fs.rmSync(idxRoot, { recursive: true, force: true });
 
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);
