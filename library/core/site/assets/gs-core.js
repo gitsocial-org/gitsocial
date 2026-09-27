@@ -584,18 +584,21 @@
     const headerBlock = split < 0 ? text : text.slice(0, split);
     const message = split < 0 ? "" : text.slice(split + 2);
     const parents = [];
-    let tree = "", authorName = "", authorEmail = "", authorTime = 0;
+    let tree = "", authorName = "", authorEmail = "", authorTime = 0, committerTime = 0;
     for (const line of headerBlock.split("\n")) {
       if (line.startsWith("tree ")) tree = line.slice(5).trim();
       else if (line.startsWith("parent ")) parents.push(line.slice(7).trim());
       else if (line.startsWith("author ")) {
         const m = /^author (.*) <([^>]*)> (\d+) /.exec(line);
         if (m) { authorName = m[1]; authorEmail = m[2]; authorTime = parseInt(m[3], 10); }
+      } else if (line.startsWith("committer ")) {
+        const m = / (\d+) [+-]\d{4}$/.exec(line);
+        if (m) committerTime = parseInt(m[1], 10);
       }
     }
     return {
       hash: sha, short: sha.slice(0, 12), tree, parents,
-      authorName, authorEmail, authorTime,
+      authorName, authorEmail, authorTime, committerTime: committerTime || authorTime,
       content: cleanContent(message),
       rawMessage: message.replace(/\r/g, ""),
       gitmsg: parseGitmsg(message),
@@ -1273,44 +1276,102 @@
     });
   }
 
-  // startExcludingWalk seeds a walk at tip whose visited set holds every ancestor of baseSha, yielding a compare's head-side commits.
-  async function startExcludingWalk(ctx, tip, baseSha, cap) {
-    cap = cap || DETAIL_WALK_CAP;
-    const visited = new Set();
-    let frontier = [baseSha];
-    let seen = 0;
-    while (frontier.length && seen < cap) {
-      const batch = [];
-      while (frontier.length && batch.length < CONCURRENCY && seen < cap) {
-        const h = frontier.shift();
-        if (h && !visited.has(h)) { visited.add(h); seen++; batch.push(h); }
-      }
-      if (!batch.length) break;
-      const objs = await Promise.all(batch.map((h) => getObject(ctx, h)));
-      for (let i = 0; i < batch.length; i++) {
-        const obj = objs[i];
-        if (obj && obj.type === "commit") for (const p of parseCommit(batch[i], obj.body).parents) frontier.push(p);
-      }
+  // RANGE_HEAD and RANGE_BASE mark the tips that reach a commit in a range walk; RANGE_BOTH is a common ancestor.
+  const RANGE_HEAD = 1, RANGE_BASE = 2, RANGE_BOTH = 3;
+  // RANGE_SLOP is the number of batches a range walk runs on after no head-only commit is queued, git's guard against clock skew.
+  const RANGE_SLOP = 5;
+
+  // rangeWalkState returns the base..head walk for a pair, cached on ctx and shared by the compare list and the merge base; a failed walk starts again.
+  function rangeWalkState(ctx, headSha, baseSha) {
+    const key = "range:" + baseSha + ".." + headSha;
+    if (!ctx.walks[key] || ctx.walks[key].state.failed) {
+      const w = { state: { flags: new Map(), commits: new Map(), queue: [], queued: new Set(), popped: [], inRange: new Set(), mergeBase: null, slop: RANGE_SLOP, reads: 0, done: false, failed: false } };
+      w.ready = rangeMark(ctx, w.state, [[headSha, RANGE_HEAD], [baseSha, RANGE_BASE]].filter((m) => m[0]));
+      w.ready.catch(() => { /* the failed flag makes the next call start again */ });
+      ctx.walks[key] = w;
     }
-    // The base commit itself is excluded; the walk starts at the head tip with that exclusion set.
-    return { visited, frontier: [tip], commits: [] };
+    return ctx.walks[key];
   }
 
-  // loadCompareCommitsWindow pages a compare's head-side commits, from the ancestry index when it covers both endpoints; cached on ctx per pair.
+  // rangeMark adds tip marks to commits, reading the new ones and queueing each commit whose marks grew, newest committer time first.
+  async function rangeMark(ctx, state, marks) {
+    const load = [];
+    for (const [sha, f] of marks) {
+      const had = state.flags.get(sha) || 0;
+      if ((had | f) === had) continue;
+      state.flags.set(sha, had | f);
+      if (state.commits.has(sha)) { if (!state.queued.has(sha)) { state.queued.add(sha); state.queue.push(sha); } }
+      else if (!had) load.push(sha);
+    }
+    state.reads += load.length;
+    let objs;
+    // A failed read leaves marks without their commits, so the whole walk is dropped.
+    try { objs = await Promise.all(load.map((h) => getObject(ctx, h))); } catch (e) { state.failed = true; throw e; }
+    for (let i = 0; i < load.length; i++) {
+      const obj = objs[i];
+      if (!obj || obj.type !== "commit") continue;
+      state.commits.set(load[i], parseCommit(load[i], obj.body));
+      state.queued.add(load[i]);
+      state.queue.push(load[i]);
+    }
+    state.queue.sort((a, b) => state.commits.get(b).committerTime - state.commits.get(a).committerTime);
+  }
+
+  // rangeStep runs the git rev-list base..head walk until done, until(state) holds, or budget more reads; a batch is the newest commits that share one mark, so reads keep time order.
+  async function rangeStep(ctx, state, until, budget) {
+    const stop = state.reads + budget;
+    while (!state.done && !until(state) && state.reads < stop) {
+      if (!state.queue.length) { state.done = true; break; }
+      if (state.queue.every((sha) => state.flags.get(sha) !== RANGE_HEAD)) {
+        if (state.slop-- <= 0) { state.done = true; break; }
+      } else state.slop = RANGE_SLOP;
+      const batch = [state.queue.shift()];
+      const lead = state.flags.get(batch[0]);
+      while (state.queue.length && batch.length < CONCURRENCY && state.flags.get(state.queue[0]) === lead) batch.push(state.queue.shift());
+      const marks = [];
+      for (const sha of batch) {
+        state.queued.delete(sha);
+        const f = state.flags.get(sha);
+        if (f === RANGE_BOTH && !state.mergeBase) state.mergeBase = sha;
+        if (f === RANGE_HEAD && !state.inRange.has(sha)) { state.inRange.add(sha); state.popped.push(sha); }
+        for (const p of state.commits.get(sha).parents) marks.push([p, f]);
+      }
+      await rangeMark(ctx, state, marks);
+    }
+    if (state.done && !state.mergeBase) state.mergeBase = state.queue.find((sha) => state.flags.get(sha) === RANGE_BOTH) || null;
+    return state;
+  }
+
+  // withRangeWalk runs fn on the pair's walk under its lock, and moves to a new walk when a failed read broke the one it waited on.
+  async function withRangeWalk(ctx, headSha, baseSha, fn) {
+    for (;;) {
+      const w = rangeWalkState(ctx, headSha, baseSha);
+      await w.ready;
+      const out = await withWalkLock(w, async () => (w.state.failed ? null : { value: await fn(w.state) }));
+      if (out) return out.value;
+    }
+  }
+
+  // rangeCommits returns the walked commits only head reaches, newest first by author time.
+  function rangeCommits(state) {
+    return state.popped.filter((sha) => state.flags.get(sha) === RANGE_HEAD).map((sha) => state.commits.get(sha)).sort((a, b) => b.authorTime - a.authorTime);
+  }
+
+  // loadCompareCommitsWindow pages a compare's head-side commits, from the ancestry index when it covers both endpoints, else from the range walk; cached on ctx per pair.
   async function loadCompareCommitsWindow(ctx, baseSha, headSha, extend) {
     const key = "compare:" + baseSha + ".." + headSha;
     let entry = ctx.walks[key];
-    if (!entry || entry.tip !== headSha) {
+    if (!entry) {
       const all = await indexCompareCommits(ctx, baseSha, headSha);
-      if (all) entry = ctx.walks[key] = { tip: headSha, all, shown: 0 };
-      else entry = ctx.walks[key] = { tip: headSha, state: await startExcludingWalk(ctx, headSha, baseSha, DETAIL_WALK_CAP) };
+      entry = ctx.walks[key] = { all, shown: 0 };
     }
-    if (entry.all) {
-      entry.shown = extend ? entry.shown + WALK_CAP : Math.max(entry.shown, WALK_CAP);
-      return { items: entry.all.slice(0, entry.shown), truncated: entry.all.length > entry.shown };
-    }
-    if (extend || entry.state.commits.length === 0) await walkStep(ctx, entry.state, WALK_CAP);
-    return { items: walkedCommits(entry.state), truncated: entry.state.frontier.length > 0 };
+    entry.shown = extend ? entry.shown + WALK_CAP : Math.max(entry.shown, WALK_CAP);
+    if (entry.all) return { items: entry.all.slice(0, entry.shown), truncated: entry.all.length > entry.shown };
+    return withRangeWalk(ctx, headSha, baseSha, async (state) => {
+      await rangeStep(ctx, state, (s) => s.popped.length > entry.shown && rangeCommits(s).length > entry.shown, DETAIL_WALK_CAP);
+      const items = rangeCommits(state);
+      return { items: items.slice(0, entry.shown), truncated: items.length > entry.shown || !state.done };
+    });
   }
 
   // GRAPH_WINDOW is the number of commits the repository graph loads per window.
@@ -2326,36 +2387,12 @@
     return parseCommit(sha, obj.body).tree;
   }
 
-  // mergeBase walks both ancestries under one bounded budget and returns the first common ancestor closest to base.
+  // mergeBase returns the first common ancestor of the range walk, within cap commit reads; null when none is found.
   async function mergeBase(ctx, headSha, baseSha, cap) {
-    cap = cap || WALK_CAP;
-    let visited = 0;
-    const step = async (frontier, taken, onCommit) => {
-      const batch = [];
-      while (frontier.length && batch.length < CONCURRENCY && visited < cap) {
-        const h = frontier.shift();
-        if (h && !taken.has(h)) { taken.add(h); visited++; batch.push(h); }
-      }
-      if (!batch.length) return null;
-      const objs = await Promise.all(batch.map((h) => getObject(ctx, h)));
-      for (let i = 0; i < batch.length; i++) {
-        const found = onCommit(batch[i]);
-        if (found) return found;
-        const obj = objs[i];
-        if (obj && obj.type === "commit") for (const p of parseCommit(batch[i], obj.body).parents) frontier.push(p);
-      }
-      return null;
-    };
-    const headAnc = new Set();
-    let frontier = [headSha];
-    while (frontier.length && visited < cap) await step(frontier, headAnc, () => null);
-    const seen = new Set();
-    frontier = [baseSha];
-    while (frontier.length && visited < cap) {
-      const hit = await step(frontier, seen, (h) => (headAnc.has(h) ? h : null));
-      if (hit) return hit;
-    }
-    return null;
+    return withRangeWalk(ctx, headSha, baseSha, async (state) => {
+      await rangeStep(ctx, state, (s) => !!s.mergeBase, cap || WALK_CAP);
+      return state.mergeBase;
+    });
   }
 
   // fileDiff fetches one changed entry's blob pair and produces its diff model; force bypasses both size caps.
@@ -2841,7 +2878,7 @@
     return seen;
   }
 
-  // resolveMergeBase returns the merge base from the ancestry index when it covers both endpoints, else from the bounded loose walk.
+  // resolveMergeBase returns the merge base from the ancestry index when it covers both endpoints, else from the range walk.
   async function resolveMergeBase(ctx, headSha, baseSha, cap) {
     const map = await codeAncestry(ctx);
     if (map && map.has(headSha) && map.has(baseSha)) {

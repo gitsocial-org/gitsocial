@@ -37,6 +37,7 @@ const DEFAULT = [
   "verify_grammars.js",
   "verify_sparse_repo.js",
   "verify_merged_diff.js",
+  "verify_range_walk.js",
   "verify_route_supersede.js",
   "verify_packfiles.js",
   "verify_absent_keys.js",
