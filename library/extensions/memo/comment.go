@@ -2,6 +2,7 @@
 package memo
 
 import (
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/result"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
@@ -12,7 +13,8 @@ func GetMemoComments(memoRef, workspaceURL string) Result[[]social.Post] {
 	if err != nil {
 		return result.Err[[]social.Post]("NOT_FOUND", notFoundMessage("memo not found: "+memoRef, err))
 	}
-	posts, err := social.GetComments(item.RepoURL, item.Hash, item.Branch, memoRef)
+	itemID := protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch)
+	posts, err := social.GetComments(item.RepoURL, item.Hash, item.Branch, itemID)
 	if err != nil {
 		return result.Err[[]social.Post]("QUERY_FAILED", err.Error())
 	}

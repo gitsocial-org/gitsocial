@@ -97,7 +97,7 @@ func UpdateMilestone(workdir, milestoneRef string, opts UpdateMilestoneOptions) 
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetPMItemByRef(milestoneRef, repoURL)
 	if err != nil {
-		return result.Err[Milestone]("NOT_FOUND", "milestone not found")
+		return result.Err[Milestone]("NOT_FOUND", notFoundMessage("milestone", milestoneRef, err))
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "pm")
@@ -182,7 +182,7 @@ func RetractMilestone(workdir, milestoneRef string) Result[bool] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetPMItemByRef(milestoneRef, repoURL)
 	if err != nil {
-		return result.Err[bool]("NOT_FOUND", "milestone not found")
+		return result.Err[bool]("NOT_FOUND", notFoundMessage("milestone", milestoneRef, err))
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "pm")

@@ -39,18 +39,8 @@ func CreateIssue(workdir, subject, body string, opts CreateIssueOptions) Result[
 	branch := gitmsg.GetExtBranch(workdir, "pm")
 
 	repoURL := gitmsg.ResolveRepoURL(workdir)
-	opts.Milestone = protocol.LocalizeRef(opts.Milestone, repoURL)
-	opts.Sprint = protocol.LocalizeRef(opts.Sprint, repoURL)
-	opts.Parent = protocol.LocalizeRef(opts.Parent, repoURL)
-	opts.Root = protocol.LocalizeRef(opts.Root, repoURL)
-	for i, r := range opts.Blocks {
-		opts.Blocks[i] = protocol.LocalizeRef(r, repoURL)
-	}
-	for i, r := range opts.BlockedBy {
-		opts.BlockedBy[i] = protocol.LocalizeRef(r, repoURL)
-	}
-	for i, r := range opts.Related {
-		opts.Related[i] = protocol.LocalizeRef(r, repoURL)
+	if err := resolveIssueRefs(&opts, repoURL); err != nil {
+		return result.Err[Issue]("NOT_FOUND", err.Error())
 	}
 
 	if opts.Parent != "" && opts.Root == "" {
@@ -74,6 +64,22 @@ func CreateIssue(workdir, subject, body string, opts CreateIssueOptions) Result[
 	}
 
 	return result.Ok(PMItemToIssue(*item))
+}
+
+// resolveIssueRefs rewrites the ref fields of an issue to the workspace-relative refs its header stores.
+func resolveIssueRefs(opts *CreateIssueOptions, repoURL string) error {
+	var err error
+	for _, field := range []*string{&opts.Milestone, &opts.Sprint, &opts.Parent, &opts.Root} {
+		if *field, err = ResolveHeaderRef(*field, repoURL); err != nil {
+			return err
+		}
+	}
+	for _, field := range []*[]string{&opts.Blocks, &opts.BlockedBy, &opts.Related} {
+		if *field, err = ResolveHeaderRefs(*field, repoURL); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetIssue retrieves a single issue by reference (hash or partial hash).
@@ -115,7 +121,7 @@ func UpdateIssue(workdir, issueRef string, opts UpdateIssueOptions) Result[Issue
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetPMItemByRef(issueRef, repoURL)
 	if err != nil {
-		return result.Err[Issue]("NOT_FOUND", "issue not found")
+		return result.Err[Issue]("NOT_FOUND", notFoundMessage("issue", issueRef, err))
 	}
 	// A change to a fork original the workspace has adopted edits the copy instead (GITMSG.md 1.5).
 	if existing.RepoURL != repoURL {
@@ -231,6 +237,9 @@ func UpdateIssue(workdir, issueRef string, opts UpdateIssueOptions) Result[Issue
 	if opts.Body != nil {
 		body = *opts.Body
 	}
+	if err := resolveIssueRefs(&createOpts, repoURL); err != nil {
+		return result.Err[Issue]("NOT_FOUND", err.Error())
+	}
 
 	canonicalRef := protocol.LocalizeRef(
 		protocol.CreateRef(protocol.RefTypeCommit, existing.Hash, existing.RepoURL, existing.Branch),
@@ -301,7 +310,7 @@ func RetractIssue(workdir, issueRef string) Result[bool] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetPMItemByRef(issueRef, repoURL)
 	if err != nil {
-		return result.Err[bool]("NOT_FOUND", "issue not found")
+		return result.Err[bool]("NOT_FOUND", notFoundMessage("issue", issueRef, err))
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "pm")

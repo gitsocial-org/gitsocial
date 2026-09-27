@@ -17,7 +17,7 @@ func AdoptIssue(workdir, issueRef string) Result[Issue] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetPMItemByRef(issueRef, repoURL)
 	if err != nil {
-		return result.Err[Issue]("NOT_FOUND", "issue not found")
+		return result.Err[Issue]("NOT_FOUND", notFoundMessage("issue", issueRef, err))
 	}
 	if existing.RepoURL == repoURL {
 		return result.Err[Issue]("NOT_FOREIGN", "the issue is already in this repository")

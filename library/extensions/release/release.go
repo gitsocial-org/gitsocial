@@ -92,7 +92,7 @@ func EditRelease(workdir, releaseRef string, opts EditReleaseOptions) Result[Rel
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReleaseItemByRef(releaseRef, repoURL)
 	if err != nil {
-		return result.Err[Release]("NOT_FOUND", "release not found")
+		return result.Err[Release]("NOT_FOUND", notFoundMessage(releaseRef, err))
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "release")
@@ -180,7 +180,7 @@ func RetractRelease(workdir, releaseRef string) Result[bool] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReleaseItemByRef(releaseRef, repoURL)
 	if err != nil {
-		return result.Err[bool]("NOT_FOUND", "release not found")
+		return result.Err[bool]("NOT_FOUND", notFoundMessage(releaseRef, err))
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "release")

@@ -258,7 +258,7 @@ func TestPROperations(t *testing.T) {
 		state := PRStateMerged
 		base := "develop"
 		head := "hotfix"
-		closes := []string{"#commit:iss1"}
+		closes := []string{"#commit:abcdef123456"}
 		reviewers := []string{"alice@test.com"}
 		subject := "New Subject"
 		body := "New Body"

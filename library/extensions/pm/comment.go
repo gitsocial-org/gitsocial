@@ -3,6 +3,7 @@ package pm
 
 import (
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/result"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
@@ -10,12 +11,13 @@ import (
 // CommentOnItem creates a comment on a PM item (issue, milestone, sprint) using the social extension.
 func CommentOnItem(workdir, itemRef, content string) Result[social.Post] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
-	_, err := GetPMItemByRef(itemRef, repoURL)
+	item, err := GetPMItemByRef(itemRef, repoURL)
 	if err != nil {
-		return result.Err[social.Post]("NOT_FOUND", "item not found: "+itemRef)
+		return result.Err[social.Post]("NOT_FOUND", notFoundMessage("item", itemRef, err))
 	}
 
-	socialResult := social.CreateComment(workdir, itemRef, content, nil)
+	itemID := protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch)
+	socialResult := social.CreateComment(workdir, itemID, content, nil)
 	if !socialResult.Success {
 		return result.Err[social.Post](socialResult.Error.Code, socialResult.Error.Message)
 	}
@@ -27,10 +29,11 @@ func CommentOnItem(workdir, itemRef, content string) Result[social.Post] {
 func GetItemComments(itemRef string, workspaceURL string) Result[[]social.Post] {
 	item, err := GetPMItemByRef(itemRef, workspaceURL)
 	if err != nil {
-		return result.Err[[]social.Post]("NOT_FOUND", "item not found: "+itemRef)
+		return result.Err[[]social.Post]("NOT_FOUND", notFoundMessage("item", itemRef, err))
 	}
 
-	posts, err := social.GetComments(item.RepoURL, item.Hash, item.Branch, itemRef)
+	itemID := protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch)
+	posts, err := social.GetComments(item.RepoURL, item.Hash, item.Branch, itemID)
 	if err != nil {
 		return result.Err[[]social.Post]("QUERY_FAILED", err.Error())
 	}

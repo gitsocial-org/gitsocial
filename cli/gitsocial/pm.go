@@ -313,15 +313,13 @@ func newPMIssueShowCmd() *cobra.Command {
 			}
 
 			cfg := GetConfig(cmd)
-			issueRef := args[0]
-
-			item, err := pm.GetPMItemByRef(issueRef, "")
-			if err != nil {
-				PrintError(cmd, "issue not found")
+			result := pm.GetIssue(args[0])
+			if !result.Success {
+				PrintError(cmd, result.Error.Text())
 				return exit(ExitError)
 			}
 
-			issue := pm.PMItemToIssue(*item)
+			issue := result.Data
 
 			if cfg.JSONOutput {
 				return PrintJSON(cmd, issue)
@@ -403,16 +401,16 @@ func newPMIssueCreateCmd() *cobra.Command {
 			}
 
 			if milestoneRef != "" {
-				opts.Milestone = "#commit:" + milestoneRef
+				opts.Milestone = milestoneRef
 			}
 
 			if sprintRef != "" {
-				opts.Sprint = "#commit:" + sprintRef
+				opts.Sprint = sprintRef
 			}
 
 			if parentRef != "" {
 				repoURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
-				parent, root, err := pm.DeriveHierarchy(commitRefOrEmpty(parentRef), repoURL, "")
+				parent, root, err := pm.DeriveHierarchy(strings.TrimSpace(parentRef), repoURL, "")
 				if err != nil {
 					PrintError(cmd, err.Error())
 					return exit(ExitInvalidArgs)
@@ -421,9 +419,9 @@ func newPMIssueCreateCmd() *cobra.Command {
 				opts.Root = root
 			}
 
-			opts.Blocks = commitRefList(blocksStr)
-			opts.BlockedBy = commitRefList(blockedByStr)
-			opts.Related = commitRefList(relatedStr)
+			opts.Blocks = text.SplitCSV(blocksStr)
+			opts.BlockedBy = text.SplitCSV(blockedByStr)
+			opts.Related = text.SplitCSV(relatedStr)
 
 			result := pm.CreateIssue(cfg.WorkDir, subject, body, opts)
 
@@ -507,11 +505,11 @@ func newPMIssueEditCmd() *cobra.Command {
 				opts.Labels = &l
 			}
 			if cmd.Flags().Changed("milestone") {
-				ref := commitRefOrEmpty(milestoneRef)
+				ref := strings.TrimSpace(milestoneRef)
 				opts.Milestone = &ref
 			}
 			if cmd.Flags().Changed("sprint") {
-				ref := commitRefOrEmpty(sprintRef)
+				ref := strings.TrimSpace(sprintRef)
 				opts.Sprint = &ref
 			}
 			if cmd.Flags().Changed("parent") {
@@ -521,7 +519,7 @@ func newPMIssueEditCmd() *cobra.Command {
 					opts.Root = &empty
 				} else {
 					repoURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
-					parent, root, err := pm.DeriveHierarchy(commitRefOrEmpty(parentRef), repoURL, args[0])
+					parent, root, err := pm.DeriveHierarchy(strings.TrimSpace(parentRef), repoURL, args[0])
 					if err != nil {
 						PrintError(cmd, err.Error())
 						return exit(ExitInvalidArgs)
@@ -531,15 +529,15 @@ func newPMIssueEditCmd() *cobra.Command {
 				}
 			}
 			if cmd.Flags().Changed("blocks") {
-				r := commitRefList(blocksStr)
+				r := text.SplitCSV(blocksStr)
 				opts.Blocks = &r
 			}
 			if cmd.Flags().Changed("blocked-by") {
-				r := commitRefList(blockedByStr)
+				r := text.SplitCSV(blockedByStr)
 				opts.BlockedBy = &r
 			}
 			if cmd.Flags().Changed("related") {
-				r := commitRefList(relatedStr)
+				r := text.SplitCSV(relatedStr)
 				opts.Related = &r
 			}
 
@@ -591,27 +589,6 @@ func parseIssueLabels(labelsStr string) []pm.Label {
 		}
 	}
 	return labels
-}
-
-// commitRefOrEmpty normalizes a bare hash into a "#commit:" ref, passing through
-// existing refs and empty strings (empty clears the field on edit).
-func commitRefOrEmpty(ref string) string {
-	ref = strings.TrimSpace(ref)
-	if ref == "" || strings.Contains(ref, "#") {
-		return ref
-	}
-	return "#commit:" + ref
-}
-
-// commitRefList parses a comma-separated hash list into "#commit:" refs.
-func commitRefList(refsStr string) []string {
-	var refs []string
-	for _, r := range strings.Split(refsStr, ",") {
-		if norm := commitRefOrEmpty(r); norm != "" {
-			refs = append(refs, norm)
-		}
-	}
-	return refs
 }
 
 // newPMIssueCloseCmd builds the command that closes an issue.
@@ -767,7 +744,7 @@ func newPMIssueCommentsCmd() *cobra.Command {
 			cfg := GetConfig(cmd)
 			issueRef := args[0]
 
-			result := pm.GetItemComments(issueRef, "")
+			result := pm.GetItemComments(issueRef, gitmsg.ResolveRepoURL(cfg.WorkDir))
 
 			if !result.Success {
 				PrintError(cmd, result.Error.Text())

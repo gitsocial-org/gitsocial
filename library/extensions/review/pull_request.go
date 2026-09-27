@@ -44,11 +44,8 @@ func CreatePR(workdir, subject, body string, opts CreatePROptions) Result[PullRe
 	opts.Head = protocol.EnsureBranchRef(opts.Head)
 	opts.Base = protocol.LocalizeRef(opts.Base, repoURL)
 	opts.Head = protocol.LocalizeRef(opts.Head, repoURL)
-	for i, ref := range opts.DependsOn {
-		opts.DependsOn[i] = protocol.LocalizeRef(ref, repoURL)
-	}
-	for i, ref := range opts.Closes {
-		opts.Closes[i] = protocol.LocalizeRef(ref, repoURL)
+	if err := resolvePRRefs(&opts, repoURL); err != nil {
+		return result.Err[PullRequest]("NOT_FOUND", err.Error())
 	}
 
 	// Auto-resolve branch tips if not already set
@@ -83,6 +80,37 @@ func CreatePR(workdir, subject, body string, opts CreatePROptions) Result[PullRe
 		return result.Err[PullRequest]("GET_FAILED", err.Error())
 	}
 	return result.Ok(ReviewItemToPullRequest(*item))
+}
+
+// resolvePRRefs rewrites closes and depends-on to the workspace-relative refs a header stores.
+func resolvePRRefs(opts *CreatePROptions, repoURL string) error {
+	closes, err := pm.ResolveHeaderRefs(opts.Closes, repoURL)
+	if err != nil {
+		return err
+	}
+	dependsOn := make([]string, 0, len(opts.DependsOn))
+	for _, ref := range opts.DependsOn {
+		resolved, err := protocol.HeaderRef(ref, repoURL, func(ref string) (string, error) {
+			item, err := GetReviewItemByRef(ref, repoURL)
+			if err != nil {
+				return "", errors.New(notFoundMessage("pull request", ref, err))
+			}
+			return protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch), nil
+		})
+		if err != nil {
+			return err
+		}
+		if resolved != "" {
+			dependsOn = append(dependsOn, resolved)
+		}
+	}
+	if len(opts.Closes) > 0 {
+		opts.Closes = closes
+	}
+	if len(opts.DependsOn) > 0 {
+		opts.DependsOn = dependsOn
+	}
+	return nil
 }
 
 // GetPR retrieves a single pull request by reference, full ref or bare hash.
@@ -129,7 +157,7 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
 	if err != nil {
-		return result.Err[PullRequest]("NOT_FOUND", "pull request not found")
+		return result.Err[PullRequest]("NOT_FOUND", notFoundMessage("pull request", prRef, err))
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "review")
@@ -232,11 +260,8 @@ func UpdatePR(workdir, prRef string, opts UpdatePROptions) Result[PullRequest] {
 	createOpts.Head = protocol.EnsureBranchRef(createOpts.Head)
 	createOpts.Base = protocol.LocalizeRef(createOpts.Base, repoURL)
 	createOpts.Head = protocol.LocalizeRef(createOpts.Head, repoURL)
-	for i, ref := range createOpts.DependsOn {
-		createOpts.DependsOn[i] = protocol.LocalizeRef(ref, repoURL)
-	}
-	for i, ref := range createOpts.Closes {
-		createOpts.Closes[i] = protocol.LocalizeRef(ref, repoURL)
+	if err := resolvePRRefs(&createOpts, repoURL); err != nil {
+		return result.Err[PullRequest]("NOT_FOUND", err.Error())
 	}
 
 	canonicalRef := protocol.LocalizeRef(
@@ -343,7 +368,7 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
 	if err != nil {
-		return result.Err[PullRequest]("NOT_FOUND", "pull request not found")
+		return result.Err[PullRequest]("NOT_FOUND", notFoundMessage("pull request", prRef, err))
 	}
 	existing, prRef = throughAdoptedCopy(repoURL, existing, prRef)
 	pr := ReviewItemToPullRequest(*existing)
@@ -506,7 +531,7 @@ func ClosePR(workdir, prRef string) Result[PullRequest] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
 	if err != nil {
-		return result.Err[PullRequest]("NOT_FOUND", "pull request not found")
+		return result.Err[PullRequest]("NOT_FOUND", notFoundMessage("pull request", prRef, err))
 	}
 	existing, prRef = throughAdoptedCopy(repoURL, existing, prRef)
 	pr := ReviewItemToPullRequest(*existing)
@@ -530,7 +555,7 @@ func MarkReady(workdir, prRef string) Result[PullRequest] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
 	if err != nil {
-		return result.Err[PullRequest]("NOT_FOUND", "pull request not found")
+		return result.Err[PullRequest]("NOT_FOUND", notFoundMessage("pull request", prRef, err))
 	}
 	if existing.RepoURL != repoURL {
 		return result.Err[PullRequest]("NOT_AUTHOR", "cannot mark ready: a pull request's draft state is the author's to set")
@@ -551,7 +576,7 @@ func ConvertToDraft(workdir, prRef string) Result[PullRequest] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
 	if err != nil {
-		return result.Err[PullRequest]("NOT_FOUND", "pull request not found")
+		return result.Err[PullRequest]("NOT_FOUND", notFoundMessage("pull request", prRef, err))
 	}
 	if existing.RepoURL != repoURL {
 		return result.Err[PullRequest]("NOT_AUTHOR", "cannot convert to draft: a pull request's draft state is the author's to set")
@@ -572,7 +597,7 @@ func UpdatePRTips(workdir, prRef string) Result[PullRequest] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
 	if err != nil {
-		return result.Err[PullRequest]("NOT_FOUND", "pull request not found")
+		return result.Err[PullRequest]("NOT_FOUND", notFoundMessage("pull request", prRef, err))
 	}
 	existing, prRef = throughAdoptedCopy(repoURL, existing, prRef)
 	pr := ReviewItemToPullRequest(*existing)
@@ -618,7 +643,7 @@ func SyncPRBranch(workdir, prRef, strategy string) Result[PullRequest] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
 	if err != nil {
-		return result.Err[PullRequest]("NOT_FOUND", "pull request not found")
+		return result.Err[PullRequest]("NOT_FOUND", notFoundMessage("pull request", prRef, err))
 	}
 	pr := ReviewItemToPullRequest(*existing)
 	if pr.State != PRStateOpen {
@@ -652,7 +677,7 @@ func RetractPR(workdir, prRef string) Result[bool] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
 	if err != nil {
-		return result.Err[bool]("NOT_FOUND", "pull request not found")
+		return result.Err[bool]("NOT_FOUND", notFoundMessage("pull request", prRef, err))
 	}
 	if existing.RepoURL != repoURL {
 		return result.Err[bool]("NOT_AUTHOR", "cannot retract: only the author can retract their pull request")

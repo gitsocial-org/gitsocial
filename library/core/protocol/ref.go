@@ -305,6 +305,22 @@ func LocalizeRef(ref, workspaceRepoURL string) string {
 	return ref
 }
 
+// HeaderRef rewrites a user ref to the workspace-relative form a header stores; a full commit ref passes through, and lookup names the full ref for anything else.
+func HeaderRef(ref, workspaceURL string, lookup func(string) (string, error)) (string, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return "", nil
+	}
+	if parsed := ParseRef(ref); parsed.Type != RefTypeCommit || parsed.Value == "" {
+		full, err := lookup(ref)
+		if err != nil {
+			return "", err
+		}
+		ref = full
+	}
+	return LocalizeRef(ref, workspaceURL), nil
+}
+
 // EnsureBranchRef normalizes a value to a proper #branch: ref if it isn't already a recognized ref type.
 func EnsureBranchRef(value string) string {
 	if value == "" {

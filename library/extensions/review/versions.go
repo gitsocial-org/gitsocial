@@ -39,7 +39,7 @@ func GetPRVersions(prRef, workspaceURL string) Result[[]PRVersion] {
 	// The item's own row answers where the pull request lives; no branch is guessed.
 	item, err := GetReviewItemByRef(prRef, workspaceURL)
 	if errors.Is(err, sql.ErrNoRows) {
-		return result.Err[[]PRVersion]("NOT_FOUND", "pull request not found: "+prRef)
+		return result.Err[[]PRVersion]("NOT_FOUND", notFoundMessage("pull request", prRef, err))
 	}
 	if err != nil {
 		return result.Err[[]PRVersion]("RESOLVE_FAILED", err.Error())

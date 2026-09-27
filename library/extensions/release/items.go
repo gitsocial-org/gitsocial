@@ -3,6 +3,7 @@ package release
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -86,13 +87,30 @@ func GetReleaseItem(repoURL, hash, branch string) (*ReleaseItem, error) {
 	})
 }
 
-// GetReleaseItemByRef looks up a release item by its ref string.
+// GetReleaseItemByRef looks up a release item by a full or workspace-relative ref, or by a bare hash prefix.
 func GetReleaseItemByRef(refStr string, defaultRepoURL string) (*ReleaseItem, error) {
+	if refStr == "" {
+		return nil, sql.ErrNoRows
+	}
+	if !strings.Contains(refStr, "#") && !strings.Contains(refStr, "://") {
+		if item, err := GetReleaseItem(defaultRepoURL, refStr, ReleaseBranch); err == nil {
+			return item, nil
+		}
+		return GetReleaseItemByHashPrefix(refStr)
+	}
 	ref := protocol.ResolveRefWithDefaults(refStr, defaultRepoURL, ReleaseBranch)
 	if ref.Hash == "" {
 		return nil, sql.ErrNoRows
 	}
 	return GetReleaseItem(ref.RepoURL, ref.Hash, ref.Branch)
+}
+
+// notFoundMessage names an ambiguous hash prefix, and the ref itself otherwise.
+func notFoundMessage(ref string, err error) string {
+	if errors.Is(err, sql.ErrNoRows) {
+		return "release not found: " + ref
+	}
+	return err.Error()
 }
 
 // GetReleaseItems queries release items with optional filtering.

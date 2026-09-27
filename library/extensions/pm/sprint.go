@@ -81,7 +81,7 @@ func UpdateSprint(workdir, sprintRef string, opts UpdateSprintOptions) Result[Sp
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetPMItemByRef(sprintRef, repoURL)
 	if err != nil {
-		return result.Err[Sprint]("NOT_FOUND", "sprint not found")
+		return result.Err[Sprint]("NOT_FOUND", notFoundMessage("sprint", sprintRef, err))
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "pm")
@@ -169,7 +169,7 @@ func RetractSprint(workdir, sprintRef string) Result[bool] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetPMItemByRef(sprintRef, repoURL)
 	if err != nil {
-		return result.Err[bool]("NOT_FOUND", "sprint not found")
+		return result.Err[bool]("NOT_FOUND", notFoundMessage("sprint", sprintRef, err))
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "pm")

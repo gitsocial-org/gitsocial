@@ -85,7 +85,7 @@ func UpdateFeedback(workdir, feedbackRef string, opts UpdateFeedbackOptions) Res
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(feedbackRef, repoURL)
 	if err != nil {
-		return result.Err[Feedback]("NOT_FOUND", "feedback not found")
+		return result.Err[Feedback]("NOT_FOUND", notFoundMessage("feedback", feedbackRef, err))
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "review")
@@ -137,7 +137,7 @@ func RetractFeedback(workdir, feedbackRef string) Result[bool] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(feedbackRef, repoURL)
 	if err != nil {
-		return result.Err[bool]("NOT_FOUND", "feedback not found")
+		return result.Err[bool]("NOT_FOUND", notFoundMessage("feedback", feedbackRef, err))
 	}
 
 	branch := gitmsg.GetExtBranch(workdir, "review")

@@ -142,18 +142,18 @@ func GetReviewItem(repoURL, hash, branch string) (*ReviewItem, error) {
 	})
 }
 
-// GetReviewItemByRef looks up a review item by its ref string; a ref without a branch resolves by hash, not by a review-branch default.
+// GetReviewItemByRef looks up a review item by its ref string; a ref without a branch or a repository resolves by hash, not by a default.
 func GetReviewItemByRef(refStr string, defaultRepoURL string) (*ReviewItem, error) {
 	parsed := protocol.ParseRef(refStr)
 	if parsed.Value == "" {
 		return nil, sql.ErrNoRows
 	}
-	if parsed.Branch == "" {
-		return findByHash(parsed.Repository, parsed.Value)
-	}
 	repoURL := parsed.Repository
 	if repoURL == "" {
 		repoURL = defaultRepoURL
+	}
+	if parsed.Branch == "" || repoURL == "" {
+		return findByHash(parsed.Repository, parsed.Value)
 	}
 	return GetReviewItem(repoURL, parsed.Value, parsed.Branch)
 }

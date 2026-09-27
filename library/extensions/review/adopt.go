@@ -74,7 +74,7 @@ func AdoptPR(workdir, prRef string) Result[PullRequest] {
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	existing, err := GetReviewItemByRef(prRef, repoURL)
 	if err != nil {
-		return result.Err[PullRequest]("NOT_FOUND", "pull request not found")
+		return result.Err[PullRequest]("NOT_FOUND", notFoundMessage("pull request", prRef, err))
 	}
 	if existing.RepoURL == repoURL {
 		return result.Err[PullRequest]("NOT_FOREIGN", "the pull request is already in this repository")

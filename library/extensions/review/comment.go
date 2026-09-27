@@ -2,6 +2,7 @@
 package review
 
 import (
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/result"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
@@ -10,9 +11,9 @@ import (
 func GetPRComments(prRef string, workspaceURL string) Result[[]social.Post] {
 	item, err := GetReviewItemByRef(prRef, workspaceURL)
 	if err != nil {
-		return result.Err[[]social.Post]("NOT_FOUND", "item not found: "+prRef)
+		return result.Err[[]social.Post]("NOT_FOUND", notFoundMessage("pull request", prRef, err))
 	}
-	return GetCommentsByKey(item.RepoURL, item.Hash, prRef)
+	return GetCommentsByKey(item.RepoURL, item.Hash, protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch))
 }
 
 // GetCommentsByKey reads a review item's comments on any branch, from its known composite key.

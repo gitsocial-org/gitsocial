@@ -465,15 +465,24 @@ func GetSocialItem(repoURL, hash, branch string, workspaceURL string) (*SocialIt
 	})
 }
 
-// GetSocialItemByRef looks up a social item by its ref string (e.g., "repo#commit:hash@branch")
+// GetSocialItemByRef looks up a social item by its ref string (e.g., "repo#commit:hash@branch"); a ref without a branch matches any branch.
 func GetSocialItemByRef(refStr string, workspaceURL string) (*SocialItem, error) {
 	parsed := protocol.ParseRef(refStr)
 	if parsed.Type != protocol.RefTypeCommit {
 		return nil, sql.ErrNoRows
 	}
-	ref := protocol.ResolveRefWithDefaults(refStr, workspaceURL, "main")
+	ref := protocol.ResolveRefWithDefaults(refStr, workspaceURL, "")
 	if ref.Hash == "" {
 		return nil, sql.ErrNoRows
+	}
+	if ref.Branch == "" {
+		return cache.QueryLocked(func(db *sql.DB) (*SocialItem, error) {
+			query := baseSelectFromView + `
+				WHERE v.repo_url = ? AND v.hash = ?
+				  AND NOT v.is_edit_commit AND NOT v.is_retracted
+				ORDER BY v.timestamp DESC LIMIT 1`
+			return scanResolvedRow(db.QueryRow(query, workspaceURL, ref.RepoURL, ref.Hash))
+		})
 	}
 	return GetSocialItem(ref.RepoURL, ref.Hash, ref.Branch, workspaceURL)
 }

@@ -3,6 +3,7 @@ package pm
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -26,7 +27,7 @@ func DeriveHierarchy(parentRef, defaultRepoURL, selfRef string) (parent, root st
 	}
 	parentItem, err := GetPMItemByRef(parentRef, defaultRepoURL)
 	if err != nil {
-		return "", "", fmt.Errorf("parent issue not found: %s", parentRef)
+		return "", "", errors.New(notFoundMessage("parent issue", parentRef, err))
 	}
 	if selfRef != "" {
 		if selfItem, err := GetPMItemByRef(selfRef, defaultRepoURL); err == nil {

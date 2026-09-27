@@ -207,8 +207,17 @@ func GetPMItem(repoURL, hash, branch string) (*PMItem, error) {
 	})
 }
 
-// GetPMItemByRef looks up a PM item by its ref string.
+// GetPMItemByRef looks up a PM item by a full or workspace-relative ref, or by a bare hash prefix.
 func GetPMItemByRef(refStr string, defaultRepoURL string) (*PMItem, error) {
+	if refStr == "" {
+		return nil, sql.ErrNoRows
+	}
+	if !strings.Contains(refStr, "#") && !strings.Contains(refStr, "://") {
+		if item, err := GetPMItem(defaultRepoURL, refStr, PMBranch); err == nil {
+			return item, nil
+		}
+		return GetPMItemByHashPrefix(refStr, "")
+	}
 	ref := protocol.ResolveRefWithDefaults(refStr, defaultRepoURL, PMBranch)
 	if ref.Hash == "" {
 		return nil, sql.ErrNoRows
@@ -216,12 +225,12 @@ func GetPMItemByRef(refStr string, defaultRepoURL string) (*PMItem, error) {
 	return GetPMItem(ref.RepoURL, ref.Hash, ref.Branch)
 }
 
-// GetPMItemByHashPrefix finds a PM item by hash prefix and type, refusing a prefix that several items share.
+// GetPMItemByHashPrefix finds a PM item by hash prefix and type (empty for any), refusing a prefix that several items share.
 func GetPMItemByHashPrefix(hashPrefix, itemType string) (*PMItem, error) {
 	hashes, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
 		rows, err := db.Query(`SELECT DISTINCT hash FROM pm_items_resolved
-			WHERE hash LIKE ? ESCAPE '\' AND type = ? AND NOT is_edit_commit AND NOT is_retracted
-			LIMIT 2`, cache.EscapeLike(hashPrefix)+"%", itemType)
+			WHERE hash LIKE ? ESCAPE '\' AND (? = '' OR type = ?) AND NOT is_edit_commit AND NOT is_retracted
+			LIMIT 2`, cache.EscapeLike(hashPrefix)+"%", itemType, itemType)
 		if err != nil {
 			return nil, err
 		}
@@ -247,9 +256,9 @@ func GetPMItemByHashPrefix(hashPrefix, itemType string) (*PMItem, error) {
 	}
 	return cache.QueryLocked(func(db *sql.DB) (*PMItem, error) {
 		query := baseSelectFromView + `
-			WHERE v.hash = ? AND v.type = ? AND NOT v.is_edit_commit AND NOT v.is_retracted
+			WHERE v.hash = ? AND (? = '' OR v.type = ?) AND NOT v.is_edit_commit AND NOT v.is_retracted
 			ORDER BY v.timestamp DESC LIMIT 1`
-		return scanResolvedRow(db.QueryRow(query, hashes[0], itemType))
+		return scanResolvedRow(db.QueryRow(query, hashes[0], itemType, itemType))
 	})
 }
 
@@ -259,6 +268,32 @@ func notFoundMessage(kind, ref string, err error) string {
 		return kind + " not found: " + ref
 	}
 	return err.Error()
+}
+
+// ResolveHeaderRef returns the workspace-relative ref a header field stores for a user ref that names a PM item.
+func ResolveHeaderRef(ref, repoURL string) (string, error) {
+	return protocol.HeaderRef(ref, repoURL, func(ref string) (string, error) {
+		item, err := GetPMItemByRef(ref, repoURL)
+		if err != nil {
+			return "", errors.New(notFoundMessage("item", ref, err))
+		}
+		return protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch), nil
+	})
+}
+
+// ResolveHeaderRefs applies ResolveHeaderRef to each ref of a list field.
+func ResolveHeaderRefs(refs []string, repoURL string) ([]string, error) {
+	out := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		resolved, err := ResolveHeaderRef(ref, repoURL)
+		if err != nil {
+			return nil, err
+		}
+		if resolved != "" {
+			out = append(out, resolved)
+		}
+	}
+	return out, nil
 }
 
 type PMQuery struct {
