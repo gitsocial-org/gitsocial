@@ -67,6 +67,8 @@ func CollectAll() []DomainDoc {
 	host.AddView("/search", tuiviews.NewSearchView("", nil, nil))
 	host.AddView("/search/help", tuiviews.NewSearchHelpView())
 	host.AddView("/notifications", tuiviews.NewNotificationsView("", nil, nil, nil, nil))
+	host.AddView("/errorlog", tuiviews.NewErrorLogView())
+	host.AddView("/diff", tuiviews.NewCommitDiffView(""))
 	// Register extension views
 	tuisocial.Register(host)
 	tuipm.Register(host)

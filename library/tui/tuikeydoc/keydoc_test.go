@@ -1,7 +1,10 @@
 // keydoc_test.go - Tests for keydoc utility functions
 package tuikeydoc
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestCapitalize(t *testing.T) {
 	tests := []struct {
@@ -111,5 +114,17 @@ func TestDomainTitles(t *testing.T) {
 		if _, ok := domainTitles[d]; !ok {
 			t.Errorf("domainTitles missing entry for %q", d)
 		}
+	}
+}
+
+// TestGeneratedKeysDocIsCurrent fails when documentation/TUI-KEYS.md drifts from the generator; run bin/gitsocial docs keybindings to refresh it.
+func TestGeneratedKeysDocIsCurrent(t *testing.T) {
+	want, err := os.ReadFile("../../../documentation/TUI-KEYS.md")
+	if err != nil {
+		t.Fatalf("read TUI-KEYS.md: %v", err)
+	}
+	got := Generate(CollectAll())
+	if string(want) != got {
+		t.Error("documentation/TUI-KEYS.md drifted from the generator; run: gitsocial docs keybindings > documentation/TUI-KEYS.md, then go generate ./library/tui/tuiviews")
 	}
 }

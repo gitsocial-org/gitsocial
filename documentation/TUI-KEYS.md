@@ -907,6 +907,9 @@
 
 | Key | Action |
 |-----|--------|
+| `j` | Scroll down |
+| `k` | Scroll up |
+| `x` | Clear all |
 | `/` | Search |
 | `tab` | Focus |
 | `shift+tab` | Focus |
@@ -915,10 +918,18 @@
 
 | Key | Action |
 |-----|--------|
-| `!` | Errors |
+| `e/E` | Expand |
+| `w` | Wrap |
+| `v` | View mode |
+| `tab` | Next file |
+| `shift+tab` | Prev file |
+| `[/]` | Prev/next hunk |
 | `/` | Search |
-| `tab` | Focus |
-| `shift+tab` | Focus |
+| `j` | Scroll down |
+| `k` | Scroll up |
+| `ctrl+d` | Half-page down |
+| `ctrl+u` | Half-page up |
+| `!` | Errors |
 
 ### Forks
 
