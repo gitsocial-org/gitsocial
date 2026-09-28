@@ -3853,10 +3853,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // GRAPH_LANE_W, GRAPH_ROW_H and GRAPH_DOT_R set the gutter geometry.
   const GRAPH_LANE_W = 18, GRAPH_ROW_H = 40, GRAPH_DOT_R = 4;
   // GRAPH_LANE_VARS pairs each lane's theme token with its light-theme fallback.
+  // The order alternates warm and cool so neighboring lanes never share a hue
+  // band, wrap included (lane 8 sits beside lane 7); validated for CVD
+  // separation and contrast in both themes against the theme surfaces.
   const GRAPH_LANE_VARS = [
-    ["--link", "#404ddd"], ["--closed", "#8957e5"], ["--open", "#1f9d55"],
-    ["--warn", "#bf8700"], ["--danger", "#cf222e"], ["--i-blue", "#1a85d4"],
-    ["--i-vermilion", "#d5512f"], ["--i-indigo", "#693acf"],
+    ["--warn", "#bf8700"], ["--i-blue", "#1a85d4"], ["--open", "#1f9d55"],
+    ["--link", "#404ddd"], ["--danger", "#cf222e"], ["--i-cyan", "#17a5af"],
+    ["--i-orange", "#d47628"], ["--closed", "#8957e5"],
   ];
   // graphLaneColors resolves the lane palette from the body's computed custom properties.
   function graphLaneColors() {
