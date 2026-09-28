@@ -1056,7 +1056,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const c = parseCommit(sha, obj.body);
     const wrap = el("div", { class: "detail" }, []);
     wrap.append(el("a", { class: "back", href: detailBackHref(ctx, "#/timeline") }, ["← back"]));
-    wrap.append(el("div", { class: "subject" }, [subjectBody(c.content)[0]]));
+    wrap.append(el("div", { class: "subject subject-commit" }, [subjectBody(c.content)[0]]));
     const meta = el("span", { class: "meta" }, [
       commitAuthorEl(c), " · ", timeEl(c.authorTime), " · ",
     ]);

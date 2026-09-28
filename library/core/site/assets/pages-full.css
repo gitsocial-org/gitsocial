@@ -281,6 +281,8 @@
   /* A trailer value and a release's commit row are metadata, so they read in their key's voice. */
   .detail dd, .release-notes dd { margin: 0; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); word-break: break-word; }
   .detail .subject { font-size: var(--fs-h1); }
+  /* A code commit's subject is chrome, like its rows in the commits list and the graph. */
+  .detail .subject.subject-commit { font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-h4); }
   .detail .card .subject, .card .subject { font-size: var(--fs-md); font-family: var(--mono); letter-spacing: var(--mono-ls); font-weight: 400; }
   .back { display: inline-block; margin-bottom: var(--sp-4); color: var(--muted); font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); }
   /* Detail top bar: the back link on the left, the page's controls on the right,
