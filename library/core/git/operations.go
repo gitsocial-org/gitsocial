@@ -729,21 +729,23 @@ func CommitExists(workdir, rev string) bool {
 	return err == nil
 }
 
-// GetDefaultBranch returns the repository's default branch name.
+// GetDefaultBranch returns the repository's default branch as a local branch name: origin's HEAD when a local branch carries that name, else main or master, else empty.
 func GetDefaultBranch(workdir string) (string, error) {
-	// Try HEAD first
-	out, err := execGitSimple(workdir, []string{"symbolic-ref", "--short", "HEAD"})
-	if err == nil && out != "" {
-		return strings.TrimSpace(out), nil
+	// Never the checked-out branch: it may be feature work. A caller that can
+	// tolerate a guess falls back to GetCurrentBranch itself.
+	out, err := execGitSimple(workdir, []string{"symbolic-ref", "--short", "refs/remotes/origin/HEAD"})
+	if err == nil {
+		if name := strings.TrimPrefix(strings.TrimSpace(out), "origin/"); name != "" && BranchExists(workdir, name) {
+			return name, nil
+		}
 	}
-	// Fallback to common defaults
 	if BranchExists(workdir, "main") {
 		return "main", nil
 	}
 	if BranchExists(workdir, "master") {
 		return "master", nil
 	}
-	return "main", nil
+	return "", nil
 }
 
 // CommitFiles creates a commit with real file content on a ref.

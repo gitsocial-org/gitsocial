@@ -716,8 +716,8 @@ func TestGetDefaultBranch_noMainNoMaster(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDefaultBranch() error = %v", err)
 	}
-	if branch != "main" {
-		t.Errorf("GetDefaultBranch() = %q, want main (final fallback)", branch)
+	if branch != "" {
+		t.Errorf("GetDefaultBranch() = %q, want empty (no default resolvable, never a guess)", branch)
 	}
 }
 

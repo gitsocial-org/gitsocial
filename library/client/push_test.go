@@ -54,6 +54,26 @@ func TestResolveRemotes(t *testing.T) {
 	}
 }
 
+// TestDefaultBranchStats_featureCheckout: the bucket HEAD follows the default branch, not the checked-out one.
+func TestDefaultBranchStats_featureCheckout(t *testing.T) {
+	work := setupWork(t, t.TempDir())
+	if _, err := git.ExecGit(work, []string{"switch", "-c", "feature/work"}); err != nil {
+		t.Fatalf("switch: %v", err)
+	}
+	git.CreateCommit(work, git.CommitOptions{Message: "feature commit", AllowEmpty: true})
+
+	branch, times, err := defaultBranchStats(work)
+	if err != nil {
+		t.Fatalf("defaultBranchStats: %v", err)
+	}
+	if branch != "main" {
+		t.Errorf("defaultBranchStats branch = %q, want main", branch)
+	}
+	if len(times) != 1 {
+		t.Errorf("defaultBranchStats commits = %d, want 1 (main only, not the feature commit)", len(times))
+	}
+}
+
 // TestPushAll_continuesPastFailure: a failed remote stops neither the next one nor the error.
 func TestPushAll_continuesPastFailure(t *testing.T) {
 	good := t.TempDir()

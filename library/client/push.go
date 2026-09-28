@@ -9,6 +9,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 
@@ -258,6 +259,7 @@ func PublishSite(workdir, remoteURL string, override objstore.SiteOverride, prog
 	// times) the browser can't cheaply derive. Best-effort: never fails the push.
 	branch, times, err := defaultBranchStats(workdir)
 	if err != nil {
+		log.Debug("site head and stats skipped", "error", err)
 		return true, complete, nil
 	}
 	_ = site.SetRemoteHead(remoteURL, objstore.HelperEnvFromOS(), branch)
@@ -266,16 +268,21 @@ func PublishSite(workdir, remoteURL string, override objstore.SiteOverride, prog
 	return true, complete, nil
 }
 
-// defaultBranchStats returns the current branch and every regular commit's
+// defaultBranchStats returns the default branch and every regular commit's
 // author time (unix seconds) on it — the served default branch in the bucket.
 // The browser buckets these into the analytics activity chart with the same
 // period logic it uses for items, and the count is len().
 func defaultBranchStats(workdir string) (string, []int, error) {
-	br, err := git.ExecGit(workdir, []string{"rev-parse", "--abbrev-ref", "HEAD"})
+	// The default branch, never the checked-out one: a push from a feature
+	// branch must not repoint the bucket HEAD at a branch the bucket may lack.
+	branch, err := git.GetDefaultBranch(workdir)
 	if err != nil {
 		return "", nil, err
 	}
-	lr, err := git.ExecGit(workdir, []string{"log", "--format=%ct", "HEAD"})
+	if branch == "" {
+		return "", nil, errors.New("no default branch resolved")
+	}
+	lr, err := git.ExecGit(workdir, []string{"log", "--format=%ct", "refs/heads/" + branch})
 	if err != nil {
 		return "", nil, err
 	}
@@ -286,5 +293,5 @@ func defaultBranchStats(workdir string) (string, []int, error) {
 			times = append(times, n)
 		}
 	}
-	return strings.TrimSpace(br.Stdout), times, nil
+	return branch, times, nil
 }

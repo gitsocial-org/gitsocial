@@ -603,6 +603,50 @@ func TestGetDefaultBranch(t *testing.T) {
 	}
 }
 
+func TestGetDefaultBranch_featureCheckout(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+	if _, err := ExecGit(dir, []string{"switch", "-c", "feature/work"}); err != nil {
+		t.Fatalf("switch error = %v", err)
+	}
+
+	branch, err := GetDefaultBranch(dir)
+	if err != nil {
+		t.Fatalf("GetDefaultBranch() error = %v", err)
+	}
+	if branch != "main" {
+		t.Errorf("GetDefaultBranch() = %q, want main (not the checked-out feature branch)", branch)
+	}
+}
+
+func TestGetDefaultBranch_originHead(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+	if _, err := ExecGit(dir, []string{"symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/release"}); err != nil {
+		t.Fatalf("symbolic-ref error = %v", err)
+	}
+
+	// origin's HEAD names no local branch (stale symref): main wins.
+	branch, err := GetDefaultBranch(dir)
+	if err != nil {
+		t.Fatalf("GetDefaultBranch() error = %v", err)
+	}
+	if branch != "main" {
+		t.Errorf("GetDefaultBranch() = %q, want main (stale origin HEAD ignored)", branch)
+	}
+
+	if _, err := ExecGit(dir, []string{"branch", "release"}); err != nil {
+		t.Fatalf("branch error = %v", err)
+	}
+	branch, err = GetDefaultBranch(dir)
+	if err != nil {
+		t.Fatalf("GetDefaultBranch() error = %v", err)
+	}
+	if branch != "release" {
+		t.Errorf("GetDefaultBranch() = %q, want release (origin's HEAD beats a local main)", branch)
+	}
+}
+
 func TestGetMergeBase(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)

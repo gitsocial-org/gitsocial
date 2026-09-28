@@ -719,6 +719,10 @@ func syncMirrorBranches(cmd *cobra.Command, cfg *Config, defaultOnly bool) error
 		current = strings.TrimSpace(r.Stdout)
 	}
 	defaultBranch, _ := git.GetDefaultBranch(cfg.WorkDir)
+	if defaultBranch == "" {
+		// The mirror clone's checkout is upstream's default branch.
+		defaultBranch = current
+	}
 	created, updated := 0, 0
 	for _, branch := range strings.Fields(out.Stdout) {
 		if branch == "HEAD" || strings.HasPrefix(branch, "gitmsg/") {

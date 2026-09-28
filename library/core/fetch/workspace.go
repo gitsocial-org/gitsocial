@@ -36,7 +36,12 @@ func resolveWorkspaceSyncContext(workdir string, procs []WorkspaceSyncFunc) *wor
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	defaultBranch, _ := git.GetDefaultBranch(workdir)
 	if defaultBranch == "" {
-		defaultBranch = "main"
+		// A label fallback only, so the checked-out branch is good enough here.
+		if current, err := git.GetCurrentBranch(workdir); err == nil && current != "" && current != "HEAD" {
+			defaultBranch = current
+		} else {
+			defaultBranch = "main"
+		}
 	}
 
 	// Every tip the gate watches, local and remote tracking: the timeline shows

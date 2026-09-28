@@ -3,7 +3,6 @@ package review
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
@@ -18,7 +17,7 @@ func CodeBranchesToPush(workdir, remote string) (map[string]int, error) {
 	if branches == nil {
 		branches = make(map[string]int)
 	}
-	if def := defaultBranch(workdir); def != "" {
+	if def, derr := git.GetDefaultBranch(workdir); derr == nil && def != "" {
 		if _, ok := branches[def]; !ok {
 			if unpushed, uerr := git.UnpushedOnBranch(workdir, def, remote); uerr == nil && len(unpushed) > 0 {
 				branches[def] = len(unpushed)
@@ -29,19 +28,6 @@ func CodeBranchesToPush(workdir, remote string) (map[string]int, error) {
 		return nil, err
 	}
 	return branches, err
-}
-
-// defaultBranch resolves origin's HEAD, else a local main or master. Not HEAD, which may be feature work.
-func defaultBranch(workdir string) string {
-	if out, err := git.ExecGit(workdir, []string{"symbolic-ref", "--short", "refs/remotes/origin/HEAD"}); err == nil {
-		return strings.TrimPrefix(strings.TrimSpace(out.Stdout), "origin/")
-	}
-	for _, name := range []string{"main", "master"} {
-		if git.BranchExists(workdir, name) {
-			return name
-		}
-	}
-	return ""
 }
 
 // PushMergedBase pushes a merged pull request's base branch, so the remote code catches up.
