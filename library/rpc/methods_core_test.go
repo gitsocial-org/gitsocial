@@ -133,6 +133,87 @@ func TestCorePush_dryRunReachesEveryConfiguredRemote(t *testing.T) {
 	}
 }
 
+// TestCorePush_allRemotes: allRemotes reaches remotes outside the configured list, alphabetically, and excludes remote.
+func TestCorePush_allRemotes(t *testing.T) {
+	testutil.OpenTempCache(t, "")
+	workdir, _ := twoRemoteWorkdir(t)
+	extra := t.TempDir()
+	if err := git.EnsureBareRepo(extra); err != nil {
+		t.Fatalf("EnsureBareRepo: %v", err)
+	}
+	if _, err := git.ExecGit(workdir, []string{"remote", "add", "backup", extra}); err != nil {
+		t.Fatalf("remote add backup: %v", err)
+	}
+	if _, err := git.ExecGit(workdir, []string{"push", "backup", "main"}); err != nil {
+		t.Fatalf("push main to backup: %v", err)
+	}
+	server := pushServer(t, workdir)
+
+	resp := server.processRequest(Request{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "core.push",
+		Params:  json.RawMessage(`{"dryRun": true, "allRemotes": true, "remote": "first"}`),
+	})
+	if resp.Error == nil || resp.Error.Code != CodeInvalidParams {
+		t.Fatalf("core.push with remote and allRemotes error = %v, want invalid params", resp.Error)
+	}
+
+	resp = server.processRequest(Request{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`2`),
+		Method:  "core.push",
+		Params:  json.RawMessage(`{"dryRun": true, "allRemotes": true}`),
+	})
+	if resp.Error != nil {
+		t.Fatalf("core.push allRemotes error = %v", resp.Error)
+	}
+	encoded, err := json.Marshal(resp.Result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	var served []struct {
+		Push struct {
+			Remote string `json:"remote"`
+		} `json:"push"`
+	}
+	if err := json.Unmarshal(encoded, &served); err != nil {
+		t.Fatalf("unmarshal result as an array: %v (%s)", err, encoded)
+	}
+	want := []string{"backup", "first", "second"}
+	if len(served) != len(want) {
+		t.Fatalf("core.push allRemotes returned %d results, want %d", len(served), len(want))
+	}
+	for i, name := range want {
+		if served[i].Push.Remote != name {
+			t.Errorf("result %d names %q, want %q (alphabetical)", i, served[i].Push.Remote, name)
+		}
+	}
+}
+
+// TestCorePush_allRemotesWithoutRemotes: a remoteless workspace errors instead of an empty success.
+func TestCorePush_allRemotesWithoutRemotes(t *testing.T) {
+	testutil.OpenTempCache(t, "")
+	workdir := t.TempDir()
+	if err := git.Init(workdir, "main"); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	server := pushServer(t, workdir)
+
+	resp := server.processRequest(Request{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "core.push",
+		Params:  json.RawMessage(`{"dryRun": true, "allRemotes": true}`),
+	})
+	if resp.Error == nil {
+		t.Fatalf("core.push allRemotes with no remotes = %v, want an error", resp.Result)
+	}
+	if resp.Error.Code != CodeInvalidArg {
+		t.Errorf("error code = %d, want %d (INVALID_ARGUMENT)", resp.Error.Code, CodeInvalidArg)
+	}
+}
+
 // TestCorePush_extensionsParamIsIgnored: RPC.md 4.5 says every initialized
 // extension is pushed whatever the extensions param names.
 func TestCorePush_extensionsParamIsIgnored(t *testing.T) {

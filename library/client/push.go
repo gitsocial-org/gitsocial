@@ -4,6 +4,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -57,6 +58,20 @@ func ResolveRemotes(workdir string, args []string) ([]string, git.PushResolution
 		return args, git.PushConfigured
 	}
 	return git.ResolvePushRemotes(workdir)
+}
+
+// AllRemotes returns every configured remote name in alphabetical order, for a push that targets them all.
+func AllRemotes(workdir string) ([]string, error) {
+	remotes, err := git.ListRemotes(workdir)
+	if err != nil {
+		return nil, fmt.Errorf("list remotes: %w", err)
+	}
+	names := make([]string, 0, len(remotes))
+	for _, r := range remotes {
+		names = append(names, r.Name)
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 // ResolveSiteOverride reads a remote's per-remote site deployment overrides from

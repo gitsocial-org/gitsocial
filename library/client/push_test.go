@@ -54,6 +54,29 @@ func TestResolveRemotes(t *testing.T) {
 	}
 }
 
+// TestAllRemotes: every configured remote in alphabetical order, ignoring the resolution order.
+func TestAllRemotes(t *testing.T) {
+	work := setupWork(t, t.TempDir())
+	for _, name := range []string{"backup", "alpha"} {
+		if _, err := git.ExecGit(work, []string{"remote", "add", name, t.TempDir()}); err != nil {
+			t.Fatalf("remote add %s: %v", name, err)
+		}
+	}
+	got, err := AllRemotes(work)
+	if err != nil {
+		t.Fatalf("AllRemotes: %v", err)
+	}
+	want := []string{"alpha", "backup", "origin"}
+	if len(got) != len(want) {
+		t.Fatalf("AllRemotes() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("AllRemotes() = %v, want %v", got, want)
+		}
+	}
+}
+
 // TestDefaultBranchStats_featureCheckout: the bucket HEAD follows the default branch, not the checked-out one.
 func TestDefaultBranchStats_featureCheckout(t *testing.T) {
 	work := setupWork(t, t.TempDir())

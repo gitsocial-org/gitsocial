@@ -354,6 +354,7 @@ func corePush(s *Server) HandlerFunc {
 			Extensions  []string `json:"extensions"`
 			Remote      string   `json:"remote"`
 			AllBranches bool     `json:"allBranches"`
+			AllRemotes  bool     `json:"allRemotes"`
 			NoSite      bool     `json:"noSite"`
 			NoCode      bool     `json:"noCode"`
 			SiteOnly    bool     `json:"siteOnly"`
@@ -363,6 +364,9 @@ func corePush(s *Server) HandlerFunc {
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
+		if p.AllRemotes && p.Remote != "" {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "allRemotes excludes remote"}
+		}
 		opts := client.Options{
 			DryRun:      p.DryRun,
 			NoCode:      p.NoCode,
@@ -371,7 +375,19 @@ func corePush(s *Server) HandlerFunc {
 			AllBranches: p.AllBranches,
 			Full:        p.Full,
 		}
-		remotes, _ := client.ResolveRemotes(s.session.Workdir, namedRemotes(p.Remote))
+		var remotes []string
+		if p.AllRemotes {
+			var lerr error
+			remotes, lerr = client.AllRemotes(s.session.Workdir)
+			if lerr != nil {
+				return nil, appError(CodeAppInternal, "INTERNAL", lerr.Error())
+			}
+			if len(remotes) == 0 {
+				return nil, appError(CodeInvalidArg, "INVALID_ARGUMENT", "no remotes configured")
+			}
+		} else {
+			remotes, _ = client.ResolveRemotes(s.session.Workdir, namedRemotes(p.Remote))
+		}
 		results, err := client.PushAll(s.session.Workdir, remotes, opts, nil, nil, nil)
 		if err != nil {
 			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("push: %s", err))

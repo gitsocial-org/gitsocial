@@ -21,6 +21,7 @@ func newPushCmd() *cobra.Command {
 	var noSite bool
 	var siteOnly bool
 	var allBranches bool
+	var allRemotes bool
 	var full bool
 
 	cmd := &cobra.Command{
@@ -30,7 +31,8 @@ func newPushCmd() *cobra.Command {
 with site.publish then rebuilds the browser static site.
 
 Remotes resolve in order: the arguments, git config gitsocial.pushRemote,
-then origin, or the first s3 remote when origin is not one. Diverged
+then origin, or the first s3 remote when origin is not one; --all-remotes
+pushes to every configured remote instead. Diverged
 gitmsg/* branches merge automatically; diverged code branches fail with a
 hint. See documentation/S3.md for remotes and thin fork buckets.
 
@@ -44,6 +46,7 @@ Each push:
 Examples:
   gitsocial push                 # resolved remotes, data and site
   gitsocial push r2 backup       # named remotes, in order
+  gitsocial push --all-remotes   # every remote, in alphabetical order
   gitsocial push --dry-run       # print the plan, send nothing
   gitsocial push --no-code       # data and site, no code branches
   gitsocial push --site-only     # rebuild the site, send no refs
@@ -57,7 +60,26 @@ Examples:
 
 			cfg := GetConfig(cmd)
 
-			remotes, resolution := client.ResolveRemotes(cfg.WorkDir, args)
+			var remotes []string
+			resolution := git.PushConfigured
+			if allRemotes {
+				if len(args) > 0 {
+					PrintError(cmd, "--all-remotes takes no remote arguments")
+					return exit(ExitError)
+				}
+				var err error
+				remotes, err = client.AllRemotes(cfg.WorkDir)
+				if err != nil {
+					PrintError(cmd, err.Error())
+					return exit(ExitError)
+				}
+				if len(remotes) == 0 {
+					PrintError(cmd, "no remotes configured, add one with: git remote add <name> <url>")
+					return exit(ExitError)
+				}
+			} else {
+				remotes, resolution = client.ResolveRemotes(cfg.WorkDir, args)
+			}
 			printRemoteHint(cmd.ErrOrStderr(), cfg.WorkDir, remotes, resolution)
 
 			if dryRun && !cfg.JSONOutput {
@@ -127,6 +149,7 @@ Examples:
 	cmd.Flags().BoolVar(&noSite, "no-site", false, "Skip the site rebuild for this push")
 	cmd.Flags().BoolVar(&siteOnly, "site-only", false, "Rebuild the site, send no refs")
 	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "Send every local branch")
+	cmd.Flags().BoolVar(&allRemotes, "all-remotes", false, "Push to every configured remote")
 	cmd.Flags().BoolVar(&full, "full", false, "Detach a thin fork bucket and upload every object")
 	cmd.MarkFlagsMutuallyExclusive("no-site", "site-only")
 

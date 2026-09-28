@@ -893,6 +893,7 @@ Pushes local changes to every default push remote, the list `gitsocial push` res
 Params:
 - `remote` (string): One remote to push to (default: every resolved push remote)
 - `allBranches` (boolean): Publish every local branch
+- `allRemotes` (boolean): Push to every configured remote in alphabetical order. Mutually exclusive with `remote`
 - `noCode` (boolean): Skip code branches
 - `noSite` (boolean): Skip the static site
 - `siteOnly` (boolean): Rebuild the site, send no refs
