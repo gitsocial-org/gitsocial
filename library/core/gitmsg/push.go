@@ -296,6 +296,11 @@ func pushTags(workdir, remote string, dryRun, more bool) (int, error) {
 	if _, err := git.ExecGit(workdir, []string{"remote", "get-url", remote}); err != nil {
 		return 0, nil
 	}
+	// No local tags: nothing can be sent, and a dry run against an empty
+	// remote would fail with "No refs in common and none specified".
+	if out, err := git.ExecGit(workdir, []string{"for-each-ref", "--count=1", "refs/tags"}); err == nil && strings.TrimSpace(out.Stdout) == "" {
+		return 0, nil
+	}
 	args := []string{"push", remote, "--tags", "--porcelain"}
 	if dryRun {
 		args = append(args, "--dry-run")
