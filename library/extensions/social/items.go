@@ -308,7 +308,7 @@ const recountInteractionsQuery = `
 	       COUNT(DISTINCT CASE WHEN s.type = 'quote' AND s.original_hash = ? THEN s.hash END)
 	FROM social_items s
 	JOIN core_commits c ON c.repo_url = s.repo_url AND c.hash = s.hash AND c.branch = s.branch
-	WHERE c.is_edit_commit = 0 AND c.is_retracted = 0 AND s.hash != ?
+	WHERE c.is_edit_commit = 0 AND c.is_retracted = 0 AND c.stale_since IS NULL AND s.hash != ?
 	  AND ((s.original_repo_url = ? AND s.original_hash = ? AND s.original_branch = ?)
 	       OR (s.repo_url, s.hash, s.branch) IN (SELECT repo_url, hash, branch FROM descendants))
 `
@@ -342,7 +342,7 @@ const recountAllInteractionsQuery = `
 		       s.reply_to_repo_url, s.reply_to_hash, s.reply_to_branch
 		FROM social_items s
 		JOIN core_commits c ON c.repo_url = s.repo_url AND c.hash = s.hash AND c.branch = s.branch
-		WHERE c.is_edit_commit = 0 AND c.is_retracted = 0 AND s.type IN ('comment', 'repost', 'quote')
+		WHERE c.is_edit_commit = 0 AND c.is_retracted = 0 AND c.stale_since IS NULL AND s.type IN ('comment', 'repost', 'quote')
 	), chain(repo_url, hash, branch, item_hash) AS (
 		SELECT reply_to_repo_url, reply_to_hash, reply_to_branch, hash FROM live
 		WHERE type = 'comment' AND reply_to_hash IS NOT NULL

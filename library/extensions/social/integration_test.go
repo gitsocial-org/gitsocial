@@ -4127,6 +4127,51 @@ func TestUpdateAncestorInteractions_nestedChain(t *testing.T) {
 	}
 }
 
+func TestRecountInteractions_excludesStale(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/stale/test"
+	branch := "main"
+	postHash := "fff0ff112233"
+	commentHash := "fff0ff223344"
+	now := time.Now()
+	_ = cache.InsertCommits([]cache.Commit{
+		{Hash: postHash, RepoURL: repoURL, Branch: branch, AuthorName: "A", AuthorEmail: "a@t.com", Message: "Post", Timestamp: now},
+		{Hash: commentHash, RepoURL: repoURL, Branch: branch, AuthorName: "B", AuthorEmail: "b@t.com", Message: "Comment", Timestamp: now.Add(time.Minute)},
+	})
+	_ = InsertSocialItem(SocialItem{RepoURL: repoURL, Hash: postHash, Branch: branch, Type: "post"})
+	_ = InsertSocialItem(SocialItem{
+		RepoURL: repoURL, Hash: commentHash, Branch: branch, Type: "comment",
+		OriginalRepoURL: cache.ToNullString(repoURL),
+		OriginalHash:    cache.ToNullString(postHash),
+		OriginalBranch:  cache.ToNullString(branch),
+		ReplyToRepoURL:  cache.ToNullString(repoURL),
+		ReplyToHash:     cache.ToNullString(postHash),
+		ReplyToBranch:   cache.ToNullString(branch),
+	})
+	countFor := func() int {
+		c, _ := cache.QueryLocked(func(db *sql.DB) (int, error) {
+			var n int
+			err := db.QueryRow(`SELECT COALESCE(comments, 0) FROM social_interactions WHERE repo_url = ? AND hash = ? AND branch = ?`,
+				repoURL, postHash, branch).Scan(&n)
+			return n, err
+		})
+		return c
+	}
+	if got := countFor(); got != 1 {
+		t.Fatalf("comment count before staling = %d, want 1", got)
+	}
+	// The comment leaves the branch (rebase); only the post stays live.
+	if _, err := cache.MarkCommitsStaleByRepo(repoURL, map[string]bool{postHash: true}); err != nil {
+		t.Fatalf("MarkCommitsStaleByRepo: %v", err)
+	}
+	if err := RecountAllInteractions(); err != nil {
+		t.Fatalf("RecountAllInteractions: %v", err)
+	}
+	if got := countFor(); got != 0 {
+		t.Errorf("comment count after staling = %d, want 0 (a stale comment does not count)", got)
+	}
+}
+
 // (TestGetPosts_threadRootNotInThread is in TestGetPostsIntegration group)
 
 // (TestGetLists_withData, TestAddRepositoryToList_emptyBranch are in TestListManagement group)

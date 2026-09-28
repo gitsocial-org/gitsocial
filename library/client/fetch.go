@@ -44,12 +44,16 @@ func Fetch(workdir, cacheDir string, opts FetchOptions) (fetch.Result, fetch.Sta
 
 // FetchRepository fetches one repository's history with every processor and hook.
 func FetchRepository(cacheDir, repoURL, branch, workspaceURL string) fetch.Result {
-	return fetch.FetchRepository(cacheDir, repoURL, branch, workspaceURL, processors(), hooks())
+	res := fetch.FetchRepository(cacheDir, repoURL, branch, workspaceURL, processors(), hooks())
+	recountSocialInteractions()
+	return res
 }
 
 // FetchRepositoryRange fetches one repository inside a date window, for pagination.
 func FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL string) fetch.Result {
-	return fetch.FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL, processors(), hooks())
+	res := fetch.FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL, processors(), hooks())
+	recountSocialInteractions()
+	return res
 }
 
 // FetchForks fetches every registered fork with the full processor set, then
@@ -67,12 +71,18 @@ func FetchForks(workdir, cacheDir string) fetch.Stats {
 
 // SyncWorkspace ingests the workspace into the cache and returns when it is current.
 func SyncWorkspace(workdir string) error {
-	return fetch.SyncWorkspace(workdir, workspaceSyncs())
+	err := fetch.SyncWorkspace(workdir, workspaceSyncs())
+	recountSocialInteractions()
+	return err
 }
 
 // SyncWorkspaceLocal ingests the workspace without the network identity backfill.
 func SyncWorkspaceLocal(workdir string) (bool, error) {
-	return fetch.SyncWorkspaceLocal(workdir, workspaceSyncs())
+	changed, err := fetch.SyncWorkspaceLocal(workdir, workspaceSyncs())
+	if changed {
+		recountSocialInteractions()
+	}
+	return changed, err
 }
 
 // SyncWorkspaceQuick ingests the most recent workspace commits and returns.
@@ -82,7 +92,18 @@ func SyncWorkspaceQuick(workdir string) error {
 
 // SyncWorkspaceContinue ingests the commits older than the quick pass, reporting progress per chunk.
 func SyncWorkspaceContinue(workdir string, onProgress func(fetch.SyncProgress)) error {
-	return fetch.SyncWorkspaceContinue(workdir, workspaceSyncs(), onProgress)
+	err := fetch.SyncWorkspaceContinue(workdir, workspaceSyncs(), onProgress)
+	recountSocialInteractions()
+	return err
+}
+
+// recountSocialInteractions refreshes the interaction counters after a pass
+// that may have marked commits stale; the counters count only live items, and
+// no recount runs inside core/fetch, which cannot see the social extension.
+func recountSocialInteractions() {
+	if err := social.RecountAllInteractions(); err != nil {
+		log.Debug("recount interactions failed", "error", err)
+	}
 }
 
 // SyncWorkspaceOrigin refreshes the workspace from its own origin and ingests its commits.
