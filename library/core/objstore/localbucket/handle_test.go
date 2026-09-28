@@ -7,9 +7,9 @@
 // (generation mode); conditional GETs are what the no-cache mutable keys rely
 // on to revalidate cheaply; Range GETs are how the browser reads one object out
 // of a packfile; the listing's per-object ETag is what the push-state marker
-// fingerprints. Requests are driven through httptest, with the package-level
-// bucket root pointed at a temp dir.
-package main
+// fingerprints. Requests are driven through httptest, with the test
+// bucket's root pointed at a temp dir.
+package localbucket
 
 import (
 	"bytes"

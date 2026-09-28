@@ -6,9 +6,10 @@
 // which is the specification both dev servers (locals3 and sitetest/serve.js)
 // and the uploaders (objstore/cache_control.go, site/site_cache_control.go) must agree on; the Range
 // expectations come from RFC 7233 and from Client.GetRange's contract.
-package main
+package localbucket
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -346,11 +347,21 @@ func TestContinuationTokenRoundTrip(t *testing.T) {
 	}
 }
 
-// withRoot points the package-level bucket root at dir for one test and
-// restores the previous value afterwards.
+// withRoot points the test bucket at dir for one test and restores the
+// previous handler afterwards.
 func withRoot(t *testing.T, dir string) {
 	t.Helper()
-	previous := root
-	root = dir
-	t.Cleanup(func() { root = previous })
+	previous := tb
+	tb = &bucket{root: dir}
+	t.Cleanup(func() { tb = previous })
 }
+
+// tb is the bucket the test shims below drive.
+var tb = &bucket{}
+
+// handle drives one request through the test bucket.
+func handle(w http.ResponseWriter, r *http.Request) { tb.handle(w, r) }
+
+// diskPath and withinRoot mirror the bucket methods for the helper tests.
+func diskPath(key string) string  { return tb.diskPath(key) }
+func withinRoot(path string) bool { return tb.withinRoot(path) }
