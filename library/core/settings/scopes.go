@@ -128,9 +128,10 @@ func Validate(key, value string) error {
 			return fmt.Errorf("%s must be true or false", key)
 		}
 	case KeyInt:
+		// Floor 1, matching Set: no registered int key accepts zero.
 		n, err := strconv.Atoi(value)
-		if err != nil || n < 0 {
-			return fmt.Errorf("%s must be a non-negative integer", key)
+		if err != nil || n < 1 {
+			return fmt.Errorf("%s must be a positive integer", key)
 		}
 		if key == "fetch.auto.interval" && n < 60 {
 			return fmt.Errorf("fetch.auto.interval must be at least 60 seconds")
