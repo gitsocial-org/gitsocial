@@ -497,6 +497,34 @@ func TestRun_ResumesFromPartialMapping(t *testing.T) {
 	}
 }
 
+// TestRun_SocialMappingRecordsConfiguredBranch: the mapping's social entries
+// carry the branch the commits landed on, not a literal default.
+func TestRun_SocialMappingRecordsConfiguredBranch(t *testing.T) {
+	opts := newRunOptions(t)
+	if err := gitmsg.SetExtConfigValue(opts.WorkDir, "social", "branch", "gitmsg/custom-social"); err != nil {
+		t.Fatalf("SetExtConfigValue() error = %v", err)
+	}
+	adapter := newFakeAdapter()
+	if _, err := Run(adapter, opts); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if n := len(branchCommits(t, opts.WorkDir, "gitmsg/custom-social")); n != 3 {
+		t.Errorf("configured social branch commits = %d, want 3", n)
+	}
+	mapping, err := ReadMapping(opts.CacheDir, opts.RepoURL, "")
+	if err != nil {
+		t.Fatalf("ReadMapping() error = %v", err)
+	}
+	for key, item := range mapping.Items {
+		if item.Type != "post" && item.Type != "comment" && item.Type != "issue-comment" && item.Type != "discussion-comment" {
+			continue
+		}
+		if item.Branch != "gitmsg/custom-social" {
+			t.Errorf("mapping %s branch = %q, want the configured social branch", key, item.Branch)
+		}
+	}
+}
+
 func TestRun_DryRunWritesNothing(t *testing.T) {
 	opts := newRunOptions(t)
 	opts.DryRun = true

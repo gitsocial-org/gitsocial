@@ -1060,7 +1060,7 @@ func executeSocial(opts Options, plan *SocialPlan, mapping *MappingFile) Stats {
 				continue
 			}
 			key := MappingKey(platform, "post", entry.item.ExternalID)
-			mapping.Record(key, hash, "gitmsg/social", "post")
+			mapping.Record(key, hash, branch, "post")
 			stats.Posts++
 		}
 		flushMapping(opts, mapping)
@@ -1227,7 +1227,7 @@ func commitDiscussionComments(opts Options, comments []ImportComment, mapping *M
 			continue
 		}
 		key := MappingKey(platform, "comment", entry.item.ExternalID)
-		mapping.Record(key, hash, "gitmsg/social", "comment")
+		mapping.Record(key, hash, branch, "comment")
 		stats.Comments++
 	}
 	return stats
