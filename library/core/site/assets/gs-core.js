@@ -2315,11 +2315,29 @@
     return kept.join("\n");
   }
 
+  // ADMON_RE matches a Docusaurus admonition opener, with an optional custom title after the type.
+  const ADMON_RE = /^:::(note|tip|info|warning|danger|caution)(?:\s+(.*))?$/;
+
   // parseMarkdown parses text into a block list; markdown-native blocks are plain data, and html blocks carry verbatim source for the sanitizer.
   function parseMarkdown(text) {
     const lines = (text || "").replace(/\r/g, "").split("\n");
     // Definitions are collected in a pass of their own: a document may reference a label before defining it.
     const { defs, skip } = collectLinkRefDefs(lines);
+    // admonCloserAfter returns the first bare ::: line past an opener, outside any fence, from one lazily built index, so a run of degraded openers stays linear.
+    let admonClosers = null;
+    const admonCloserAfter = (from) => {
+      if (admonClosers === null) {
+        admonClosers = [];
+        let fenced = false;
+        for (let j = 0; j < lines.length; j++) {
+          if (/^\s*```/.test(lines[j])) { fenced = !fenced; continue; }
+          if (!fenced && lines[j].trim() === ":::") admonClosers.push(j);
+        }
+      }
+      let lo = 0, hi = admonClosers.length;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (admonClosers[mid] <= from) lo = mid + 1; else hi = mid; }
+      return lo < admonClosers.length ? admonClosers[lo] : -1;
+    };
     const blocks = [];
     let i = 0;
     while (i < lines.length) {
@@ -2336,6 +2354,16 @@
       // A collected definition renders nothing; only block-start lines are in skip, so a definition-shaped line inside a paragraph stays text.
       if (skip.has(i)) { i++; continue; }
       const t = line.trim();
+      const adm = ADMON_RE.exec(t);
+      if (adm) {
+        const end = admonCloserAfter(i);
+        // Without a closing marker the opener falls through and stays visible paragraph text.
+        if (end >= 0) {
+          blocks.push({ type: "admonition", kind: adm[1], title: (adm[2] || "").trim(), blocks: parseMarkdown(lines.slice(i + 1, end).join("\n")) });
+          i = end + 1;
+          continue;
+        }
+      }
       const closeM = /^<\/([a-zA-Z][\w-]*)\s*>$/.exec(t);
       if (closeM) { blocks.push({ type: "htmlclose", tag: closeM[1].toLowerCase() }); i++; continue; }
       const openM = /^<([a-zA-Z][\w-]*)((?:\s[^<>]*)?)>$/.exec(t);
@@ -2371,7 +2399,8 @@
       let setext = 0;
       while (i < lines.length && lines[i].trim() !== "" && !/^\s*```/.test(lines[i]) &&
              !/^#{1,6}\s+/.test(lines[i]) && !/^\s*(?:[-*+]|\d+[.)])\s+/.test(lines[i]) &&
-             !/^\s*>/.test(lines[i]) && !breaksParagraph(lines[i].trim())) {
+             !/^\s*>/.test(lines[i]) && !breaksParagraph(lines[i].trim()) &&
+             !(para.length && ADMON_RE.test(lines[i].trim()))) {
         const su = para.length ? /^ {0,3}(=+|-+) *$/.exec(lines[i]) : null;
         if (su) { setext = su[1][0] === "=" ? 1 : 2; i++; break; }
         if (isThematicBreak(lines[i])) break;

@@ -214,6 +214,22 @@ for (const c of FIX.frontMatter) {
   eq(GS.stripFrontMatter(c.source), c.expect, c.name);
 }
 
+console.log("=== parity invariant: the ::: admonition component ===");
+for (const c of FIX.admonitions) {
+  const root = GS.renderMarkdown(c.source);
+  const boxes = findCls(root, "admonition");
+  if (!c.expectClass) {
+    eq(boxes.length, 0, c.name + ": a degraded opener builds no admonition");
+  } else {
+    eq(boxes.length, 1, c.name + ": one admonition");
+    eq(boxes[0] && boxes[0].className, c.expectClass, c.name + ": the block's classes");
+    const title = boxes[0] && boxes[0].children[0];
+    eq(title && title.tagName.toLowerCase() + "." + title.className, "p.admonition-title", c.name + ": the title line leads");
+    eq(title && title.textContent, c.expectTitle, c.name + ": the title text");
+  }
+  eq(root.textContent.includes(c.expectBodyHas), true, c.name + ": the body text stays visible");
+}
+
 console.log("=== parity invariant: the name an unconfigured site takes ===");
 for (const c of FIX.defaultTitles) {
   eq(GS.repoTitle(c.base), c.expectTitle, c.name + ": default title");

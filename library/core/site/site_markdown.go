@@ -10,6 +10,7 @@ package site
 import (
 	"html"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -23,6 +24,7 @@ const (
 	siteMDQuote     = "blockquote"
 	siteMDTable     = "table"
 	siteMDThematic  = "thematic"
+	siteMDAdmon     = "admonition"
 	siteMDHTML      = "html"      // a self-contained raw HTML line
 	siteMDHTMLOpen  = "htmlopen"  // an opening tag on its own line: following blocks nest inside
 	siteMDHTMLClose = "htmlclose" // its closing tag
@@ -45,14 +47,14 @@ type siteMDBlock struct {
 	Kind    string
 	Level   int            // heading level
 	Spans   []siteMDSpan   // heading, paragraph
-	Text    string         // fenced code body
+	Text    string         // fenced code body, admonition title
 	Ordered bool           // list
 	Items   []siteMDItem   // list
-	Blocks  []siteMDBlock  // blockquote
+	Blocks  []siteMDBlock  // blockquote, admonition
 	Headers [][]siteMDSpan // table header cells
 	Aligns  []string       // table column alignment
 	Rows    [][][]siteMDSpan
-	Tag     string // htmlopen/htmlclose tag name
+	Tag     string // htmlopen/htmlclose tag name, admonition type
 	Raw     string // html/htmlopen source
 }
 
@@ -105,6 +107,7 @@ var (
 	siteMDBareURLRE   = regexp.MustCompile(`^https?://[^\s<>)]+`)
 	siteMDSchemeRE    = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*:`)
 	siteMDHrefOKRE    = regexp.MustCompile(`(?i)^(https?:|mailto:|#|/)`)
+	siteMDAdmonRE     = regexp.MustCompile(`^:::(note|tip|info|warning|danger|caution)(?:\s+(.*))?$`)
 	siteMDSlugDropRE  = regexp.MustCompile(`[^\w\s-]`)
 	siteMDSlugSpaceRE = regexp.MustCompile(`\s+`)
 )
@@ -171,7 +174,7 @@ func appendSiteMDPlainText(lines *[]string, blocks []siteMDBlock) {
 		switch block.Kind {
 		case siteMDCode:
 			*lines = append(*lines, block.Text)
-		case siteMDQuote:
+		case siteMDQuote, siteMDAdmon:
 			appendSiteMDPlainText(lines, block.Blocks)
 		case siteMDList:
 			for _, item := range block.Items {
@@ -233,6 +236,28 @@ func siteMDTruncateSource(text string, max int) (string, bool) {
 // parseSiteMarkdown parses text into a block list, capturing raw HTML verbatim for the sanitizer.
 func parseSiteMarkdown(text string) []siteMDBlock {
 	lines := strings.Split(strings.ReplaceAll(text, "\r", ""), "\n")
+	// admonCloserAfter returns the first bare ::: line past an opener, outside any fence, from one lazily built index, so a run of degraded openers stays linear.
+	var admonClosers []int
+	admonBuilt := false
+	admonCloserAfter := func(from int) int {
+		if !admonBuilt {
+			admonBuilt = true
+			fenced := false
+			for j, l := range lines {
+				if siteMDFenceRE.MatchString(l) {
+					fenced = !fenced
+					continue
+				}
+				if !fenced && strings.TrimSpace(l) == ":::" {
+					admonClosers = append(admonClosers, j)
+				}
+			}
+		}
+		if k := sort.SearchInts(admonClosers, from+1); k < len(admonClosers) {
+			return admonClosers[k]
+		}
+		return -1
+	}
 	var blocks []siteMDBlock
 	for i := 0; i < len(lines); {
 		line := lines[i]
@@ -247,6 +272,15 @@ func parseSiteMarkdown(text string) []siteMDBlock {
 			continue
 		}
 		t := strings.TrimSpace(line)
+		if m := siteMDAdmonRE.FindStringSubmatch(t); m != nil {
+			end := admonCloserAfter(i)
+			// Without a closing marker the opener falls through and stays visible paragraph text.
+			if end >= 0 {
+				blocks = append(blocks, siteMDBlock{Kind: siteMDAdmon, Tag: m[1], Text: strings.TrimSpace(m[2]), Blocks: parseSiteMarkdown(strings.Join(lines[i+1:end], "\n"))})
+				i = end + 1
+				continue
+			}
+		}
 		if m := siteMDCloseTagRE.FindStringSubmatch(t); m != nil {
 			blocks = append(blocks, siteMDBlock{Kind: siteMDHTMLClose, Tag: strings.ToLower(m[1])})
 			i++
@@ -313,7 +347,8 @@ func parseSiteMarkdown(text string) []siteMDBlock {
 		setext := 0
 		for i < len(lines) && strings.TrimSpace(lines[i]) != "" && !siteMDFenceRE.MatchString(lines[i]) &&
 			!siteMDHeadingRE.MatchString(lines[i]) && !siteMDBulletRE.MatchString(lines[i]) &&
-			!siteMDQuoteRE.MatchString(lines[i]) && !siteMDBreaksParagraph(strings.TrimSpace(lines[i])) {
+			!siteMDQuoteRE.MatchString(lines[i]) && !siteMDBreaksParagraph(strings.TrimSpace(lines[i])) &&
+			(len(para) == 0 || !siteMDAdmonRE.MatchString(strings.TrimSpace(lines[i]))) {
 			if len(para) > 0 {
 				if su := siteMDSetextRE.FindStringSubmatch(lines[i]); su != nil {
 					setext = 2
@@ -1028,6 +1063,15 @@ func writeSiteMDBlock(b *strings.Builder, block siteMDBlock, r *siteMDRender) {
 		b.WriteString("<blockquote>\n")
 		writeSiteMDBlocks(b, block.Blocks, r)
 		b.WriteString("</blockquote>\n")
+	case siteMDAdmon:
+		title := block.Text
+		if title == "" {
+			title = block.Tag
+		}
+		b.WriteString(`<div class="admonition admonition-` + block.Tag + "\">\n")
+		b.WriteString(`<p class="admonition-title">` + html.EscapeString(title) + "</p>\n")
+		writeSiteMDBlocks(b, block.Blocks, r)
+		b.WriteString("</div>\n")
 	default:
 		b.WriteString("<p>")
 		writeSiteMDInline(b, block.Spans, r)

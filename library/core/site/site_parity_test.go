@@ -222,6 +222,15 @@ type parityMDXStripCase struct {
 	Expect string `json:"expect"`
 }
 
+// parityAdmonitionCase pins the ::: component one markdown source yields on both renderers.
+type parityAdmonitionCase struct {
+	Name          string `json:"name"`
+	Source        string `json:"source"`
+	ExpectClass   string `json:"expectClass"`
+	ExpectTitle   string `json:"expectTitle"`
+	ExpectBodyHas string `json:"expectBodyHas"`
+}
+
 // parityTagOrderCase pins the display order of a set of tag names and dates.
 type parityTagOrderCase struct {
 	Name string `json:"name"`
@@ -253,6 +262,7 @@ type parityFixtures struct {
 	MarkdownPaths  []parityMarkdownPath      `json:"markdownPaths"`
 	MDXStrip       []parityMDXStripCase      `json:"mdxStrip"`
 	FrontMatter    []parityMDXStripCase      `json:"frontMatter"`
+	Admonitions    []parityAdmonitionCase    `json:"admonitions"`
 	ListEmpty      map[string]string         `json:"listEmpty"`
 	ListHeadings   map[string]string         `json:"listHeadings"`
 	TagOrder       []parityTagOrderCase      `json:"tagOrder"`
@@ -746,6 +756,34 @@ func TestParityFrontMatter(t *testing.T) {
 			if got := siteStripFrontMatter(c.Source); got != c.Expect {
 				t.Errorf("siteStripFrontMatter = %q, want %q", got, c.Expect)
 			}
+		})
+	}
+}
+
+// TestParityAdmonitions asserts the page layer builds a ::: block as the one
+// admonition component the app builds, class for class, against the fixture
+// unit_parity.js also asserts, and that a degraded opener stays visible text.
+func TestParityAdmonitions(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.Admonitions) == 0 {
+		t.Fatal("no admonition cases in parity fixtures")
+	}
+	for _, c := range f.Admonitions {
+		t.Run(c.Name, func(t *testing.T) {
+			got := renderSiteMarkdown(c.Source, siteMarkdownContext{})
+			if c.ExpectClass == "" {
+				if strings.Contains(got, "admonition") {
+					t.Errorf("a degraded opener built an admonition:\n%s", got)
+				}
+			} else {
+				if !strings.Contains(got, `<div class="`+c.ExpectClass+`">`+"\n"+`<p class="admonition-title">`+c.ExpectTitle+"</p>\n") {
+					t.Errorf("missing the admonition head for %q in:\n%s", c.ExpectClass, got)
+				}
+			}
+			if !strings.Contains(got, c.ExpectBodyHas) {
+				t.Errorf("missing body text %q in:\n%s", c.ExpectBodyHas, got)
+			}
+			assertBalancedHTML(t, got)
 		})
 	}
 }

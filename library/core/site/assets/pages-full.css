@@ -428,6 +428,24 @@
     margin: var(--sp-3) 0; padding: var(--sp-1) var(--sp-4); color: var(--muted);
     border-left: 3px solid var(--line);
   }
+  /* ::: admonitions: a tinted panel per type, its label a small mono line. */
+  .markdown .admonition {
+    margin: var(--sp-4) 0; padding: var(--sp-2) var(--sp-4) var(--sp-3);
+    border-left: 3px solid var(--line); background: var(--panel);
+  }
+  .markdown .admonition p { margin: var(--sp-2) 0; }
+  .markdown .admonition p.admonition-title {
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui);
+    font-weight: 600; color: var(--muted); margin: var(--sp-2) 0 var(--sp-1);
+  }
+  .markdown .admonition-tip { border-left-color: var(--open); background: var(--open-t1); }
+  .markdown .admonition-tip p.admonition-title { color: var(--open); }
+  .markdown .admonition-info { border-left-color: var(--i-blue); background: color-mix(in srgb, var(--i-blue) 14%, transparent); }
+  .markdown .admonition-info p.admonition-title { color: var(--i-blue); }
+  .markdown .admonition-warning, .markdown .admonition-caution { border-left-color: var(--warn); background: var(--warn-t1); }
+  .markdown .admonition-warning p.admonition-title, .markdown .admonition-caution p.admonition-title { color: var(--warn); }
+  .markdown .admonition-danger { border-left-color: var(--danger); background: var(--danger-t1); }
+  .markdown .admonition-danger p.admonition-title { color: var(--danger); }
   .markdown del, .markdown s, .markdown strike { text-decoration: line-through; opacity: 0.75; }
   .markdown kbd {
     font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: 0.78em; padding: 0.05rem var(--sp-2);

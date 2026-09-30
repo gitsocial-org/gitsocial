@@ -198,6 +198,50 @@ func TestSiteMarkdown_Grammar(t *testing.T) {
 			src:  "<article><p>kept</p></article>\n",
 			want: []string{"<p>kept</p>"},
 		},
+		{
+			name:   "admonition with nested markdown in its body",
+			src:    ":::note\nBe **careful** with [docs](https://example.com/d) and `x`.\n:::\n",
+			want:   []string{"<div class=\"admonition admonition-note\">\n<p class=\"admonition-title\">note</p>\n<p>Be <strong>careful</strong> with <a href=\"https://example.com/d\">docs</a> and <code>x</code>.</p>\n</div>"},
+			absent: []string{":::"},
+		},
+		{
+			name: "admonition custom title replaces the label",
+			src:  ":::tip Pro move\nUse the flag.\n:::\n",
+			want: []string{`<div class="admonition admonition-tip">`, `<p class="admonition-title">Pro move</p>`, "<p>Use the flag.</p>"},
+		},
+		{
+			name: "admonition holds blank-line-separated blocks",
+			src:  ":::warning\n\nFirst.\n\n- item\n\n:::\n\nafter\n",
+			want: []string{`<div class="admonition admonition-warning">`, "<p>First.</p>", "<li>item</li>", "<p>after</p>"},
+		},
+		{
+			name:   "unclosed admonition opener stays visible text",
+			src:    ":::danger\nstill visible\n",
+			want:   []string{":::danger", "still visible"},
+			absent: []string{"admonition"},
+		},
+		{
+			name:   "unknown admonition type stays visible text",
+			src:    ":::shrug\nx\n:::\n",
+			want:   []string{":::shrug"},
+			absent: []string{"admonition"},
+		},
+		{
+			name: "a bare ::: inside a fenced body does not close the block",
+			src:  ":::note\n```\n:::tip x\n:::\n```\ntail prose\n:::\n\nafter\n",
+			want: []string{`<div class="admonition admonition-note">`, ":::tip x", "<p>tail prose</p>", "<p>after</p>"},
+		},
+		{
+			name: "an opener glued to a paragraph starts its own block",
+			src:  "Intro text\n:::warning\nMind the gap.\n:::\n",
+			want: []string{"<p>Intro text</p>", `<div class="admonition admonition-warning">`, "<p>Mind the gap.</p>"},
+		},
+		{
+			name:   "a run of degraded openers parses flat",
+			src:    strings.Repeat(":::note\n", 100000),
+			want:   []string{":::note"},
+			absent: []string{"admonition"},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -326,7 +370,7 @@ func TestSiteMarkdown_Hostile(t *testing.T) {
 // Every cut must still produce balanced markup — an unclosed <div>, <ul> or
 // fence would run to the end of the page and swallow everything under it.
 func TestSiteMarkdown_Truncation(t *testing.T) {
-	full := "<div align=\"center\">\n\n# Title\n\n</div>\n\n## Section\n\n- one\n  - nested\n- two\n\n```go\nfunc main() {}\n```\n\n> quote\n\n<details>\n\ninner\n\n</details>\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\ntail paragraph\n"
+	full := "<div align=\"center\">\n\n# Title\n\n</div>\n\n## Section\n\n- one\n  - nested\n- two\n\n```go\nfunc main() {}\n```\n\n> quote\n\n:::note\ncallout body\n:::\n\n<details>\n\ninner\n\n</details>\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\ntail paragraph\n"
 	for limit := 1; limit <= len(full); limit++ {
 		src, truncated := siteMDTruncateSource(full, limit)
 		if truncated != (limit < len(full)) {

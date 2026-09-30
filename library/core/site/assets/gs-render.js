@@ -1431,7 +1431,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       parent.append(wrapFullscreen(el("pre", { class: "codeblock" }, [codeEl])));
     } else if (block.type === "list") parent.append(renderMdList(block, mdctx));
     else if (block.type === "table") parent.append(renderMdTable(block, mdctx));
-    else if (block.type === "blockquote") {
+    else if (block.type === "admonition") {
+      const box = el("div", { class: "admonition admonition-" + block.kind }, []);
+      box.append(el("p", { class: "admonition-title" }, [block.title || block.kind]));
+      renderBlocksInto(box, block.blocks, mdctx);
+      parent.append(box);
+    } else if (block.type === "blockquote") {
       const bq = el("blockquote", {}, []);
       renderBlocksInto(bq, block.blocks, mdctx);
       parent.append(bq);

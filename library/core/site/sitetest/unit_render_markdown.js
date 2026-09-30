@@ -1,6 +1,7 @@
 // unit_render_markdown.js - shim-rendered units for the markdown renderer:
 // tables, lists, raw-HTML sanitizing, relative link and image resolution,
-// in-page heading anchors, and the fullscreen overlay a code block opens.
+// in-page heading anchors, ::: admonitions, and the fullscreen overlay a
+// code block opens.
 require("./shim.js");
 const GS = require("../assets/gs-render.js");
 const { textOf, findTag } = global.__shim;
@@ -67,6 +68,32 @@ eq(pushed, ["#file:documentation/GUIDE.md@trunk:the-rules"], "an in-page anchor 
 global.location.hash = "#/";
 fire(findTag(heads, "a")[0], "click");
 eq(pushed[1], "#the-rules", "off a file route the plain fragment is pushed");
+
+console.log("=== admonitions ===");
+const adm = GS.renderMarkdown(":::note\nBe **careful** with [the docs](https://example.com/d) and `x`.\n:::\n");
+const admBox = findClass(adm, "admonition")[0];
+ok(!!admBox, "a closed ::: block builds an admonition");
+eq(admBox.className, "admonition admonition-note", "the block carries the shared class set");
+eq(findClass(admBox, "admonition-title").map(textOf), ["note"], "the type labels the title line");
+eq([findTag(admBox, "strong").map(textOf), findTag(admBox, "code").map(textOf)], [["careful"], ["x"]], "nested markdown renders inside the body");
+eq(findTag(admBox, "a").map(href), ["https://example.com/d"], "a link renders inside the body");
+const admTitled = GS.renderMarkdown(":::tip Pro move\nUse the flag.\n:::\n");
+eq(findClass(admTitled, "admonition-title").map(textOf), ["Pro move"], "a custom title replaces the label");
+eq(findClass(admTitled, "admonition")[0].className, "admonition admonition-tip", "the type still sets the class");
+const admOpen = GS.renderMarkdown(":::danger\nstill visible\n");
+eq(findClass(admOpen, "admonition").length, 0, "an unclosed opener builds no admonition");
+ok(textOf(admOpen).indexOf(":::danger") !== -1 && textOf(admOpen).indexOf("still visible") !== -1, "an unclosed opener degrades to visible text");
+const admUnknown = GS.renderMarkdown(":::shrug\nx\n:::\n");
+eq(findClass(admUnknown, "admonition").length, 0, "an unknown type builds no admonition");
+const admFence = GS.renderMarkdown(":::note\n```\n:::tip x\n:::\n```\ntail prose\n:::\n\nafter\n");
+eq(findClass(admFence, "admonition").length, 1, "a bare ::: inside a fenced body does not close the block");
+ok(textOf(findClass(admFence, "admonition")[0]).indexOf(":::tip x") !== -1, "the fenced lines stay literal inside the body");
+ok(findTag(admFence, "p").map(textOf).includes("after"), "the prose after the closer stays a paragraph");
+const admGlued = GS.renderMarkdown("Intro text\n:::warning\nMind the gap.\n:::\n");
+eq(findClass(admGlued, "admonition").length, 1, "an opener glued to a paragraph starts its own block");
+ok(findTag(admGlued, "p").map(textOf).includes("Intro text"), "the paragraph before the opener stays whole");
+const admFlood = GS.renderMarkdown(":::note\n".repeat(100000));
+eq(findClass(admFlood, "admonition").length, 0, "a run of degraded openers parses flat");
 
 console.log("=== code blocks and the fullscreen overlay ===");
 const code = GS.renderMarkdown("```go\nfunc main() {}\n```\n");
