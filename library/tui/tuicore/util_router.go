@@ -167,6 +167,11 @@ func LocRepoLists(repoURL string) Location {
 	return Location{Path: "/social/repository/lists", Params: map[string]string{"url": repoURL}}
 }
 
+// LocRef points at a textual ref, resolved at navigation time when the cache can say what it is.
+func LocRef(ref string) Location {
+	return Location{Path: "/ref", Params: map[string]string{"ref": ref}}
+}
+
 // LocCommitDiff creates a location for a generic commit diff view.
 func LocCommitDiff(commit string) Location {
 	return Location{Path: "/diff", Params: map[string]string{"commit": commit}}

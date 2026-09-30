@@ -2,10 +2,15 @@
 package tui
 
 import (
+	"database/sql"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
 func TestBuildPushConfirmPrompt_NamesRemoteAndHost(t *testing.T) {
@@ -102,5 +107,33 @@ func TestBuildRemotePickerChoices_PersistRoundDropsExtras(t *testing.T) {
 	}
 	if choices[0].Key != "1" || choices[1].Key != "2" {
 		t.Errorf("persist choice keys = %q %q, want 1 2", choices[0].Key, choices[1].Key)
+	}
+}
+
+// TestResolveRefLocation maps a ref through the cache: a pm hit opens the issue, a miss the raw commit.
+func TestResolveRefLocation(t *testing.T) {
+	testutil.OpenTempCache(t, "")
+	hash := "cafe12345678"
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash: hash, RepoURL: "https://example.com/r", Branch: "gitmsg/pm",
+		AuthorName: "T", AuthorEmail: "t@t.com", Message: "an issue", Timestamp: time.Now(),
+	}}); err != nil {
+		t.Fatalf("InsertCommits: %v", err)
+	}
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`INSERT INTO pm_items (repo_url, hash, branch, type, state) VALUES (?, ?, ?, 'issue', 'open')`,
+			"https://example.com/r", hash, "gitmsg/pm")
+		return err
+	}); err != nil {
+		t.Fatalf("insert pm item: %v", err)
+	}
+	got := resolveRefLocation("#commit:" + hash + "@gitmsg/pm")
+	want := tuicore.LocPMIssueDetail(hash)
+	if got.Path != want.Path || got.Param("issueID") != want.Param("issueID") {
+		t.Errorf("resolveRefLocation = %+v, want %+v", got, want)
+	}
+	miss := resolveRefLocation("#commit:0123456789ab")
+	if miss.Path != tuicore.LocCommitDiff("0123456789ab").Path {
+		t.Errorf("unknown hash = %+v, want the commit diff view", miss)
 	}
 }

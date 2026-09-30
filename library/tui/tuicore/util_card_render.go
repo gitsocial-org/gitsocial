@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -23,6 +24,8 @@ var (
 	codeBlockRe = regexp.MustCompile("(?s)(?:```(\\w*)\\n(.*?)```|~~~(\\w*)\\n(.*?)~~~)")
 	// Matches bare URLs (not inside markdown link syntax or HTML attributes)
 	urlRe = regexp.MustCompile(`https?://[^\s)>\]"]+`)
+	// refRe matches a workspace-relative commit ref at a boundary; the grammar mirrors the site renderers.
+	refRe = regexp.MustCompile(`(^|[\s([{"'<])(#commit:[0-9a-f]{7,40}(?:@[\w./-]+)?)`)
 	// Matches markdown links [text](http-url) with capture groups
 	mdLinkExtractRe = regexp.MustCompile(`\[([^\]]+)\]\((https?://[^)]+)\)`)
 	// Matches markdown images ![alt](url) with optional {attrs} suffix (GitLab/Kramdown)
@@ -178,6 +181,29 @@ func restoreMarkdownImages(content string, images []mdImage, anchors *AnchorColl
 func extractURLs(content string) (string, []string) {
 	mdSpans := mdLinkExtractRe.FindAllStringIndex(content, -1)
 	urlMatches := urlRe.FindAllStringIndex(content, -1)
+	// Refs ride the same placeholder list, so both paths restore them together.
+	// A ref inside a URL match is that URL's fragment, not a local ref; the
+	// overlap check keeps the replacement offsets whole.
+	inURL := func(start int) bool {
+		for _, u := range urlMatches {
+			if start >= u[0] && start < u[1] {
+				return true
+			}
+		}
+		return false
+	}
+	for _, m := range refRe.FindAllStringSubmatchIndex(content, -1) {
+		start := m[4]
+		if inURL(start) {
+			continue
+		}
+		ref := content[start:m[5]]
+		for strings.HasSuffix(ref, ".") || strings.HasSuffix(ref, ",") {
+			ref = ref[:len(ref)-1]
+		}
+		urlMatches = append(urlMatches, []int{start, start + len(ref)})
+	}
+	sort.Slice(urlMatches, func(i, j int) bool { return urlMatches[i][0] < urlMatches[j][0] })
 	if len(urlMatches) == 0 {
 		return content, nil
 	}
@@ -212,7 +238,13 @@ func extractURLs(content string) (string, []string) {
 func restoreURLs(content string, urls []string, anchors *AnchorCollector) string {
 	for i, u := range urls {
 		placeholder := fmt.Sprintf("%s%d\x00", urlPlaceholderPrefix, i)
-		replacement := anchors.MarkLink(u, u, Location{Path: u})
+		var replacement string
+		if strings.HasPrefix(u, "#") {
+			// A ref navigates internally, resolved at activation when the cache can say what it is.
+			replacement = anchors.Mark(u, LocRef(u))
+		} else {
+			replacement = anchors.MarkLink(u, u, Location{Path: u})
+		}
 		content = strings.Replace(content, placeholder, replacement, 1)
 	}
 	return content
@@ -239,6 +271,11 @@ func ExtractContentLinks(text, repoURL, branch string) []CardLink {
 	}
 	_, urls := extractURLs(textWithoutImages)
 	for _, u := range urls {
+		if strings.HasPrefix(u, "#") {
+			// A ref resolves at navigation time, like its inline anchor.
+			links = append(links, CardLink{Label: u, Location: LocRef(u)})
+			continue
+		}
 		links = append(links, CardLink{Label: u, Location: Location{Path: u}})
 	}
 	return links

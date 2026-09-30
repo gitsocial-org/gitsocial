@@ -1137,6 +1137,10 @@ func (m *Model) handleNavigate(msg tuicore.NavigateMsg) tea.Cmd {
 		m.navHidden = false
 		m.applyLayout(m.layout.Width, m.layout.Height)
 	}
+	// A textual ref resolves here, where the cache can say what it is.
+	if msg.Location.Path == "/ref" {
+		msg.Location = resolveRefLocation(msg.Location.Param("ref"))
+	}
 	// External URLs: open in browser instead of routing internally
 	if strings.HasPrefix(msg.Location.Path, "http") {
 		openBrowser(msg.Location.Path)
@@ -2043,6 +2047,37 @@ func buildImportConfirmPrompt(repoURL string, found, mapped importpkg.ItemCounts
 		return "Import from " + repoURL + "?"
 	}
 	return "Import " + strings.Join(parts, ", ") + " from " + repoURL + "?"
+}
+
+// resolveRefLocation maps a commit ref to its item's view through the cache, else to the raw commit diff.
+func resolveRefLocation(ref string) tuicore.Location {
+	parsed := protocol.ParseRef(ref)
+	if parsed.Type != protocol.RefTypeCommit || parsed.Value == "" {
+		return tuicore.LocTimeline
+	}
+	hits, err := cache.DetectExtension(parsed.Value)
+	if err == nil {
+		for _, h := range hits {
+			switch h.Extension {
+			case "review":
+				return tuicore.LocReviewPRDetail(h.Hash)
+			case "pm":
+				switch h.Type {
+				case "milestone":
+					return tuicore.LocPMMilestoneDetail(h.Hash)
+				case "sprint":
+					return tuicore.LocPMSprintDetail(h.Hash)
+				}
+				return tuicore.LocPMIssueDetail(h.Hash)
+			case "release":
+				return tuicore.LocReleaseDetail(h.Hash)
+			case "social":
+				return tuicore.LocDetail(h.Hash)
+			}
+		}
+	}
+	// Memo items and unfetched commits land on the raw commit view.
+	return tuicore.LocCommitDiff(parsed.Value)
 }
 
 // buildPushConfirmPrompt builds the one-line confirm: every target with how the

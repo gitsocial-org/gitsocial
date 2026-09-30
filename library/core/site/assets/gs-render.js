@@ -1316,25 +1316,54 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // ---- Markdown rendering (browser only; raw HTML via the sanitizer) ----
 
   // renderInline turns inline spans into DOM nodes; rawhtml spans pass through the sanitizer.
-  function renderInline(spans, mdctx) {
+  // REF_LINK_RE matches a workspace-relative ref at a boundary, the grammar parseRoute reads; the
+  // leading group keeps a cross-repository URL's fragment from reading as a local ref.
+  const REF_LINK_RE = /(^|[\s([{"'<])(#(?:commit:[0-9a-f]{7,40}(?:@[\w./-]+)?|branch:[\w./-]+|tag:[\w./-]+|file:[\w./-]+(?:@[\w./-]*)?(?::L\d+(?:-\d+)?)?))/g;
+
+  // refLinkNodes splits plain text into text nodes and hash-styled anchors for the refs it carries.
+  function refLinkNodes(text) {
+    const out = [];
+    let last = 0;
+    for (const m of text.matchAll(REF_LINK_RE)) {
+      let ref = m[2];
+      while (ref.endsWith(".") || ref.endsWith(",")) ref = ref.slice(0, -1);
+      const start = m.index + m[1].length;
+      if (start > last) out.push(document.createTextNode(text.slice(last, start)));
+      out.push(el("a", { class: "hash", href: ref }, [ref]));
+      last = start + ref.length;
+    }
+    if (last === 0) return null;
+    if (last < text.length) out.push(document.createTextNode(text.slice(last)));
+    return out;
+  }
+
+  // pushTextWithRefs appends plain text to out, linking any refs it carries.
+  function pushTextWithRefs(out, text) {
+    const nodes = refLinkNodes(text);
+    if (nodes) { for (const n of nodes) out.push(n); } else out.push(document.createTextNode(text));
+  }
+
+  function renderInline(spans, mdctx, inLink) {
     const out = [];
     for (const s of spans) {
       if (s.type === "code") out.push(el("code", {}, [s.value]));
-      else if (s.type === "strong") out.push(el("strong", {}, renderInline(s.spans, mdctx)));
-      else if (s.type === "em") out.push(el("em", {}, renderInline(s.spans, mdctx)));
-      else if (s.type === "strike") out.push(el("del", {}, renderInline(s.spans, mdctx)));
+      else if (s.type === "strong") out.push(el("strong", {}, renderInline(s.spans, mdctx, inLink)));
+      else if (s.type === "em") out.push(el("em", {}, renderInline(s.spans, mdctx, inLink)));
+      else if (s.type === "strike") out.push(el("del", {}, renderInline(s.spans, mdctx, inLink)));
       else if (s.type === "image") out.push(makeImage(s.src, s.alt, mdctx));
       else if (s.type === "rawhtml") for (const n of sanitizeHtml(s.value, mdctx)) out.push(n);
       else if (s.type === "link") {
-        const a = el("a", {}, renderInline(s.spans, mdctx));
+        // No ref anchors inside an anchor: nesting would split the author's link.
+        const a = el("a", {}, renderInline(s.spans, mdctx, true));
         const href = hrefOk(s.href) ? s.href : relativeHref(s.href, mdctx);
         if (href) a.setAttribute("href", href);
         out.push(a);
       } else if (mdctx && mdctx.hardBreaks && s.value.indexOf("\n") >= 0) {
         // A single newline is a hard br, as in a GitHub comment.
         const segs = s.value.split("\n");
-        segs.forEach((seg, i) => { if (i) out.push(el("br", {}, [])); if (seg) out.push(document.createTextNode(seg)); });
-      } else out.push(document.createTextNode(s.value));
+        segs.forEach((seg, i) => { if (i) out.push(el("br", {}, [])); if (seg) { if (inLink) out.push(document.createTextNode(seg)); else pushTextWithRefs(out, seg); } });
+      } else if (inLink) out.push(document.createTextNode(s.value));
+      else pushTextWithRefs(out, s.value);
     }
     return out;
   }

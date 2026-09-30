@@ -1118,21 +1118,26 @@ func writeSiteMDTable(b *strings.Builder, block siteMDBlock, r *siteMDRender) {
 
 // writeSiteMDInline writes inline spans: only a rawhtml span reaches the sanitizer, and every text node is escaped.
 func writeSiteMDInline(b *strings.Builder, spans []siteMDSpan, r *siteMDRender) {
+	writeSiteMDInlineCtx(b, spans, r, false)
+}
+
+// writeSiteMDInlineCtx is writeSiteMDInline with ref linking off inside an anchor, where nesting would split it.
+func writeSiteMDInlineCtx(b *strings.Builder, spans []siteMDSpan, r *siteMDRender, inLink bool) {
 	for _, s := range spans {
 		switch s.Kind {
 		case siteMDInCode:
 			b.WriteString("<code>" + html.EscapeString(s.Value) + "</code>")
 		case siteMDStrong:
 			b.WriteString("<strong>")
-			writeSiteMDInline(b, s.Spans, r)
+			writeSiteMDInlineCtx(b, s.Spans, r, inLink)
 			b.WriteString("</strong>")
 		case siteMDEm:
 			b.WriteString("<em>")
-			writeSiteMDInline(b, s.Spans, r)
+			writeSiteMDInlineCtx(b, s.Spans, r, inLink)
 			b.WriteString("</em>")
 		case siteMDStrike:
 			b.WriteString("<del>")
-			writeSiteMDInline(b, s.Spans, r)
+			writeSiteMDInlineCtx(b, s.Spans, r, inLink)
 			b.WriteString("</del>")
 		case siteMDImage:
 			b.WriteString(siteMDImageHTML(s.Src, s.Alt, ""))
@@ -1144,10 +1149,36 @@ func writeSiteMDInline(b *strings.Builder, spans []siteMDSpan, r *siteMDRender) 
 			} else {
 				b.WriteString("<a>")
 			}
-			writeSiteMDInline(b, s.Spans, r)
+			// No ref anchors inside an anchor: nesting would split the author's link.
+			writeSiteMDInlineCtx(b, s.Spans, r, true)
 			b.WriteString("</a>")
 		default:
-			b.WriteString(html.EscapeString(s.Value))
+			if inLink {
+				b.WriteString(html.EscapeString(s.Value))
+			} else {
+				writeSiteMDTextWithRefs(b, s.Value)
+			}
 		}
 	}
+}
+
+// siteMDRefRe matches a workspace-relative ref at a boundary, the grammar gs-render's REF_LINK_RE mirrors;
+// the leading group keeps a cross-repository URL's fragment from reading as a local ref.
+var siteMDRefRe = regexp.MustCompile(`(^|[\s([{"'<])(#(?:commit:[0-9a-f]{7,40}(?:@[\w./-]+)?|branch:[\w./-]+|tag:[\w./-]+|file:[\w./-]+(?:@[\w./-]*)?(?::L[0-9]+(?:-[0-9]+)?)?))`)
+
+// writeSiteMDTextWithRefs escapes plain text, linking each embedded ref the way the app renderer does.
+func writeSiteMDTextWithRefs(b *strings.Builder, text string) {
+	last := 0
+	for _, m := range siteMDRefRe.FindAllStringSubmatchIndex(text, -1) {
+		start := m[4]
+		ref := text[start:m[5]]
+		for strings.HasSuffix(ref, ".") || strings.HasSuffix(ref, ",") {
+			ref = ref[:len(ref)-1]
+		}
+		b.WriteString(html.EscapeString(text[last:start]))
+		// The matched charset carries nothing HTML-active, so the ref writes raw.
+		b.WriteString(`<a class="hash" href="` + ref + `">` + ref + `</a>`)
+		last = start + len(ref)
+	}
+	b.WriteString(html.EscapeString(text[last:]))
 }

@@ -170,3 +170,58 @@ func TestVerifiedBadgeComesFromFlags(t *testing.T) {
 		})
 	}
 }
+
+// TestExtractURLs_refsRideTheList: a commit ref extracts beside bare URLs and restores as an internal anchor.
+func TestExtractURLs_refsRideTheList(t *testing.T) {
+	content := "fixed in #commit:abc123def456@gitmsg/pm, see https://example.com and #commit:1234567."
+	stripped, urls := extractURLs(content)
+	if len(urls) != 3 {
+		t.Fatalf("extracted = %v, want the two refs and the url", urls)
+	}
+	if urls[0] != "#commit:abc123def456@gitmsg/pm" || urls[2] != "#commit:1234567" {
+		t.Errorf("refs = %q and %q, want the trailing period trimmed", urls[0], urls[2])
+	}
+	anchors := NewAnchorCollector("t", -1)
+	restored := restoreURLs(stripped, urls, anchors)
+	if !strings.Contains(restored, "#commit:abc123def456@gitmsg/pm") {
+		t.Errorf("restored text lost the ref: %q", restored)
+	}
+	zones := anchors.Zones()
+	if len(zones) != 3 {
+		t.Fatalf("zones = %d, want 3", len(zones))
+	}
+	if zones[0].Location.Path != "/ref" || zones[0].Location.Param("ref") != "#commit:abc123def456@gitmsg/pm" {
+		t.Errorf("ref zone location = %+v, want /ref carrying the ref", zones[0].Location)
+	}
+	if zones[1].Location.Path != "https://example.com" {
+		t.Errorf("url zone location = %+v, want the external url", zones[1].Location)
+	}
+}
+
+// TestExtractURLs_crossRepoRefStaysInItsURL: a ref fragment inside a URL is that URL's own, and the offsets stay whole.
+func TestExtractURLs_crossRepoRefStaysInItsURL(t *testing.T) {
+	content := "see https://forge.example/x#commit:abc1234 now"
+	stripped, urls := extractURLs(content)
+	if len(urls) != 1 || urls[0] != "https://forge.example/x#commit:abc1234" {
+		t.Fatalf("extracted = %v, want the one full url", urls)
+	}
+	restored := restoreURLs(stripped, urls, nil)
+	if !strings.Contains(restored, "now") || !strings.Contains(restored, "see ") {
+		t.Errorf("surrounding text corrupted: %q", restored)
+	}
+	bare := "word#commit:abc1234 and ok"
+	if _, refs := extractURLs(bare); len(refs) != 0 {
+		t.Errorf("a ref without a boundary extracted: %v", refs)
+	}
+}
+
+// TestExtractContentLinks_refUsesLocRef: the links panel's ref entry resolves at navigation time.
+func TestExtractContentLinks_refUsesLocRef(t *testing.T) {
+	links := ExtractContentLinks("fix in #commit:abc123def456", "", "")
+	if len(links) != 1 {
+		t.Fatalf("links = %+v, want the one ref", links)
+	}
+	if links[0].Location.Path != "/ref" || links[0].Location.Param("ref") != "#commit:abc123def456" {
+		t.Errorf("ref link location = %+v, want /ref carrying the ref", links[0].Location)
+	}
+}

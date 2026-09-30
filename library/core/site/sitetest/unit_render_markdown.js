@@ -95,5 +95,21 @@ eq(overlays().length, 0, "Escape removed the overlay");
 GS.openFullscreen(null);
 eq(overlays().length, 0, "a missing node opens nothing");
 
+// Refs in plain text link to their routes; code spans stay plain; a trailing period stays outside.
+const refs = GS.renderMarkdown("Fixed by #commit:abc123def456@gitmsg/pm.\n\nUse `#commit:abc123def456` and see #tag:v1.2.0 plus #file:docs/A.md@main:L3-9.\n");
+const refAnchors = findClass(refs, "hash").filter((a) => a.tagName === "A");
+eq(refAnchors.length, 3, "three refs outside code link");
+eq(refAnchors[0].getAttribute("href"), "#commit:abc123def456@gitmsg/pm", "the commit ref links to its route without the period");
+eq(refAnchors[1].getAttribute("href"), "#tag:v1.2.0", "the tag ref links");
+eq(refAnchors[2].getAttribute("href"), "#file:docs/A.md@main:L3-9", "the file ref links with its line range");
+ok(textOf(refs).indexOf("#commit:abc123def456@gitmsg/pm.") !== -1, "the period renders after the linked ref");
+
+// A cross-repository URL's fragment and a ref inside link text stay plain.
+const crossRefs = GS.renderMarkdown("See https://other.example/repo#commit:abc123def456 here.\n\n[fix #commit:abc123def456](https://example.com)\n");
+eq(findClass(crossRefs, "hash").filter((a) => a.tagName === "A").length, 0, "no hash anchor for a URL fragment or inside a link");
+const outerLinks = [];
+(function walk(n) { for (const c of (n && n._children) || []) { if (c.nodeType === 1 && c.tagName === "A") outerLinks.push(c); walk(c); } })(crossRefs);
+ok(outerLinks.every((a) => findClass(a, "hash").length === 0), "no anchor nests inside an anchor");
+
 console.log("\n" + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

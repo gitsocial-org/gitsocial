@@ -37,6 +37,38 @@ func TestSiteMarkdown_Grammar(t *testing.T) {
 			absent: []string{"# Title", "## About"},
 		},
 		{
+			name: "refs in plain text link to their routes",
+			src:  "Fixed by #commit:abc123def456@gitmsg/pm and #commit:1234567 on main.\n\nSee #branch:feature/x, #tag:v1.2.0 and #file:docs/A.md@main:L3-9 too.\n",
+			want: []string{
+				`<a class="hash" href="#commit:abc123def456@gitmsg/pm">#commit:abc123def456@gitmsg/pm</a>`,
+				`<a class="hash" href="#commit:1234567">#commit:1234567</a> on main.`,
+				`<a class="hash" href="#branch:feature/x">#branch:feature/x</a>`,
+				`<a class="hash" href="#tag:v1.2.0">#tag:v1.2.0</a>`,
+				`<a class="hash" href="#file:docs/A.md@main:L3-9">#file:docs/A.md@main:L3-9</a>`,
+			},
+		},
+		{
+			name:   "refs in code spans and blocks stay plain",
+			src:    "Use `#commit:abc123def456` here.\n\n```\n#commit:abc123def456\n```\n",
+			absent: []string{`href="#commit:abc123def456"`},
+		},
+		{
+			name:   "a cross-repository URL's fragment is not a local ref",
+			src:    "See https://other.example/repo#commit:abc123def456 and word#commit:abc123def456 forms.\n",
+			absent: []string{`<a class="hash"`},
+		},
+		{
+			name:   "a ref inside link text stays plain, no nested anchor",
+			src:    "[fix #commit:abc123def456](https://example.com)\n",
+			want:   []string{`<a href="https://example.com">fix #commit:abc123def456</a>`},
+			absent: []string{`class="hash"`},
+		},
+		{
+			name: "a ref keeps its trailing period outside the link",
+			src:  "Done in #commit:abc123def456.\n",
+			want: []string{`<a class="hash" href="#commit:abc123def456">#commit:abc123def456</a>.`},
+		},
+		{
 			name: "duplicate heading slugs are deduplicated",
 			src:  "## About\n\n## About\n",
 			want: []string{`id="md-about"`, `id="md-about-1"`},
