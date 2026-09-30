@@ -2274,11 +2274,20 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return baseSha && headSha ? { baseSha, headSha } : null;
   }
 
-  // prDiffSection builds a PR's Files changed section from the merge range, else the resolved tips, or null.
+  // prDiffNotice builds the Files changed section with a one-line notice in place of the diff (design rule 5).
+  function prDiffNotice(text) {
+    return el("div", { class: "diff-section" }, [
+      el("div", { class: "diff-head" }, [el("span", { class: "subject" }, ["Files changed"])]),
+      el("div", { class: "notice" }, [text]),
+    ]);
+  }
+
+  // prDiffSection builds a PR's Files changed section from the merge range, else the resolved tips; a range that does not resolve gets the notice.
   async function prDiffSection(ctx, header, fileFeedback) {
     if (!header) return null;
     // The merge range comes first: it stays on the base branch after the head is deleted.
-    if ((header.state || "") === "merged" && header["merge-base"] && header["merge-head"]) {
+    const hasMergeRange = (header.state || "") === "merged" && header["merge-base"] && header["merge-head"];
+    if (hasMergeRange) {
       const m = await resolveMergedRefs(ctx, header.base, header["merge-base"], header["merge-head"]);
       if (m) {
         const baseTree = await commitTree(ctx, m.baseSha);
@@ -2289,19 +2298,19 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         }
       }
     }
-    if (!header["head-tip"] || !header["base-tip"]) return null;
+    if (!header["head-tip"] || !header["base-tip"]) {
+      // A merged PR with a recorded range that did not resolve is unresolvable here, not unrecorded.
+      if (hasMergeRange) return prDiffNotice("The recorded merge range does not resolve in this bucket, so no diff can be shown here.");
+      return prDiffNotice("This pull request records no base or head tip, so no diff can be shown here.");
+    }
     const headR = await resolveTipCommit(ctx, header.head, header["head-tip"]);
     const baseR = await resolveTipCommit(ctx, header.base, header["base-tip"]);
     if (headR.status !== "ok" || baseR.status !== "ok") {
-      const note = el("div", { class: "diff-section" }, [
-        el("div", { class: "diff-head" }, [el("span", { class: "subject" }, ["Files changed"])]),
-        el("div", { class: "notice" }, ["The base or head tips are not present in this bucket (a foreign fork or an unfetched branch), so no diff can be shown here."]),
-      ]);
-      return note;
+      return prDiffNotice("The base or head tips are not present in this bucket (a foreign fork or an unfetched branch), so no diff can be shown here.");
     }
     const headTree = await commitTree(ctx, headR.sha);
     const baseTree = await commitTree(ctx, baseR.sha);
-    if (!headTree || !baseTree) return el("div", { class: "diff-section" }, [el("div", { class: "notice" }, ["Tip commit objects are missing from this bucket."])]);
+    if (!headTree || !baseTree) return prDiffNotice("Tip commit objects are missing from this bucket.");
     const caveats = [];
     const mb = await resolveMergeBase(ctx, headR.sha, baseR.sha, DETAIL_WALK_CAP);
     let leftTree = baseTree;
@@ -2546,10 +2555,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         const summary = reviewSummary(fb.all, item.header.reviewers || "");
         return reviewSummarySection(summary, fb.nonFile);
       });
+      // A throw inside this producer would leave no section at all, so it resolves to the notice instead.
       enrichDetail(root, async () => {
-        const file = prFeedback(items, item.commit.short).file;
-        await hydrateItems(ctx, file);
-        return prDiffSection(ctx, item.header, file);
+        try {
+          const file = prFeedback(items, item.commit.short).file;
+          await hydrateItems(ctx, file);
+          return await prDiffSection(ctx, item.header, file);
+        } catch (e) { return prDiffNotice("The changes could not be loaded from this bucket."); }
       });
     }
     // The social walk can be large, so the thread enriches last.

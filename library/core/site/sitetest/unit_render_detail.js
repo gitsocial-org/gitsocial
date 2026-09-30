@@ -1,6 +1,7 @@
 // unit_render_detail.js - shim-rendered units for the detail routes, over an
 // object store seeded in the read context: the version picker and its diff, the
-// share control, the pm relation sections, release assets and the config page.
+// share control, the pm relation sections, release assets, the PR Changes
+// section with its notices, and the config page.
 require("./shim.js");
 const GS = require("../assets/gs-render.js");
 const { textOf, findTag } = global.__shim;
@@ -172,6 +173,65 @@ async function main() {
   const when = findClass(meta, "reltime").map((n) => n.getAttribute("title")).join();
   ok(when.startsWith("2025-01-"), "the detail shows the original time, not the copy's June commit", when);
   eq(keys(adopted).indexOf("adopts"), -1, "the meta row carries adopts, so no field row repeats it");
+
+  console.log("=== a pull request's Changes section ===");
+  // A two-commit code history: base ab holds notes.txt, head ac adds a line to it.
+  const hexBytes = (h) => { const b = new Uint8Array(20); for (let i = 0; i < 20; i++) b[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16); return b; };
+  const blob = (id, s) => ctx.objects.set(sha(id), { type: "blob", body: enc.encode(s) });
+  // tree seeds one git tree object from [mode, name, target id] entries.
+  function tree(id, entries) {
+    const parts = entries.flatMap(([mode, name, target]) => [enc.encode(mode + " " + name + "\0"), hexBytes(sha(target))]);
+    const body = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    let off = 0;
+    for (const p of parts) { body.set(p, off); off += p.length; }
+    ctx.objects.set(sha(id), { type: "tree", body });
+  }
+  blob("fa", "hello\n");
+  blob("fb", "hello\nworld\n");
+  tree("ta", [["100644", "notes.txt", "fa"]]);
+  tree("tb", [["100644", "notes.txt", "fb"]]);
+  const codeCommit = (id, parent, treeId, when, msg) => ctx.objects.set(sha(id), { type: "commit", body: enc.encode("tree " + sha(treeId) + (parent ? "\nparent " + sha(parent) : "") + "\nauthor Ada <ada@example.com> " + when + " +0000\n\n" + msg + "\n") });
+  codeCommit("ab", null, "ta", 1750000000, "base");
+  codeCommit("ac", "ab", "tb", 1750000100, "head");
+  commit("aa", null, 1750001000, "Add world", { ext: "review", type: "pull-request", state: "open", base: "#branch:main", "base-tip": short("ab"), head: "#branch:feature", "head-tip": short("ac") });
+  commit("ae", "aa", 1750001100, "From a fork", { ext: "review", type: "pull-request", state: "open", base: "#branch:main", "base-tip": short("ab"), head: "https://example.com/fork#branch:feature", "head-tip": short("ac") });
+  commit("af", "ae", 1750001200, "A draft with no tips", { ext: "review", type: "pull-request", state: "open", draft: "true", base: "#branch:main", head: "#branch:feature" });
+  const prCtx = Object.assign({}, ctx, { walks: {}, refMisses: new Set(), manifest: Promise.resolve({
+    "refs/heads/gitmsg/review": sha("af"), "refs/heads/main": sha("ab"), "refs/heads/feature": sha("ac"),
+  }) });
+  const pr = (await GS.itemDetail(prCtx, sha("aa"), "gitmsg/review"))[0];
+  await tick(80);
+  const prDiff = findClass(pr, "diff-section")[0];
+  ok(!!prDiff, "a PR whose tips resolve in the bucket gains a Changes section");
+  eq(findClass(prDiff, "subject").map(textOf), ["Files changed (1)"], "the section counts the changed files");
+  eq(findClass(prDiff, "diff-path").map(textOf), ["notes.txt"], "the changed file is listed by path");
+  const prLines = findClass(prDiff, "diff-line").map((l) => textOf(findClass(l, "dl-sign")[0]) + textOf(findClass(l, "dl-text")[0]));
+  ok(prLines.indexOf("+world") !== -1, "the diff body shows the added line", prLines.join(" | "));
+  eq(findClass(prDiff, "caveat").map(textOf), [], "exact tips with a merge base carry no caveat chips");
+  eq(findClass(prDiff, "notice").length, 0, "a resolved diff shows no notice");
+
+  const fpr = (await GS.itemDetail(prCtx, sha("ae"), "gitmsg/review"))[0];
+  await tick(80);
+  const fSec = findClass(fpr, "diff-section")[0];
+  ok(!!fSec && findClass(fSec, "notice").length === 1, "a foreign head keeps the section with one notice");
+  ok(text(fSec).indexOf("not present in this bucket") !== -1, "the notice names the unresolved tips", text(fSec));
+  eq(findClass(fSec, "diff-file").length, 0, "no file rows render under the notice");
+
+  const dpr = (await GS.itemDetail(prCtx, sha("af"), "gitmsg/review"))[0];
+  await tick(80);
+  const dSec = findClass(dpr, "diff-section")[0];
+  ok(!!dSec, "a PR with no recorded tips shows the section in place of a blank");
+  ok(text(dSec).indexOf("records no base or head tip") !== -1, "the notice says the tips are not recorded", text(dSec));
+
+  commit("ad", "af", 1750001300, "Merged long ago", { ext: "review", type: "pull-request", state: "merged", base: "#branch:main", "merge-base": "0000abc", "merge-head": "0000def" });
+  const mCtx = Object.assign({}, prCtx, { walks: {}, refMisses: new Set(), manifest: Promise.resolve({
+    "refs/heads/gitmsg/review": sha("ad"), "refs/heads/main": sha("ab"), "refs/heads/feature": sha("ac"),
+  }) });
+  const mpr = (await GS.itemDetail(mCtx, sha("ad"), "gitmsg/review"))[0];
+  await tick(80);
+  const mSec = findClass(mpr, "diff-section")[0];
+  ok(!!mSec && text(mSec).indexOf("recorded merge range does not resolve") !== -1,
+    "a merged PR with an unresolvable range says so, not that nothing was recorded", text(mSec));
 
   console.log("=== the configuration page ===");
   document.body._cls = new Set();
