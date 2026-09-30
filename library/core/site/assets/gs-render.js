@@ -2786,19 +2786,20 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // BOARD_ITEM_CAP bounds the cards a column cell shows before "show N more".
   const BOARD_ITEM_CAP = 7;
 
-  // boardColumnEl renders one board column with its header, count, WIP and capped cards.
+  // boardColumnEl renders one board column with its header, count, WIP and capped cards; a column with no issues starts collapsed.
   function boardColumnEl(col, issues, state, cellKey, onChange) {
-    const column = el("div", { class: "board-col" + (state.collapsedCols.has(col.name) ? " board-col-collapsed" : "") }, []);
+    const collapsed = state.colCollapsed(col.name, !col.issues.length);
+    const column = el("div", { class: "board-col" + (collapsed ? " board-col-collapsed" : "") }, []);
     const head = el("div", { class: "board-col-head" }, []);
-    const caret = el("button", { class: "board-col-toggle", type: "button", "aria-label": "Collapse column" }, [state.collapsedCols.has(col.name) ? "▸" : "▾"]);
-    caret.addEventListener("click", (e) => { e.stopPropagation(); state.toggleCol(col.name); onChange(); });
+    const caret = el("button", { class: "board-col-toggle", type: "button", "aria-label": collapsed ? "Expand column" : "Collapse column" }, [collapsed ? "▸" : "▾"]);
+    caret.addEventListener("click", (e) => { e.stopPropagation(); state.toggleCol(col.name, !col.issues.length); onChange(); });
     head.append(caret, el("span", { class: "board-col-name" }, [col.name + " " + issues.length + (col.wip ? " / " + col.wip : "")]));
     if (col.wip && issues.length > col.wip) head.append(el("span", { class: "chip board-wip-over" }, ["over WIP"]));
     const hide = el("button", { class: "board-col-hide", type: "button", "aria-label": "Hide column", title: "Hide column" }, ["✕"]);
     hide.addEventListener("click", (e) => { e.stopPropagation(); state.hideCol(col.name); onChange(); });
     head.append(hide);
     column.append(head);
-    if (state.collapsedCols.has(col.name)) return column;
+    if (collapsed) return column;
     if (!issues.length) { column.append(el("div", { class: "board-empty mono" }, ["—"])); return column; }
     const expanded = state.expandedCells.has(cellKey);
     const shown = expanded ? issues : issues.slice(0, BOARD_ITEM_CAP);
@@ -2811,7 +2812,22 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return column;
   }
 
-  // boardGrid renders the visible columns, each from its own issues or the lane subset laneOf gives.
+  // boardScrollBox wraps the column row in a box whose edge fades mark the columns scrolled out of view.
+  function boardScrollBox(grid) {
+    const box = el("div", { class: "board-scroll" }, [grid]);
+    // sync shows a fade only on an edge that clips columns; the first run waits for layout.
+    const sync = () => {
+      const max = (grid.scrollWidth || 0) - (grid.clientWidth || 0);
+      box.classList.toggle("board-clip-left", grid.scrollLeft > 1);
+      box.classList.toggle("board-clip-right", grid.scrollLeft < max - 1);
+    };
+    grid.addEventListener("scroll", sync);
+    if (typeof ResizeObserver !== "undefined") new ResizeObserver(sync).observe(grid);
+    if (typeof setTimeout === "function") setTimeout(sync, 0);
+    return box;
+  }
+
+  // boardGrid renders the visible columns, each from its own issues or the lane subset laneOf gives, in a scroll box.
   function boardGrid(columns, laneOf, state, keyPrefix, onChange) {
     const grid = el("div", { class: "board" }, []);
     for (const col of columns) {
@@ -2819,14 +2835,15 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const issues = laneOf ? (laneOf.get(col.name) || []) : col.issues;
       grid.append(boardColumnEl(col, issues, state, keyPrefix + "\x00" + col.name, onChange));
     }
-    return grid;
+    return boardScrollBox(grid);
   }
 
-  // newBoardState builds the session-only board UI state.
+  // newBoardState builds the session-only board UI state; a reader's column toggle outlives the empty default.
   function newBoardState() {
     const s = {
-      collapsedCols: new Set(), hiddenCols: new Set(), collapsedLanes: new Set(), expandedCells: new Set(),
-      toggleCol: (n) => { s.collapsedCols.has(n) ? s.collapsedCols.delete(n) : s.collapsedCols.add(n); },
+      colChoices: new Map(), hiddenCols: new Set(), collapsedLanes: new Set(), expandedCells: new Set(),
+      colCollapsed: (n, empty) => s.colChoices.has(n) ? s.colChoices.get(n) : empty,
+      toggleCol: (n, empty) => { s.colChoices.set(n, !s.colCollapsed(n, empty)); },
       hideCol: (n) => s.hiddenCols.add(n),
       showCol: (n) => s.hiddenCols.delete(n),
       toggleLane: (l) => { s.collapsedLanes.has(l) ? s.collapsedLanes.delete(l) : s.collapsedLanes.add(l); },

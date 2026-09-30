@@ -207,6 +207,16 @@ function rest() {
   fire(findClass(board, "board-lane-head")[0], "click");
   ok(findClass(board, "board-lane")[0]._cls.has("board-lane-collapsed"), "clicking a lane head collapses it");
 
+  console.log("=== board empty-column default ===");
+  const flat = GS.boardBody(boardIssues, { columns: [{ name: "Open", filter: "state:open" }, { name: "Closed", filter: "state:closed" }, { name: "Blocked", filter: "state:blocked" }] });
+  const flatCols = findClass(flat, "board-col");
+  ok(flatCols[2]._cls.has("board-col-collapsed"), "a column with no issues starts collapsed");
+  ok(!flatCols[0]._cls.has("board-col-collapsed"), "a column with issues starts expanded");
+  fire(findClass(flat, "board-col-toggle")[2], "click");
+  ok(!findClass(flat, "board-col")[2]._cls.has("board-col-collapsed"), "the caret expands a default-collapsed column");
+  fire(findClass(flat, "board-col-toggle")[2], "click");
+  ok(findClass(flat, "board-col")[2]._cls.has("board-col-collapsed"), "the reader's own toggle outlives the empty default");
+
   console.log("=== icons and focus targets ===");
   const goIcon = GS.icon("main.go");
   ok(!!goIcon && goIcon._cls.has("gs-icon"), "a filename resolves to an icon span");

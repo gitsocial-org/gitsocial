@@ -690,12 +690,30 @@
   .chip.chip-review { color: var(--text); }
   .chip.chip-review .review-ok { color: var(--open); font-weight: 600; }
   .chip.chip-review .review-no { color: var(--danger); font-weight: 600; }
-  /* Kanban board: horizontally scrolling columns, each a header + issue cards. */
+  /* Kanban board: horizontally scrolling columns, each a header + issue cards.
+     The row scrolls in its own box inside the fixed shell; the scroll box's
+     edge fades say that more columns sit past a clipped edge. */
   .board { display: flex; gap: var(--sp-4); overflow-x: auto; padding-bottom: var(--sp-3); align-items: flex-start; }
-  .board-col { flex: 0 0 15rem; min-width: 15rem; background: var(--chip); border-radius: var(--r-panel); padding: var(--sp-3); }
+  /* Columns grow from the 15rem floor, so the space a collapsed or hidden
+     column frees goes to the expanded ones instead of staying blank. */
+  .board-col { flex: 1 1 15rem; min-width: 15rem; background: var(--chip); border-radius: var(--r-panel); padding: var(--sp-3); }
   /* A collapsed column shows only its slim header, so it stops taking a full lane
-     of horizontal space while remaining a visible, re-expandable stub. */
+     of horizontal space while remaining a visible, re-expandable stub. A column
+     with no issues starts collapsed (boardColumnEl), so it keeps its place and
+     its count without an empty lane. */
   .board-col.board-col-collapsed { flex: 0 0 auto; min-width: 0; }
+  /* Edge fades on the scroll box, the .home-fade cue turned sideways: a quiet
+     gradient over a clipped edge, toggled from the scroll position in JS. The
+     fades stop above the row's scrollbar gutter. */
+  .board-scroll { position: relative; }
+  .board-scroll::before, .board-scroll::after {
+    content: ""; position: absolute; top: 0; bottom: var(--sp-3); width: var(--sp-6);
+    pointer-events: none; opacity: 0; transition: opacity 0.12s ease;
+  }
+  .board-scroll::before { left: 0; background: linear-gradient(to right, var(--bg), transparent); }
+  .board-scroll::after { right: 0; background: linear-gradient(to left, var(--bg), transparent); }
+  .board-scroll.board-clip-left::before { opacity: 1; }
+  .board-scroll.board-clip-right::after { opacity: 1; }
   .board-col-head { margin-bottom: var(--sp-3); display: flex; align-items: center; gap: var(--sp-2); }
   .board-col-name { flex: 1 1 auto; white-space: nowrap; }
   .board-col-toggle, .board-col-hide { flex: 0 0 auto; line-height: 1; padding: 0 0.1rem; }
