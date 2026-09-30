@@ -1,3 +1,4 @@
+const SHELL = require("./shellrev.js");
 // verify_html_pages.js - the push-generated static HTML page layer on the live
 // fixture (M3-M5): guard-gated generation, item pages with threads inlined,
 // type list pages + chain, the timeline front page (code commits + README),
@@ -51,7 +52,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   // theme gates, page-structural rules) plus the linked pages-full.css, which
   // carries the class vocabulary — so a page rule that exists anywhere else is
   // a rule the app would not agree with.
-  const css = await get(TD + "pages-full.css");
+  const css = await get(TD + SHELL + "pages-full.css");
   ok("pages-full.css is served", css.status === 200);
   ok("pages-full.css carries the class vocabulary the front page's markup needs", /\.card\s*\{/.test(css.text) && /\.card-head\s*\{/.test(css.text) && /\.type-glyph\s*\{/.test(css.text), "len=" + css.text.length);
   // The chip vocabulary is the app's own (.chip.state fills, verdict tints,
@@ -64,15 +65,15 @@ const REPLY_TEXT = "Congrats, this is huge!";
   // sheet — inlined, hence live before pages-full.css lands — carries them.
   ok("the inlined core carries the shared sidebar and home vocabulary", /\.nav-list a/.test(front.text) && /\.nav-icon\s*\{/.test(front.text) && /\.home-row\s*\{/.test(front.text) && /\.home-toggle\s*\{/.test(front.text));
   ok("the inlined core gates dark on the stored-theme class with a media fallback", /html\.dark-mode/.test(front.text) && /@media \(prefers-color-scheme: ?dark\)/.test(front.text) && /html\.light-mode/.test(front.text));
-  ok("front links pages-full.css", /<link rel="stylesheet" href="\.\/pages-full\.css">/.test(front.text));
-  ok("front references gs-upgrade.js (defer)", /<script defer src="\.\/gs-upgrade\.js">/.test(front.text));
+  ok("front links pages-full.css", front.text.includes('<link rel="stylesheet" href="./' + SHELL + 'pages-full.css">'));
+  ok("front references gs-upgrade.js (defer)", front.text.includes('<script defer src="./' + SHELL + 'gs-upgrade.js">'));
   ok("front carries the CSP meta", /Content-Security-Policy/.test(front.text));
   ok("front CSP script-src permits eval (lazy grammar loader)", /script-src[^"]*'unsafe-eval'/.test(front.text));
   ok("front CSP media-src permits blob (inline video)", /media-src[^"]*blob:/.test(front.text));
   ok("front canonical points at the site root", front.text.includes('<link rel="canonical" href="' + cfg.url + '">'));
   ok("front carries no 'open in app' link", !/open in app/.test(front.text));
-  ok("gs-upgrade.js is served", (await get(TD + "gs-upgrade.js")).status === 200);
-  ok("pages-core.css is served", (await get(TD + "pages-core.css")).status === 200);
+  ok("gs-upgrade.js is served", (await get(TD + SHELL + "gs-upgrade.js")).status === 200);
+  ok("pages-core.css is served", (await get(TD + SHELL + "pages-core.css")).status === 200);
 
   console.log("\n--- robots.txt + sitemap.xml ---");
   const robots = await get(TD + "robots.txt");
@@ -94,7 +95,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("every sitemapped item page serves with the mount div", pages.length === itemLocs.length, pages.length + "/" + itemLocs.length);
   ok("sitemap lastmod is W3C dates", /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/.test(sitemap.text));
 
-  ok("every item page references gs-upgrade.js (defer)", pages.every((p) => /<script defer src="\.\.\/gs-upgrade\.js">/.test(p)), "some item page missing the upgrade script");
+  ok("every item page references gs-upgrade.js (defer)", pages.every((p) => p.includes('<script defer src="../' + SHELL + 'gs-upgrade.js">')), "some item page missing the upgrade script");
   ok("no item page carries an 'open in app' link", pages.every((p) => !/open in app/.test(p)), "an item page still links 'open in app'");
   ok("every item page carries the CSP meta", pages.every((p) => /Content-Security-Policy/.test(p)));
   ok("every item page CSP permits eval (lazy grammar loader)", pages.every((p) => /script-src[^"]*'unsafe-eval'/.test(p)));

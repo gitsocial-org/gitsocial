@@ -63,12 +63,25 @@ func TestShellAssetsStoredBrotli(t *testing.T) {
 	if len(names) == 0 {
 		t.Fatal("no embedded site files: the shell assertion would be vacuous")
 	}
+	version, err := siteVersion()
+	if err != nil {
+		t.Fatalf("siteVersion: %v", err)
+	}
+	shellDir := shellDirFor(version)
 	for _, name := range names {
 		raw, err := siteFiles.ReadFile("assets/" + name)
 		if err != nil {
 			t.Fatalf("read embedded %s: %v", name, err)
 		}
-		key := "repo/" + name
+		key := "repo/" + shellDir + name
+		if name == "index.html" {
+			// The flip lives at the root with substituted references, checked by its own test.
+			key = "repo/index.html"
+			raw, err = siteIndexHTML(shellDir)
+			if err != nil {
+				t.Fatalf("siteIndexHTML: %v", err)
+			}
+		}
 		if !siteCompressible(name) {
 			if enc := bucket.EncOf(key); enc != "" {
 				t.Errorf("%s: non-text asset stored with Content-Encoding %q", key, enc)

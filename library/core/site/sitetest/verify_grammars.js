@@ -38,7 +38,7 @@ async function main() {
   // Point the loader at the served fixture and reset any base grammars fetched
   // by a prior module load. init() already set the base to the shim location;
   // set it explicitly to the served fixture for determinism.
-  GS.setGrammarBase(BASE);
+  GS.setGrammarBase(BASE + (window.GS_SHELL || ""));
 
   const P = global.window.Prism;
   ok("prism.js loaded with a base grammar (go) but not python", !!(P && P.languages && P.languages.go) && !P.languages.python, "go=" + !!(P && P.languages && P.languages.go) + " py=" + !!(P && P.languages && P.languages.python));

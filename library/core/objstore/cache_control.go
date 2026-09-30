@@ -23,10 +23,22 @@ const (
 // Cache-Control value it must be stored (and served) with. A writer that seals
 // a key of its own stamps CacheControlImmutable on the upload instead.
 func cacheControlForKey(key string) string {
-	if isLooseObjectKey(key) || isPackKey(key) || isArtifactVersionKey(key) {
+	if isLooseObjectKey(key) || isPackKey(key) || isArtifactVersionKey(key) || isShellRevisionKey(key) {
 		return CacheControlImmutable
 	}
 	return cacheControlRevalidate
+}
+
+// isShellRevisionKey reports whether a key sits under a versioned site shell
+// directory (`.gitsocial/site/shell/<12-hex>/…`), whose content its name seals.
+func isShellRevisionKey(key string) bool {
+	const shellPrefix = ".gitsocial/site/shell/"
+	i := strings.Index(key, shellPrefix)
+	if i < 0 || (i > 0 && key[i-1] != '/') {
+		return false
+	}
+	rev, rest, ok := strings.Cut(key[i+len(shellPrefix):], "/")
+	return ok && rest != "" && len(rev) == 12 && isHexString(rev)
 }
 
 // isPackKey reports whether a key is a packfile or its index

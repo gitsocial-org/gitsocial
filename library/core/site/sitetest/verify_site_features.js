@@ -18,6 +18,7 @@
 //   board columns collapse/hide, swimlanes collapse + lane index, per-cell item cap
 //   board card glyph renders inline with the subject (one title line, not its own row)
 require("./shim.js");
+const SHELL = require("./shellrev.js");
 require("../assets/icons.js");
 const GS = require("../assets/gs-app.js");
 const { viewNode, textOf, setHash } = global.__shim;
@@ -159,9 +160,9 @@ async function main() {
       });
     }).on("error", () => resolve({ status: 0, text: "" }));
   });
-  const py = await get("grammars/prism-python.js");
+  const py = await get(SHELL + "grammars/prism-python.js");
   ok("grammars/prism-python.js is served by the shell", py.status === 200 && /Prism\.languages\.python=/.test(py.text), "status=" + py.status);
-  const cpp = await get("grammars/prism-cpp.js");
+  const cpp = await get(SHELL + "grammars/prism-cpp.js");
   ok("grammars/prism-cpp.js is served (a dependency-chained grammar)", cpp.status === 200 && /extend\("c"/.test(cpp.text), "status=" + cpp.status);
   const gone = await get(".gitsocial/site/prism-extra.js");
   ok("the retired prism-extra.js bundle is not published", gone.status === 404, "status=" + gone.status);

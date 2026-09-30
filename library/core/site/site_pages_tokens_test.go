@@ -158,10 +158,10 @@ func TestSitePagesHeadWiring(t *testing.T) {
 	if strings.Contains(sitePagesCoreCSS, "/*") {
 		t.Error("the inlined core CSS must carry no comments")
 	}
-	if !strings.Contains(html, `<link rel="preload" as="style" href="../pages-full.css" onload="this.onload=null;this.rel='stylesheet'">`) {
+	if !strings.Contains(html, `<link rel="preload" as="style" href="../`+sitePagesShellDir+`pages-full.css" onload="this.onload=null;this.rel='stylesheet'">`) {
 		t.Error("head must async-load pages-full.css (preload + onload flip) relative to the page's base")
 	}
-	if !strings.Contains(html, `<noscript><link rel="stylesheet" href="../pages-full.css"></noscript>`) {
+	if !strings.Contains(html, `<noscript><link rel="stylesheet" href="../`+sitePagesShellDir+`pages-full.css"></noscript>`) {
 		t.Error("head must carry the no-JS blocking fallback link for pages-full.css")
 	}
 }

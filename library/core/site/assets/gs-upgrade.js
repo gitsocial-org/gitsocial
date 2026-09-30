@@ -199,6 +199,9 @@
     });
   }
 
+  // shellURL joins the served base, the versioned shell directory the page announces, and one asset name.
+  function shellURL(base, name) { return base + (window.GS_SHELL || "") + name; }
+
   // preloadScript warms gs-app.js into the cache without running it, since executing it auto-runs init().
   function preloadScript(src) {
     try {
@@ -358,19 +361,19 @@
     try { entryHref = window.location.href; } catch (e) { entryHref = null; }
     var giveUp = (typeof setTimeout === "function") ? setTimeout(restoreStatic, BOOT_MAX_MS) : null;
     var shellLoad = Promise.all([
-      loadScript(base + "icons.js").catch(function (e) { /* icons optional */ }),
-      loadScript(base + "gs-core.js"),
-      loadScript(base + "gs-render.js"),
+      loadScript(shellURL(base, "icons.js")).catch(function (e) { /* icons optional */ }),
+      loadScript(shellURL(base, "gs-core.js")),
+      loadScript(shellURL(base, "gs-render.js")),
     ]);
-    var cssLoad = loadStylesheet(base + "pages-full.css", "not all");
+    var cssLoad = loadStylesheet(shellURL(base, "pages-full.css"), "not all");
     cssLoad.catch(function (e) { /* delivered at the await below */ });
     // A page without the inlined data-gs-core base predates the core/full split, so the core sheet is fetched alongside.
     var coreLoad = null;
     try {
-      if (!document.querySelector("style[data-gs-core]")) coreLoad = loadStylesheet(base + "pages-core.css", "not all");
+      if (!document.querySelector("style[data-gs-core]")) coreLoad = loadStylesheet(shellURL(base, "pages-core.css"), "not all");
     } catch (e) { /* shimmed DOM — the inlined core is the normal case */ }
     if (coreLoad) coreLoad.catch(function (e) { /* delivered at the await below */ });
-    preloadScript(base + "gs-app.js");
+    preloadScript(shellURL(base, "gs-app.js"));
     await shellLoad;
     // Resolve the entry now: entryFor asks gs-core's parseRoute, which exists only once the batch above has run.
     var route = entryFor().route;
@@ -436,7 +439,7 @@
       try { history.replaceState(null, "", "#" + route); } catch (e) { window.location.hash = route; }
     }
     // gs-app.js loads last and auto-runs init(), so the chrome must be staged and the route seeded first.
-    await loadScript(base + "gs-app.js");
+    await loadScript(shellURL(base, "gs-app.js"));
     if (giveUp !== null) { try { clearTimeout(giveUp); } catch (e) { /* no clearTimeout */ } }
     if (typeof setTimeout === "function") setTimeout(restoreStatic, APP_MAX_MS);
     // Wire the URL reflection after gs-app: hashchange listeners fire in registration order, and the app must read the hash first.

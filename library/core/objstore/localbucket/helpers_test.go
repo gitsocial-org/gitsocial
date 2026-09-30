@@ -365,3 +365,16 @@ func handle(w http.ResponseWriter, r *http.Request) { tb.handle(w, r) }
 // diskPath and withinRoot mirror the bucket methods for the helper tests.
 func diskPath(key string) string  { return tb.diskPath(key) }
 func withinRoot(path string) bool { return tb.withinRoot(path) }
+
+// TestCacheControlFor_shellRevision mirrors the objstore classifier: a versioned shell directory serves immutable.
+func TestCacheControlFor_shellRevision(t *testing.T) {
+	if got := cacheControlFor("repo/.gitsocial/site/shell/d829ec79861d/gs-app.js"); got != "public, max-age=31536000, immutable" {
+		t.Errorf("shell revision key = %q, want immutable", got)
+	}
+	if got := cacheControlFor("repo/gs-app.js"); got != "no-cache" {
+		t.Errorf("root shell key = %q, want no-cache", got)
+	}
+	if got := cacheControlFor("repo/.gitsocial/site/shell/nothex/gs-app.js"); got != "no-cache" {
+		t.Errorf("non-hex shell dir = %q, want no-cache", got)
+	}
+}

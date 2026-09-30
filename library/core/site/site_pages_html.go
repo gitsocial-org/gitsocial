@@ -145,9 +145,10 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <style data-gs-core>@CORE@</style>
 {{if .AccentCSS}}<style data-gs-core>{{.AccentCSS}}</style>
 {{end}}@BOOT@
-<link rel="preload" as="style" href="{{.Base}}pages-full.css" onload="this.onload=null;this.rel='stylesheet'">
-<noscript><link rel="stylesheet" href="{{.Base}}pages-full.css"></noscript>
-<script defer src="{{.Base}}gs-upgrade.js"></script>
+<link rel="preload" as="style" href="{{.Base}}{{shellDir}}pages-full.css" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="{{.Base}}{{shellDir}}pages-full.css"></noscript>
+{{shellTag}}
+<script defer src="{{.Base}}{{shellDir}}gs-upgrade.js"></script>
 </head>
 <body>
 <div id="gs-page" data-base="{{.Base}}">
@@ -211,7 +212,27 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{template "foot"}}{{end}}`
 
 // sitePageTemplates is the parsed page template set, with the core CSS and the boot script spliced in.
-var sitePageTemplates = template.Must(template.New("pages").Parse(
+// sitePagesShellDir is the versioned shell directory this binary's pages reference, fixed per build like the inlined core CSS.
+var sitePagesShellDir = sitePagesReadShellDir()
+
+// sitePagesReadShellDir derives the shell directory from the embedded assets; a broken embed panics at init, like the core CSS read.
+func sitePagesReadShellDir() string {
+	version, err := siteVersion()
+	if err != nil {
+		panic("site: hash embedded assets for the pages' shell dir: " + err.Error())
+	}
+	return shellDirFor(version)
+}
+
+// sitePagesShellScript announces the shell directory to the boot scripts; a
+// prebuilt tag, so the JS escaper cannot respell the path and every consumer
+// sees the same bytes.
+var sitePagesShellScript = template.HTML(`<script>window.GS_SHELL="` + sitePagesShellDir + `";</script>`)
+
+var sitePageTemplates = template.Must(template.New("pages").Funcs(template.FuncMap{
+	"shellDir": func() string { return sitePagesShellDir },
+	"shellTag": func() template.HTML { return sitePagesShellScript },
+}).Parse(
 	strings.NewReplacer("@CORE@", sitePagesCoreCSS, "@BOOT@", sitePagesBootScript).Replace(sitePageTemplateText)))
 
 // sitePagesShellIconRe pulls the <link rel="icon"> href out of the shell.

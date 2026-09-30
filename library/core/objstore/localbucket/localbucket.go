@@ -175,6 +175,12 @@ func cacheControlFor(key string) string {
 			return "public, max-age=31536000, immutable"
 		}
 	}
+	if i := strings.Index(key, ".gitsocial/site/shell/"); i >= 0 && (i == 0 || key[i-1] == '/') {
+		rev, rest, ok := strings.Cut(key[i+len(".gitsocial/site/shell/"):], "/")
+		if ok && rest != "" && len(rev) == 12 && isHex(rev) {
+			return "public, max-age=31536000, immutable"
+		}
+	}
 	if isDigits(strings.TrimSuffix(file, ".html")) && strings.HasSuffix(file, ".html") {
 		dir := key[:strings.LastIndexByte(key, '/')+1]
 		for _, d := range []string{"issues/", "prs/", "posts/", "releases/", "memos/"} {

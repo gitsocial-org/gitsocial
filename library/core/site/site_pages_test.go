@@ -219,13 +219,13 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 		t.Error("pages on: index.html must be the generated front page")
 	}
 	front := getKey(t, client, "index.html")
-	if !strings.Contains(front, `src="./gs-upgrade.js"`) {
+	if !strings.Contains(front, `src="./`+sitePagesShellDir+`gs-upgrade.js"`) {
 		t.Error("pages on: front page must reference gs-upgrade.js")
 	}
 	if strings.Contains(front, "open in app") {
 		t.Error("pages on: front page must not carry an 'open in app' link")
 	}
-	for _, key := range []string{sitePagesManifestKey, "pages-core.css", "pages-full.css", sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey, sitePagesUpgradeKey, "posts/index.html", "issues/index.html", "posts/feed.xml", "issues/feed.xml"} {
+	for _, key := range []string{sitePagesManifestKey, sitePagesShellDir + "pages-core.css", sitePagesShellDir + "pages-full.css", sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey, sitePagesShellDir + sitePagesUpgradeKey, "posts/index.html", "issues/index.html", "posts/feed.xml", "issues/feed.xml"} {
 		if !keyExists(client, key) {
 			t.Errorf("pages on: %s must exist", key)
 		}
@@ -412,6 +412,8 @@ func TestSitePages_HostileEscaping(t *testing.T) {
 		// upgrade tag has attributes). What this check is for is a script tag
 		// CONSTRUCTED from hostile input.
 		page := strings.Replace(getKey(t, client, key), sitePagesBootScript, "", 1)
+		// The shell announce tag is the same kind of constant: strip it before the hostile scan.
+		page = strings.Replace(page, string(sitePagesShellScript), "", 1)
 		if strings.Contains(page, "<script>") || strings.Contains(page, "</title><") {
 			t.Errorf("%s carries unescaped hostile input", key)
 		}

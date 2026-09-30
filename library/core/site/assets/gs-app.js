@@ -80,7 +80,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     // Point the grammar loader at this session's bucket base (idempotent), so a
     // caller that drives route() directly (headless tests) still lazy-loads
     // grammars from the right place without going through init().
-    if (ctx && ctx.base) setGrammarBase(ctx.base);
+    if (ctx && ctx.base) setGrammarBase(ctx.base + (window.GS_SHELL || ""));
     // Capture the hash NOW: on an upgraded page, gs-upgrade's syncURL rewrites
     // the URL to a clean (hashless) page URL right after this handler's
     // synchronous prefix, so location.hash is unreliable after the first await.
@@ -408,7 +408,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     const ctx = newContext(deriveBase(location));
     // Grammar files are fetched relative to the bucket base, so tell the render
     // layer where the site is served from before any code block is highlighted.
-    setGrammarBase(ctx.base);
+    setGrammarBase(ctx.base + (window.GS_SHELL || ""));
     const name = repoTitle(ctx.base);
     // The document/tab title names the browsed project, not the static "gitsocial"
     // shell placeholder — derived from the same served-directory name as the chrome.

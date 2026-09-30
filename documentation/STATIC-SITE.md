@@ -122,7 +122,8 @@ The pages are at the prefix root, next to the shell; the cache classes are in [S
 
 | Key | Content | Cache |
 |---|---|---|
-| `index.html` | front page while the page layer is on, otherwise the shell | no-cache |
+| `index.html` | front page while the page layer is on, otherwise the shell; its asset references carry the shell revision | no-cache |
+| `.gitsocial/site/shell/<rev>/` | the shell assets of one binary version; the current and previous revisions are kept, older ones swept on a shell change | immutable |
 | `i/<short>.html` | one page per top-level item | no-cache |
 | `issues/`, `prs/`, `posts/`, `releases/`, `memos/` | `index.html` head plus full `<n>.html` pages | head no-cache, full pages immutable |
 | `commits/index.html`, `commits/<n>.html` | the default-branch commit list | no-cache |

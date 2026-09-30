@@ -190,9 +190,14 @@ func sitePageSiteFor(cfg SiteCustomization, base string) sitePageSite {
 	return site
 }
 
-// sitePageSiteHash fingerprints the site identity baked into every page; a change regenerates the page layer.
+// sitePageSiteHash fingerprints the site identity baked into every page; a change, the shell revision included, regenerates the page layer.
 func sitePageSiteHash(site sitePageSite) string {
-	h := sha256.Sum256([]byte(site.Title + "\x00" + site.URL + "\x00" + site.Description + "\x00" + site.Image + "\x00" + site.Favicon + "\x00" + string(site.AccentCSS)))
+	return sitePageSiteHashWith(site, sitePagesShellDir)
+}
+
+// sitePageSiteHashWith is sitePageSiteHash over an explicit shell dir, the seam its test varies.
+func sitePageSiteHashWith(site sitePageSite, shellDir string) string {
+	h := sha256.Sum256([]byte(site.Title + "\x00" + site.URL + "\x00" + site.Description + "\x00" + site.Image + "\x00" + site.Favicon + "\x00" + string(site.AccentCSS) + "\x00" + shellDir))
 	return hex.EncodeToString(h[:])[:12]
 }
 

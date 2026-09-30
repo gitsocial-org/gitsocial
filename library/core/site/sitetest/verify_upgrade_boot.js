@@ -37,6 +37,8 @@ global.fetch = (url, opts) => { if (/\/prism\.js(?:\?|$)/.test(String(url))) pri
 require("../assets/icons.js");
 const GS = require("../assets/gs-app.js");
 const UP = require("../assets/gs-upgrade.js");
+const SHELL = require("./shellrev.js");
+const SHELL_RE = SHELL.replace(/[.\/]/g, "\\$&");
 const { setHash } = global.__shim;
 const origin = process.env.GS_SITE_ORIGIN || "http://localhost:8000";
 const TD = process.env.GS_SITE_BUCKET || "thread-demo";
@@ -563,7 +565,7 @@ async function main() {
   console.log("\n--- Served pages carry the boot hooks ---");
   const front = await get(base + "index.html");
   ok("front page served", front.status === 200);
-  ok("front carries gs-route + data-base + upgrade script", /name="gs-route" content="\/"/.test(front.text) && /data-base="\.\/"/.test(front.text) && /<script defer src="\.\/gs-upgrade\.js">/.test(front.text));
+  ok("front carries gs-route + data-base + upgrade script", /name="gs-route" content="\/"/.test(front.text) && /data-base="\.\/"/.test(front.text) && new RegExp('<script defer src="\\./' + SHELL_RE + 'gs-upgrade\\.js">').test(front.text));
 
   console.log("\n--- The hide is JS-gated: the served document is never hidden ---");
   // A page hidden in the markup or by an unconditional CSS rule, then revealed by
@@ -627,7 +629,7 @@ async function main() {
   // or a cleanup there would turn the split reveal into a slot that fills in
   // while the visitor watches, with nothing failing. Pin the pair together.
   {
-    const css = await get(base + "pages-full.css");
+    const css = await get(base + SHELL + "pages-full.css");
     ok("pages-full.css served", css.status === 200);
     ok("the class hides whatever the app rendered into the slot", /html\.gs-loading\s+#view\s*>\s*\*\s*\{[^}]*display:\s*none/.test(css.text), "css=" + css.text.slice(0, 120));
     ok("and paints the same loading treatment in its place", /html\.gs-loading\s+#view::before\s*\{[^}]*content:\s*"Loading…"/.test(css.text), "css=" + css.text.slice(0, 120));
@@ -643,7 +645,7 @@ async function main() {
     // impossible: the page's head inlines pages-core.css — the very file the
     // shell links — so there is no second copy of the tokens to drift. Assert
     // the construction, not the numbers.
-    const coreCSS = await get(base + "pages-core.css");
+    const coreCSS = await get(base + SHELL + "pages-core.css");
     ok("pages-core.css served", coreCSS.status === 200);
     const stripComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "");
     const styleStart = front.text.indexOf("<style data-gs-core>");
@@ -678,7 +680,7 @@ async function main() {
   const short = issue.commit.short;
   const itemPage = await get(base + "i/" + short + ".html");
   ok("item page served + readable without JS", itemPage.status === 200 && /<h1 class="subject">/.test(itemPage.text));
-  ok("item page carries gs-route (item) + data-base(../) + upgrade script", new RegExp('name="gs-route" content="commit:' + short + '@gitmsg/pm"').test(itemPage.text) && /data-base="\.\.\/"/.test(itemPage.text) && /<script defer src="\.\.\/gs-upgrade\.js">/.test(itemPage.text));
+  ok("item page carries gs-route (item) + data-base(../) + upgrade script", new RegExp('name="gs-route" content="commit:' + short + '@gitmsg/pm"').test(itemPage.text) && /data-base="\.\.\/"/.test(itemPage.text) && new RegExp('<script defer src="\\.\\./' + SHELL_RE + 'gs-upgrade\\.js">').test(itemPage.text));
 
   console.log("\n--- A page entry boots the app onto its route ---");
   // Front page: meta route / → the app renders the home (README) view.
@@ -693,7 +695,7 @@ async function main() {
   // the document a crawler read is the document the boot opens.
   const filePage = await get(base + "f/notes.html");
   ok("file page served + readable without JS", filePage.status === 200 && /<pre>/.test(filePage.text));
-  ok("file page carries gs-route (file) + data-base(../) + upgrade script", /name="gs-route" content="file:notes\.txt@main"/.test(filePage.text) && /data-base="\.\.\/"/.test(filePage.text) && /<script defer src="\.\.\/gs-upgrade\.js">/.test(filePage.text));
+  ok("file page carries gs-route (file) + data-base(../) + upgrade script", /name="gs-route" content="file:notes\.txt@main"/.test(filePage.text) && /data-base="\.\.\/"/.test(filePage.text) && new RegExp('<script defer src="\\.\\./' + SHELL_RE + 'gs-upgrade\\.js">').test(filePage.text));
   const fileView = await bootLike(base, "file:notes.txt@main", null);
   ok("file-page meta route boots the app's file view", fileView.length > 0 && !/not found/i.test(fileView), "view=" + fileView.slice(0, 80));
 
@@ -758,7 +760,7 @@ async function main() {
   {
     const page = await get(base + "commits/index.html");
     ok("commits/index.html served + readable without JS", page.status === 200 && /<h1>Commits<\/h1>/.test(page.text));
-    ok("commits page carries gs-route(/commits) + data-base(../) + upgrade script", /name="gs-route" content="\/commits"/.test(page.text) && /data-base="\.\.\/"/.test(page.text) && /<script defer src="\.\.\/gs-upgrade\.js">/.test(page.text));
+    ok("commits page carries gs-route(/commits) + data-base(../) + upgrade script", /name="gs-route" content="\/commits"/.test(page.text) && /data-base="\.\.\/"/.test(page.text) && new RegExp('<script defer src="\\.\\./' + SHELL_RE + 'gs-upgrade\\.js">').test(page.text));
     // The row leads with the commit glyph, the same one the app's code card paints.
     const rows = [...page.text.matchAll(/<div class="card" id="(c-[0-9a-f]{12})"><div class="card-head"><span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="([^"]+)">([\s\S]*?)<\/a><\/div>\s*<span class="meta">([\s\S]*?)<\/span><\/div>/g)]
       .map((m) => ({ id: m[1], href: m[2], subject: unesc(m[3]), meta: unesc(m[4].replace(/<[^>]*>/g, "")) }));

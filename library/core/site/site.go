@@ -26,7 +26,19 @@ const (
 	siteVersionKey = ".gitsocial/site/version"
 	// siteStatsKey holds push-computed counts the analytics page reads.
 	siteStatsKey = ".gitsocial/site/stats.json"
+	// siteShellPrefix roots the versioned, immutable shell directories.
+	siteShellPrefix = ".gitsocial/site/shell/"
+	// siteShellPrevKey records the outgoing shell revision across a version change, so an interrupted sweep retries on later passes.
+	siteShellPrevKey = ".gitsocial/site/shellprev"
 )
+
+// shellDirFor returns the versioned shell directory a site version's assets live under.
+func shellDirFor(version string) string {
+	if len(version) > 12 {
+		version = version[:12]
+	}
+	return siteShellPrefix + version + "/"
+}
 
 // siteFileNames lists the embedded site files in upload order, relative to site/, walking subdirectories.
 func siteFileNames() ([]string, error) {
@@ -107,42 +119,139 @@ func putSiteAsset(client *objstore.Client, key, name string, data []byte) error 
 	return nil
 }
 
-// uploadShellFile puts one embedded site file (by its site/-relative name).
-func uploadShellFile(client *objstore.Client, prefix, name string) error {
+// uploadShellFile puts one embedded site file into the versioned shell directory.
+func uploadShellFile(client *objstore.Client, prefix, shellDir, name string) error {
 	data, err := siteFiles.ReadFile("assets/" + name)
 	if err != nil {
 		return fmt.Errorf("read embedded %s: %w", name, err)
 	}
-	return putSiteAsset(client, prefix+name, name, data)
+	return putSiteAsset(client, prefix+shellDir+name, name, data)
 }
 
-// uploadShellIndexHTML puts the embedded shell index.html, the flip back on the pages-disable path.
+// siteIndexHTML returns the embedded index.html with its asset references
+// pointed into the versioned shell directory and the directory announced to
+// the scripts. Every substitution must land, or the embedded source drifted.
+func siteIndexHTML(shellDir string) ([]byte, error) {
+	data, err := siteFiles.ReadFile("assets/index.html")
+	if err != nil {
+		return nil, fmt.Errorf("read embedded index.html: %w", err)
+	}
+	html := string(data)
+	subs := [][2]string{
+		{`<link rel="stylesheet" href="pages-core.css">`, `<link rel="stylesheet" href="` + shellDir + `pages-core.css">`},
+		{`<link rel="stylesheet" href="pages-full.css">`, `<link rel="stylesheet" href="` + shellDir + `pages-full.css">`},
+		{`<script src="icons.js">`, `<script>window.GS_SHELL="` + shellDir + `";</script>` + "\n" + `<script src="` + shellDir + `icons.js">`},
+		{`<script src="gs-core.js">`, `<script src="` + shellDir + `gs-core.js">`},
+		{`<script src="gs-render.js">`, `<script src="` + shellDir + `gs-render.js">`},
+		{`<script src="gs-app.js">`, `<script src="` + shellDir + `gs-app.js">`},
+	}
+	for _, s := range subs {
+		if strings.Count(html, s[0]) != 1 {
+			return nil, fmt.Errorf("index.html reference %q found %d times, want one", s[0], strings.Count(html, s[0]))
+		}
+		html = strings.Replace(html, s[0], s[1], 1)
+	}
+	return []byte(html), nil
+}
+
+// uploadShellIndexHTML puts the shell index.html with versioned references, the flip on every shell upload and on the pages-disable path.
 func uploadShellIndexHTML(client *objstore.Client, prefix string) error {
-	return uploadShellFile(client, prefix, "index.html")
+	version, err := siteVersion()
+	if err != nil {
+		return err
+	}
+	html, err := siteIndexHTML(shellDirFor(version))
+	if err != nil {
+		return err
+	}
+	return putSiteAsset(client, prefix+"index.html", "index.html", html)
 }
 
-// uploadSiteFiles puts every embedded site file plus the version marker.
+// uploadSiteFiles puts every embedded site file into the versioned shell
+// directory, flips index.html to reference it, writes the version marker and
+// sweeps the revision before the previous one. The order is the guarantee: a
+// reader never sees a reference before its target exists.
 func uploadSiteFiles(client *objstore.Client, prefix string) error {
 	names, err := siteFileNames()
 	if err != nil {
 		return err
 	}
-	// The shell is dozens of small files, each a round trip, so they upload through the pool.
-	if err := objstore.FirstError(objstore.RunParallel(len(names), func(i int) error {
-		return uploadShellFile(client, prefix, names[i])
-	})); err != nil {
-		return err
-	}
-	// Sweep the retired grammar bundle so a bucket pushed by an earlier binary stays tidy.
-	_ = client.Delete(prefix + obsoletePrismExtraKey)
 	version, err := siteVersion()
 	if err != nil {
 		return err
 	}
+	shellDir := shellDirFor(version)
+	previous, _ := client.Get(prefix + siteVersionKey)
+	// The shell is dozens of small files, each a round trip, so they upload through the pool.
+	if err := objstore.FirstError(objstore.RunParallel(len(names), func(i int) error {
+		if names[i] == "index.html" {
+			return nil // the flip below, after every target exists
+		}
+		return uploadShellFile(client, prefix, shellDir, names[i])
+	})); err != nil {
+		return err
+	}
+	if err := uploadShellIndexHTML(client, prefix); err != nil {
+		return err
+	}
+	// Sweep the retired grammar bundle so a bucket pushed by an earlier binary stays tidy.
+	_ = client.Delete(prefix + obsoletePrismExtraKey)
+	// The outgoing revision is recorded before the marker moves, so a crash
+	// between the two leaves a retriable state, never an uncollectable one.
+	if prev := strings.TrimSpace(string(previous)); prev != "" && prev != version {
+		if err := client.Put(prefix+siteShellPrevKey, []byte(shellDirFor(prev)+"\n")); err != nil {
+			return fmt.Errorf("write shell prev marker: %w", err)
+		}
+	}
 	if err := client.Put(prefix+siteVersionKey, []byte(version+"\n")); err != nil {
 		return fmt.Errorf("write site version: %w", err)
 	}
+	sweepShellRevisions(client, prefix, names, shellDir)
 	return nil
+}
+
+// sweepShellRevisions removes shell directories outside the kept pair, and the
+// root-level copies once the previous revision is itself a shell directory:
+// pages a pre-versioning binary generated reference the root names until the
+// budgeted regeneration finishes, so the first transition keeps them as grace.
+// It runs on every shell upload from the durable prev marker, so a failed or
+// interrupted sweep retries on the next pass instead of leaving orphans.
+func sweepShellRevisions(client *objstore.Client, prefix string, names []string, keepCurrent string) {
+	prev, err := client.Get(prefix + siteShellPrevKey)
+	if err != nil && !errors.Is(err, objstore.ErrNotFound) {
+		return // transient: the next pass retries
+	}
+	keepPrevious := strings.TrimSpace(string(prev))
+	keys, err := client.List(prefix + siteShellPrefix)
+	if err != nil {
+		return
+	}
+	previousExists := false
+	for _, key := range keys {
+		rel := strings.TrimPrefix(key, prefix)
+		rev, _, ok := strings.Cut(strings.TrimPrefix(rel, siteShellPrefix), "/")
+		if !ok {
+			continue
+		}
+		if dir := siteShellPrefix + rev + "/"; dir == keepPrevious {
+			previousExists = true
+		} else if dir != keepCurrent {
+			_ = client.Delete(key)
+		}
+	}
+	if keepPrevious == "" || !previousExists {
+		return
+	}
+	// One probe gates the root sweep, so a clean bucket costs a HEAD, not deletes.
+	if _, _, err := client.HeadObject(prefix + "gs-app.js"); err != nil {
+		return
+	}
+	// The root-level copies an earlier binary served; index.html stays, it is the flip itself.
+	for _, name := range names {
+		if name != "index.html" {
+			_ = client.Delete(prefix + name)
+		}
+	}
 }
 
 // obsoletePrismExtraKey is the retired extra-grammars bundle, swept on every shell upload.
