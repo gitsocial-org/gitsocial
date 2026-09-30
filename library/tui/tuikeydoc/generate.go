@@ -186,5 +186,5 @@ func writeConfirmationDialogs(b *strings.Builder) {
 	b.WriteString("- `y` / `Y` - Confirm action\n")
 	b.WriteString("- `n` / `N` / `esc` - Cancel\n\n")
 	b.WriteString("All confirmations use the shared `ConfirmDialog` component.\n\n")
-	b.WriteString("`p` reaches every default push remote. Its confirm names each one; a remote picker comes first only when several s3 remotes exist and none is configured.\n")
+	b.WriteString("`p` reaches every default push remote. Its confirm leads with how the list was resolved and names each target; `a` on it re-targets to every configured remote and confirms again before pushing. A remote picker comes first only when several s3 remotes exist and none is configured.\n")
 }

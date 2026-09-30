@@ -13,9 +13,9 @@ func TestBuildPushConfirmPrompt_NamesRemoteAndHost(t *testing.T) {
 		Branches: []gitmsg.BranchPushCount{{Branch: "gitmsg/social", Commits: 3}},
 		Refs:     2,
 	}
-	got := buildPushConfirmPrompt(p, []string{pushTargetLabel("r2", "s3://acct.r2.cloudflarestorage.com/bucket")})
-	if !strings.Contains(got, "Push to r2 (acct.r2.cloudflarestorage.com)") {
-		t.Errorf("prompt missing remote/host: %q", got)
+	got := buildPushConfirmPrompt(p, []string{pushTargetLabel("r2", "s3://acct.r2.cloudflarestorage.com/bucket")}, "configured")
+	if !strings.Contains(got, "Push to [configured] r2 (acct.r2.cloudflarestorage.com)") {
+		t.Errorf("prompt missing remote/host/source: %q", got)
 	}
 	if !strings.Contains(got, "3 social") || !strings.Contains(got, "2 refs") {
 		t.Errorf("prompt missing counts: %q", got)
@@ -26,21 +26,21 @@ func TestBuildPushConfirmPrompt_NamesRemoteAndHost(t *testing.T) {
 }
 
 func TestBuildPushConfirmPrompt_EmptyPreviewStillOffers(t *testing.T) {
-	got := buildPushConfirmPrompt(&gitmsg.PushPreview{}, []string{pushTargetLabel("origin", "https://github.com/user/repo")})
+	got := buildPushConfirmPrompt(&gitmsg.PushPreview{}, []string{pushTargetLabel("origin", "https://github.com/user/repo")}, "origin")
 	if strings.Contains(got, "Nothing to push") {
 		t.Errorf("empty preview must still offer a push, got %q", got)
 	}
 	if !strings.Contains(got, "no counted changes; tags checked at push") {
 		t.Errorf("empty prompt missing the no-counts note: %q", got)
 	}
-	if !strings.Contains(got, "Push to origin") {
+	if !strings.Contains(got, "Push to [origin] origin") {
 		t.Errorf("empty prompt should still name remote: %q", got)
 	}
 }
 
 func TestBuildPushConfirmPrompt_CodeBranchesNamed(t *testing.T) {
 	p := &gitmsg.PushPreview{Code: []gitmsg.BranchPushCount{{Branch: "feature/x", Commits: 2}}}
-	got := buildPushConfirmPrompt(p, []string{pushTargetLabel("origin", "")})
+	got := buildPushConfirmPrompt(p, []string{pushTargetLabel("origin", "")}, "")
 	if !strings.Contains(got, "code: feature/x (2)") {
 		t.Errorf("prompt missing code branch: %q", got)
 	}
@@ -89,9 +89,9 @@ func TestBuildPushConfirmPrompt_NamesEveryRemote(t *testing.T) {
 	got := buildPushConfirmPrompt(p, []string{
 		pushTargetLabel("r2", "s3://acct.r2.cloudflarestorage.com/bucket"),
 		pushTargetLabel("backup", "s3://s3.example.com/bucket"),
-	})
-	if !strings.Contains(got, "Push to r2 (acct.r2.cloudflarestorage.com), backup (s3.example.com)") {
-		t.Errorf("prompt should name both remotes in order: %q", got)
+	}, "all remotes")
+	if !strings.Contains(got, "Push to [all remotes] r2 (acct.r2.cloudflarestorage.com), backup (s3.example.com)") {
+		t.Errorf("prompt should name both remotes in order with the source: %q", got)
 	}
 }
 

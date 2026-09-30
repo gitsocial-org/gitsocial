@@ -243,7 +243,7 @@ func TestSequence(t *testing.T) {
 		h.NavigateTo(tuicore.LocConfig("social"))
 		h.SendKey("p")
 		out := rendered(h)
-		assertContains(t, out, "Push to origin")
+		assertContains(t, out, "Push to [origin] origin")
 		assertContains(t, out, "tags checked at push")
 		h.SendKey("n") // dismiss
 	})
@@ -260,10 +260,60 @@ func TestSequence(t *testing.T) {
 		pair.NavigateTo(tuicore.LocConfig("social"))
 		pair.SendKey("p")
 		out := rendered(pair)
-		assertContains(t, out, "Push to r2 (r2.example.com), origin (github.com)")
+		assertContains(t, out, "Push to [configured] r2 (r2.example.com), origin (github.com)")
 		if strings.Contains(stripANSI(out), "Push to which remote?") {
 			t.Errorf("a configured pair must not show the picker:\n%s", out)
 		}
 		pair.SendKey("n") // dismiss
+	})
+	// PushConfirmAllRemotes: `a` re-targets the confirm to every configured
+	// remote, an unconfigured one included, and nothing pushes before the
+	// re-rendered confirm's own yes; a second `a` there is absorbed.
+	t.Run("PushConfirmAllRemotes", func(t *testing.T) {
+		workdir := CloneFixture(t, f.Workdir)
+		for _, r := range [][2]string{{"r2", "s3://r2.example.com/bucket/repo"}, {"backup", "s3://backup.example.com/bucket/repo"}} {
+			if _, err := git.ExecGit(workdir, []string{"remote", "add", r[0], r[1]}); err != nil {
+				t.Fatalf("add %s: %v", r[0], err)
+			}
+		}
+		// Only r2 is configured; backup joins through `a` alone.
+		if err := git.SetConfiguredPushRemotes(workdir, []string{"r2"}); err != nil {
+			t.Fatalf("SetConfiguredPushRemotes: %v", err)
+		}
+		all := New(t, workdir, f.CacheDir)
+		// Wide enough that the three-target prompt is not clipped by the footer.
+		all.SetSize(220, 40)
+		all.NavigateTo(tuicore.LocConfig("social"))
+		all.SendKey("p")
+		out := rendered(all)
+		assertContains(t, out, "Push to [configured] r2 (r2.example.com)")
+		if strings.Contains(stripANSI(out), "backup") {
+			t.Errorf("the default confirm must cover the resolved list alone:\n%s", out)
+		}
+		all.SendKey("a")
+		out = rendered(all)
+		assertContains(t, out, "[all remotes]")
+		for _, name := range []string{"backup (backup.example.com)", "origin (github.com)", "r2 (r2.example.com)"} {
+			assertContains(t, out, name)
+		}
+		all.SendKey("a") // absorbed on the all-remotes confirm
+		out = rendered(all)
+		assertContains(t, out, "[all remotes]")
+		all.SendKey("n") // dismiss without pushing
+	})
+	// PushRemoteless: with no remotes at all, p reports and opens no confirm.
+	t.Run("PushRemoteless", func(t *testing.T) {
+		workdir := CloneFixture(t, f.Workdir)
+		if _, err := git.ExecGit(workdir, []string{"remote", "remove", "origin"}); err != nil {
+			t.Fatalf("remove origin: %v", err)
+		}
+		lone := New(t, workdir, f.CacheDir)
+		lone.NavigateTo(tuicore.LocConfig("social"))
+		lone.SendKey("p")
+		out := stripANSI(rendered(lone))
+		if strings.Contains(out, "Push to ") {
+			t.Errorf("a remoteless workspace must not open the push confirm:\n%s", out)
+		}
+		assertContains(t, rendered(lone), "Push:")
 	})
 }

@@ -620,6 +620,9 @@ func (m *Model) handleImportMsg(msg tea.Msg) (bool, tea.Cmd) {
 	case importCountedMsg:
 		return true, m.handleImportCounted(msg)
 
+	case pushAllRemotesMsg:
+		return true, m.showPushAllRemotesConfirm()
+
 	case startImportMsg:
 		if m.isImporting || m.isFetching {
 			return true, nil
@@ -1098,7 +1101,7 @@ func (m *Model) buildHandlerContext() *tuicore.HandlerContext {
 			if resolution == git.PushAmbiguous {
 				return m.showPushRemotePicker(git.S3Remotes(m.workdir), remotes[0], false)
 			}
-			return m.showPushConfirm(remotes)
+			return m.showPushConfirm(remotes, string(resolution), false)
 		},
 		StartLFSPush: func() tea.Cmd {
 			if m.isPushing || m.isFetching {
@@ -1277,7 +1280,7 @@ func (m *Model) showPushRemotePicker(s3 []string, defaultRemote string, persist 
 		m.host.State().ChoicePrompt = ""
 		switch key {
 		case "enter":
-			return m.showPushConfirm([]string{defaultRemote})
+			return m.showPushConfirm([]string{defaultRemote}, "picked", false)
 		case "D":
 			return m.showPushRemotePicker(s3, defaultRemote, true)
 		}
@@ -1291,14 +1294,16 @@ func (m *Model) showPushRemotePicker(s3 []string, defaultRemote string, persist 
 				return m.host.SetMessageWithTimeout("Push: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
 			}
 		}
-		return m.showPushConfirm([]string{picked})
+		return m.showPushConfirm([]string{picked}, "picked", false)
 	})
 	m.host.State().ChoicePrompt = m.pushChoice.Render()
 	return nil
 }
 
-// showPushConfirm previews the first remote and confirms against every target.
-func (m *Model) showPushConfirm(remotes []string) tea.Cmd {
+// showPushConfirm previews the first remote and confirms against every target;
+// source names how the list was resolved, and all marks the all-remotes form,
+// whose confirm absorbs a second `a`.
+func (m *Model) showPushConfirm(remotes []string, source string, all bool) tea.Cmd {
 	if len(remotes) == 0 {
 		return nil
 	}
@@ -1310,21 +1315,49 @@ func (m *Model) showPushConfirm(remotes []string) tea.Cmd {
 	for _, remote := range remotes {
 		targets = append(targets, pushTargetLabel(remote, git.RemoteURL(m.workdir, remote)))
 	}
-	m.pushChoice.Show(buildPushConfirmPrompt(preview, targets), []tuicore.Choice{
+	choices := []tuicore.Choice{
 		{Key: "y", Label: "es"},
 		{Key: "n", Label: "o"},
-	}, func(key string) tea.Cmd {
+	}
+	if !all {
+		choices = append(choices, tuicore.Choice{Key: "a", Label: "ll remotes"})
+	}
+	m.pushChoice.Show(buildPushConfirmPrompt(preview, targets, source), choices, func(key string) tea.Cmd {
 		m.host.State().ChoicePrompt = ""
-		if key != "y" {
-			return nil
+		switch key {
+		case "a":
+			// Offered only on the non-all confirm, and a message round-trip,
+			// not a nested Show: Update's value receiver copies the model, so
+			// this callback closed over the copy that created it, and a direct
+			// Show would arm the stale copy's dialog.
+			return func() tea.Msg { return pushAllRemotesMsg{} }
+		case "y":
+			m.isPushing = true
+			m.host.SetPushing(true)
+			m.host.SetPushingInfo(strings.Join(remotes, ", "))
+			return m.startPush(remotes)
 		}
-		m.isPushing = true
-		m.host.SetPushing(true)
-		m.host.SetPushingInfo(strings.Join(remotes, ", "))
-		return m.startPush(remotes)
+		return nil
 	})
 	m.host.State().ChoicePrompt = m.pushChoice.Render()
 	return nil
+}
+
+// pushAllRemotesMsg asks the live model to re-target the push confirm to every configured remote.
+type pushAllRemotesMsg struct{}
+
+// showPushAllRemotesConfirm re-targets the confirm to every configured remote,
+// through the seam the CLI's --all-remotes uses; nothing pushes before the
+// re-rendered confirm's own yes.
+func (m *Model) showPushAllRemotesConfirm() tea.Cmd {
+	remotes, err := client.AllRemotes(m.workdir)
+	if err != nil {
+		return m.host.SetMessageWithTimeout("Push: "+err.Error(), tuicore.MessageTypeError, 5*time.Second)
+	}
+	if len(remotes) == 0 {
+		return m.host.SetMessageWithTimeout("Push: no remotes configured", tuicore.MessageTypeError, 5*time.Second)
+	}
+	return m.showPushConfirm(remotes, "all remotes", true)
 }
 
 // startPush pushes to every remote through client.PushAll, the sequence the CLI runs.
@@ -2012,9 +2045,14 @@ func buildImportConfirmPrompt(repoURL string, found, mapped importpkg.ItemCounts
 	return "Import " + strings.Join(parts, ", ") + " from " + repoURL + "?"
 }
 
-// buildPushConfirmPrompt builds the one-line confirm: every target, then the first remote's counts.
-func buildPushConfirmPrompt(p *gitmsg.PushPreview, targets []string) string {
+// buildPushConfirmPrompt builds the one-line confirm: every target with how the
+// list was resolved, then the first remote's counts.
+func buildPushConfirmPrompt(p *gitmsg.PushPreview, targets []string, source string) string {
 	target := strings.Join(targets, ", ")
+	if source != "" {
+		// The source leads, so a long target list cannot push it off screen.
+		target = "[" + source + "] " + target
+	}
 	var parts []string
 	for _, b := range p.Branches {
 		name := strings.TrimPrefix(b.Branch, "gitmsg/")
