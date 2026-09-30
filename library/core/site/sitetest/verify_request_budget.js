@@ -125,10 +125,13 @@ async function main() {
   // section: the landing reads the head, the branch list, the root tree and the
   // README, and no extension index (measured 11).
   await run("home", TD, "#/", 20);
-  await run("timeline", TD, "#/timeline", 85);
-  // The timeline's cards come from the metadata index; the bodies behind them are one
-  // bucket read per item and load after the paint. A regression that puts them back in
-  // front of it reads here as the paint count climbing toward the settled one.
+  // The settled ceiling fell 85 → 50 when hydration moved to the bodies corpus: a
+  // window's bodies are a few shard reads per lane, and only a commit the corpus
+  // misses pays its own object read.
+  await run("timeline", TD, "#/timeline", 50);
+  // The timeline's cards come from the metadata index; the bodies behind them come
+  // from the bodies corpus and load after the paint. A regression that puts them
+  // back in front of it reads here as the paint count climbing toward the settled one.
   {
     const tl = await measureSplit(TD, "#/timeline");
     ok("timeline paints on the index alone ≤ 35 fetches (measured " + tl.atPaint + " of " + tl.total + ")",

@@ -1070,13 +1070,107 @@
     commit.hollow = false;
   }
 
+  // itemCommits lists an item's distinct version commits plus its own.
+  function itemCommits(item) {
+    const commits = [];
+    for (const v of (item.versions || [])) if (v.commit && commits.indexOf(v.commit) === -1) commits.push(v.commit);
+    if (item.commit && commits.indexOf(item.commit) === -1) commits.push(item.commit);
+    return commits;
+  }
+
+  // bodyDocText fetches one bodies-corpus document, memoized per context so hydration and search share each read; a rejection is not kept.
+  function bodyDocText(ctx, key) {
+    const cache = ctx.bodyDocTexts || (ctx.bodyDocTexts = new Map());
+    if (!cache.has(key)) {
+      const p = fetchText(ctx.base, key);
+      p.catch(() => { if (cache.get(key) === p) cache.delete(key); });
+      cache.set(key, p);
+    }
+    return cache.get(key);
+  }
+
+  // loadBodyState opens an ext's bodies corpus once per context: a sha to message map fed from the newest shard and head, plus the older shard keys newest-first.
+  function loadBodyState(ctx, ext) {
+    if (!ctx.bodyMaps) ctx.bodyMaps = {};
+    if (ctx.bodyMaps[ext] !== undefined) return ctx.bodyMaps[ext];
+    const promise = (async () => {
+      const dir = ".gitsocial/site/bodies/" + ext + "/";
+      const mtext = await bodyDocText(ctx, dir + "manifest.json");
+      if (!mtext) return null;
+      let m;
+      try { m = JSON.parse(mtext); } catch { return null; }
+      if (!m || m.version !== 4 || !Array.isArray(m.shards)) return null;
+      const st = { map: new Map(), pending: new Map(), older: m.shards.slice(0, Math.max(0, m.shards.length - 1)).map((s) => dir + s.key).reverse() };
+      const eager = m.shards.slice(-1).map((s) => dir + s.key).concat([dir + "head.json"]);
+      await Promise.all(eager.map((k) => loadBodyShard(ctx, st, k)));
+      return st;
+    })().catch(() => null); // a failed open resolves null for the session: the corpus is a fast path, and the object read covers every miss
+    ctx.bodyMaps[ext] = promise;
+    return promise;
+  }
+
+  // loadBodyShard merges one bodies document into the corpus map, memoized so concurrent batches share a single read.
+  function loadBodyShard(ctx, st, key) {
+    if (!st.pending.has(key)) {
+      st.pending.set(key, (async () => {
+        const text = await bodyDocText(ctx, key);
+        if (!text) return;
+        let doc;
+        try { doc = JSON.parse(text); } catch { return; }
+        if (doc && Array.isArray(doc.items)) for (const e of doc.items) if (e && e.sha) st.map.set(e.sha, String(e.message || ""));
+      })().catch(() => {}));
+    }
+    return st.pending.get(key);
+  }
+
+  // fillBodyCommit fills a hollow commit record from a bodies-corpus message; tree and parents stay empty, and a route that needs them reads the object.
+  function fillBodyCommit(commit, msg) {
+    commit.content = cleanContent(msg);
+    commit.rawMessage = msg.replace(/\r/g, "");
+    commit.refs = parseRefs(msg);
+    const g = parseGitmsg(msg);
+    if (g) commit.gitmsg = g;
+    commit.hollow = false;
+  }
+
+  // hydrateFromBodies fills a batch's hollow commits from each ext's bodies corpus, a few shard reads in place of one object read per item; a commit the corpus misses keeps its object read.
+  async function hydrateFromBodies(ctx, items) {
+    const byExt = new Map();
+    for (const it of items) {
+      for (const c of itemCommits(it)) {
+        if (!c.hollow) continue;
+        const ext = c.gitmsg && c.gitmsg.ext;
+        if (!ext || !EXT_BRANCHES[ext]) continue;
+        if (!byExt.has(ext)) byExt.set(ext, []);
+        byExt.get(ext).push(c);
+      }
+    }
+    if (!byExt.size) return;
+    await Promise.all(Array.from(byExt, async ([ext, commits]) => {
+      const st = await loadBodyState(ctx, ext);
+      if (!st) return;
+      // fill resolves what the map holds and returns the rest, so older shards load only while a miss remains.
+      const fill = (cs) => cs.filter((c) => {
+        if (!c.hollow) return false;
+        const msg = st.map.get(c.hash);
+        if (msg === undefined) return true;
+        fillBodyCommit(c, msg);
+        return false;
+      });
+      let miss = fill(commits);
+      for (const key of st.older) {
+        if (!miss.length) break;
+        await loadBodyShard(ctx, st, key);
+        miss = fill(miss);
+      }
+    }));
+  }
+
   // hydrateItem fetches an item's version commit bodies and recomputes its displayed content; idempotent.
   async function hydrateItem(ctx, item) {
     if (!item) return;
     const versions = item.versions || [];
-    const commits = [];
-    for (const v of versions) if (v.commit && commits.indexOf(v.commit) === -1) commits.push(v.commit);
-    if (item.commit && commits.indexOf(item.commit) === -1) commits.push(item.commit);
+    const commits = itemCommits(item);
     for (const c of commits) await hydrateCommit(ctx, c);
     const canon = versions.length ? versions[0].commit : item.commit;
     const canonContent = canon ? canon.content : "";
@@ -1093,9 +1187,10 @@
     }
   }
 
-  // hydrateItems hydrates a set of items' bodies with bounded concurrency.
+  // hydrateItems hydrates a set of items' bodies: the bodies corpus first, then one object read per commit still hollow, with bounded concurrency.
   async function hydrateItems(ctx, items) {
     const list = (items || []).filter(Boolean);
+    await hydrateFromBodies(ctx, list);
     let i = 0;
     const worker = async () => { while (i < list.length) { const it = list[i++]; await hydrateItem(ctx, it); } };
     await Promise.all(Array.from({ length: Math.min(HYDRATE_CONCURRENCY, list.length) }, worker));
@@ -3099,7 +3194,7 @@
   }
 
   // loadTimelineWindow is the autoscroll-paged merged timeline: merge every branch's metadata, take the newest shown, and hydrate that slice alone in the background.
-  // The bodies are one bucket read per item, so the window is returned the moment the metadata merges and `hydrated` tells the caller when to redraw it.
+  // The bodies come from each lane's bodies corpus, with one object read per item the corpus misses; the window is returned the moment the metadata merges and `hydrated` tells the caller when to redraw it.
   async function loadTimelineWindow(ctx, extend) {
     const tl = ctx.timeline || (ctx.timeline = { shown: 0 });
     tl.shown = extend ? tl.shown + TIMELINE_WINDOW : TIMELINE_WINDOW;
@@ -3731,13 +3826,13 @@
   // loadBodyIndexSharded assembles the sharded corpus newest-first; null when the manifest is absent or an older version.
   async function loadBodyIndexSharded(ctx, ext) {
     const dir = ".gitsocial/site/bodies/" + ext + "/";
-    const mtext = await fetchText(ctx.base, dir + "manifest.json");
+    const mtext = await bodyDocText(ctx, dir + "manifest.json");
     if (!mtext) return null;
     let m;
     try { m = JSON.parse(mtext); } catch { return null; }
     if (!m || m.version !== 4 || !/^[0-9a-f]{40}$/.test(m.tip || "") || !Array.isArray(m.shards)) return null;
     const keys = m.shards.map((s) => dir + s.key).concat([dir + "head.json"]);
-    const texts = await Promise.all(keys.map((k) => fetchText(ctx.base, k)));
+    const texts = await Promise.all(keys.map((k) => bodyDocText(ctx, k)));
     const items = [];
     for (const t of texts) {
       if (!t) continue;
