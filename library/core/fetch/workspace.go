@@ -4,7 +4,6 @@ package fetch
 import (
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -27,7 +26,9 @@ type workspaceSyncContext struct {
 	procs         []WorkspaceSyncFunc
 	combinedTip   string
 	tipKey        string
-	since         *time.Time
+	// excludes are the previous walk's tip hashes; the incremental walk is
+	// everything they do not reach. Empty means a full walk.
+	excludes []string
 }
 
 // resolveWorkspaceSyncContext gathers the per-sync state once. Returns nil
@@ -62,7 +63,7 @@ func resolveWorkspaceSyncContext(workdir string, procs []WorkspaceSyncFunc) *wor
 	tipKey := "workspace:" + repoURL
 
 	persisted, err := cache.GetSyncTip(tipKey)
-	if err == nil && persisted == combinedTip {
+	if err == nil && persisted == ancestryMarker+combinedTip {
 		return nil
 	}
 
@@ -75,21 +76,74 @@ func resolveWorkspaceSyncContext(workdir string, procs []WorkspaceSyncFunc) *wor
 		procs:         procs,
 		combinedTip:   combinedTip,
 		tipKey:        tipKey,
-		since:         workspaceSyncWindow(repoURL, persisted),
+		excludes:      workspaceSyncExcludes(repoURL, persisted),
 	}
 }
 
-// workspaceSyncWindow returns the commit date the walk starts from, nil while the cache may still miss old history.
-func workspaceSyncWindow(repoURL, persistedTip string) *time.Time {
-	// A recorded tip means an earlier sync finalized, so the cache holds every commit up to it.
-	if persistedTip == "" {
+// workspaceSyncExcludes returns the previous walk's tip hashes, or nil when the
+// next walk must be full. Ancestry, never a time window: an item creation
+// inserts its commit at wall-clock now, and a timestamp-derived window moves
+// past commits the walk has not seen; a late-pushed commit carries a commit
+// date older than any clock bound.
+func workspaceSyncExcludes(repoURL, persistedTip string) []string {
+	// Only a tip this ancestry walk wrote proves the cache reaches its hashes;
+	// a row from the old time-window code may sit past starved commits, so it
+	// earns one full walk, which backfills them.
+	marked, ok := strings.CutPrefix(persistedTip, ancestryMarker)
+	if !ok {
 		return nil
 	}
+	// An emptied repository (ResetRepositoryData, DeleteRepository) can leave the
+	// tip row behind; with nothing cached, the walk must rebuild in full.
 	meta, err := cache.GetRepositoryFetchMeta(repoURL)
 	if err != nil || !meta.HasCommits {
 		return nil
 	}
-	return sinceWithOverlap(meta.NewestCommitTime)
+	return tipHashes(marked)
+}
+
+// ancestryMarker prefixes a sync tip written by the ancestry walk; ref hashes never contain it.
+const ancestryMarker = "ancestry\x00"
+
+// nonMergeTips returns the tips in the cache's abbreviated form, dropping the
+// merges, which --no-merges keeps out of every walk. On a listing error it
+// returns the full-length input, which the guard then refuses: the safe side.
+func nonMergeTips(workdir string, tips []string) []string {
+	if len(tips) == 0 {
+		return nil
+	}
+	short, err := git.ExecGit(workdir, append([]string{"rev-list", "--no-walk", "--abbrev-commit", "--abbrev=12"}, tips...))
+	if err != nil {
+		return tips
+	}
+	mergeList, err := git.ExecGit(workdir, append([]string{"rev-list", "--no-walk", "--min-parents=2", "--abbrev-commit", "--abbrev=12"}, tips...))
+	if err != nil {
+		return tips
+	}
+	merges := make(map[string]bool)
+	for _, h := range strings.Fields(mergeList.Stdout) {
+		merges[h] = true
+	}
+	kept := make([]string, 0, len(tips))
+	for _, h := range strings.Fields(short.Stdout) {
+		if !merges[h] {
+			kept = append(kept, h)
+		}
+	}
+	return kept
+}
+
+// tipHashes extracts the ref hashes from a stored combined tip.
+func tipHashes(combinedTip string) []string {
+	var hashes []string
+	for _, part := range strings.Split(combinedTip, "\x00") {
+		for _, line := range strings.Split(part, "\n") {
+			if h := strings.TrimSpace(line); len(h) == 40 {
+				hashes = append(hashes, h)
+			}
+		}
+	}
+	return hashes
 }
 
 // processCommitBatch inserts a batch of git commits into the cache and runs
@@ -169,12 +223,9 @@ func SyncWorkspaceQuick(workdir string, procs []WorkspaceSyncFunc) error {
 		return nil // tips unchanged
 	}
 
-	opts := &git.GetCommitsOptions{All: true, Since: ctx.since}
-	// Inside a window the quick pass takes every new commit, so none falls between the two passes.
-	if ctx.since == nil {
-		opts.Limit = quickPassLimit
-	}
-	commits, err := git.GetCommits(workdir, opts)
+	// Bounded in both modes: this is the render-path pass, and the continuation
+	// picks up whatever a large delta leaves beyond the cap.
+	commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{All: true, Exclude: ctx.excludes, Limit: quickPassLimit})
 	if err != nil {
 		return err
 	}
@@ -194,17 +245,27 @@ func SyncWorkspaceContinue(workdir string, procs []WorkspaceSyncFunc, onProgress
 		return nil // tips unchanged, the quick pass covered everything
 	}
 
-	commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{All: true, Since: ctx.since})
+	commits, err := git.GetCommits(workdir, &git.GetCommitsOptions{All: true, Exclude: ctx.excludes})
 	if err != nil {
 		return err
 	}
 
-	// Skip the head of the list (already processed by SyncWorkspace) and
-	// process the tail in chunks.
-	if len(commits) <= quickPassLimit {
-		return finalizeWorkspaceSync(ctx)
+	// An incremental continuation re-resolves its own delta, so a commit that
+	// landed between the quick pass's walk and here is in it; only the commits
+	// the cache lacks are processed, never a positional skip against a list the
+	// quick pass may not have produced.
+	rest := commits
+	if len(ctx.excludes) > 0 {
+		if unfetched, ferr := cache.FilterUnfetchedCommitsByRepo(ctx.repoURL, commitHashes(commits)); ferr == nil {
+			rest = filterCommitsByHash(commits, unfetched)
+		}
+	} else {
+		// A full walk: skip the head the quick pass processed and chunk the tail.
+		if len(commits) <= quickPassLimit {
+			return finalizeWorkspaceSync(ctx)
+		}
+		rest = commits[quickPassLimit:]
 	}
-	rest := commits[quickPassLimit:]
 	total := len(rest)
 	for start := 0; start < len(rest); start += quickPassLimit {
 		end := start + quickPassLimit
@@ -222,8 +283,41 @@ func SyncWorkspaceContinue(workdir string, procs []WorkspaceSyncFunc, onProgress
 	return finalizeWorkspaceSync(ctx)
 }
 
+// commitHashes lists the hashes of a commit batch.
+func commitHashes(commits []git.Commit) []string {
+	hashes := make([]string, 0, len(commits))
+	for _, c := range commits {
+		hashes = append(hashes, c.Hash)
+	}
+	return hashes
+}
+
+// filterCommitsByHash keeps the commits whose hash is in the given set.
+func filterCommitsByHash(commits []git.Commit, keep []string) []git.Commit {
+	set := make(map[string]bool, len(keep))
+	for _, h := range keep {
+		set[h] = true
+	}
+	kept := make([]git.Commit, 0, len(keep))
+	for _, c := range commits {
+		if set[c.Hash] {
+			kept = append(kept, c)
+		}
+	}
+	return kept
+}
+
 // finalizeWorkspaceSync marks commits that left the repo stale and records the sync tip.
 func finalizeWorkspaceSync(ctx *workspaceSyncContext) error {
+	// The tip advances only when every current tip commit is cached: a walk
+	// that failed or was cut short leaves the old tip, and the next sync
+	// retries the same delta instead of sealing the hole behind a new tip.
+	// Merge tips are exempt, since the walk itself runs --no-merges.
+	missing, err := cache.FilterUnfetchedCommitsByRepo(ctx.repoURL, nonMergeTips(ctx.workdir, tipHashes(ctx.combinedTip)))
+	if err != nil || len(missing) > 0 {
+		log.Warn("sync finalize skipped, walk incomplete", "repo", ctx.repoURL, "missing", len(missing), "error", err)
+		return nil
+	}
 	// The stale check reads every live commit, not the window the walk used.
 	liveHashes, err := git.GetAllCommitHashes(ctx.workdir)
 	if err != nil {
@@ -231,6 +325,6 @@ func finalizeWorkspaceSync(ctx *workspaceSyncContext) error {
 	} else if _, err := cache.MarkCommitsStaleByRepo(ctx.repoURL, liveHashes); err != nil {
 		log.Warn("mark stale commits", "error", err, "repo", ctx.repoURL)
 	}
-	_ = cache.SetSyncTip(ctx.tipKey, ctx.combinedTip)
+	_ = cache.SetSyncTip(ctx.tipKey, ancestryMarker+ctx.combinedTip)
 	return nil
 }

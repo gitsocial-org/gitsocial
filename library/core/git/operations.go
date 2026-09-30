@@ -151,6 +151,9 @@ type GetCommitsOptions struct {
 	Until       *time.Time
 	All         bool
 	IncludeRefs []string
+	// Exclude drops each hash and its ancestors from the walk (git log ^<hash>),
+	// skipping hashes the repository no longer has.
+	Exclude []string
 }
 
 // GetCommits retrieves commits from the repository with filtering options.
@@ -186,6 +189,13 @@ func GetCommits(workdir string, opts *GetCommitsOptions) ([]Commit, error) {
 		}
 	}
 
+	if len(opts.Exclude) > 0 {
+		// --ignore-missing keeps the walk alive when an excluded tip was gc'd away.
+		args = append(args, "--ignore-missing")
+		for _, h := range opts.Exclude {
+			args = append(args, "^"+h)
+		}
+	}
 	if opts.Limit > 0 {
 		args = append(args, fmt.Sprintf("--max-count=%d", opts.Limit))
 	}
