@@ -1410,11 +1410,11 @@
     if (ctx.walks[key]) return ctx.walks[key];
     const load = (async () => {
       const { branches, defaultBranch } = await listBranches(ctx);
-      // Branch tips, the tag list and the review index are independent reads, so they go out in one batch.
+      // Branch tips, the tag map and the review index are independent reads, so they go out in one batch.
       const code = branches.filter((b) => !b.name.startsWith("gitmsg/"));
-      const [tipShas, tagList, idx] = await Promise.all([
+      const [tipShas, tagMap, idx] = await Promise.all([
         Promise.all(code.map((b) => refTip(ctx, b.ref))),
-        listTags(ctx),
+        tagsByCommit(ctx).catch((e) => { if (e && e.forbidden) throw e; return new Map(); }),
         loadItemsIndex(ctx, "review").catch((e) => { if (e && e.forbidden) throw e; return null; }),
       ]);
       const tips = {};
@@ -1422,8 +1422,9 @@
         const sha = tipShas[i];
         if (sha) (tips[sha] = tips[sha] || []).push(code[i].name);
       }
+      // Keyed by the peeled commit, so an annotated tag decorates the commit it points at.
       const tags = {};
-      for (const t of tagList) (tags[t.sha] = tags[t.sha] || []).push(t.name);
+      for (const [sha, names] of tagMap) tags[sha] = names.slice();
       const merged = [];
       const seen = new Set();
       for (const e of (idx ? idx.items : [])) {
@@ -1856,6 +1857,32 @@
     }
     const ordered = await orderTagTies(ctx, tags, fresh);
     return { tags: ordered.map((t) => Object.assign({}, t, { entry: fresh.get(t.name) || null })), complete: false };
+  }
+
+  // tagsByCommit maps each tag's commit sha to its tag names in display order, peeling annotated tags; cached per context.
+  function tagsByCommit(ctx) {
+    if (ctx.tagCommits) return ctx.tagCommits;
+    const load = (async () => {
+      const { tags } = await orderedTags(ctx);
+      const commits = new Array(tags.length);
+      let i = 0;
+      // The artifact entry names the commit; only a tag without one pays for a peel.
+      const worker = async () => {
+        while (i < tags.length) {
+          const at = i++;
+          const t = tags[at];
+          commits[at] = t.entry ? t.entry.commit : (await peelTag(ctx, t.sha).catch(() => ({ commit: null }))).commit;
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, tags.length) }, worker));
+      const map = new Map();
+      tags.forEach((t, at) => { const c = commits[at]; if (c) map.set(c, (map.get(c) || []).concat(t.name)); });
+      return map;
+    })();
+    ctx.tagCommits = load;
+    // A rejection is not kept, so a transient failure recovers on the next call.
+    load.catch(() => { if (ctx.tagCommits === load) delete ctx.tagCommits; });
+    return load;
   }
 
   // resolveCompareRef resolves a compare side to a commit sha, branch first unless the manifest lists only the tag.
@@ -4344,7 +4371,7 @@
     loadTimelineItems, loadTimelineWindow, HOME_ROWS, compactCount, loadNavCounts, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
     loadCommitsPage, loadCommitsLayout, COMMITS_PAGE_SIZE,
     manifestFor, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
-    parseTree, getTree, resolvePath, listBranches, listTags, orderTagTies, orderedTags, loadSiteTags, loadTagRange, tagRangeWindow, tagRangeFiles, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
+    parseTree, getTree, resolvePath, listBranches, listTags, orderTagTies, orderedTags, tagsByCommit, loadSiteTags, loadTagRange, tagRangeWindow, tagRangeFiles, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, resolveMergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,

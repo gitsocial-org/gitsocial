@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, peelTag, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, peelTag, tagsByCommit, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -3582,14 +3582,16 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("div", { class: "view-count" }, [n + " " + (n === 1 ? singular : plural || singular + "s")]);
   }
 
-  // branchesView lists the repo's branches with the default marked.
+  // branchesView lists the repo's branches with the default marked, and links the tags beside them.
   async function branchesView(ctx) {
     const { branches, defaultBranch } = await listBranches(ctx);
     if (!branches.length) return [el("div", { class: "empty" }, ["No branches in this repository."])];
     const nodes = [countHead(branches.length, "branch", "branches")];
-    if (defaultBranch) nodes.push(el("div", { class: "page-actions" }, [
-      el("a", { class: "action-link", href: compareRef(defaultBranch, "") }, ["⇄ Compare branches"]),
-    ]));
+    const tags = await listTags(ctx);
+    const actions = [];
+    if (defaultBranch) actions.push(el("a", { class: "action-link", href: compareRef(defaultBranch, "") }, ["⇄ Compare branches"]));
+    if (tags.length) actions.push(el("a", { class: "action-link", href: "#/tags" }, [tags.length + (tags.length === 1 ? " tag" : " tags") + " →"]));
+    if (actions.length) nodes.push(el("div", { class: "page-actions" }, actions));
     for (const b of branches) {
       const head = el("div", { class: "card-head" }, [el("a", { class: "subject mono", href: "#branch:" + b.name }, [b.name])]);
       if (b.isDefault) head.append(el("span", { class: "chip" }, ["default"]));
@@ -3737,6 +3739,18 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
+  // ROW_TAG_CHIPS caps a commit row's tag chips; the rest fold into one "+N" chip.
+  const ROW_TAG_CHIPS = 3;
+
+  // tagChipEls returns a commit row's tag chips linking to their tag pages, capped at ROW_TAG_CHIPS.
+  function tagChipEls(names) {
+    const all = names || [];
+    const chips = all.slice(0, ROW_TAG_CHIPS).map((name) => el("a", { class: "chip tag-tip", href: "#tag:" + name, title: name }, [name]));
+    const rest = all.slice(ROW_TAG_CHIPS);
+    if (rest.length) chips.push(el("span", { class: "chip tag-tip", title: rest.join("\n") }, ["+" + rest.length]));
+    return chips;
+  }
+
   // commitCard renders the one code-commit card; id, time and refSha keep parity with the generated commits page.
   function commitCard(c, name, opts) {
     const o = opts || {};
@@ -3747,6 +3761,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       el("a", { class: "hash", href: ref }, [c.short]),
     ]);
     if (o.chip && name) meta.append(el("span", { class: "chip" }, [name]));
+    for (const chip of tagChipEls(o.tags)) meta.append(chip);
     return card({ id: o.id, parts: [head, meta], nav: { hash: c.hash, branch: name } });
   }
 
@@ -3778,7 +3793,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [listHeading("commits"), wrap];
   }
 
-  // branchLogView renders a branch's paged commit log.
+  // branchLogView renders a branch's paged commit log, a tag chip on each tagged commit.
   async function branchLogView(ctx, name) {
     const first = await loadBranchLogWindow(ctx, name, false);
     if (!first.tip) return [el("div", { class: "err" }, ["Branch not found: " + name])];
@@ -3791,8 +3806,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (defaultBranch && defaultBranch !== name) actions.append(el("a", { class: "action-link", href: compareRef(defaultBranch, name) }, ["⇄ compare with " + defaultBranch]));
     wrap.append(actions);
     if (!first.items.length) { wrap.append(el("div", { class: "empty" }, ["No commits on this branch."])); return [wrap]; }
+    // The chips are decoration, so a failed tag read leaves the log bare.
+    const tagMap = await tagsByCommit(ctx).catch(() => new Map());
     for (const n of pagedListView(first,
-      (commits, box) => box.replaceChildren(...commits.map((c) => commitCard(c, name))),
+      (commits, box) => box.replaceChildren(...commits.map((c) => commitCard(c, name, { tags: tagMap.get(c.hash) }))),
       () => loadBranchLogWindow(ctx, name, true))) wrap.append(n);
     return [wrap];
   }

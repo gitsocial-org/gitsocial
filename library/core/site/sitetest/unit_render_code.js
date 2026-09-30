@@ -68,8 +68,17 @@ put("a1", "tree", rootEntries(sha("b2")));
 put("a0", "tree", rootEntries(sha("b1")));
 put("c0", "commit", "tree " + sha("a0") + "\nauthor Ada <ada@example.com> 1750000000 +0000\n\nRoot commit\n");
 put("c1", "commit", "tree " + sha("a1") + "\nparent " + sha("c0") + "\nauthor Ada <ada@example.com> 1750000100 +0000\n\nRewrite the last line\n\nThe body of the commit.\n");
+// d7 is an annotated tag object on c1, so the tag ref sha is not a commit until peeled.
+put("d7", "tag", "object " + sha("c1") + "\ntype commit\ntag v0.2\ntagger Ada <ada@example.com> 1750000200 +0000\n\nSecond cut\n");
 ctx.head = Promise.resolve({ branch: "refs/heads/trunk", sha: sha("c1") });
-ctx.manifest = Promise.resolve({ "refs/heads/trunk": sha("c1") });
+ctx.manifest = Promise.resolve({
+  "refs/heads/trunk": sha("c1"),
+  "refs/tags/v0.2": sha("d7"),
+  "refs/tags/v0.1": sha("c0"),
+  "refs/tags/v0.0.1": sha("c0"),
+  "refs/tags/v0.0.2": sha("c0"),
+  "refs/tags/v0.0.3": sha("c0"),
+});
 
 async function main() {
   console.log("=== the code route renders the default branch root ===");
@@ -255,6 +264,25 @@ async function main() {
   ok(findClass(detail, "diff-line").length > 0, "the expanded file carries its rows");
 
   eq(textOf((await GS.commitDetail(ctx, sha("ee"), "trunk"))[0]), "Commit not found: " + sha("ee"), "an unknown sha says so");
+
+  console.log("=== tags decorate the graph, the branch log and the branch list ===");
+  const tagChips = (node) => findClass(node, "tag-tip").map((c) => textOf(c) + (c.getAttribute("href") ? "@" + c.getAttribute("href") : ""));
+  const graph = (await GS.graphView(ctx))[0];
+  const graphRows = findClass(graph, "graph-row-text");
+  eq(graphRows.length, 2, "the graph window shows both commits");
+  eq(tagChips(graphRows[0]), ["v0.2@#tag:v0.2"], "an annotated tag decorates the commit it peels to");
+  eq(tagChips(graphRows[1]), ["v0.1@#tag:v0.1", "v0.0.3@#tag:v0.0.3", "v0.0.2@#tag:v0.0.2"], "a lightweight tag decorates its commit, capped in version order");
+  ok(findClass(graphRows[1], "chip").some((c) => textOf(c) === "+1"), "the chips past the cap fold into one +N chip");
+
+  const log = (await GS.branchLogView(ctx, "trunk"))[0];
+  const logCards = findClass(log, "card");
+  eq(logCards.map(tagChips), [["v0.2@#tag:v0.2"], ["v0.1@#tag:v0.1", "v0.0.3@#tag:v0.0.3", "v0.0.2@#tag:v0.0.2", "+1"]],
+    "each log row carries its own tag chips, linked and capped with a +N fold");
+
+  const bwrap = document.createElement("div");
+  bwrap.append(...(await GS.branchesView(ctx)));
+  eq(findClass(bwrap, "action-link").map((a) => textOf(a) + "@" + a.getAttribute("href")).slice(-1), ["5 tags →@#/tags"],
+    "the branch list links the tags beside the compare action");
 
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);
