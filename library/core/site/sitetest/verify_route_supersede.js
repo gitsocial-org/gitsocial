@@ -62,7 +62,7 @@ async function main() {
 }
 
 // progressCase is the other way a stale route reaches the shared #view: the
-// "Searching history…" line itemDetail repaints while findItemDeep deepens an ext
+// "commits scanned" line itemDetail repaints while findItemDeep deepens an ext
 // walk, which on a multi-shard corpus keeps ticking after the visitor clicked away.
 async function progressCase() {
   const base = origin + "/thread-demo/", dir = ".gitsocial/site/items/pm/";
@@ -108,7 +108,7 @@ async function progressCase() {
   // The held shards prove the search was still running after the timeline painted,
   // so a green result here is the guard working and never a race that went missing.
   ok("the stale search was still deepening past the timeline's paint", slowHits > hitsAtPaint, "held shard reads " + hitsAtPaint + " → " + slowHits);
-  ok("the superseded item search never repaints over the timeline", !after.includes("Searching history"),
+  ok("the superseded item search never repaints over the timeline", !after.includes("commits scanned"),
     "clobbered by the stale search :: " + JSON.stringify(after.slice(0, 120)));
   ok("the timeline is still the view once the stale search ends", after.includes("Timeline"), "view=" + JSON.stringify(after.slice(0, 120)));
   slowMarks = []; delayMs = 0;

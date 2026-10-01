@@ -121,7 +121,7 @@
     '    </nav>',
     '    <div class="nav-footer"><a class="foot-brand" href="https://gitsocial.org"><svg class="logo-small" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" /></svg><span>Built with GitSocial</span></a></div>',
     '  </aside>',
-    '  <main id="view" class="content"><div class="loading">Loading…</div></main>',
+    '  <main id="view" class="content"><div class="loading"><span class="spinner" role="status" aria-label="Loading"></span></div></main>',
     '</div>',
   ].join("\n");
 

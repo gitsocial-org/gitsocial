@@ -264,11 +264,26 @@ function resolveShort(subject) {
 }
 
 async function main() {
+  // The one loading icon: no shell asset says the loading words, and reduced
+  // motion swaps the spin for a pulse. File greps, so they run without Chrome.
+  {
+    const assets = path.join(__dirname, "..", "assets");
+    const hits = [];
+    for (const name of fs.readdirSync(assets).filter((n) => /\.(js|css|html)$/.test(n))) {
+      const text = fs.readFileSync(path.join(assets, name), "utf8");
+      for (const phrase of ["Loading…", "Loading diff…", "Diffing…"]) if (text.includes(phrase)) hits.push(name + ": " + phrase);
+    }
+    ok("no shell asset carries loading text", hits.length === 0, hits.join(" | "));
+    const full = fs.readFileSync(path.join(assets, "pages-full.css"), "utf8");
+    ok("reduced motion stops the spinner's turn", /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.spinner::before/.test(full), "no reduced-motion rule for .spinner");
+    const core = fs.readFileSync(path.join(assets, "pages-core.css"), "utf8");
+    ok("reduced motion pulses the boot ring too", /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?html\.gs-boot body::before/.test(core), "no reduced-motion rule for the boot ring");
+  }
   const bin = chrome.find();
   if (!bin) {
     console.log("SKIP: no Chrome found (set CHROME to override)");
-    console.log("\n0 passed, 0 failed");
-    process.exit(0);
+    console.log("\n" + pass + " passed, " + fail + " failed");
+    process.exit(fail ? 1 : 0);
   }
   const update = process.env.GS_STYLES_UPDATE === "1";
   if (update) fs.mkdirSync(DIR, { recursive: true });

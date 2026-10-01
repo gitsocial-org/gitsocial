@@ -233,6 +233,34 @@ async function main() {
   ok(!!mSec && text(mSec).indexOf("recorded merge range does not resolve") !== -1,
     "a merged PR with an unresolvable range says so, not that nothing was recorded", text(mSec));
 
+  console.log("=== the loading spinner ===");
+  const sp = GS.spinner();
+  ok(sp._cls.has("spinner") && sp.getAttribute("role") === "status" && sp.getAttribute("aria-label") === "Loading", "the spinner names itself to screen readers");
+  const cd = (await GS.commitDetail(ctx, sha("d3"), ""))[0];
+  await tick(60);
+  ok(findClass(cd, "changes-pending").length === 0, "the pending spinner goes when the changes section paints", text(cd));
+  ok(findClass(cd, "diff-section").length === 1, "the changes section stands in its place");
+  // boomCtx refuses the tree read, so the changes producer fails after the base detail painted.
+  const boomCtx = Object.assign({}, ctx, { objects: {
+    has: (k) => { if (k === sha("a1")) throw new Error("no tree reads"); return ctx.objects.has(k); },
+    get: (k) => ctx.objects.get(k), set: () => {}, delete: () => {},
+  } });
+  const cdBoom = (await GS.commitDetail(boomCtx, sha("d3"), ""))[0];
+  ok(findClass(cdBoom, "changes-pending").length === 1 && findClass(cdBoom, "spinner").length === 1, "the spinner holds the changes section's place at first paint");
+  await tick(60);
+  ok(findClass(cdBoom, "changes-pending").length === 0 && findClass(cdBoom, "diff-section").length === 0, "a failed changes producer removes the spinner");
+  const holdRoot = GS.el("div", {}, []);
+  const hold = GS.el("div", { class: "changes-pending" }, [GS.spinner()]);
+  holdRoot.append(hold);
+  GS.enrichDetail(holdRoot, async () => null, (n) => { if (n) hold.replaceWith(n); else hold.remove(); });
+  await tick(20);
+  ok(findClass(holdRoot, "changes-pending").length === 0, "a null producer removes the spinner through its place");
+  const paged = GS.pagedListView({ items: [], truncated: true }, () => {}, () => new Promise(() => {}))[0];
+  const more = findClass(paged, "load-more")[0];
+  fire(more, "click");
+  const btnSp = findClass(more, "spinner")[0];
+  ok(more.disabled === true && !!btnSp && btnSp.getAttribute("role") === "status" && btnSp.getAttribute("aria-label") === "Loading", "a busy button disables behind an announced spinner");
+
   console.log("=== the configuration page ===");
   document.body._cls = new Set();
   const config = (await GS.configView(ctx))[0];

@@ -277,12 +277,22 @@
      complete and visible for a crawler, a text browser, and anyone with
      scripting off; on a JS client the class lands in the head, before the body
      is parsed, so the static content never reaches a painted frame. The
-     loading line matches the app's own `.loading` treatment (muted, centered,
-     2.5rem of air) so the boot and the app speak the same visual language. */
+     placeholder is the site's one loading icon, the same ring `.spinner` draws
+     in pages-full.css, so the boot and the app speak the same visual language;
+     this file keeps its own copy because it loads first. Reduced motion swaps
+     the turn for an opacity pulse. */
   html.gs-boot #gs-page { display: none; }
   html.gs-boot body::before {
-    content: "Loading…"; display: block; padding: var(--sp-6) 0;
-    text-align: center; color: var(--muted);
+    content: ""; display: block; width: 1.5em; height: 1.5em;
+    margin: var(--sp-6) auto; color: var(--muted);
+    border: 2px solid color-mix(in srgb, var(--muted) 35%, transparent);
+    border-top-color: currentColor; border-radius: 50%;
+    animation: gs-spin 0.8s linear infinite;
+  }
+  @keyframes gs-spin { to { transform: rotate(360deg); } }
+  @keyframes gs-pulse { 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) {
+    html.gs-boot body::before { animation: gs-pulse 1.2s ease-in-out infinite; }
   }
   /* Page-structural rules: the bare-element voice of the generated documents.
      The class vocabulary the pages share with the app (.chip, .card,

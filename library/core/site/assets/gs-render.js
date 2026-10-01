@@ -128,6 +128,22 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // icon resolves a filename/kind to its key then builds the element (or null).
   function icon(name, kind, cls) { return iconEl(iconName(name, kind), cls); }
 
+  // spinner returns the site's one loading icon, announced to screen readers.
+  function spinner() {
+    return el("span", { class: "spinner", role: "status", "aria-label": "Loading" }, []);
+  }
+
+  // busyButton disables a button behind a spinner, pinning its width; the returned restore puts the label back.
+  function busyButton(btn, label) {
+    const prev = btn.textContent;
+    if (btn.getBoundingClientRect) {
+      const w = btn.getBoundingClientRect().width;
+      if (w) btn.style.minWidth = Math.ceil(w) + "px";
+    }
+    btn.disabled = true;
+    btn.replaceChildren(spinner(), ...(label ? [" " + label] : []));
+    return () => { btn.disabled = false; btn.style.minWidth = ""; btn.textContent = prev; };
+  }
 
   // ---- Syntax highlighting via Prism (browser only, no innerHTML) ----
 
@@ -617,9 +633,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const btn = el("button", { class: "load-more", type: "button" }, ["Load more"]);
       moreWrap = el("div", { class: "load-more-wrap" }, [btn]);
       btn.addEventListener("click", async () => {
-        btn.disabled = true; btn.textContent = "Loading…";
+        const restore = busyButton(btn);
         try { const next = await loadMore(); draw(next.items, next.truncated); }
-        catch (e) { btn.disabled = false; btn.textContent = "Load more"; }
+        catch (e) { restore(); }
       });
       wrap.append(moreWrap);
     }
@@ -1070,7 +1086,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       trailerList(dl, c.gitmsg, []);
       wrap.append(dl);
     }
-    enrichDetail(wrap, () => commitChangesSection(ctx, c));
+    // A spinner holds the changes section's place; its place swaps it for the section and drops it on null or failure.
+    const pending = el("div", { class: "changes-pending" }, [spinner()]);
+    wrap.append(pending);
+    enrichDetail(wrap, () => commitChangesSection(ctx, c), (node) => { if (node) pending.replaceWith(node); else pending.remove(); });
     return [wrap];
   }
 
@@ -2192,10 +2211,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         if (f.model.tooLarge) {
           const anyway = el("button", { class: "load-more", type: "button" }, ["Diff anyway"]);
           anyway.addEventListener("click", async () => {
-            anyway.disabled = true; anyway.textContent = "Diffing…";
-            f.model = await fileDiff(ctx, entry, true);
-            counts.replaceChildren(el("span", { class: "cnt-add" }, ["+" + f.model.adds]), el("span", { class: "cnt-del" }, ["-" + f.model.dels]));
-            f.renderBody();
+            const restore = busyButton(anyway);
+            try {
+              f.model = await fileDiff(ctx, entry, true);
+              counts.replaceChildren(el("span", { class: "cnt-add" }, ["+" + f.model.adds]), el("span", { class: "cnt-del" }, ["-" + f.model.dels]));
+              f.renderBody();
+            } catch (e) { restore(); }
           });
           body.replaceChildren(el("div", { class: "notice" }, ["File too large to diff. ", anyway]));
           return;
@@ -2216,7 +2237,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         f.expanded = true; body.style.display = ""; fhead.classList.add("open");
         refreshExpandBtn();
         if (!f.model) {
-          body.replaceChildren(el("div", { class: "loading" }, ["Loading diff…"]));
+          body.replaceChildren(el("div", { class: "loading" }, [spinner()]));
           f.model = await fileDiff(ctx, entry);
           if (f.model.binary) counts.textContent = "binary";
           else if (f.model.tooLarge) counts.textContent = "large";
@@ -2508,11 +2529,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // enrichDetail appends a producer's section after first paint, so no bounded walk gates it; failures are swallowed.
+  // enrichDetail appends a producer's section after first paint, so no bounded walk gates it; a null or failed producer hands its place null, so a placeholder never stays.
   function enrichDetail(root, producer, place) {
     Promise.resolve().then(producer).then((node) => {
-      if (node) (place ? place(node) : root.append(node));
-    }).catch(() => { /* enrichment is best-effort; the base detail already painted */ });
+      if (node) { if (place) place(node); else root.append(node); }
+      else if (place) place(null);
+    }).catch(() => { if (place) place(null); /* enrichment is best-effort; the base detail already painted */ });
   }
 
   // detailTab names an item's nav tab: a milestone or sprint has its own list, every other item its branch's tab.
@@ -2526,7 +2548,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   async function itemDetail(ctx, hash, branch, paint, onTab) {
     const cv = COMMIT_VIEW[branch];
     const show = paint || setView;
-    const onProgress = (visited) => show([el("div", { class: "loading" }, ["Searching history… (" + visited + " commits scanned)"])]);
+    const onProgress = (visited) => show([el("div", { class: "loading" }, [spinner(), " " + visited + " commits scanned"])]);
     const { item, items } = await findItemDeep(ctx, cv.ext, hash, onProgress);
     if (!item) return [el("div", { class: "err" }, [cv.label + " not found."])];
     const tab = detailTab(cv, item);
@@ -2540,7 +2562,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       if (sec) root.append(sec);
     }
     enrichDetail(root, () => replyContextSection(ctx, item, branch),
-      (node) => root.insertBefore(node, root.children[1] || null));
+      (node) => { if (node) root.insertBefore(node, root.children[1] || null); });
     if (cv.ext === "pm") {
       enrichDetail(root, async () => {
         const wrap = el("div", {}, []);
@@ -3073,10 +3095,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       return rows.length ? el("div", { class: "search-facets" }, rows) : null;
     }
     // tierButton loads a deeper search window on click and redraws.
-    function tierButton(label, busyLabel, extend, full, older) {
+    function tierButton(label, extend, full, older) {
       const btn = el("button", { class: "load-more", type: "button" }, [label]);
       btn.addEventListener("click", async () => {
-        btn.disabled = true; btn.textContent = busyLabel;
+        busyButton(btn);
         try { corpus = await loadSearchWindow(ctx, extend, full, older); } catch (e) { /* keep prior corpus */ }
         draw();
       });
@@ -3094,7 +3116,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
           ? "Currently searching recent items by subject, author, and labels. Loads every message body across all history to match full text (coverage is limited to the bootstrapped prefix)."
           : "Currently searching recent items by subject, author, and labels. Loads every message body across all history to match full text.";
         kids.push(el("div", { class: "search-tier-note" }, [note]));
-        const fullBtn = tierButton("Load full search index", "Loading full search index…", true, true, true);
+        const fullBtn = tierButton("Load full search index", true, true, true);
         kids.push(fullBtn);
         fullSearchBytes(ctx).then((bytes) => { if (bytes > 0 && !fullBtn.disabled) fullBtn.textContent = "Load full search index (" + humanBytes(bytes) + ")"; }).catch(() => {});
       }
@@ -3111,24 +3133,24 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const token = ++hydrateToken;
       hydrateItems(ctx, targets).then(() => { if (token === hydrateToken) draw(); }).catch(() => {});
     }
-    // laneProgress is the "searching N of M" suffix while corpus lanes resolve.
-    function laneProgress() {
-      if (!corpus || !corpus.loading) return "";
-      return " · searching " + corpus.loading.done + " of " + corpus.loading.total + " sections…";
+    // laneProgress is the "spinner X of Y sections" status suffix while corpus lanes resolve, as nodes.
+    function laneProgress(lead) {
+      if (!corpus || !corpus.loading) return [];
+      return (lead ? [" · "] : []).concat([spinner(), " " + corpus.loading.done + " of " + corpus.loading.total + " sections"]);
     }
     // draw renders the results for the current query, filters and corpus.
     function draw() {
-      if (!corpus) { results.replaceChildren(el("div", { class: "loading" }, ["Loading…"])); return; }
+      if (!corpus) { results.replaceChildren(el("div", { class: "loading" }, [spinner()])); return; }
       const res = searchItemsFaceted(input.value || "", corpus.perExt, filters);
       // No facets means no query or filter: show the scope help.
       if (!Object.keys(res.facets).length) {
-        status.textContent = laneProgress().replace(/^ · /, "");
+        status.replaceChildren(...laneProgress(false));
         results.replaceChildren(searchHelp(corpus));
         renderDeeper();
         return;
       }
       const partial = corpus.truncated || corpus.light || corpus.hasOlder;
-      status.textContent = res.total + (res.total === 1 ? " result" : " results") + (partial && !corpus.full && !corpus.loading ? " in loaded items" : "") + laneProgress();
+      status.replaceChildren(res.total + (res.total === 1 ? " result" : " results") + (partial && !corpus.full && !corpus.loading ? " in loaded items" : ""), ...laneProgress(true));
       const nodes = [];
       const facetBox = renderFacets(res);
       if (facetBox) nodes.push(facetBox);
@@ -3539,15 +3561,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     toggle.addEventListener("click", async () => {
       note.style.display = "none";
       if (!loaded) {
-        toggle.disabled = true;
-        toggle.textContent = "Loading " + total + " forks…";
+        const restore = busyButton(toggle, total + " forks");
         let all = null;
         try { all = await loadForks(ctx); } catch (e) { all = null; }
-        toggle.disabled = false;
+        restore();
         if (all && all.length > forks.length) forks = all;
         if (!all || all.failed) {
           // Failed or partial: stay capped, say so, and keep the retry.
-          toggle.textContent = "Load all " + total + " forks";
           note.textContent = all
             ? "Could not load " + all.failed + " of " + total + " forks (the host may be rate limiting). Try again to fetch the rest."
             : "Loading the fork list failed (the host may be rate limiting). Try again.";
@@ -4054,9 +4074,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const btn = el("button", { class: "load-more", type: "button" }, ["Load more"]);
       moreWrap = el("div", { class: "load-more-wrap" }, [btn]);
       btn.addEventListener("click", async () => {
-        btn.disabled = true; btn.textContent = "Loading…";
+        const restore = busyButton(btn);
         try { data = await loadGraphWindow(ctx, true); render(); }
-        catch (e) { btn.disabled = false; btn.textContent = "Load more"; }
+        catch (e) { restore(); }
       });
       wrap.append(moreWrap);
     }
@@ -4264,6 +4284,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

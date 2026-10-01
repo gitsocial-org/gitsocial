@@ -154,9 +154,9 @@ function mkBrowser(startURL) {
 // reveal contract is about.
 const ASSET_MS = 5;
 
-// LOADING is what the served page paints while `gs-boot` is on <html>: the
-// inline rules hide #gs-page and put the app's own loading treatment in its
-// place. The suite models it as the visible text, which is what a reader sees.
+// LOADING stands for the boot placeholder while `gs-boot` is on <html>: the
+// inline rules hide #gs-page and draw the loading ring in its place. The ring
+// has no text, so the suite models that state with this one label.
 const LOADING = "Loading…";
 // CHROME marks the app's own frame being on screen — the nav and the two-panel
 // layout, revealed as soon as pages-full.css governs the page and long before the
@@ -588,9 +588,9 @@ async function main() {
     // ran: an upgrade script that 404s or fails to parse leaves nobody else to
     // un-hide the page, which is the one way this mechanism could strand a reader.
     ok("the script un-hides itself if the upgrade never takes ownership", !!bootScript && /__gsBooting/.test(bootScript[0]) && /addEventListener\("load"/.test(bootScript[0]) && /setTimeout\(u,\d+\)/.test(bootScript[0]), bootScript && bootScript[0]);
-    // The loading line is the app's own treatment (muted, centered, generous
-    // padding) so the boot and the app that follows read as one design.
-    ok("the loading state is painted by the same class, not by markup", /html\.gs-boot body::before\s*\{[^}]*content:\s*"Loading…"[^}]*text-align:\s*center/.test(head), "head=" + head.slice(head.indexOf("<style data-gs-core>"), head.indexOf("</style>")).slice(0, 400));
+    // The loading placeholder is the site's one icon, the spinner ring, drawn
+    // by the boot class alone so the boot and the app read as one design.
+    ok("the loading state is painted by the same class, not by markup", /html\.gs-boot body::before\s*\{[^}]*border-radius:\s*50%[^}]*animation:[^}]*gs-spin/.test(head), "head=" + head.slice(head.indexOf("<style data-gs-core>"), head.indexOf("</style>")).slice(0, 400));
     // The no-JS contract: the page still reads.
     ok("the served page is complete without JS (content in the body as served)", /<p class="meta">README<\/p>/.test(front.text) && /class="home-section"/.test(front.text));
     ok("the front page owns no heading; the README's come first", front.text.indexOf("<h1") > front.text.indexOf('<p class="meta">README</p>'));
@@ -632,7 +632,7 @@ async function main() {
     const css = await get(base + SHELL + "pages-full.css");
     ok("pages-full.css served", css.status === 200);
     ok("the class hides whatever the app rendered into the slot", /html\.gs-loading\s+#view\s*>\s*\*\s*\{[^}]*display:\s*none/.test(css.text), "css=" + css.text.slice(0, 120));
-    ok("and paints the same loading treatment in its place", /html\.gs-loading\s+#view::before\s*\{[^}]*content:\s*"Loading…"/.test(css.text), "css=" + css.text.slice(0, 120));
+    ok("and paints the same loading ring in its place", /html\.gs-loading\s+#view::before\s*\{[^}]*border-radius:\s*50%[^}]*animation:[^}]*gs-spin/.test(css.text), "css=" + css.text.slice(0, 120));
     // It is scoped to the class, so the plain shell (which never sets it) and
     // every post-boot navigation are untouched: this is a boot state, not a style.
     // No cloaking risk either: the served page links this sheet itself, but the

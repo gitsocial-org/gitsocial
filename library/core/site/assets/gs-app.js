@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -18,10 +18,10 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   // already painted (rapid nav timeline→detail, or two overlapping route drivers).
   let routeGen = 0;
 
-  // WATCHDOG_MS bounds how long a route may sit on "Loading…" before the boot
-  // watchdog surfaces a visible error (a large real repo can take several seconds
-  // to hydrate its first window, so this is generous — it only trips on a genuine
-  // stall, never a slow-but-progressing load).
+  // WATCHDOG_MS bounds how long a route may sit on the loading placeholder
+  // before the boot watchdog surfaces a visible error (a large real repo can
+  // take several seconds to hydrate its first window, so this is generous: it
+  // only trips on a real stall, never a slow-but-progressing load).
   const WATCHDOG_MS = 30000;
 
   // firstViewSignalled guards the page-entry boot handshake: gs-upgrade.js holds
@@ -106,9 +106,9 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     else if (r.type === "config") activeTab = "config";
     highlightNav(activeTab);
     revokeObjectUrls();
-    setView([el("div", { class: "loading" }, ["Loading…"])]);
+    setView([el("div", { class: "loading" }, [spinner()])]);
     // Boot watchdog: a route whose async work never settles would otherwise sit on
-    // "Loading…" with no console error. If the view is still the loading placeholder
+    // the spinner with no console error. If the view is still the loading placeholder
     // after WATCHDOG_MS, surface a visible error and log it. `settled` is flipped by
     // every real setView below (routeSettled), so a slow load that painted is spared.
     let settled = false;
@@ -147,7 +147,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
       if (r.type === "index" && r.tab === "timeline") {
         // First paint must not wait on the interaction counts: on a mid-push or
         // index-stale bucket the count load can walk loose objects, so gating the
-        // window behind it (an old Promise.all) left the page on "Loading…" behind
+        // window behind it (an old Promise.all) left the page on the spinner behind
         // a long walk. Paint the window immediately with no counts, then load them
         // in the background and re-draw the visible cards once they arrive. `counts`
         // is a live reference the drawBody closure reads each render, so both the
