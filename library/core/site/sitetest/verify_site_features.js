@@ -193,7 +193,7 @@ async function main() {
   ok("graph marks the default branch chip as `default`", defChips.length === 1 && textOf(defChips[0]) === "main", "default chips=" + defChips.map(textOf).join(","));
   const tagChips = findClass(viewNode, "tag-tip").map(textOf);
   ok("graph badges the lightweight tag on its row", tagChips.includes("v1.0-light"), "tags=" + tagChips.join(","));
-  ok("annotated tag stays unbadged (its refs.json sha is the tag object, never a row; no peel fetch)", !tagChips.includes("v1.0"), "tags=" + tagChips.join(","));
+  ok("annotated tag badges the row of its peeled commit", tagChips.includes("v1.0"), "tags=" + tagChips.join(","));
   const hashes = findClass(viewNode, "graph-row-text").flatMap((r) => findClass(r, "hash").map((h) => h.getAttribute("href") || ""));
   ok("graph short hashes link to commit detail", hashes.some((h) => /^#commit:/.test(h)), hashes.slice(0, 3).join(","));
 
