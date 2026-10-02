@@ -110,7 +110,7 @@ func TestBuildRemotePickerChoices_PersistRoundDropsExtras(t *testing.T) {
 	}
 }
 
-// TestResolveRefLocation maps a ref through the cache: a pm hit opens the issue, a miss the raw commit.
+// TestResolveRefLocation maps a ref through the cache: a pm hit opens the issue, a cached commit its post, a miss the raw commit.
 func TestResolveRefLocation(t *testing.T) {
 	testutil.OpenTempCache(t, "")
 	hash := "cafe12345678"
@@ -127,12 +127,24 @@ func TestResolveRefLocation(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("insert pm item: %v", err)
 	}
-	got := resolveRefLocation("#commit:" + hash + "@gitmsg/pm")
+	got := resolveRefLocation("#commit:"+hash+"@gitmsg/pm", "https://example.com/r")
 	want := tuicore.LocPMIssueDetail(hash)
 	if got.Path != want.Path || got.Param("issueID") != want.Param("issueID") {
 		t.Errorf("resolveRefLocation = %+v, want %+v", got, want)
 	}
-	miss := resolveRefLocation("#commit:0123456789ab")
+	code := "beef12345678"
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash: code, RepoURL: "https://example.com/r", Branch: "feature/x",
+		AuthorName: "T", AuthorEmail: "t@t.com", Message: "a code commit", Timestamp: time.Now(),
+	}}); err != nil {
+		t.Fatalf("InsertCommits: %v", err)
+	}
+	post := resolveRefLocation("#commit:"+code, "https://example.com/r")
+	wantPost := tuicore.LocDetail("https://example.com/r#commit:" + code + "@feature/x")
+	if post.Path != wantPost.Path || post.Param("postID") != wantPost.Param("postID") {
+		t.Errorf("cached commit = %+v, want %+v", post, wantPost)
+	}
+	miss := resolveRefLocation("#commit:0123456789ab", "https://example.com/r")
 	if miss.Path != tuicore.LocCommitDiff("0123456789ab").Path {
 		t.Errorf("unknown hash = %+v, want the commit diff view", miss)
 	}

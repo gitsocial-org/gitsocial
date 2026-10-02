@@ -1139,7 +1139,7 @@ func (m *Model) handleNavigate(msg tuicore.NavigateMsg) tea.Cmd {
 	}
 	// A textual ref resolves here, where the cache can say what it is.
 	if msg.Location.Path == "/ref" {
-		msg.Location = resolveRefLocation(msg.Location.Param("ref"))
+		msg.Location = resolveRefLocation(msg.Location.Param("ref"), gitmsg.ResolveRepoURL(m.workdir))
 	}
 	// External URLs: open in browser instead of routing internally
 	if strings.HasPrefix(msg.Location.Path, "http") {
@@ -2049,9 +2049,16 @@ func buildImportConfirmPrompt(repoURL string, found, mapped importpkg.ItemCounts
 	return "Import " + strings.Join(parts, ", ") + " from " + repoURL + "?"
 }
 
-// resolveRefLocation maps a commit ref to its item's view through the cache, else to the raw commit diff.
-func resolveRefLocation(ref string) tuicore.Location {
+// resolveRefLocation maps a commit or tag ref to its item's view through the cache, else to the raw commit diff.
+func resolveRefLocation(ref, workspaceURL string) tuicore.Location {
 	parsed := protocol.ParseRef(ref)
+	if parsed.Type == protocol.RefTypeTag && parsed.Value != "" {
+		if item, err := release.GetReleaseItemByTagOrVersion(parsed.Value); err == nil {
+			return tuicore.LocReleaseDetail(item.Hash)
+		}
+		// The refs/tags/ prefix keeps a tag name from reading as a git option.
+		return tuicore.LocCommitDiff("refs/tags/" + parsed.Value)
+	}
 	if parsed.Type != protocol.RefTypeCommit || parsed.Value == "" {
 		return tuicore.LocTimeline
 	}
@@ -2072,11 +2079,24 @@ func resolveRefLocation(ref string) tuicore.Location {
 			case "release":
 				return tuicore.LocReleaseDetail(h.Hash)
 			case "social":
-				return tuicore.LocDetail(h.Hash)
+				return tuicore.LocDetail(protocol.CreateRef(protocol.RefTypeCommit, h.Hash, h.RepoURL, h.Branch))
+			case "memo":
+				return tuicore.LocMemoDetail(h.Hash)
 			}
 		}
 	}
-	// Memo items and unfetched commits land on the raw commit view.
+	repoURL := parsed.Repository
+	if repoURL == "" {
+		repoURL = workspaceURL
+	}
+	// A cached commit opens as a post, under the branch the cache stores it on; an unfetched one lands on the raw commit view.
+	commit, err := cache.GetCommit(repoURL, parsed.Value, parsed.Branch)
+	if err != nil {
+		commit, err = cache.GetCommitOnAnyBranch(repoURL, parsed.Value)
+	}
+	if err == nil {
+		return tuicore.LocDetail(protocol.CreateRef(protocol.RefTypeCommit, commit.Hash, commit.RepoURL, commit.Branch))
+	}
 	return tuicore.LocCommitDiff(parsed.Value)
 }
 

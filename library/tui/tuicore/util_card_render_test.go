@@ -182,7 +182,7 @@ func TestExtractURLs_refsRideTheList(t *testing.T) {
 		t.Errorf("refs = %q and %q, want the trailing period trimmed", urls[0], urls[2])
 	}
 	anchors := NewAnchorCollector("t", -1)
-	restored := restoreURLs(stripped, urls, anchors)
+	restored := restoreURLs(stripped, urls, anchors, false)
 	if !strings.Contains(restored, "#commit:abc123def456@gitmsg/pm") {
 		t.Errorf("restored text lost the ref: %q", restored)
 	}
@@ -205,7 +205,7 @@ func TestExtractURLs_crossRepoRefStaysInItsURL(t *testing.T) {
 	if len(urls) != 1 || urls[0] != "https://forge.example/x#commit:abc1234" {
 		t.Fatalf("extracted = %v, want the one full url", urls)
 	}
-	restored := restoreURLs(stripped, urls, nil)
+	restored := restoreURLs(stripped, urls, nil, false)
 	if !strings.Contains(restored, "now") || !strings.Contains(restored, "see ") {
 		t.Errorf("surrounding text corrupted: %q", restored)
 	}

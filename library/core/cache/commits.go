@@ -576,7 +576,7 @@ func EscapeLike(s string) string {
 
 // ExtensionHit identifies which extension table owns a commit hash, with its full primary key.
 type ExtensionHit struct {
-	Extension string // "review", "pm", "release", "social"
+	Extension string // "review", "pm", "release", "social", "memo"
 	Type      string // extension-specific type (e.g. "pull-request", "issue", "post")
 	RepoURL   string
 	Hash      string
@@ -607,8 +607,10 @@ func DetectExtension(hash string) ([]ExtensionHit, error) {
 			SELECT 'release', tag, repo_url, hash, branch FROM release_items WHERE ` + cond + `
 			UNION ALL
 			SELECT 'social', type, repo_url, hash, branch FROM social_items WHERE ` + cond + `
+			UNION ALL
+			SELECT 'memo', type, repo_url, hash, branch FROM memo_items WHERE ` + cond + `
 		)`
-		rows, err := db.Query(query, arg, arg, arg, arg)
+		rows, err := db.Query(query, arg, arg, arg, arg, arg)
 		if err != nil {
 			return nil, fmt.Errorf("detect extension: %w", err)
 		}
@@ -635,6 +637,27 @@ func GetCommit(repoURL, hashPrefix, branch string) (Commit, error) {
 		var ts string
 		err := db.QueryRow(`SELECT hash, repo_url, branch, author_name, author_email, message, timestamp FROM core_commits WHERE repo_url = ? AND hash LIKE ? AND branch = ? LIMIT 1`,
 			repoURL, hashPrefix+"%", branch).Scan(&c.Hash, &c.RepoURL, &c.Branch, &c.AuthorName, &c.AuthorEmail, &c.Message, &ts)
+		if err != nil {
+			return Commit{}, fmt.Errorf("get commit: %w", err)
+		}
+		if t, err := time.Parse(time.RFC3339, ts); err == nil {
+			c.Timestamp = t
+		}
+		return c, nil
+	})
+}
+
+// GetCommitOnAnyBranch returns a cached commit by repo URL and hash prefix, on the branch the cache stores it under.
+func GetCommitOnAnyBranch(repoURL, hashPrefix string) (Commit, error) {
+	repoURL = protocol.NormalizeURL(repoURL)
+	if !isHexString(hashPrefix) {
+		return Commit{}, fmt.Errorf("get commit: invalid hash prefix")
+	}
+	return QueryLocked(func(db *sql.DB) (Commit, error) {
+		var c Commit
+		var ts string
+		err := db.QueryRow(`SELECT hash, repo_url, branch, author_name, author_email, message, timestamp FROM core_commits WHERE repo_url = ? AND hash LIKE ? ORDER BY is_virtual LIMIT 1`,
+			repoURL, hashPrefix+"%").Scan(&c.Hash, &c.RepoURL, &c.Branch, &c.AuthorName, &c.AuthorEmail, &c.Message, &ts)
 		if err != nil {
 			return Commit{}, fmt.Errorf("get commit: %w", err)
 		}

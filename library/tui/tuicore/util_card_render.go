@@ -24,8 +24,8 @@ var (
 	codeBlockRe = regexp.MustCompile("(?s)(?:```(\\w*)\\n(.*?)```|~~~(\\w*)\\n(.*?)~~~)")
 	// Matches bare URLs (not inside markdown link syntax or HTML attributes)
 	urlRe = regexp.MustCompile(`https?://[^\s)>\]"]+`)
-	// refRe matches a workspace-relative commit ref at a boundary; the grammar mirrors the site renderers.
-	refRe = regexp.MustCompile(`(^|[\s([{"'<])(#commit:[0-9a-f]{7,40}(?:@[\w./-]+)?)`)
+	// refRe matches a workspace-relative commit or tag ref at a boundary; the grammar mirrors the site renderers.
+	refRe = regexp.MustCompile(`(^|[\s([{"'<])(#(?:commit:[0-9a-f]{7,40}(?:@[\w./-]+)?|tag:[\w./-]+))`)
 	// Matches markdown links [text](http-url) with capture groups
 	mdLinkExtractRe = regexp.MustCompile(`\[([^\]]+)\]\((https?://[^)]+)\)`)
 	// Matches markdown images ![alt](url) with optional {attrs} suffix (GitLab/Kramdown)
@@ -119,11 +119,19 @@ func extractMarkdownLinks(content string) (string, []mdLink) {
 	return result, links
 }
 
+// dimResume returns the escape code that puts dimmed text back after a link resets the color.
+func dimResume(dimmed bool) string {
+	if !dimmed {
+		return ""
+	}
+	return "\x1b[38;5;" + pickThemeColor(graySecondaryDark, graySecondaryLight) + "m"
+}
+
 // restoreMarkdownLinks replaces markdown link placeholders with styled OSC 8 terminal hyperlinks.
-func restoreMarkdownLinks(content string, links []mdLink, anchors *AnchorCollector) string {
+func restoreMarkdownLinks(content string, links []mdLink, anchors *AnchorCollector, dimmed bool) string {
 	for i, link := range links {
 		placeholder := fmt.Sprintf("%s%d\x00", mdLinkPlaceholderPrefix, i)
-		replacement := anchors.MarkLink(link.text, link.url, Location{Path: link.url})
+		replacement := anchors.MarkLink(link.text, link.url, Location{Path: link.url}) + dimResume(dimmed)
 		content = strings.Replace(content, placeholder, replacement, 1)
 	}
 	return content
@@ -158,7 +166,7 @@ func extractMarkdownImages(content string) (string, []mdImage) {
 }
 
 // restoreMarkdownImages replaces image placeholders with styled [IMAGE: alt] indicators.
-func restoreMarkdownImages(content string, images []mdImage, anchors *AnchorCollector) string {
+func restoreMarkdownImages(content string, images []mdImage, anchors *AnchorCollector, dimmed bool) string {
 	for i, img := range images {
 		placeholder := fmt.Sprintf("%s%d\x00", mdImagePlaceholderPrefix, i)
 		label := "IMAGE"
@@ -171,7 +179,7 @@ func restoreMarkdownImages(content string, images []mdImage, anchors *AnchorColl
 			loc := Location{Path: img.url}
 			replacement = anchors.Mark(replacement, loc)
 		}
-		content = strings.Replace(content, placeholder, replacement, 1)
+		content = strings.Replace(content, placeholder, replacement+dimResume(dimmed), 1)
 	}
 	return content
 }
@@ -235,17 +243,17 @@ func extractURLs(content string) (string, []string) {
 }
 
 // restoreURLs replaces URL placeholders with styled, zone-marked URLs (when anchors != nil) or plain styled URLs.
-func restoreURLs(content string, urls []string, anchors *AnchorCollector) string {
+func restoreURLs(content string, urls []string, anchors *AnchorCollector, dimmed bool) string {
 	for i, u := range urls {
 		placeholder := fmt.Sprintf("%s%d\x00", urlPlaceholderPrefix, i)
 		var replacement string
 		if strings.HasPrefix(u, "#") {
 			// A ref navigates internally, resolved at activation when the cache can say what it is.
-			replacement = anchors.Mark(u, LocRef(u))
+			replacement = anchors.Mark(LinkStyle(u), LocRef(u))
 		} else {
 			replacement = anchors.MarkLink(u, u, Location{Path: u})
 		}
-		content = strings.Replace(content, placeholder, replacement, 1)
+		content = strings.Replace(content, placeholder, replacement+dimResume(dimmed), 1)
 	}
 	return content
 }
@@ -510,9 +518,9 @@ func renderGlamour(renderer *glamour.TermRenderer, variant byte, text string, wr
 	}
 	text = restoreCodeBlocks(text, codeBlocks, dimmedCode)
 	text = colorizeEmails(text)
-	text = restoreMarkdownImages(text, images, anchors)
-	text = restoreMarkdownLinks(text, links, anchors)
-	text = restoreURLs(text, urls, anchors)
+	text = restoreMarkdownImages(text, images, anchors, dimmedCode)
+	text = restoreMarkdownLinks(text, links, anchors, dimmedCode)
+	text = restoreURLs(text, urls, anchors, dimmedCode)
 	if wrapWidth > 0 {
 		text = lipgloss.NewStyle().Width(wrapWidth).Render(text)
 	}
@@ -560,9 +568,9 @@ func renderContent(content CardContent, selectionBar string, iconPad string, opt
 			text = renderGlamour(renderer, variant, text, opts.WrapWidth, opts.Dimmed, extractedMdImages, extractedMdLinks, extractedURLs, opts.Anchors)
 		} else {
 			text = renderMath(text)
-			text = restoreMarkdownImages(text, extractedMdImages, opts.Anchors)
-			text = restoreMarkdownLinks(text, extractedMdLinks, opts.Anchors)
-			text = restoreURLs(text, extractedURLs, opts.Anchors)
+			text = restoreMarkdownImages(text, extractedMdImages, opts.Anchors, opts.Dimmed)
+			text = restoreMarkdownLinks(text, extractedMdLinks, opts.Anchors, opts.Dimmed)
+			text = restoreURLs(text, extractedURLs, opts.Anchors, opts.Dimmed)
 			if opts.WrapWidth > 0 {
 				text = lipgloss.NewStyle().Width(opts.WrapWidth).Render(text)
 			}
