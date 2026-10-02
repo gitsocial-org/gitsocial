@@ -708,7 +708,7 @@ func renderNestedCard(nested NestedCard, selectionBar string, width int) string 
 		str.WriteString(Dim.Render(nested.Card.Header.Icon))
 		str.WriteString("  ")
 	}
-	str.WriteString(nested.Card.Header.TitleStyle(nested.Dimmed).Render(stripVerifiedIcon(nested.Card.Header.Title)))
+	str.WriteString(nested.Card.Header.TitleStyle(false).Render(stripVerifiedIcon(nested.Card.Header.Title)))
 	rest := ""
 	if nested.Card.Header.Badge != "" {
 		rest += " " + stripVerifiedIcon(nested.Card.Header.Badge)
@@ -739,11 +739,7 @@ func renderNestedCard(nested NestedCard, selectionBar string, width int) string 
 		str.WriteString(selectionBar)
 		str.WriteString(padding)
 		str.WriteString(nestedIconPad)
-		if nested.Dimmed {
-			str.WriteString(Dim.Render(line))
-		} else {
-			str.WriteString(line)
-		}
+		str.WriteString(line)
 	}
 
 	if truncated {
@@ -751,11 +747,7 @@ func renderNestedCard(nested NestedCard, selectionBar string, width int) string 
 		str.WriteString(selectionBar)
 		str.WriteString(padding)
 		str.WriteString(nestedIconPad)
-		if nested.Dimmed {
-			str.WriteString(Dim.Render("···"))
-		} else {
-			str.WriteString("···")
-		}
+		str.WriteString("···")
 	}
 
 	// Stats

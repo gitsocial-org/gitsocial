@@ -145,7 +145,6 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 				card.Nested = append(card.Nested, tuicore.NestedCard{
 					Card:     originalCard,
 					Position: "after",
-					Dimmed:   false,
 				})
 			}
 		}
@@ -158,7 +157,6 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 				card.Nested = append(card.Nested, tuicore.NestedCard{
 					Card:     originalCard,
 					Position: "after",
-					Dimmed:   true,
 					MaxLines: 5,
 				})
 			}
@@ -177,7 +175,6 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 					card.Nested = append(card.Nested, tuicore.NestedCard{
 						Card:     parentCard,
 						Position: "after",
-						Dimmed:   true,
 						MaxLines: 5,
 					})
 				}

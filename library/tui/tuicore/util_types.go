@@ -377,8 +377,7 @@ type CardContent struct {
 type NestedCard struct {
 	Card     Card
 	Position string // "before" or "after" main content
-	Dimmed   bool
-	MaxLines int // 0 = use default (5)
+	MaxLines int    // 0 = use default (5)
 }
 
 // CardOptions controls how a card is rendered
