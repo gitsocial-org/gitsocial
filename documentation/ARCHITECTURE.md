@@ -209,7 +209,7 @@ Outside the tree:
 |---------|-------|---------|
 | `core/git`<br>Git operations | `Commit`, `FileDiff`, `Hunk`, `DiffLine`, `DiffStats` | `GetCommits`, `CreateCommit`, `ReadRef`, `WriteRef`, `GetDiff`, `GetFileDiff`, `GetFileContent`, `GetDiffStats`, `MergeBranches`, `SquashMerge`, `RebaseMerge`, `ForceMerge`, `RebaseBranch`, `RangeDiff`, `PatchesEqual`, `GetBehindCount`, `GetMergeBase`, `GetUserName`, `GetGitConfig`, `GetCommitSignerKey` |
 | `core/protocol`<br>Message parsing | `Header`, `Message`, `Origin`, `Trailer` | `ParseMessage`, `ParseHeader`, `CreateHeader`, `FormatMessage`, `ParseRef`, `CreateRef`, `FormatShortRef`, `QuoteContent`, `ApplyOrigin`, `ExtractTrailers`, `Trailer` |
-| `core/cache`<br>SQLite operations | `Repository`, `Commit`, `TrailerRef` | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `ResetRepositoryData`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef` |
+| `core/cache`<br>SQLite operations | `Repository`, `Commit`, `TrailerRef` | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `MarkCommitsStaleByHome`, `GetCommitOnAnyBranch`, `ResetRepositoryData`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef` |
 | `core/gitmsg`<br>Protocol-level storage | | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsBranchConfigurable`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
 | `core/storage`<br>Bare repo management | | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
 | `core/objstore`<br>S3 remote | `Client`, `Config`, `HelperEnv`, `Progress`, `LocalCommitSource`, `PushOutcome`, `PostPushHook`, `SiteOverride` | `NewClient`, `ClientForRemote`, `ParseS3URL`, `RunHelper`, `HelperEnvFromOS`, `ListRemoteRefs`, `ReadRemoteRefs`, `RebuildRefManifest`, `LogDumbTransportInfo`, `RefsHeadDigest`, `ReadPackedObject`, `ThinUpstreamURL`, `CompressJSON`, `ReadCompressedJSON`, `PutCompressed`, `UploadConcurrency`, `RunParallel`, `PushArtifactObjects`, `PutObjectToRemote` |
@@ -244,7 +244,7 @@ A push is the sequence: the data push, then the site step after it.
 
 ## Cache
 
-You can delete the storage under `repositories/` at any time; GitSocial uses `cache.db`, not the storage, to decide what to fetch. The cache is append-only. A commit that leaves its source branch (rebase, force-push) is stale: `cache.MarkCommitsStale` or `MarkCommitsStaleByRepo` sets its `stale_since`. Timeline and list queries exclude stale commits, and thread and detail views show them dimmed.
+You can delete the storage under `repositories/` at any time; GitSocial uses `cache.db`, not the storage, to decide what to fetch. The cache is append-only. A commit that leaves its source branch (rebase, force-push) is stale: `cache.MarkCommitsStale` or `MarkCommitsStaleByRepo` sets its `stale_since`. In the workspace, a row is stale when its branch is not the [home](#workspace-home-branch) of its commit, and `MarkCommitsStaleByHome` sets the value. Timeline and list queries exclude stale commits, and thread and detail views show them dimmed.
 
 SQLite: WAL, 64 MB page cache, temp store in memory, 16 connections, 256 MB mmap.
 
@@ -319,12 +319,37 @@ Fork refs sit outside `refs/gitmsg/`, keyed by `fetch.URLHash` of the fork ident
 
 | Repository | Cache | Storage |
 |---|---|---|
-| Workspace | full history, all branches | the workspace directory |
+| Workspace | full history, local branches and `origin` | the workspace directory |
 | Followed with `#branch:*` | full history, all branches | persistent |
 | Followed on one branch | full history, incremental | persistent |
 | Not followed | a 30-day window | may be deleted at any time |
 
-All-branch following stores each commit under its real refname. The workspace always follows all branches. Deduplication and stale marking work per repository through `FilterUnfetchedCommitsByRepo` and `MarkCommitsStaleByRepo`. Switching a repository between one branch and `*` runs `cache.ResetRepositoryData`, and the next fetch rebuilds the data of the repository.
+All-branch following stores each commit under its real refname. Deduplication and stale marking of a followed repository work per repository through `FilterUnfetchedCommitsByRepo` and `MarkCommitsStaleByRepo`. Switching a repository between one branch and `*` runs `cache.ResetRepositoryData`, and the next fetch rebuilds the data of the repository.
+
+### Workspace home branch
+
+The workspace sync stores each commit under one branch, its home, and the home is a function of the current refs. A cache built from empty has the same live rows as a cache that followed each change. `core/fetch/home.go` computes the home, and `SyncWorkspaceOrigin` and each `SyncWorkspace*` function ingest through it, with the workspace sync function of each extension and the mention and trailer processors.
+
+| Rule | Value | Test |
+|---|---|---|
+| Walked refs | `refs/heads/*` and `refs/remotes/origin/*`; no other remote, no tag, no state ref | `TestWorkspaceSync_otherRemoteAddsNothing`, `TestWorkspaceSync_skipsStateRefs` |
+| Logical branch | the ref name without `refs/heads/` or `refs/remotes/origin/` | `TestWorkspaceSync_contentBranchHome` |
+| Default branch | the `HEAD` of `origin`, then `main`, then `master`, then the first code branch by name | `TestDefaultBranch_ignoresCheckout` |
+| Home | the first branch that reaches the commit: the default branch, then each `gitmsg/*` branch by name, then each other branch | `TestHomeBranch_precedence` |
+| Order of the other branches | a branch whose tips another branch reaches comes first; unrelated branches sort by name | `TestHomeBranch_stackAncestorFirst` |
+| Live row | the row whose branch is the home; each other row of the hash is stale | `TestWorkspaceSync_mergeMovesHome`, `TestWorkspaceSync_selfHeals` |
+| Read marker | copied to the new home when a row goes stale | `TestMarkCommitsStaleByHome_readMarkerFollowsTheCommit` |
+| Gate | the names, tips and symrefs of the walked refs, in `core_sync_tips` | `TestWorkspaceSync_gateEqualsWalkSet` |
+| Stable branches | the default branch and the `gitmsg/*` branches; the sync reads only the commits after their last tips | `TestWorkspaceSync_rewindTakesTheFullPath` |
+| Full comparison | on a first build, a tip from older code, a stable branch that lost a commit, or a new set of stable branches; it reads each row | `TestWorkspaceSync_rewindTakesTheFullPath`, `TestSyncTip_oldFormatTriggersSync` |
+| Tip | advances only when each commit has its home row | `TestWorkspaceSync_tipNeedsFullState` |
+| Finalize | the stale marks and the tip are written only if no walked ref moved during the sync | `TestWorkspaceSync_refChangeDuringSyncSkipsFinalize` |
+| Origin sync | ingests with the sync functions in `Options.WorkspaceSyncs`; with none, the gate stays open for the caller | `TestSyncWorkspaceOrigin_runsTheWorkspaceSyncs` |
+| Rebuild | the live rows equal those of a cache built from empty | `TestWorkspaceSync_rebuildEqualsIncremental` |
+| Lookup of a commit | by repository and hash, the live row first | `TestGetCommitOnAnyBranch_prefersLive` |
+| Stale source | no mention notification, no trailer notification and no trailer reference | `TestMentionProvider_excludesStaleCommit`, `TestGetTrailerRefsTo_excludesStaleSource` |
+
+A different repository, a mirror or the upstream of a fork, is not workspace content when it is only a git remote. It gets into the cache through a list or a fork registration, under its own URL.
 
 ### Extension rules
 
