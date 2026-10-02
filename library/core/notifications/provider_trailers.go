@@ -34,6 +34,7 @@ func (p *trailerProvider) GetNotifications(workdir string, filter Filter) ([]Not
 			LEFT JOIN core_notification_reads r ON t.repo_url = r.repo_url AND t.hash = r.hash AND t.branch = r.branch
 			WHERE ref.author_email = ?
 			  AND c.author_email != ?
+			  AND c.stale_since IS NULL
 		`
 		args := []interface{}{userEmail, userEmail}
 		if filter.UnreadOnly {
@@ -94,6 +95,7 @@ func (p *trailerProvider) GetUnreadCount(workdir string) (int, error) {
 			LEFT JOIN core_notification_reads r ON t.repo_url = r.repo_url AND t.hash = r.hash AND t.branch = r.branch
 			WHERE ref.author_email = ?
 			  AND c.author_email != ?
+			  AND c.stale_since IS NULL
 			  AND r.repo_url IS NULL
 		`, userEmail, userEmail).Scan(&count)
 		return count, err

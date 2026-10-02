@@ -593,6 +593,36 @@ func TestMentionProvider_GetUnreadCount(t *testing.T) {
 	}
 }
 
+// TestMentionProvider_excludesStaleCommit: a mention in a stale commit gives no notification and no unread count.
+func TestMentionProvider_excludesStaleCommit(t *testing.T) {
+	setupTestDB(t)
+	workdir := setupGitRepo(t)
+	now := time.Now()
+	seedMentionData(t, "aaa111222333", "Bob", "bob@example.com", now)
+	seedMentionData(t, "bbb111222333", "Carol", "carol@example.com", now)
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`UPDATE core_commits SET stale_since = ? WHERE hash = ?`, now.UTC().Format(time.RFC3339), "aaa111222333")
+		return err
+	}); err != nil {
+		t.Fatalf("mark stale: %v", err)
+	}
+	p := &mentionProvider{}
+	items, err := p.GetNotifications(workdir, Filter{})
+	if err != nil {
+		t.Fatalf("GetNotifications() error = %v", err)
+	}
+	if len(items) != 1 || items[0].Actor.Email != "carol@example.com" {
+		t.Errorf("notifications = %+v, want the one from the live commit", items)
+	}
+	count, err := p.GetUnreadCount(workdir)
+	if err != nil {
+		t.Fatalf("GetUnreadCount() error = %v", err)
+	}
+	if count != 1 {
+		t.Errorf("unread count = %d, want 1", count)
+	}
+}
+
 func TestMentionProvider_GetUnreadCount_emptyEmail(t *testing.T) {
 	setupTestDB(t)
 	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")

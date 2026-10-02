@@ -27,6 +27,7 @@ func GetTrailerRefsTo(refRepoURL, refHash, refBranch string) ([]TrailerRef, erro
 			FROM core_trailer_refs t
 			JOIN core_commits c ON t.repo_url = c.repo_url AND t.hash = c.hash AND t.branch = c.branch
 			WHERE t.ref_repo_url = ? AND t.ref_hash = ? AND t.ref_branch = ?
+			  AND c.stale_since IS NULL
 			ORDER BY c.timestamp DESC
 		`, refRepoURL, refHash, refBranch)
 		if err != nil {
