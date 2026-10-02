@@ -825,3 +825,30 @@ func TestDefaultBranch_ignoresCheckout(t *testing.T) {
 		}
 	}
 }
+
+// TestSyncWorkspaceOrigin_runsTheWorkspaceSyncs: the origin sync ingests through the workspace sync functions of its options, with the home of each commit; with none it leaves the gate open.
+func TestSyncWorkspaceOrigin_runsTheWorkspaceSyncs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	testutil.OpenTempCache(t, sharedCacheDir)
+	dir := initWorkspace(t)
+	second := datedCommit(t, dir, "second", time.Now())
+	pushToBare(t, dir, false)
+	if _, stats := SyncWorkspaceOrigin(dir, nil, nil); stats.Items != 0 {
+		t.Errorf("items with no workspace sync = %d, want 0", stats.Items)
+	}
+	seen := make(map[string]string)
+	syncs := []WorkspaceSyncFunc{func(commits []git.Commit, _, _, _ string) {
+		for _, c := range commits {
+			seen[c.Hash] = CleanRefname(c.Refname)
+		}
+	}}
+	_, stats := SyncWorkspaceOrigin(dir, &Options{WorkspaceSyncs: syncs}, nil)
+	if stats.Items != 2 {
+		t.Errorf("items = %d, want 2", stats.Items)
+	}
+	if seen[second] != "main" {
+		t.Errorf("sync branch for %s = %q, want main", second, seen[second])
+	}
+}

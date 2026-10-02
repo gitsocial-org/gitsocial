@@ -100,10 +100,23 @@ func insertAndDispatch(storageDir, repoURL string, newGitCommits []git.Commit, b
 	return len(newCommits), nil
 }
 
-// CleanRefname strips ref prefixes to produce a short branch name. Tag refs
-// return "" so callers fall back to the default branch — tags are not branches
-// and storing "tags/X" in core_commits.branch attributes ancestor commits to
-// the tag rather than the branch that owns them.
+// ProcessorSync adapts per-commit processors to a workspace sync function.
+func ProcessorSync(processors []CommitProcessor) WorkspaceSyncFunc {
+	return func(commits []git.Commit, _, repoURL, defaultBranch string) {
+		for _, gc := range commits {
+			branch := CleanRefname(gc.Refname)
+			if branch == "" {
+				branch = defaultBranch
+			}
+			msg := protocol.ParseMessage(gc.Message)
+			for _, proc := range processors {
+				proc(gc, msg, repoURL, branch)
+			}
+		}
+	}
+}
+
+// CleanRefname strips ref prefixes to a short branch name; a tag ref gives "", and the caller uses its fallback branch.
 func CleanRefname(ref string) string {
 	if ref == "" || ref == "HEAD" || strings.HasSuffix(ref, "/HEAD") {
 		return ""

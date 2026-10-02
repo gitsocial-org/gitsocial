@@ -30,10 +30,10 @@ type Error struct {
 
 // Options controls fetch behavior.
 type Options struct {
-	WorkspaceBranch  string
 	Parallel         int
 	FetchAllBranches bool
 	OnProgress       func(repoURL string, processed, total int)
+	WorkspaceSyncs   []WorkspaceSyncFunc // the workspace sync of each extension; with none, the caller's sync ingests the workspace
 }
 
 // RepoInfo identifies a repository to fetch.
@@ -51,25 +51,14 @@ type Result = result.Result[Stats]
 // Extensions use this for post-fetch operations (e.g., follower detection, list caching).
 type PostFetchHook func(storageDir, repoURL, branch, workspaceURL string)
 
-// SyncWorkspaceOrigin refreshes the workspace from its own origin and ingests
-// its commits into the cache: the code branches, the gitmsg refs and their
-// tracking mirrors, and the workspace repository row. It is the part of a fetch
-// that concerns the workspace itself, split out so a caller that only needs its
-// own repo current (mirror's publish loop) can skip the rest of a full fetch —
-// registered forks, followed repos, identity backfill — which serve local
-// viewing rather than the workspace's own state. Returns the workspace's
-// origin URL ("" when it has no origin) and the stats it accumulated.
-func SyncWorkspaceOrigin(workdir string, opts *Options, processors []CommitProcessor, hooks []PostFetchHook) (string, Stats) {
+// SyncWorkspaceOrigin fetches the workspace's origin (code branches, gitmsg refs and their tracking mirrors) and runs the workspace sync; it returns the origin URL, "" with no origin, and the stats.
+func SyncWorkspaceOrigin(workdir string, opts *Options, hooks []PostFetchHook) (string, Stats) {
 	if opts == nil {
 		opts = &Options{}
 	}
 	stats := Stats{}
 	originURL := protocol.NormalizeURL(git.GetOriginURL(workdir))
 	if originURL != "" {
-		wsBranch := opts.WorkspaceBranch
-		if wsBranch == "" {
-			wsBranch = "main"
-		}
 		// Always fetch default refspec (configured tracking branches)
 		fetchErr := git.FetchRemote(workdir, "origin", nil)
 		// Always fetch gitmsg refs (config, lists, extension branches)
@@ -102,13 +91,9 @@ func SyncWorkspaceOrigin(workdir string, opts *Options, processors []CommitProce
 			}); err != nil {
 				log.Warn("insert workspace repository failed", "url", originURL, "error", err)
 			}
-			meta, metaErr := cache.GetRepositoryFetchMeta(originURL)
-			if metaErr == nil {
-				var since *time.Time
-				if meta.HasCommits {
-					since = sinceWithOverlap(meta.NewestCommitTime)
-				}
-				wsCount, wsErr := fetchAllBranches(workdir, originURL, wsBranch, since, processors)
+			// One ingest path, and only with every extension's sync: a sync with fewer would close the gate on them.
+			if len(opts.WorkspaceSyncs) > 0 {
+				_, wsCount, wsErr := syncWorkspaceHomes(workdir, opts.WorkspaceSyncs, 0, nil)
 				if wsErr != nil {
 					log.Warn("workspace commit processing failed", "url", originURL, "error", wsErr)
 				} else {
@@ -142,7 +127,7 @@ func FetchAll(workdir, cacheDir string, opts *Options, repos []RepoInfo, process
 	stats := Stats{}
 
 	// Sync workspace origin — workspace always uses all-branch logic
-	originURL, wsStats := SyncWorkspaceOrigin(workdir, opts, processors, hooks)
+	originURL, wsStats := SyncWorkspaceOrigin(workdir, opts, hooks)
 	stats.Items += wsStats.Items
 	stats.Repositories += wsStats.Repositories
 

@@ -1301,7 +1301,7 @@ func TestSyncWorkspaceOrigin_gitmsgBranches(t *testing.T) {
 	git.ExecGit(ws, []string{"remote", "add", "origin", bareDir})
 
 	// Absent locally: the fetch creates both branches at origin's tip.
-	SyncWorkspaceOrigin(ws, nil, nil, nil)
+	SyncWorkspaceOrigin(ws, nil, nil)
 	for _, branch := range []string{"gitmsg/social/posts", "gitmsg/review/prs"} {
 		local, _ := git.ReadRef(ws, branch)
 		remote, _ := git.ReadRef(repoDir, branch)
@@ -1329,7 +1329,7 @@ func TestSyncWorkspaceOrigin_gitmsgBranches(t *testing.T) {
 	git.ExecGit(repoDir, []string{"checkout", "main"})
 	git.ExecGit(repoDir, []string{"push", "origin", "--all"})
 
-	SyncWorkspaceOrigin(ws, nil, nil, nil)
+	SyncWorkspaceOrigin(ws, nil, nil)
 
 	// Ancestor locally: the fetch fast-forwards to origin's new tip.
 	local, _ := git.ReadRef(ws, "gitmsg/social/posts")
@@ -1339,24 +1339,6 @@ func TestSyncWorkspaceOrigin_gitmsgBranches(t *testing.T) {
 	}
 	if local, _ := git.ReadRef(ws, "gitmsg/review/prs"); local != diverged {
 		t.Errorf("gitmsg/review/prs = %q, want the diverged local commit %q", local, diverged)
-	}
-}
-
-func TestFetchAll_workspaceSyncCustomBranch(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-	t.Parallel()
-	repoDir, _ := initTestRepo(t, 1)
-	pushToBare(t, repoDir, false)
-
-	// Explicit WorkspaceBranch exercises the branch != "" path
-	res := FetchAll(repoDir, t.TempDir(), &Options{WorkspaceBranch: "develop"}, nil, nil, nil)
-	if !res.Success {
-		t.Errorf("FetchAll() failed: %v", res.Error)
-	}
-	if res.Data.Repositories < 1 {
-		t.Errorf("repositories = %d, want >= 1", res.Data.Repositories)
 	}
 }
 

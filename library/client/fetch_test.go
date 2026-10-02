@@ -110,8 +110,8 @@ func TestProcessorSetsCoverEveryExtension(t *testing.T) {
 			}
 		}
 	}
-	if got := len(workspaceSyncs()); got != len(cases)+1 {
-		t.Errorf("workspaceSyncs has %d entries, want %d (one per extension)", got, len(cases)+1)
+	if got := len(workspaceSyncs()); got != len(cases)+2 {
+		t.Errorf("workspaceSyncs has %d entries, want %d (one per extension and the notification processors)", got, len(cases)+2)
 	}
 }
 
@@ -128,6 +128,20 @@ func TestExtraProcessorsRecordMentions(t *testing.T) {
 	}
 	if got := rowCount(t, "core_mentions", commit.Hash); got != 1 {
 		t.Errorf("core_mentions rows = %d, want 1 (the mention processor is missing from the set)", got)
+	}
+}
+
+// TestWorkspaceSyncsRecordMentions checks that the workspace sync writes the mention of a commit, as the fetch processors do.
+func TestWorkspaceSyncsRecordMentions(t *testing.T) {
+	testutil.OpenTempCache(t, "")
+	commit := git.Commit{Hash: "cccc000000000000000000000000000000000002", Message: "ping @grace@example.com", Author: "Ada", Email: "ada@example.com", Timestamp: time.Now(), Refname: "refs/heads/main"}
+	seedCommit(t, commit, "main")
+	workdir := t.TempDir()
+	for _, sync := range workspaceSyncs() {
+		sync([]git.Commit{commit}, workdir, testRepoURL, "main")
+	}
+	if got := rowCount(t, "core_mentions", commit.Hash); got != 1 {
+		t.Errorf("core_mentions rows = %d, want 1 (the workspace sync has no mention processor)", got)
 	}
 }
 
@@ -161,8 +175,8 @@ func TestBackfillSpecsCoverEveryExtension(t *testing.T) {
 		}
 		seen[s.Extension] = true
 	}
-	if got := len(workspaceSyncs()); got != len(want) {
-		t.Errorf("workspaceSyncs has %d entries, want %d (one per extension)", got, len(want))
+	if got := len(workspaceSyncs()); got != len(want)+1 {
+		t.Errorf("workspaceSyncs has %d entries, want %d (one per extension and the notification processors)", got, len(want)+1)
 	}
 }
 

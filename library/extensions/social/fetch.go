@@ -21,6 +21,7 @@ type FetchOptions struct {
 	FetchAllBranches bool
 	ExtraProcessors  []fetch.CommitProcessor
 	ExtraHooks       []fetch.PostFetchHook
+	WorkspaceSyncs   []fetch.WorkspaceSyncFunc
 	OnProgress       func(repoURL string, processed, total int)
 }
 
@@ -65,10 +66,10 @@ func Fetch(workdir, cacheDir string, opts *FetchOptions) fetch.Result {
 	}
 
 	coreOpts := &fetch.Options{
-		WorkspaceBranch:  gitmsg.GetExtBranch(workdir, "social"),
 		Parallel:         opts.Parallel,
 		FetchAllBranches: opts.FetchAllBranches,
 		OnProgress:       opts.OnProgress,
+		WorkspaceSyncs:   opts.WorkspaceSyncs,
 	}
 
 	processors := Processors()

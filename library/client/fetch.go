@@ -30,6 +30,7 @@ func Fetch(workdir, cacheDir string, opts FetchOptions) (fetch.Result, fetch.Sta
 		FetchAllBranches: opts.FetchAllBranches,
 		ExtraProcessors:  extraProcessors(),
 		ExtraHooks:       review.PostFetchHooks(),
+		WorkspaceSyncs:   workspaceSyncs(),
 		OnProgress:       opts.OnProgress,
 	})
 	forkStats := FetchForks(workdir, cacheDir)
@@ -108,7 +109,14 @@ func recountSocialInteractions() {
 
 // SyncWorkspaceOrigin refreshes the workspace from its own origin and ingests its commits.
 func SyncWorkspaceOrigin(workdir string, opts *fetch.Options) (string, fetch.Stats) {
-	return fetch.SyncWorkspaceOrigin(workdir, opts, processors(), hooks())
+	withSyncs := fetch.Options{}
+	if opts != nil {
+		withSyncs = *opts
+	}
+	withSyncs.WorkspaceSyncs = workspaceSyncs()
+	originURL, stats := fetch.SyncWorkspaceOrigin(workdir, &withSyncs, hooks())
+	recountSocialInteractions()
+	return originURL, stats
 }
 
 // BackfillWorkspaceIdentity extracts signer keys for the workspace and verifies their bindings.
@@ -142,6 +150,7 @@ func workspaceSyncs() []fetch.WorkspaceSyncFunc {
 		review.SyncWorkspaceBatch,
 		release.SyncWorkspaceBatch,
 		memo.SyncWorkspaceBatch,
+		fetch.ProcessorSync([]fetch.CommitProcessor{notifications.MentionProcessor(), notifications.TrailerProcessor()}),
 	}
 }
 
