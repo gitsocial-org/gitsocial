@@ -71,8 +71,8 @@ const (
 	grayPrimaryLight   = "236"
 	grayNormalDark     = "250" // default body text
 	grayNormalLight    = "238"
-	graySecondaryDark  = "242" // dim: labels, meta, muted, line numbers
-	graySecondaryLight = "244"
+	graySecondaryDark  = "245" // dim: labels, meta, muted, line numbers
+	graySecondaryLight = "242"
 
 	graySelectedDark  = "240" // row-selection / focus-highlight background
 	graySelectedLight = "252"
@@ -173,13 +173,4 @@ var (
 	DiffRemoved    = adaptive(diffRemovedDark, diffRemovedLight)
 	DiffHunkHeader = adaptive(diffHunkHeaderDark, diffHunkHeaderLight)
 	diffLineNum    = adaptive(graySecondaryDark, graySecondaryLight)
-)
-
-// Renderer grays that can't reuse the adaptiveColor tiers directly: chroma
-// needs hex strings, so the canonical ANSI tokens above aren't usable here.
-const (
-	// Dimmed syntax for stale/retracted code: one flat gray so dimmed code
-	// reads as uniformly de-emphasized.
-	grayDimDark  = "#808080"
-	grayDimLight = "#9e9e9e"
 )

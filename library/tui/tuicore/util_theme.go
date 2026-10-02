@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	"charm.land/glamour/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/styles"
@@ -68,9 +69,10 @@ func chromaStyleFor(dark bool) *chroma.Style {
 	return styles.Get("github")
 }
 
-// chromaDimStyleFor builds the dimmed syntax style for stale and retracted code: one low-contrast gray.
+// chromaDimStyleFor builds the dimmed syntax style for stale and retracted code: the secondary text gray as hex.
 func chromaDimStyleFor(dark bool, fallback *chroma.Style) *chroma.Style {
-	dim := pickFor(dark, grayDimDark, grayDimLight)
+	r, g, b, _ := lipgloss.Color(pickFor(dark, graySecondaryDark, graySecondaryLight)).RGBA()
+	dim := fmt.Sprintf("#%02x%02x%02x", r>>8, g>>8, b>>8)
 	builder := chroma.NewStyleBuilder("dimmed")
 	for _, token := range []chroma.TokenType{
 		chroma.Background, chroma.Text, chroma.Keyword, chroma.KeywordType, chroma.NameFunction,
