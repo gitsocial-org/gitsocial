@@ -154,6 +154,8 @@ type GetCommitsOptions struct {
 	// Exclude drops each hash and its ancestors from the walk (git log ^<hash>),
 	// skipping hashes the repository no longer has.
 	Exclude []string
+	// Hashes reads these commits with no walk; Branch, All and IncludeRefs are then ignored.
+	Hashes []string
 }
 
 // GetCommits retrieves commits from the repository with filtering options.
@@ -165,7 +167,10 @@ func GetCommits(workdir string, opts *GetCommitsOptions) ([]Commit, error) {
 	format := fmt.Sprintf("%s%%h%s%%cd%s%%an%s%%ae%s%%B%s%%S", recordSep, unitSep, unitSep, unitSep, unitSep, unitSep)
 	args := []string{"log"}
 
-	if opts.All {
+	if len(opts.Hashes) > 0 {
+		args = append(args, "--no-walk")
+		args = append(args, opts.Hashes...)
+	} else if opts.All {
 		// Exclude tags so a commit's `%S` source ref resolves to the branch that
 		// reaches it, not whichever tag git happens to scan first. Otherwise
 		// every ancestor of a tag gets attributed to `refs/tags/X` and stored
@@ -453,6 +458,54 @@ func GetAllUnpushedCommits(workdir string) (map[string]struct{}, error) {
 		}
 	}
 	return hashes, nil
+}
+
+// GetCommitHashes returns the non-merge commits that refs reach and exclude does not, newest first, up to limit when it is set.
+func GetCommitHashes(workdir string, refs, exclude []string, limit int) ([]string, error) {
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	args := []string{"rev-list", "--no-merges", "--abbrev-commit", "--abbrev=12"}
+	if limit > 0 {
+		args = append(args, fmt.Sprintf("--max-count=%d", limit))
+	}
+	args = append(args, refs...)
+	for _, ref := range exclude {
+		args = append(args, "^"+ref)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	result, err := ExecGitContext(ctx, workdir, args)
+	if err != nil {
+		return nil, fmt.Errorf("rev-list: %w", err)
+	}
+	return strings.Fields(result.Stdout), nil
+}
+
+// GetCommitGraph returns each commit that refs reach and exclude does not, newest first, as its full hash, its abbreviated hash and its parents; the revisions go through stdin.
+func GetCommitGraph(workdir string, refs, exclude []string) ([][]string, error) {
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	var revs strings.Builder
+	for _, ref := range refs {
+		revs.WriteString(ref + "\n")
+	}
+	for _, ref := range exclude {
+		revs.WriteString("^" + ref + "\n")
+	}
+	out, err := execGitWithStdin(workdir, []string{"log", "--format=%H %h %P", "--abbrev=12", "--stdin"}, revs.String())
+	if err != nil {
+		return nil, fmt.Errorf("log graph: %w", err)
+	}
+	lines := strings.Split(out, "\n")
+	graph := make([][]string, 0, len(lines))
+	for _, line := range lines {
+		if fields := strings.Fields(line); len(fields) >= 2 {
+			graph = append(graph, fields)
+		}
+	}
+	return graph, nil
 }
 
 // GetAllCommitHashes returns all commit hashes in the repository (all refs, excluding gitmsg/config).

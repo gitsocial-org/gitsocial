@@ -530,6 +530,70 @@ func MarkCommitsStaleByRepo(repoURL string, liveHashes map[string]bool) (int, er
 	})
 }
 
+// MarkCommitsStaleByHome marks each row stale whose branch is not the home of its commit, and live again when it is; a read marker follows a commit to its new home, and the rows of the settled branches are not read.
+func MarkCommitsStaleByHome(repoURL string, homes map[string]string, settled []string) (int, error) {
+	repoURL = protocol.NormalizeURL(repoURL)
+	return QueryLocked(func(db *sql.DB) (int, error) {
+		query := `SELECT hash, branch, stale_since FROM core_commits WHERE repo_url = ? AND is_virtual = 0`
+		args := []interface{}{repoURL}
+		if len(settled) > 0 {
+			query += ` AND branch NOT IN (` + strings.TrimSuffix(strings.Repeat("?,", len(settled)), ",") + `)`
+			for _, branch := range settled {
+				args = append(args, branch)
+			}
+		}
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			return 0, fmt.Errorf("query commits for stale check: %w", err)
+		}
+		defer rows.Close()
+		type commitKey struct{ hash, branch string }
+		var toStale, toUnstale []commitKey
+		for rows.Next() {
+			var hash, branch string
+			var staleSince sql.NullString
+			if err := rows.Scan(&hash, &branch, &staleSince); err != nil {
+				return 0, fmt.Errorf("scan commit for stale check: %w", err)
+			}
+			live := homes[hash] == branch
+			if !live && !staleSince.Valid {
+				toStale = append(toStale, commitKey{hash, branch})
+			} else if live && staleSince.Valid {
+				toUnstale = append(toUnstale, commitKey{hash, branch})
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return 0, err
+		}
+		now := time.Now().UTC().Format(time.RFC3339)
+		for _, k := range toStale {
+			if _, err := db.Exec(
+				`UPDATE core_commits SET stale_since = ? WHERE repo_url = ? AND hash = ? AND branch = ?`,
+				now, repoURL, k.hash, k.branch); err != nil {
+				return 0, fmt.Errorf("mark stale %s: %w", k.hash, err)
+			}
+			home := homes[k.hash]
+			if home == "" {
+				continue
+			}
+			if _, err := db.Exec(
+				`INSERT OR IGNORE INTO core_notification_reads (repo_url, hash, branch, read_at)
+				 SELECT repo_url, hash, ?, read_at FROM core_notification_reads WHERE repo_url = ? AND hash = ? AND branch = ?`,
+				home, repoURL, k.hash, k.branch); err != nil {
+				return 0, fmt.Errorf("move read marker %s: %w", k.hash, err)
+			}
+		}
+		for _, k := range toUnstale {
+			if _, err := db.Exec(
+				`UPDATE core_commits SET stale_since = NULL WHERE repo_url = ? AND hash = ? AND branch = ?`,
+				repoURL, k.hash, k.branch); err != nil {
+				return 0, fmt.Errorf("unstale %s: %w", k.hash, err)
+			}
+		}
+		return len(toStale), nil
+	})
+}
+
 // ResetRepositoryData deletes all commits and extension items for a repo.
 // Used when switching between specific branch and * following mode, and when
 // GC'ing a memo session bare repo whose `local:<path>` rows are now orphaned.
@@ -647,7 +711,7 @@ func GetCommit(repoURL, hashPrefix, branch string) (Commit, error) {
 	})
 }
 
-// GetCommitOnAnyBranch returns a cached commit by repo URL and hash prefix, on the branch the cache stores it under.
+// GetCommitOnAnyBranch returns a cached commit by repo URL and hash prefix, the live row before a stale one.
 func GetCommitOnAnyBranch(repoURL, hashPrefix string) (Commit, error) {
 	repoURL = protocol.NormalizeURL(repoURL)
 	if !isHexString(hashPrefix) {
@@ -656,7 +720,7 @@ func GetCommitOnAnyBranch(repoURL, hashPrefix string) (Commit, error) {
 	return QueryLocked(func(db *sql.DB) (Commit, error) {
 		var c Commit
 		var ts string
-		err := db.QueryRow(`SELECT hash, repo_url, branch, author_name, author_email, message, timestamp FROM core_commits WHERE repo_url = ? AND hash LIKE ? ORDER BY is_virtual LIMIT 1`,
+		err := db.QueryRow(`SELECT hash, repo_url, branch, author_name, author_email, message, timestamp FROM core_commits WHERE repo_url = ? AND hash LIKE ? ORDER BY stale_since IS NOT NULL, is_virtual LIMIT 1`,
 			repoURL, hashPrefix+"%").Scan(&c.Hash, &c.RepoURL, &c.Branch, &c.AuthorName, &c.AuthorEmail, &c.Message, &ts)
 		if err != nil {
 			return Commit{}, fmt.Errorf("get commit: %w", err)

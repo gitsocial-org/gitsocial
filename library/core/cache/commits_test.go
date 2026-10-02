@@ -350,3 +350,142 @@ func TestInsertCommits_withEditsRetracted(t *testing.T) {
 		t.Error("IsRetracted should be true")
 	}
 }
+
+// staleByBranch returns, per branch, whether the row of a hash in the test repository is stale.
+func staleByBranch(t *testing.T, hash string) map[string]bool {
+	t.Helper()
+	repoURL := "https://github.com/user/repo"
+	stale, err := QueryLocked(func(db *sql.DB) (map[string]bool, error) {
+		rows, err := db.Query("SELECT branch, stale_since IS NOT NULL FROM core_commits WHERE repo_url = ? AND hash = ?", repoURL, hash)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		out := make(map[string]bool)
+		for rows.Next() {
+			var branch string
+			var isStale bool
+			if err := rows.Scan(&branch, &isStale); err != nil {
+				return nil, err
+			}
+			out[branch] = isStale
+		}
+		return out, rows.Err()
+	})
+	if err != nil {
+		t.Fatalf("query stale rows: %v", err)
+	}
+	return stale
+}
+
+func TestMarkCommitsStaleByHome_rowIsLiveOnlyUnderItsHome(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/user/repo"
+	now := time.Now()
+	if err := InsertCommits([]Commit{
+		{Hash: "aaa111111111", RepoURL: repoURL, Branch: "feature/x", Message: "moved", Timestamp: now},
+		{Hash: "aaa111111111", RepoURL: repoURL, Branch: "main", Message: "moved", Timestamp: now},
+		{Hash: "bbb222222222", RepoURL: repoURL, Branch: "main", Message: "gone", Timestamp: now},
+	}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	staled, err := MarkCommitsStaleByHome(repoURL, map[string]string{"aaa111111111": "main"}, nil)
+	if err != nil {
+		t.Fatalf("MarkCommitsStaleByHome() error = %v", err)
+	}
+	if staled != 2 {
+		t.Errorf("staled = %d, want 2", staled)
+	}
+	moved := staleByBranch(t, "aaa111111111")
+	if moved["main"] || !moved["feature/x"] {
+		t.Errorf("stale by branch = %v, want main live and feature/x stale", moved)
+	}
+	if gone := staleByBranch(t, "bbb222222222"); !gone["main"] {
+		t.Errorf("a commit with no home is not stale: %v", gone)
+	}
+	// The home moves back: the old row is live again and the other goes stale.
+	if _, err := MarkCommitsStaleByHome(repoURL, map[string]string{"aaa111111111": "feature/x"}, nil); err != nil {
+		t.Fatalf("MarkCommitsStaleByHome() error = %v", err)
+	}
+	back := staleByBranch(t, "aaa111111111")
+	if !back["main"] || back["feature/x"] {
+		t.Errorf("stale by branch = %v, want feature/x live and main stale", back)
+	}
+}
+
+func TestMarkCommitsStaleByHome_readMarkerFollowsTheCommit(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/user/repo"
+	now := time.Now()
+	if err := InsertCommits([]Commit{
+		{Hash: "aaa111111111", RepoURL: repoURL, Branch: "feature/x", Message: "moved", Timestamp: now},
+		{Hash: "aaa111111111", RepoURL: repoURL, Branch: "main", Message: "moved", Timestamp: now},
+	}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	if err := ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec("INSERT INTO core_notification_reads (repo_url, hash, branch, read_at) VALUES (?, ?, ?, ?)",
+			repoURL, "aaa111111111", "feature/x", "2026-01-01T00:00:00Z")
+		return err
+	}); err != nil {
+		t.Fatalf("insert read marker: %v", err)
+	}
+	if _, err := MarkCommitsStaleByHome(repoURL, map[string]string{"aaa111111111": "main"}, nil); err != nil {
+		t.Fatalf("MarkCommitsStaleByHome() error = %v", err)
+	}
+	read, err := QueryLocked(func(db *sql.DB) (int, error) {
+		var c int
+		err := db.QueryRow("SELECT COUNT(*) FROM core_notification_reads WHERE repo_url = ? AND hash = ? AND branch = ?",
+			repoURL, "aaa111111111", "main").Scan(&c)
+		return c, err
+	})
+	if err != nil {
+		t.Fatalf("query read marker: %v", err)
+	}
+	if read != 1 {
+		t.Errorf("read markers under the new home = %d, want 1", read)
+	}
+}
+
+func TestGetCommitOnAnyBranch_prefersLive(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/user/repo"
+	now := time.Now()
+	if err := InsertCommits([]Commit{
+		{Hash: "aaa111111111", RepoURL: repoURL, Branch: "a-feature", Message: "moved", Timestamp: now},
+		{Hash: "aaa111111111", RepoURL: repoURL, Branch: "main", Message: "moved", Timestamp: now},
+	}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	if _, err := MarkCommitsStaleByHome(repoURL, map[string]string{"aaa111111111": "main"}, nil); err != nil {
+		t.Fatalf("MarkCommitsStaleByHome() error = %v", err)
+	}
+	got, err := GetCommitOnAnyBranch(repoURL, "aaa111111111")
+	if err != nil {
+		t.Fatalf("GetCommitOnAnyBranch() error = %v", err)
+	}
+	if got.Branch != "main" {
+		t.Errorf("branch = %q, want the live row under main", got.Branch)
+	}
+}
+
+func TestMarkCommitsStaleByHome_settledBranchIsNotRead(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/user/repo"
+	now := time.Now()
+	if err := InsertCommits([]Commit{
+		{Hash: "aaa111111111", RepoURL: repoURL, Branch: "main", Message: "old history", Timestamp: now},
+		{Hash: "bbb222222222", RepoURL: repoURL, Branch: "feature/x", Message: "gone", Timestamp: now},
+	}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	if _, err := MarkCommitsStaleByHome(repoURL, map[string]string{}, []string{"main"}); err != nil {
+		t.Fatalf("MarkCommitsStaleByHome() error = %v", err)
+	}
+	if staleByBranch(t, "aaa111111111")["main"] {
+		t.Error("a row of a settled branch went stale")
+	}
+	if !staleByBranch(t, "bbb222222222")["feature/x"] {
+		t.Error("a row with no home under a branch that is not settled stayed live")
+	}
+}
