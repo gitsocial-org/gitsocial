@@ -300,7 +300,7 @@ func TestProviderNotifications(t *testing.T) {
 	t.Run("GetNotifications_limitTruncation", func(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
-		wsURL := "https://github.com/test/repo"
+		wsURL := ownRepoURL(t, dir, "provider-limit")
 		prHash := "d0a012345678"
 		insertReviewTestCommit(t, wsURL, prHash)
 		InsertReviewItem(ReviewItem{RepoURL: wsURL, Hash: prHash, Branch: reviewTestBranch, Type: "pull-request", State: cache.ToNullString("open")})
@@ -332,7 +332,7 @@ func TestProviderNotifications(t *testing.T) {
 	t.Run("GetNotifications_withData", func(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
-		wsURL := "https://github.com/test/repo"
+		wsURL := ownRepoURL(t, dir, "provider-data")
 		prHash := "e0a012345678"
 		fbHash := "e0b012345678"
 		insertReviewTestCommit(t, wsURL, prHash)
@@ -363,7 +363,7 @@ func TestProviderNotifications(t *testing.T) {
 	t.Run("GetUnreadCount_withData", func(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
-		wsURL := "https://github.com/test/repo"
+		wsURL := ownRepoURL(t, dir, "provider-unread")
 		prHash := "e1a012345678"
 		fbHash := "e1b012345678"
 		insertReviewTestCommit(t, wsURL, prHash)
@@ -390,6 +390,16 @@ func TestProviderNotifications(t *testing.T) {
 			t.Errorf("expected at least 1 unread, got %d", count)
 		}
 	})
+}
+
+// ownRepoURL points the origin of a test workspace at a repository URL of its own, so no parallel test writes the rows it reads.
+func ownRepoURL(t *testing.T, dir, name string) string {
+	t.Helper()
+	url := "https://github.com/test/" + name
+	if _, err := git.ExecGit(dir, []string{"remote", "set-url", "origin", url}); err != nil {
+		t.Fatalf("set origin: %v", err)
+	}
+	return url
 }
 
 // countPRReady returns the pr-ready notifications the upstream sees.
