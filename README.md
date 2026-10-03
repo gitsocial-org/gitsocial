@@ -1,12 +1,9 @@
-<div align="center">
 
-  <h1>GitSocial</h1>
+<h1>GitSocial</h1>
 
-  *Git-native collaboration platform*
+*Git-native collaboration platform*
 
-</div>
-
-## About
+---
 
 GitSocial is an open source Go binary that stores issues, pull requests, comments and other data in git. It can push that data to your own S3 bucket, which then serves as both a git remote and a static site. [GitSocial.org](https://gitsocial.org) runs this way.
 
