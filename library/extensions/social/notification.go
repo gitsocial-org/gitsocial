@@ -14,10 +14,10 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// userThreadsCTE pre-computes the threads the user is in; parameters: userEmail, workspaceURL, workdir.
+// userThreadsCTE pre-computes the threads the user is in, each by repository and hash; parameters: userEmail, workspaceURL, workdir.
 const userThreadsCTE = `
 	user_threads AS (
-		SELECT DISTINCT s.original_repo_url, s.original_hash, s.original_branch
+		SELECT DISTINCT s.original_repo_url, s.original_hash
 		FROM social_items s
 		JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
 		WHERE s.type IN ('comment', 'repost', 'quote')
@@ -49,7 +49,6 @@ const notifiableItems = `
 	      SELECT 1 FROM user_threads ut
 	      WHERE ut.original_repo_url = s.original_repo_url
 	        AND ut.original_hash = s.original_hash
-	        AND ut.original_branch = s.original_branch
 	    ) AND ` + followedReposCondition + `)
 	  )
 `

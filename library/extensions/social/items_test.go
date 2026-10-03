@@ -1396,3 +1396,43 @@ func TestInsertSocialItem_upgradeFromVirtual(t *testing.T) {
 		t.Error("expected virtual flag cleared after upgrade")
 	}
 }
+
+// TestRecount_movedTarget pins invariant 5: the counts of a moved target add up on its live row.
+func TestRecount_movedTarget(t *testing.T) {
+	setupTestDB(t)
+	repo := "https://github.com/moved/counts"
+	insertMovedCommit(t, repo, "c0c000000001")
+	// The comment under the old branch comes last, so its recount decides the counts.
+	insertCommentOn(t, "c0c000000003", repo, "c0c000000001", itemsTestBranch)
+	insertCommentOn(t, "c0c000000002", repo, "c0c000000001", movedFromBranch)
+
+	counts, err := RefreshInteractionCounts(repo, "c0c000000001", itemsTestBranch)
+	if err != nil {
+		t.Fatalf("RefreshInteractionCounts() error = %v", err)
+	}
+	if counts.Comments != 2 {
+		t.Errorf("live row comments = %d, want 2", counts.Comments)
+	}
+}
+
+// TestRecountAll_movedTarget pins invariant 5 on the full rebuild after a fetch.
+func TestRecountAll_movedTarget(t *testing.T) {
+	setupTestDB(t)
+	repo := "https://github.com/moved/recountall"
+	insertMovedCommit(t, repo, "c0a000000001")
+	insertCommentOn(t, "c0a000000002", repo, "c0a000000001", movedFromBranch)
+	insertCommentOn(t, "c0a000000003", repo, "c0a000000001", itemsTestBranch)
+
+	if err := RecountAllInteractions(); err != nil {
+		t.Fatalf("RecountAllInteractions() error = %v", err)
+	}
+	for branch, want := range map[string]int{itemsTestBranch: 2, movedFromBranch: 0} {
+		counts, err := RefreshInteractionCounts(repo, "c0a000000001", branch)
+		if err != nil {
+			t.Fatalf("RefreshInteractionCounts(%s) error = %v", branch, err)
+		}
+		if counts.Comments != want {
+			t.Errorf("comments on the %s row = %d, want %d", branch, counts.Comments, want)
+		}
+	}
+}

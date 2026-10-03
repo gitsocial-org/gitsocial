@@ -296,7 +296,7 @@ type itemKey struct{ repoURL, hash, branch string }
 // maxThreadDepth bounds the reply-to walk so a cyclic chain cannot loop.
 const maxThreadDepth = 50
 
-// recountInteractionsQuery counts the live comments in a target's thread and the reposts and quotes of it.
+// recountInteractionsQuery counts the live comments in a target's thread and the reposts and quotes of it; the original matches by repository and hash.
 const recountInteractionsQuery = `
 	WITH RECURSIVE descendants(repo_url, hash, branch) AS (
 		SELECT ?, ?, ?
@@ -310,16 +310,32 @@ const recountInteractionsQuery = `
 	FROM social_items s
 	JOIN core_commits c ON c.repo_url = s.repo_url AND c.hash = s.hash AND c.branch = s.branch
 	WHERE c.is_edit_commit = 0 AND c.is_retracted = 0 AND c.stale_since IS NULL AND s.hash != ?
-	  AND ((s.original_repo_url = ? AND s.original_hash = ? AND s.original_branch = ?)
+	  AND ((s.original_repo_url = ? AND s.original_hash = ?)
 	       OR (s.repo_url, s.hash, s.branch) IN (SELECT repo_url, hash, branch FROM descendants))
 `
 
-// recountInteractions is the one writer of social_interactions: a count follows the live items.
+// liveTarget returns the key of a target's live row, by branch name between two live rows, or the stored key when the target has no row.
+func liveTarget(db *sql.DB, k itemKey) itemKey {
+	var branch string
+	if err := db.QueryRow(`SELECT t.branch FROM core_commits t WHERE t.repo_url = ? AND t.hash = ?
+		ORDER BY `+cache.LiveFirstOrder("t")+`, t.branch LIMIT 1`, k.repoURL, k.hash).Scan(&branch); err != nil {
+		return k
+	}
+	return itemKey{k.repoURL, k.hash, branch}
+}
+
+// recountInteractions is the one writer of social_interactions: a count follows the live items and sits on the live row of its target.
 func recountInteractions(db *sql.DB, targets []itemKey) {
-	for _, t := range targets {
+	seen := make(map[itemKey]bool, len(targets))
+	for _, stored := range targets {
+		t := liveTarget(db, stored)
+		if seen[t] {
+			continue
+		}
+		seen[t] = true
 		var comments, reposts, quotes int
 		if err := db.QueryRow(recountInteractionsQuery,
-			t.repoURL, t.hash, t.branch, t.hash, t.hash, t.hash, t.repoURL, t.hash, t.branch,
+			t.repoURL, t.hash, t.branch, t.hash, t.hash, t.hash, t.repoURL, t.hash,
 		).Scan(&comments, &reposts, &quotes); err != nil {
 			log.Warn("recount interactions failed", "hash", t.hash, "error", err)
 			continue
@@ -335,8 +351,8 @@ func recountInteractions(db *sql.DB, targets []itemKey) {
 	}
 }
 
-// recountAllInteractionsQuery rebuilds every target's counts in one pass over the live items.
-const recountAllInteractionsQuery = `
+// recountAllInteractionsQuery rebuilds every target's counts in one pass over the live items, each under the live row of its target.
+var recountAllInteractionsQuery = `
 	WITH RECURSIVE live AS (
 		SELECT s.repo_url, s.hash, s.branch, s.type,
 		       s.original_repo_url, s.original_hash, s.original_branch,
@@ -357,13 +373,19 @@ const recountAllInteractionsQuery = `
 		FROM live WHERE original_hash IS NOT NULL
 		UNION
 		SELECT repo_url, hash, branch, 'comment', item_hash FROM chain
+	), targets AS (
+		SELECT p.repo_url, p.hash,
+		       COALESCE((SELECT t.branch FROM core_commits t WHERE t.repo_url = p.repo_url AND t.hash = p.hash
+		                 ORDER BY ` + cache.LiveFirstOrder("t") + `, t.branch LIMIT 1), p.branch) AS branch,
+		       p.type, p.item_hash
+		FROM pairs p
 	)
 	INSERT INTO social_interactions (repo_url, hash, branch, comments, reposts, quotes)
 	SELECT repo_url, hash, branch,
 	       COUNT(DISTINCT CASE WHEN type = 'comment' THEN item_hash END),
 	       COUNT(DISTINCT CASE WHEN type = 'repost' THEN item_hash END),
 	       COUNT(DISTINCT CASE WHEN type = 'quote' THEN item_hash END)
-	FROM pairs
+	FROM targets
 	WHERE hash IS NOT NULL AND item_hash != hash
 	GROUP BY repo_url, hash, branch
 `

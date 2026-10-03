@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 )
 
@@ -181,4 +183,57 @@ func TestGetFollowNotifications_noAuthor(t *testing.T) {
 	if notifs[0].Actor.Name == "" {
 		t.Error("Actor.Name should fallback to display name")
 	}
+}
+
+// TestUserThreads_movedOriginal pins invariant 6: a comment under the new branch of a thread the user joined under the old one notifies the user.
+func TestUserThreads_movedOriginal(t *testing.T) {
+	workdir := initWorkspace(t)
+	workspaceURL := gitmsg.ResolveRepoURL(workdir)
+	userEmail := git.GetUserEmail(workdir)
+	followed := "https://github.com/moved/followed"
+	other := "https://github.com/moved/other"
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		if _, err := db.Exec(`INSERT INTO core_lists (id, name, source, version, workdir) VALUES (?, ?, ?, ?, ?)`,
+			"moved-follow", "Follow", "local", "0.1.0", workdir); err != nil {
+			return err
+		}
+		_, err := db.Exec(`INSERT INTO core_list_repositories (list_id, repo_url, branch) VALUES (?, ?, ?)`,
+			"moved-follow", followed, "*")
+		return err
+	}); err != nil {
+		t.Fatalf("seed list: %v", err)
+	}
+	insertMovedCommit(t, followed, "d0d000000001")
+	at := time.Date(2025, 10, 22, 12, 0, 0, 0, time.UTC)
+	commits := []cache.Commit{
+		{Hash: "d0d000000002", RepoURL: workspaceURL, Branch: "gitmsg/social", AuthorName: "Me", AuthorEmail: userEmail, Message: "Mine", Timestamp: at},
+		{Hash: "d0d000000003", RepoURL: other, Branch: "gitmsg/social", AuthorName: "Other", AuthorEmail: "other@test.com", Message: "Theirs", Timestamp: at.Add(time.Hour)},
+	}
+	if err := cache.InsertCommits(commits); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	for _, c := range []struct{ repo, hash, branch string }{
+		{workspaceURL, "d0d000000002", movedFromBranch},
+		{other, "d0d000000003", itemsTestBranch},
+	} {
+		if err := InsertSocialItem(SocialItem{
+			RepoURL: c.repo, Hash: c.hash, Branch: "gitmsg/social", Type: "comment",
+			OriginalRepoURL: cache.ToNullString(followed),
+			OriginalHash:    cache.ToNullString("d0d000000001"),
+			OriginalBranch:  cache.ToNullString(c.branch),
+		}); err != nil {
+			t.Fatalf("InsertSocialItem(%s) error = %v", c.hash, err)
+		}
+	}
+
+	notifs, err := getNotifications(workdir, notificationFilter{})
+	if err != nil {
+		t.Fatalf("getNotifications() error = %v", err)
+	}
+	for _, n := range notifs {
+		if n.Item != nil && n.Item.Display.CommitHash == "d0d000000003" {
+			return
+		}
+	}
+	t.Errorf("notifications = %+v, want the comment under the new branch", notifs)
 }
