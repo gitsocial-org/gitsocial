@@ -104,6 +104,31 @@ My Branches in the navigation, or `b` on a repository, opens its branches. The f
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
+### Code
+
+`c` on a repository or on a branch opens the tree of the branch; with no branch picked, the default branch. Enter descends into a directory or opens a file, and `backspace` goes up. A file shows line numbers and syntax color; a line range named by a reference is selected and scrolled into view. A binary file and a Git LFS pointer show their size only. The view reads the workspace or the local clone of a followed repository, and is read-only.
+
+```
+╭─ ▤  user/repo · main · src ────────────────────────────────────────────╮
+│                                                                         │
+│  ▸ ..                                                                   │
+│    lib/                                                                 │
+│    main.go · 2.0KB                                                      │
+│    vendor · submodule                                                   │
+│                                                                         │
+╰─────────────────────────────────────────────────────────────────────────╯
+
+╭─ ▤  user/repo · main · src/main.go ────────────────────────────────────╮
+│                                                                         │
+│   1  package main                                                       │
+│   2                                                                     │
+│   3  func main() {                                                      │
+│   4      run()                                                          │
+│   5  }                                                                  │
+│                                                                         │
+╰─────────────────────────────────────────────────────────────────────────╯
+```
+
 ### List repositories
 
 The view is a text list, with an input field for a local list.
@@ -508,7 +533,7 @@ Each view has a route; a view with no diagram uses the list or the detail layout
 
 | Section | Routes |
 |---|---|
-| Social | `/social/timeline`, `/social/my-repository`, `/social/repository`, `/social/repository/lists`, `/social/repository/branches`, `/social/list`, `/social/list/repos`, `/social/detail`, `/social/thread`, `/social/post-form`, `/social/history`, `/social/history/diff`, `/social/explore`, `/social/followers` |
+| Social | `/social/timeline`, `/social/my-repository`, `/social/repository`, `/social/repository/lists`, `/social/repository/branches`, `/social/repository/code`, `/social/list`, `/social/list/repos`, `/social/detail`, `/social/thread`, `/social/post-form`, `/social/history`, `/social/history/diff`, `/social/explore`, `/social/followers` |
 | PM | `/pm/board`, `/pm/issues`, `/pm/issue`, `/pm/new-issue`, `/pm/edit-issue`, `/pm/milestones`, `/pm/milestone`, `/pm/new-milestone`, `/pm/edit-milestone`, `/pm/sprints`, `/pm/sprint`, `/pm/new-sprint`, `/pm/edit-sprint`, `/pm/config`, and `/pm/<item>/history` with `/history/diff` for each item type |
 | Review | `/review/prs`, `/review/pr`, `/review/new-pr`, `/review/edit-pr`, `/review/feedback`, `/review/diff`, `/review/pr/interdiff`, `/review/pr/history`, `/review/pr/history/diff` |
 | Release | `/release/list`, `/release/detail`, `/release/new`, `/release/edit`, `/release/sbom`, `/release/history`, `/release/history/diff`, `/export-artifact` |

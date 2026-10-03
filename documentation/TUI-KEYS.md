@@ -208,6 +208,7 @@
 | `l` | Lists |
 | `a` | Add to my lists |
 | `b` | Branches |
+| `c` | Code |
 | `[/]` | Older/newer |
 | `r` | Refresh |
 | `!` | Errors |
@@ -223,6 +224,7 @@
 | `p` | Push |
 | `l` | Lists |
 | `b` | Branches |
+| `c` | Code |
 | `r` | Refresh |
 | `!` | Errors |
 | `tab` | Focus |
@@ -286,8 +288,25 @@
 | Key | Action |
 |-----|--------|
 | `enter` | Open |
+| `c` | Code |
 | `j` | Down |
 | `k` | Up |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Code
+
+| Key | Action |
+|-----|--------|
+| `enter` | Open |
+| `backspace` | Parent |
+| `j` | Down |
+| `k` | Up |
+| `ctrl+d` | Half-page down |
+| `ctrl+u` | Half-page up |
+| `g/G` | Top/bottom |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |

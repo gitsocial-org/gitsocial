@@ -5,6 +5,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
@@ -153,4 +154,13 @@ type branchesLoadedMsg struct {
 	Branches []cache.BranchSummary
 	Default  string // the default branch of the workspace, empty for a remote
 	Err      error
+}
+
+// codeLoadedMsg is sent when the code view has read a tree or a file of a branch
+type codeLoadedMsg struct {
+	Type    string // tree or blob
+	Branch  string // the branch that was read, resolved when the location named none
+	Entries []git.TreeEntry
+	Content string
+	Err     error
 }

@@ -3,6 +3,7 @@ package tuicore
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -105,6 +106,27 @@ func LocRepoBranches(url string) Location {
 		params["url"] = url
 	}
 	return Location{Path: "/social/repository/branches", Params: params}
+}
+
+// LocRepoCode creates a location for the code view of a repository at a path; an empty url is the workspace, an empty branch its default branch, and a line range of 0 none.
+func LocRepoCode(url, branch, path string, line, lineEnd int) Location {
+	params := map[string]string{}
+	if url != "" {
+		params["url"] = url
+	}
+	if branch != "" {
+		params["branch"] = branch
+	}
+	if path != "" {
+		params["path"] = path
+	}
+	if line > 0 {
+		params["line"] = strconv.Itoa(line)
+	}
+	if lineEnd > line {
+		params["lineEnd"] = strconv.Itoa(lineEnd)
+	}
+	return Location{Path: "/social/repository/code", Params: params}
 }
 
 // LocList creates a location for a list posts view.
@@ -460,7 +482,7 @@ func (r *Router) NavItemID() string {
 	path := r.location.Path
 	// Special cases with dynamic nav IDs based on params
 	switch path {
-	case "/social/repository":
+	case "/social/repository", "/social/repository/code":
 		if _, hasURL := r.location.Params["url"]; hasURL {
 			return "social.timeline" // external repo from timeline
 		}

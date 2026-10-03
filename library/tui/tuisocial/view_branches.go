@@ -35,6 +35,7 @@ func (v *branchesView) Bindings() []tuicore.Binding {
 	noop := func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) { return false, nil }
 	return []tuicore.Binding{
 		{Key: "enter", Label: "open", Contexts: []tuicore.Context{tuicore.Branches}, Handler: noop},
+		{Key: "c", Label: "code", Contexts: []tuicore.Context{tuicore.Branches}, Handler: noop},
 		{Key: "j", Label: "down", Contexts: []tuicore.Context{tuicore.Branches}, Handler: noop},
 		{Key: "k", Label: "up", Contexts: []tuicore.Context{tuicore.Branches}, Handler: noop},
 	}
@@ -143,8 +144,25 @@ func (v *branchesView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		v.moveCursor(-1)
 	case "enter":
 		return v.openSelected()
+	case "c":
+		return v.openCode()
 	}
 	return nil
+}
+
+// openCode pushes the code view on the selected branch; the first row opens the default branch.
+func (v *branchesView) openCode() tea.Cmd {
+	if v.loading {
+		return nil
+	}
+	branch := ""
+	if v.cursor > 0 && v.cursor <= len(v.branches) {
+		branch = v.branches[v.cursor-1].Name
+	}
+	url := v.url
+	return func() tea.Msg {
+		return tuicore.NavigateMsg{Location: tuicore.LocRepoCode(url, branch, "", 0, 0), Action: tuicore.NavPush}
+	}
 }
 
 // openSelected replaces the location with the Repository view on the selected branch; the first row opens every branch.
