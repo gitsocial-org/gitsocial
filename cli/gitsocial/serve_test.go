@@ -162,6 +162,17 @@ func serveBucketDir(t *testing.T, dir, cacheDir string) string {
 	return filepath.Join(cacheDir, "serve", fetch.URLHash(root), serveBucket, filepath.Base(root))
 }
 
+// bucketRefs lists the refs the serve bucket advertises.
+func bucketRefs(t *testing.T, c *serveChild) map[string]string {
+	t.Helper()
+	remote := "s3://" + strings.TrimSuffix(strings.TrimPrefix(c.url, "http://"), "/")
+	refs, err := objstore.ListRemoteRefs(remote, objstore.HelperEnvFromOS())
+	if err != nil {
+		t.Fatalf("list %s: %v", remote, err)
+	}
+	return refs
+}
+
 // TestServeEnv_AppendsConfig: the serve remote joins the GIT_CONFIG_* entries already in the environment, and both stay in effect.
 func TestServeEnv_AppendsConfig(t *testing.T) {
 	t.Parallel()
@@ -276,4 +287,65 @@ func TestServe_portInUse(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "--addr") {
 		t.Fatalf("runServe on a taken port = %v, want an error naming --addr", err)
 	}
+}
+
+// TestServeWatch_Coalesces: one push runs at a time, and changes during a push give one more push after it.
+func TestServeWatch_Coalesces(t *testing.T) {
+	t.Parallel()
+	var mu sync.Mutex
+	state, pushes, inFlight := "a", 0, false
+	snapshot := func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		return state
+	}
+	push := func() {
+		mu.Lock()
+		if inFlight {
+			t.Error("a push started while another one ran")
+		}
+		inFlight = true
+		pushes++
+		first := pushes == 1
+		if first {
+			state = "b"
+		}
+		mu.Unlock()
+		time.Sleep(30 * time.Millisecond)
+		mu.Lock()
+		if first {
+			state = "c"
+		}
+		inFlight = false
+		mu.Unlock()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	watchRefs(ctx, 5*time.Millisecond, "", snapshot, push)
+	if pushes != 2 {
+		t.Errorf("pushes = %d, want 2: the first for the change, one more for the changes during it", pushes)
+	}
+}
+
+// TestServe_PushFailureKeepsServing: a rejected push leaves the last build served and prints the error, and the next change pushes again.
+func TestServe_PushFailureKeepsServing(t *testing.T) {
+	t.Parallel()
+	dir, cacheDir := serveRepo(t)
+	c := startServe(t, dir, cacheDir)
+	served := strings.TrimSpace(gitOut(t, dir, "rev-parse", "main"))
+	if refs := bucketRefs(t, c); refs["refs/heads/main"] != served {
+		t.Fatalf("bucket main = %q, want %s after the first push", refs["refs/heads/main"], served)
+	}
+	gitOut(t, dir, "commit", "--amend", "--allow-empty", "-m", "amended")
+	waitFor(t, 2*time.Minute, "the push error", func() bool { return strings.Contains(c.stderr.String(), "gitsocial: push:") })
+	if status, body := httpGet(t, c.url); status != 200 || !strings.Contains(body, "<title>gitsocial</title>") {
+		t.Errorf("GET %s = %d after a failed push, want the served build", c.url, status)
+	}
+	if refs := bucketRefs(t, c); refs["refs/heads/main"] != served {
+		t.Errorf("bucket main = %q after a rejected push, want %s", refs["refs/heads/main"], served)
+	}
+	gitOut(t, dir, "reset", "--hard", served)
+	gitOut(t, dir, "commit", "--allow-empty", "-m", "next")
+	next := strings.TrimSpace(gitOut(t, dir, "rev-parse", "main"))
+	waitFor(t, 2*time.Minute, "the next push", func() bool { return bucketRefs(t, c)["refs/heads/main"] == next })
 }

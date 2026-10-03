@@ -61,7 +61,7 @@ gitsocial push --site-only     # rebuild the site, send no refs
 
 ### gitsocial serve
 
-Shows the site of the workspace in a browser. It starts a loopback bucket in the process, pushes the workspace to it and serves the site app from the bucket. The site has no HTML pages. Ctrl-C stops it.
+Shows the site of the workspace in a browser. It starts a loopback bucket in the process, pushes the workspace to it and serves the site app from the bucket. A change to a branch, a tag or a state ref pushes again, and a failed push keeps the last build served. The site has no HTML pages. Ctrl-C stops it.
 
 ```
 gitsocial serve                      # serving http://127.0.0.1:4747/gitsocial/<repo>/
@@ -72,6 +72,7 @@ gitsocial serve --addr 127.0.0.1:8080
 |---|---|
 | bucket root | `~/.cache/gitsocial/serve/<hash>/`, kept between runs |
 | remote | `gitsocial-serve`, in the environment of the serve process; no git config is written |
+| poll | `git for-each-ref refs/heads refs/tags refs/gitmsg` every 2 s; one push at a time |
 
 ### gitsocial mirror
 

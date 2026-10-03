@@ -28,6 +28,7 @@ const (
 	serveRemote      = "gitsocial-serve"
 	serveBucket      = "gitsocial"
 	serveDefaultAddr = "127.0.0.1:4747"
+	serveInterval    = 2 * time.Second
 )
 
 // newServeCmd creates the serve command.
@@ -38,7 +39,8 @@ func newServeCmd() *cobra.Command {
 		Short: "Serve the site of the workspace on loopback",
 		Long: `Show the site of the workspace in a browser. serve starts a loopback
 bucket in the process, pushes the workspace to it and serves the site
-app from the bucket. The site has no HTML pages. Ctrl-C stops it.
+app from the bucket. A change to a branch, a tag or a state ref pushes
+again. The site has no HTML pages. Ctrl-C stops it.
 
 The bucket is at <cache-dir>/serve/<hash>/ and stays between runs, so
 the next start pushes the difference. The remote gitsocial-serve is in
@@ -65,7 +67,7 @@ Examples:
 	return cmd
 }
 
-// runServe serves the bucket on addr, pushes the workspace to it and stays until ctx ends.
+// runServe serves the bucket on addr, pushes the workspace to it and pushes again on each ref change until ctx ends.
 func runServe(ctx context.Context, cfg *Config, addr string, out, errOut io.Writer) error {
 	root, err := git.GetRootDir(cfg.WorkDir)
 	if err != nil {
@@ -88,10 +90,40 @@ func runServe(ctx context.Context, cfg *Config, addr string, out, errOut io.Writ
 	if err := applyServeEnv(host, "s3://"+host+"/"+path); err != nil {
 		return err
 	}
-	servePush(ctx, root, errOut)
+	push := func() { servePush(ctx, root, errOut) }
+	last := refsSnapshot(root)
+	push()
 	fmt.Fprintf(out, "serving http://%s/%s/\n", host, path)
-	<-ctx.Done()
+	watchRefs(ctx, serveInterval, last, func() string { return refsSnapshot(root) }, push)
 	return nil
+}
+
+// refsSnapshot returns the names and tips of the branches, tags and state refs, or "" when git cannot list them.
+func refsSnapshot(root string) string {
+	out, err := git.ExecGit(root, []string{"for-each-ref", "--format=%(refname) %(objectname)", "refs/heads", "refs/tags", "refs/gitmsg"})
+	if err != nil {
+		return ""
+	}
+	return out.Stdout
+}
+
+// watchRefs polls the snapshot every interval and runs push on each change until ctx ends; one push runs at a time, and a change during a push gives one more push after it.
+func watchRefs(ctx context.Context, interval time.Duration, last string, snapshot func() string, push func()) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		current := snapshot()
+		if current == last {
+			continue
+		}
+		last = current
+		push()
+	}
 }
 
 // serveHost returns the host and port a client reaches the listener at; an unspecified address answers on loopback.
