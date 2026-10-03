@@ -319,6 +319,31 @@ func TestGetLinksTo_excludesStaleSource(t *testing.T) {
 	}
 }
 
+// TestGetRelated_editedSourceOnce edits a linked issue twice and expects the target to list it once, under its canonical hash and with its title.
+func TestGetRelated_editedSourceOnce(t *testing.T) {
+	setupTestDB(t)
+	workdir := cloneFixture(t)
+
+	target := newIssue(t, workdir, "Target", CreateIssueOptions{})
+	source := newIssue(t, workdir, "Source", CreateIssueOptions{Related: []string{target.ID}})
+	labels := []Label{{Scope: "priority", Value: "high"}}
+	assignees := []string{"alice@test.com"}
+	for _, opts := range []UpdateIssueOptions{{Labels: &labels}, {Assignees: &assignees}} {
+		if res := UpdateIssue(workdir, source.ID, opts); !res.Success {
+			t.Fatalf("UpdateIssue() failed: %s", res.Error.Message)
+		}
+	}
+
+	res := GetRelated(target.ID)
+	if !res.Success || len(res.Data) != 1 || res.Data[0].ID != source.ID || res.Data[0].Subject != "Source" {
+		t.Errorf("GetRelated() = %+v, want the source once with its title", res.Data)
+	}
+	got := GetIssue(target.ID)
+	if !got.Success || len(got.Data.Related) != 1 || got.Data.Related[0].Hash != refHash(t, source.ID) {
+		t.Errorf("Related = %+v, want the canonical source once", got.Data.Related)
+	}
+}
+
 func TestIsBlocked_invalidRef(t *testing.T) {
 	setupTestDB(t)
 	_ = cloneFixture(t)

@@ -3,6 +3,7 @@ package pm
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
@@ -42,22 +43,33 @@ func InsertLinks(repoURL, hash, branch string, blocks, blockedBy, related []Issu
 	})
 }
 
-// GetLinks returns links declared by an issue (forward lookup).
+// GetLinks returns the links the latest version of an issue declares, with the issue as their source (forward lookup).
 func GetLinks(repoURL, hash, branch string) ([]Link, error) {
-	return cache.QueryLocked(func(db *sql.DB) ([]Link, error) {
+	latest, err := cache.GetLatestVersion(repoURL, hash, branch)
+	if err != nil {
+		return nil, fmt.Errorf("resolve latest version of %s: %w", hash, err)
+	}
+	links, err := cache.QueryLocked(func(db *sql.DB) ([]Link, error) {
 		rows, err := db.Query(`SELECT from_repo_url, from_hash, from_branch, to_repo_url, to_hash, to_branch, link_type FROM pm_links WHERE from_repo_url = ? AND from_hash = ? AND from_branch = ?`,
-			repoURL, hash, branch)
+			latest.RepoURL, latest.Hash, latest.Branch)
 		if err != nil {
 			return nil, err
 		}
 		defer rows.Close()
 		return scanLinks(rows)
 	})
+	if err != nil {
+		return nil, err
+	}
+	for i := range links {
+		links[i].From = IssueRef{RepoURL: repoURL, Hash: hash, Branch: branch}
+	}
+	return links, nil
 }
 
-// GetLinksTo returns links pointing to an issue from sources that are not stale (reverse lookup).
+// GetLinksTo returns the links to an issue from the latest version of each source that is not stale, with the canonical issue as their source (reverse lookup).
 func GetLinksTo(repoURL, hash, branch string) ([]Link, error) {
-	return cache.QueryLocked(func(db *sql.DB) ([]Link, error) {
+	links, err := cache.QueryLocked(func(db *sql.DB) ([]Link, error) {
 		rows, err := db.Query(`SELECT l.from_repo_url, l.from_hash, l.from_branch, l.to_repo_url, l.to_hash, l.to_branch, l.link_type
 			FROM pm_links l
 			LEFT JOIN core_commits c ON c.repo_url = l.from_repo_url AND c.hash = l.from_hash AND c.branch = l.from_branch
@@ -69,6 +81,37 @@ func GetLinksTo(repoURL, hash, branch string) ([]Link, error) {
 		defer rows.Close()
 		return scanLinks(rows)
 	})
+	if err != nil {
+		return nil, err
+	}
+	var current []Link
+	for _, l := range links {
+		canonical, ok, err := currentSource(l.From)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			l.From = canonical
+			current = append(current, l)
+		}
+	}
+	return current, nil
+}
+
+// currentSource returns the canonical issue of a link source, and false when the source is not the latest version of that issue.
+func currentSource(from IssueRef) (IssueRef, bool, error) {
+	repoURL, hash, branch, err := cache.ResolveToCanonical(from.RepoURL, from.Hash, from.Branch)
+	if err != nil {
+		return IssueRef{}, false, fmt.Errorf("resolve canonical of %s: %w", from.Hash, err)
+	}
+	latest, err := cache.GetLatestVersion(repoURL, hash, branch)
+	if err != nil {
+		return IssueRef{}, false, fmt.Errorf("resolve latest version of %s: %w", hash, err)
+	}
+	if latest.RepoURL != from.RepoURL || latest.Hash != from.Hash {
+		return IssueRef{}, false, nil
+	}
+	return IssueRef{RepoURL: repoURL, Hash: hash, Branch: branch}, true, nil
 }
 
 // scanLinks reads issue link rows into links.
