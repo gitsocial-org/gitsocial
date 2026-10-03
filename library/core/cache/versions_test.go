@@ -1067,3 +1067,112 @@ func TestApplyEdit_marksEveryRowOfTheEdit(t *testing.T) {
 		t.Errorf("edit rows marked = %d (%v), want both", marked, err)
 	}
 }
+
+// moveEditedPost caches a post and its edit on feature/x, then both under main with the feature/x rows stale.
+func moveEditedPost(t *testing.T) {
+	t.Helper()
+	edit := movedEdit("Edited text", "aabb00112233", "feature/x")
+	insertAt(t, "aabb00112233", "feature/x", "Original", 12)
+	insertAt(t, "ccdd44556677", "feature/x", edit, 13)
+	insertAt(t, "aabb00112233", "main", "Original", 12)
+	insertAt(t, "ccdd44556677", "main", edit, 13)
+	markStale(t, "aabb00112233")
+	markStale(t, "ccdd44556677")
+}
+
+func TestGetLatestVersion_oneEditTwoRows(t *testing.T) {
+	setupTestDB(t)
+	moveEditedPost(t)
+	for _, branch := range []string{"feature/x", "main", ""} {
+		got, err := GetLatestVersion(movedRepo, "aabb00112233", branch)
+		if err != nil {
+			t.Fatalf("GetLatestVersion(%q) error = %v", branch, err)
+		}
+		if !got.HasEdits || got.Hash != "ccdd44556677" || got.Branch != "main" {
+			t.Errorf("GetLatestVersion(%q) = %+v, want the edit on its live row under main", branch, got)
+		}
+	}
+}
+
+func TestGetLatestVersion_newestEdit(t *testing.T) {
+	setupTestDB(t)
+	insertAt(t, "aabb00112233", "main", "Original", 12)
+	insertAt(t, "eeff00112233", "main", movedEdit("Second edit", "aabb00112233", "main"), 14)
+	insertAt(t, "ccdd44556677", "main", movedEdit("First edit", "aabb00112233", "main"), 13)
+	got, err := GetLatestVersion(movedRepo, "aabb00112233", "main")
+	if err != nil || got.Hash != "eeff00112233" {
+		t.Errorf("GetLatestVersion() = %+v (%v), want the newer edit", got, err)
+	}
+}
+
+func TestGetVersionHistory_oneEntryPerEdit(t *testing.T) {
+	setupTestDB(t)
+	moveEditedPost(t)
+	versions, err := GetVersionHistory(movedRepo, "aabb00112233", "feature/x")
+	if err != nil {
+		t.Fatalf("GetVersionHistory() error = %v", err)
+	}
+	if len(versions) != 1 {
+		t.Fatalf("len(versions) = %d, want one entry for the edit", len(versions))
+	}
+	if versions[0].EditBranch != "main" || versions[0].CanonicalBranch != "main" {
+		t.Errorf("version = %+v, want the live rows of the edit and the canonical", versions[0])
+	}
+}
+
+func TestResolveToCanonical_anyBranch(t *testing.T) {
+	setupTestDB(t)
+	moveEditedPost(t)
+	for _, branch := range []string{"feature/x", "main", "gitmsg/social", ""} {
+		repo, hash, canonicalBranch, err := ResolveToCanonical(movedRepo, "ccdd44556677", branch)
+		if err != nil {
+			t.Fatalf("ResolveToCanonical(%q) error = %v", branch, err)
+		}
+		if repo != movedRepo || hash != "aabb00112233" || canonicalBranch != "main" {
+			t.Errorf("ResolveToCanonical(%q) = %s %s %s, want the canonical on its live row under main", branch, repo, hash, canonicalBranch)
+		}
+	}
+}
+
+func TestGetCanonical_anyBranch(t *testing.T) {
+	setupTestDB(t)
+	insertAt(t, "aabb00112233", "main", "Original", 12)
+	insertAt(t, "ccdd44556677", "main", movedEdit("Edited text", "aabb00112233", "feature/x"), 13)
+	for _, branch := range []string{"main", "feature/x", ""} {
+		v, err := GetCanonical(movedRepo, "ccdd44556677", branch)
+		if err != nil {
+			t.Fatalf("GetCanonical(%q) error = %v", branch, err)
+		}
+		if v == nil || v.CanonicalHash != "aabb00112233" || v.CanonicalBranch != "main" {
+			t.Errorf("GetCanonical(%q) = %+v, want the canonical on main", branch, v)
+		}
+	}
+	if is, _ := IsEdit(movedRepo, "ccdd44556677", "feature/x"); !is {
+		t.Error("IsEdit with another branch = false, want true")
+	}
+	if has, _ := HasEdits(movedRepo, "aabb00112233", "feature/x"); !has {
+		t.Error("HasEdits with another branch = false, want true")
+	}
+}
+
+func TestHasProposedColumn_matchesByHash(t *testing.T) {
+	setupTestDB(t)
+	const fork = "https://github.com/bob/repo"
+	insertAt(t, "aabb00112233", "main", "Original", 12)
+	if err := InsertCommits([]Commit{{Hash: "ccdd44556677", RepoURL: fork, Branch: "main", Message: "Proposal",
+		Timestamp: time.Date(2025, 10, 21, 13, 0, 0, 0, time.UTC)}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	if err := InsertVersion(fork, "ccdd44556677", "main", movedRepo, "aabb00112233", "feature/x", false); err != nil {
+		t.Fatalf("InsertVersion() error = %v", err)
+	}
+	proposed, err := QueryLocked(func(db *sql.DB) (bool, error) {
+		var p bool
+		err := db.QueryRow(`SELECT `+HasProposedColumn("c")+` FROM core_commits c WHERE repo_url = ? AND hash = ? AND branch = 'main'`,
+			movedRepo, "aabb00112233").Scan(&p)
+		return p, err
+	})
+	if err != nil || !proposed {
+		t.Errorf("has_proposed = %v (%v), want true for a proposal whose reference names another branch", proposed, err)
+	}
+}

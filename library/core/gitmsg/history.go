@@ -41,9 +41,6 @@ func GetHistory(ref string, workspaceURL string) ([]MessageVersion, error) {
 	}
 	commitHash := parsed.Value
 	branch := parsed.Branch
-	if branch == "" {
-		branch = "main"
-	}
 
 	// Resolve to canonical if this is an edit
 	canonicalRepoURL, canonicalHash, canonicalBranch, err := cache.ResolveToCanonical(repoURL, commitHash, branch)
@@ -52,19 +49,23 @@ func GetHistory(ref string, workspaceURL string) ([]MessageVersion, error) {
 	}
 
 	return cache.QueryLocked(func(db *sql.DB) ([]MessageVersion, error) {
-		// Get canonical commit and all edits via core_commits_version
+		// The canonical and each edit match by repository and hash, one row each, the live row first.
 		query := `
-			SELECT repo_url, hash, branch, author_name, author_email, message, timestamp, edits
-			FROM core_commits
-			WHERE repo_url = ? AND hash = ? AND branch = ?
+			SELECT * FROM (
+				SELECT c.repo_url, c.hash, c.branch, c.author_name, c.author_email, c.message, c.timestamp, c.edits
+				FROM core_commits c
+				WHERE c.repo_url = ? AND c.hash = ?
+				ORDER BY ` + cache.LiveFirstOrder("c") + `, c.branch = ? DESC, c.branch LIMIT 1)
 			UNION ALL
 			SELECT c.repo_url, c.hash, c.branch, c.author_name, c.author_email, c.message, c.timestamp, c.edits
 			FROM core_commits c
-			JOIN core_commits_version v ON v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash AND v.edit_branch = c.branch
-			WHERE v.canonical_repo_url = ? AND v.canonical_hash = ? AND v.canonical_branch = ?
+			WHERE c.rowid IN (SELECT e.rowid FROM core_commits_version v
+				JOIN core_commits e ON e.repo_url = v.edit_repo_url AND e.hash = v.edit_hash
+				 AND e.branch = ` + cache.LiveBranch("v.edit_repo_url", "v.edit_hash") + `
+				WHERE v.canonical_repo_url = ? AND v.canonical_hash = ?)
 			ORDER BY timestamp DESC`
 
-		rows, err := db.Query(query, canonicalRepoURL, canonicalHash, canonicalBranch, canonicalRepoURL, canonicalHash, canonicalBranch)
+		rows, err := db.Query(query, canonicalRepoURL, canonicalHash, canonicalBranch, canonicalRepoURL, canonicalHash)
 		if err != nil {
 			return nil, err
 		}

@@ -266,12 +266,6 @@ type LatestVersionResult struct {
 	HasEdits    bool
 }
 
-type ResolveResult struct {
-	RepoURL string
-	Hash    string
-	Branch  string
-}
-
 type LatestContentResult struct {
 	Message  string
 	HasEdits bool
@@ -368,7 +362,7 @@ func SyncEditExtensionFields(edits []EditKey) {
 	})
 }
 
-// GetLatestVersion returns the latest version of a commit.
+// GetLatestVersion returns the live row of the latest same-repo edit of a canonical, matched by repository and hash.
 // If no edits exist, returns the canonical commit info with HasEdits=false.
 func GetLatestVersion(canonicalRepoURL, canonicalHash, canonicalBranch string) (LatestVersionResult, error) {
 	return QueryLocked(func(db *sql.DB) (LatestVersionResult, error) {
@@ -376,14 +370,14 @@ func GetLatestVersion(canonicalRepoURL, canonicalHash, canonicalBranch string) (
 		var isRetracted int
 
 		err := db.QueryRow(`
-			SELECT v.edit_repo_url, v.edit_hash, v.edit_branch, v.is_retracted
+			SELECT v.edit_repo_url, v.edit_hash, c.branch, v.is_retracted
 			FROM core_commits_version v
-			JOIN core_commits c ON v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash AND v.edit_branch = c.branch
-			WHERE v.canonical_repo_url = ? AND v.canonical_hash = ? AND v.canonical_branch = ?
+			JOIN core_commits c ON v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash
+			WHERE v.canonical_repo_url = ? AND v.canonical_hash = ?
 			  AND v.edit_repo_url = v.canonical_repo_url
-			ORDER BY c.timestamp DESC, v.edit_hash DESC
+			ORDER BY c.timestamp DESC, `+LiveFirstOrder("c")+`, v.edit_hash DESC
 			LIMIT 1`,
-			canonicalRepoURL, canonicalHash, canonicalBranch,
+			canonicalRepoURL, canonicalHash,
 		).Scan(&latestRepoURL, &latestHash, &latestBranch, &isRetracted)
 
 		if err == sql.ErrNoRows {
@@ -397,18 +391,20 @@ func GetLatestVersion(canonicalRepoURL, canonicalHash, canonicalBranch string) (
 	})
 }
 
-// GetVersionHistory returns all versions of a commit ordered by timestamp DESC.
+// GetVersionHistory returns the edits of a canonical, one per edit hash on its live row, ordered by timestamp DESC.
 // First item is latest, last is canonical.
 func GetVersionHistory(canonicalRepoURL, canonicalHash, canonicalBranch string) ([]Version, error) {
 	return QueryLocked(func(db *sql.DB) ([]Version, error) {
 		rows, err := db.Query(`
-			SELECT v.edit_repo_url, v.edit_hash, v.edit_branch, v.canonical_repo_url, v.canonical_hash, v.canonical_branch,
+			SELECT v.edit_repo_url, v.edit_hash, c.branch, v.canonical_repo_url, v.canonical_hash, `+CanonicalBranch("v")+`,
 			       v.is_retracted, c.timestamp
 			FROM core_commits_version v
-			JOIN core_commits c ON v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash AND v.edit_branch = c.branch
-			WHERE v.canonical_repo_url = ? AND v.canonical_hash = ? AND v.canonical_branch = ?
+			JOIN core_commits c ON v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash
+			 AND c.branch = `+LiveBranch("v.edit_repo_url", "v.edit_hash")+`
+			WHERE v.canonical_repo_url = ? AND v.canonical_hash = ?
+			GROUP BY v.edit_repo_url, v.edit_hash
 			ORDER BY c.timestamp DESC, v.edit_hash DESC`,
-			canonicalRepoURL, canonicalHash, canonicalBranch)
+			canonicalRepoURL, canonicalHash)
 		if err != nil {
 			return nil, err
 		}
@@ -432,40 +428,41 @@ func GetVersionHistory(canonicalRepoURL, canonicalHash, canonicalBranch string) 
 	})
 }
 
-// HasEdits returns true if the canonical commit has any edits.
+// HasEdits returns true if the canonical commit, matched by repository and hash, has any edits.
 func HasEdits(canonicalRepoURL, canonicalHash, canonicalBranch string) (bool, error) {
 	return QueryLocked(func(db *sql.DB) (bool, error) {
 		var count int
 		err := db.QueryRow(`
 			SELECT COUNT(*) FROM core_commits_version
-			WHERE canonical_repo_url = ? AND canonical_hash = ? AND canonical_branch = ?`,
-			canonicalRepoURL, canonicalHash, canonicalBranch).Scan(&count)
+			WHERE canonical_repo_url = ? AND canonical_hash = ?`,
+			canonicalRepoURL, canonicalHash).Scan(&count)
 		return count > 0, err
 	})
 }
 
-// IsEdit returns true if this commit is an edit (not a canonical).
+// IsEdit returns true if this commit, matched by repository and hash, is an edit (not a canonical).
 func IsEdit(repoURL, hash, branch string) (bool, error) {
 	return QueryLocked(func(db *sql.DB) (bool, error) {
 		var count int
 		err := db.QueryRow(`
 			SELECT COUNT(*) FROM core_commits_version
-			WHERE edit_repo_url = ? AND edit_hash = ? AND edit_branch = ?`,
-			repoURL, hash, branch).Scan(&count)
+			WHERE edit_repo_url = ? AND edit_hash = ?`,
+			repoURL, hash).Scan(&count)
 		return count > 0, err
 	})
 }
 
-// GetCanonical returns the canonical commit info if this is an edit.
+// GetCanonical returns the canonical of an edit matched by repository and hash, the version row of the given branch first; the canonical branch is that of its live row.
 // Returns nil if the commit is not an edit.
 func GetCanonical(repoURL, hash, branch string) (*Version, error) {
 	return QueryLocked(func(db *sql.DB) (*Version, error) {
 		var v Version
 		var isRetracted int
 		err := db.QueryRow(`
-			SELECT edit_repo_url, edit_hash, edit_branch, canonical_repo_url, canonical_hash, canonical_branch, is_retracted
-			FROM core_commits_version
-			WHERE edit_repo_url = ? AND edit_hash = ? AND edit_branch = ?`,
+			SELECT v.edit_repo_url, v.edit_hash, v.edit_branch, v.canonical_repo_url, v.canonical_hash, `+CanonicalBranch("v")+`, v.is_retracted
+			FROM core_commits_version v
+			WHERE v.edit_repo_url = ? AND v.edit_hash = ?
+			ORDER BY v.edit_branch = ? DESC LIMIT 1`,
 			repoURL, hash, branch).Scan(&v.EditRepoURL, &v.EditHash, &v.EditBranch, &v.CanonicalRepoURL, &v.CanonicalHash, &v.CanonicalBranch, &isRetracted)
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -478,25 +475,17 @@ func GetCanonical(repoURL, hash, branch string) (*Version, error) {
 	})
 }
 
-// ResolveToCanonical follows the edit chain to find the canonical version.
+// ResolveToCanonical follows an edit, matched by repository and hash, to its canonical and the branch of the canonical's live row.
 // If the commit is already canonical, returns the same repo/hash/branch.
 func ResolveToCanonical(repoURL, hash, branch string) (string, string, string, error) {
-	result, err := QueryLocked(func(db *sql.DB) (ResolveResult, error) {
-		var canonicalRepoURL, canonicalHash, canonicalBranch string
-		err := db.QueryRow(`
-			SELECT canonical_repo_url, canonical_hash, canonical_branch
-			FROM core_commits_version
-			WHERE edit_repo_url = ? AND edit_hash = ? AND edit_branch = ?`,
-			repoURL, hash, branch).Scan(&canonicalRepoURL, &canonicalHash, &canonicalBranch)
-		if err == sql.ErrNoRows {
-			return ResolveResult{RepoURL: repoURL, Hash: hash, Branch: branch}, nil
-		}
-		if err != nil {
-			return ResolveResult{}, err
-		}
-		return ResolveResult{RepoURL: canonicalRepoURL, Hash: canonicalHash, Branch: canonicalBranch}, nil
-	})
-	return result.RepoURL, result.Hash, result.Branch, err
+	v, err := GetCanonical(repoURL, hash, branch)
+	if err != nil {
+		return "", "", "", err
+	}
+	if v == nil {
+		return repoURL, hash, branch, nil
+	}
+	return v.CanonicalRepoURL, v.CanonicalHash, v.CanonicalBranch, nil
 }
 
 // ResolveRefToCanonical resolves a ref string to its canonical version.
@@ -523,35 +512,27 @@ func ResolveRefToCanonical(refString string) string {
 // GetLatestContent returns the message content of the latest version.
 // Resolves to canonical first, then finds latest edit's content.
 func GetLatestContent(repoURL, hash, branch string) (string, bool, error) {
+	canonicalRepoURL, canonicalHash, canonicalBranch, err := ResolveToCanonical(repoURL, hash, branch)
+	if err != nil {
+		return "", false, err
+	}
 	result, err := QueryLocked(func(db *sql.DB) (LatestContentResult, error) {
-		// First resolve to canonical if this is an edit
-		canonicalRepoURL, canonicalHash, canonicalBranch := repoURL, hash, branch
-		err := db.QueryRow(`
-			SELECT canonical_repo_url, canonical_hash, canonical_branch
-			FROM core_commits_version
-			WHERE edit_repo_url = ? AND edit_hash = ? AND edit_branch = ?`,
-			repoURL, hash, branch).Scan(&canonicalRepoURL, &canonicalHash, &canonicalBranch)
-		if err != nil && err != sql.ErrNoRows {
-			return LatestContentResult{}, err
-		}
-
-		// Find latest edit's content
 		var latestMessage string
-		err = db.QueryRow(`
+		err := db.QueryRow(`
 			SELECT c.message
 			FROM core_commits_version v
-			JOIN core_commits c ON v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash AND v.edit_branch = c.branch
-			WHERE v.canonical_repo_url = ? AND v.canonical_hash = ? AND v.canonical_branch = ?
+			JOIN core_commits c ON v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash
+			WHERE v.canonical_repo_url = ? AND v.canonical_hash = ?
 			  AND v.edit_repo_url = v.canonical_repo_url
-			ORDER BY c.timestamp DESC, v.edit_hash DESC
+			ORDER BY c.timestamp DESC, `+LiveFirstOrder("c")+`, v.edit_hash DESC
 			LIMIT 1`,
-			canonicalRepoURL, canonicalHash, canonicalBranch).Scan(&latestMessage)
+			canonicalRepoURL, canonicalHash).Scan(&latestMessage)
 
 		if err == sql.ErrNoRows {
-			// No edits, get canonical content
 			err = db.QueryRow(`
-				SELECT message FROM core_commits
-				WHERE repo_url = ? AND hash = ? AND branch = ?`,
+				SELECT c.message FROM core_commits c
+				WHERE c.repo_url = ? AND c.hash = ?
+				ORDER BY `+LiveFirstOrder("c")+`, c.branch = ? DESC, c.branch LIMIT 1`,
 				canonicalRepoURL, canonicalHash, canonicalBranch).Scan(&latestMessage)
 			return LatestContentResult{Message: latestMessage, HasEdits: false}, err
 		}

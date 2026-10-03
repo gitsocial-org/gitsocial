@@ -906,23 +906,25 @@ func TestGetHistory_withWorkspaceURL(t *testing.T) {
 func TestGetHistory_noBranch(t *testing.T) {
 	setupTestDB(t)
 
-	cache.InsertCommits([]cache.Commit{
-		{
-			Hash:      "aabbccdd1234",
-			RepoURL:   "https://github.com/user/repo",
-			Branch:    "main",
-			Message:   "Post content",
-			Timestamp: time.Now().UTC(),
-		},
-	})
+	for _, branch := range []string{"main", "gitmsg/social"} {
+		cache.InsertCommits([]cache.Commit{
+			{
+				Hash:      "aabbccdd1234",
+				RepoURL:   "https://github.com/user/repo",
+				Branch:    branch,
+				Message:   "Post content",
+				Timestamp: time.Now().UTC(),
+			},
+		})
+	}
 
-	// Ref without branch should default to "main"
+	// A ref without a branch finds the commit by repository and hash; between two live rows, the first branch by name, not main.
 	result, err := GetHistory("https://github.com/user/repo#commit:aabbccdd1234", "https://github.com/user/repo")
 	if err != nil {
 		t.Fatalf("GetHistory() error = %v", err)
 	}
-	if len(result) == 0 {
-		t.Error("should find version with default branch")
+	if len(result) != 1 || result[0].Branch != "gitmsg/social" {
+		t.Errorf("GetHistory() = %+v, want the commit on gitmsg/social", result)
 	}
 }
 

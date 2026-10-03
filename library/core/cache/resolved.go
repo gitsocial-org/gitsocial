@@ -21,11 +21,10 @@ const ResolvedFlagColumns = `v.edits, v.is_virtual, v.is_retracted, v.has_edits`
 // whether an item has a pending cross-repo edit proposal: an edit from another
 // repo with neither an acceptance nor a decline recorded. Single source of
 // truth for the proposed-edit marker semantics. itemAlias is the table alias
-// carrying repo_url/hash/branch.
+// carrying repo_url/hash, and the canonical matches by repository and hash.
 func HasProposedColumn(itemAlias string) string {
 	return `EXISTS(SELECT 1 FROM core_commits_version cve
               WHERE cve.canonical_repo_url = ` + itemAlias + `.repo_url AND cve.canonical_hash = ` + itemAlias + `.hash
-                AND cve.canonical_branch = ` + itemAlias + `.branch
                 AND cve.edit_repo_url != cve.canonical_repo_url
                 AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cve.edit_repo_url AND d.edit_hash = cve.edit_hash AND d.edit_branch = cve.edit_branch)
                 AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cve.edit_repo_url AND dd.edit_hash = cve.edit_hash AND dd.edit_branch = cve.edit_branch)) AS has_proposed`
@@ -34,6 +33,17 @@ func HasProposedColumn(itemAlias string) string {
 // LiveFirstOrder is the ORDER BY terms that put the live row of a hash first, then a fetched row; a caller ends the order with its preferred branch, then the branch name.
 func LiveFirstOrder(alias string) string {
 	return alias + ".stale_since IS NOT NULL, " + alias + ".is_virtual"
+}
+
+// LiveBranch is a scalar subquery of the branch of the live row of a hash, from the SQL expressions of its repository and hash.
+func LiveBranch(repoExpr, hashExpr string) string {
+	return `(SELECT lb.branch FROM core_commits lb WHERE lb.repo_url = ` + repoExpr + ` AND lb.hash = ` + hashExpr +
+		` ORDER BY ` + LiveFirstOrder("lb") + `, lb.branch LIMIT 1)`
+}
+
+// CanonicalBranch is the branch of the live row of a version row's canonical, or the branch of the reference when the canonical has no row; alias names the core_commits_version row.
+func CanonicalBranch(alias string) string {
+	return `COALESCE(` + LiveBranch(alias+".canonical_repo_url", alias+".canonical_hash") + `, ` + alias + `.canonical_branch)`
 }
 
 // ResolvedSelect builds the standard resolved-view SELECT used by extensions:
