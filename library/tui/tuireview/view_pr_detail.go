@@ -1347,7 +1347,7 @@ func renderPRCard(pr *review.PullRequest, width int, selected bool, searchQuery 
 	}
 	if !opts.version {
 		prRef := protocol.ParseRef(pr.ID)
-		if trailerRefs, err := cache.GetTrailerRefsTo(prRef.Repository, prRef.Value, prRef.Branch); err == nil && len(trailerRefs) > 0 {
+		if trailerRefs, err := cache.GetTrailerRefsTo(prRef.Repository, prRef.Value); err == nil && len(trailerRefs) > 0 {
 			for i, tr := range trailerRefs {
 				rowLabel := "Referenced by"
 				if i > 0 {

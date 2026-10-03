@@ -1292,7 +1292,7 @@ func printPRDetails(out io.Writer, workdir string, pr review.PullRequest) {
 	}
 
 	ref := protocol.ParseRef(pr.ID)
-	if refs, err := cache.GetTrailerRefsTo(ref.Repository, ref.Value, ref.Branch); err == nil && len(refs) > 0 {
+	if refs, err := cache.GetTrailerRefsTo(ref.Repository, ref.Value); err == nil && len(refs) > 0 {
 		fmt.Fprintf(out, "\nReferenced by:\n")
 		for _, r := range refs {
 			subject, _ := protocol.SplitSubjectBody(r.Message)

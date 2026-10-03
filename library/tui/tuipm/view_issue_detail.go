@@ -662,7 +662,7 @@ func renderIssueCard(issue *pm.Issue, milestone *pm.Milestone, sprint *pm.Sprint
 	}
 	if !opts.version {
 		ref := protocol.ParseRef(issue.ID)
-		if trailerRefs, err := cache.GetTrailerRefsTo(ref.Repository, ref.Value, ref.Branch); err == nil && len(trailerRefs) > 0 {
+		if trailerRefs, err := cache.GetTrailerRefsTo(ref.Repository, ref.Value); err == nil && len(trailerRefs) > 0 {
 			for i, tr := range trailerRefs {
 				rowLabel := "Referenced by"
 				if i > 0 {

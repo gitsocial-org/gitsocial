@@ -12,6 +12,9 @@ import (
 
 type trailerProvider struct{}
 
+// targetAuthoredBy holds when any row of the trailer target, by repository and hash, has the given author; parameter: userEmail.
+const targetAuthoredBy = `EXISTS (SELECT 1 FROM core_commits ref WHERE ref.repo_url = t.ref_repo_url AND ref.hash = t.ref_hash AND ref.author_email = ?)`
+
 // init registers the trailer notification provider.
 func init() {
 	RegisterProvider("core", &trailerProvider{})
@@ -30,9 +33,8 @@ func (p *trailerProvider) GetNotifications(workdir string, filter Filter) ([]Not
 			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END as is_read
 			FROM core_trailer_refs t
 			JOIN core_commits c ON t.repo_url = c.repo_url AND t.hash = c.hash AND t.branch = c.branch
-			JOIN core_commits ref ON t.ref_repo_url = ref.repo_url AND t.ref_hash = ref.hash AND t.ref_branch = ref.branch
 			LEFT JOIN core_notification_reads r ON t.repo_url = r.repo_url AND t.hash = r.hash AND t.branch = r.branch
-			WHERE ref.author_email = ?
+			WHERE ` + targetAuthoredBy + `
 			  AND c.author_email != ?
 			  AND c.stale_since IS NULL
 		`
@@ -91,9 +93,8 @@ func (p *trailerProvider) GetUnreadCount(workdir string) (int, error) {
 		err := db.QueryRow(`
 			SELECT COUNT(*) FROM core_trailer_refs t
 			JOIN core_commits c ON t.repo_url = c.repo_url AND t.hash = c.hash AND t.branch = c.branch
-			JOIN core_commits ref ON t.ref_repo_url = ref.repo_url AND t.ref_hash = ref.hash AND t.ref_branch = ref.branch
 			LEFT JOIN core_notification_reads r ON t.repo_url = r.repo_url AND t.hash = r.hash AND t.branch = r.branch
-			WHERE ref.author_email = ?
+			WHERE `+targetAuthoredBy+`
 			  AND c.author_email != ?
 			  AND c.stale_since IS NULL
 			  AND r.repo_url IS NULL

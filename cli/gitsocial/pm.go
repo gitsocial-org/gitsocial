@@ -1793,7 +1793,7 @@ func printIssueDetails(out io.Writer, issue pm.Issue) {
 	}
 
 	ref := protocol.ParseRef(issue.ID)
-	if refs, err := cache.GetTrailerRefsTo(ref.Repository, ref.Value, ref.Branch); err == nil && len(refs) > 0 {
+	if refs, err := cache.GetTrailerRefsTo(ref.Repository, ref.Value); err == nil && len(refs) > 0 {
 		fmt.Fprintf(out, "\nReferenced by:\n")
 		for _, r := range refs {
 			subject, _ := protocol.SplitSubjectBody(r.Message)
