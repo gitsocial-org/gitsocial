@@ -188,3 +188,49 @@ func TestNeedsReseed(t *testing.T) {
 		t.Error("needsReseed() = true for a newer cache, want false (Open refuses it instead)")
 	}
 }
+
+// TestOpen_reseedKeepsReadMarkers pins invariant 8: a read marker and a follow marker survive the version boundary.
+func TestOpen_reseedKeepsReadMarkers(t *testing.T) {
+	Reset()
+	dir := t.TempDir()
+	dbPath := seedCacheFile(t, dir, schemaVersion-1, `
+		CREATE TABLE core_notification_reads (repo_url TEXT NOT NULL, hash TEXT NOT NULL, branch TEXT NOT NULL, read_at TEXT, PRIMARY KEY (repo_url, hash, branch));
+		INSERT INTO core_notification_reads VALUES ('https://github.com/test/repo', 'abc123456789', 'gitmsg/pm', '2026-01-01T00:00:00Z');
+		INSERT INTO core_notification_reads VALUES ('https://github.com/test/follower', 'follow', '', NULL);
+	`)
+
+	if err := Open(dir); err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer Reset()
+	if got := probeUserVersion(t, dbPath); got != schemaVersion {
+		t.Errorf("user_version = %d, want %d", got, schemaVersion)
+	}
+	var kept int
+	var readAt sql.NullString
+	if err := DB().QueryRow(`SELECT COUNT(*), MAX(read_at) FROM core_notification_reads`).Scan(&kept, &readAt); err != nil {
+		t.Fatalf("count markers: %v", err)
+	}
+	if kept != 2 || readAt.String != "2026-01-01T00:00:00Z" {
+		t.Errorf("markers after the reseed = %d with read_at %q, want both rows with their time", kept, readAt.String)
+	}
+	var followKept int
+	if err := DB().QueryRow(`SELECT COUNT(*) FROM core_notification_reads WHERE hash = 'follow' AND branch = ''`).Scan(&followKept); err != nil || followKept != 1 {
+		t.Errorf("follow markers after the reseed = %d, %v, want 1", followKept, err)
+	}
+}
+
+// TestOpen_reseedWithoutMarkersTable keeps the reseed of a cache that is older than the markers table.
+func TestOpen_reseedWithoutMarkersTable(t *testing.T) {
+	Reset()
+	dir := t.TempDir()
+	seedCacheFile(t, dir, schemaVersion-1, "")
+	if err := Open(dir); err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer Reset()
+	var n int
+	if err := DB().QueryRow(`SELECT COUNT(*) FROM core_notification_reads`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("markers = %d, %v, want an empty table", n, err)
+	}
+}

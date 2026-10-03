@@ -33,7 +33,7 @@ bin/gitsocial tui
 - A worktree for a parallel branch is at `.local/worktrees/<name>`, the same as a design note is at `.local/design/`.
 - Give each parallel build a different output name, so one build does not overwrite the output of another.
 - Put a review fix into the branch commit that it corrects; a fix for a change that is already on `main` is a separate commit.
-- If a branch changes the cache schema, run it with its own `--cache-dir`: the first binary that opens the shared `~/.cache/gitsocial/cache.db` reseeds it at the new version, and older binaries then refuse it. To rebuild, delete the cache.
+- If a branch changes the cache schema, run it with its own `--cache-dir`: the first binary that opens the shared `~/.cache/gitsocial/cache.db` reseeds it at the new version and keeps only the read markers, and older binaries then refuse it. To rebuild, delete the cache.
 
 ### Test and lint
 

@@ -307,11 +307,11 @@ func Open(cacheDir string) error {
 		return err
 	}
 
-	// If an existing cache predates the current schemaVersion, nuke it and
-	// reseed on next fetch. A reseed is cheap because the cache is an index,
-	// not a source of truth: re-fetching from origin repos is always possible.
+	// An older cache is deleted and refilled by the next fetch; only the read markers are not in git, so they are carried over.
+	var markers [][4]string
 	if needsReseed(dbPath) {
 		log.Info("cache schema is older than current; deleting and recreating", "path", dbPath)
+		markers = readMarkersFromFile(dbPath)
 		if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
 			log.Warn("failed to remove stale cache", "path", dbPath, "error", err)
 		}
@@ -358,9 +358,6 @@ func Open(cacheDir string) error {
 		opened = true
 		return err
 	}
-	if _, err := d.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion)); err != nil {
-		log.Warn("cache user_version set failed", "error", err)
-	}
 	schemaMu.Lock()
 	names := make([]string, 0, len(extensionSchemas))
 	for name := range extensionSchemas {
@@ -378,12 +375,65 @@ func Open(cacheDir string) error {
 		}
 	}
 	schemaMu.Unlock()
+	restoreReadMarkers(d, markers)
+	// The version is written last, so a cache that failed between the schemas is reseeded on the next open.
+	if _, err := d.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion)); err != nil {
+		log.Warn("cache user_version set failed", "error", err)
+	}
 
 	dbPtr.Store(d)
 	opened = true
 	initErr = nil
 	log.Debug("cache opened", "path", dbPath, "duration_ms", time.Since(start).Milliseconds())
 	return nil
+}
+
+// readMarkersFromFile reads the rows of core_notification_reads from a cache file before its reseed; a file without the table gives none.
+func readMarkersFromFile(dbPath string) [][4]string {
+	probe, err := sql.Open("sqlite", dbPath+"?_busy_timeout=5000")
+	if err != nil {
+		return nil
+	}
+	defer probe.Close()
+	rows, err := probe.Query(`SELECT repo_url, hash, branch, COALESCE(read_at, '') FROM core_notification_reads`)
+	if err != nil {
+		log.Warn("read markers not kept across the reseed", "error", err)
+		return nil
+	}
+	defer rows.Close()
+	var markers [][4]string
+	for rows.Next() {
+		var m [4]string
+		if err := rows.Scan(&m[0], &m[1], &m[2], &m[3]); err == nil {
+			markers = append(markers, m)
+		}
+	}
+	return markers
+}
+
+// restoreReadMarkers writes the read markers of the deleted cache into the new one.
+func restoreReadMarkers(d *sql.DB, markers [][4]string) {
+	if len(markers) == 0 {
+		return
+	}
+	tx, err := d.Begin()
+	if err != nil {
+		log.Warn("read markers not kept across the reseed", "error", err)
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, m := range markers {
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO core_notification_reads (repo_url, hash, branch, read_at) VALUES (?, ?, ?, ?)`,
+			m[0], m[1], m[2], ToNullString(m[3])); err != nil {
+			log.Warn("read markers not kept across the reseed", "error", err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Warn("read markers not kept across the reseed", "error", err)
+		return
+	}
+	log.Info("read markers kept across the reseed", "count", len(markers))
 }
 
 // needsReseed returns true when the cache file at dbPath exists but its
