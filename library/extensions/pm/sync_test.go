@@ -475,12 +475,13 @@ func queryPMItem(t *testing.T, hash string) PMItem {
 	t.Helper()
 	item, err := cache.QueryLocked(func(db *sql.DB) (PMItem, error) {
 		var p PMItem
-		err := db.QueryRow(`SELECT repo_url, hash, branch, type, state, assignees, due, start_date, end_date,
-			milestone_repo_url, milestone_hash, milestone_branch,
-			sprint_repo_url, sprint_hash, sprint_branch,
-			parent_repo_url, parent_hash, parent_branch,
-			root_repo_url, root_hash, root_branch, labels
-			FROM pm_items WHERE repo_url = ? AND hash = ? AND branch = ?`,
+		err := db.QueryRow(`SELECT p.repo_url, p.hash, p.branch, p.type, p.state, p.assignees, p.due, p.start_date, p.end_date,
+			p.milestone_repo_url, p.milestone_hash, p.milestone_branch,
+			p.sprint_repo_url, p.sprint_hash, p.sprint_branch,
+			p.parent_repo_url, p.parent_hash, p.parent_branch,
+			p.root_repo_url, p.root_hash, p.root_branch, c.labels
+			FROM pm_items p JOIN core_commits c ON c.repo_url = p.repo_url AND c.hash = p.hash AND c.branch = p.branch
+			WHERE p.repo_url = ? AND p.hash = ? AND p.branch = ?`,
 			pmSyncTestRepoURL, hash, pmSyncTestBranch).Scan(
 			&p.RepoURL, &p.Hash, &p.Branch, &p.Type, &p.State,
 			&p.Assignees, &p.Due, &p.StartDate, &p.EndDate,

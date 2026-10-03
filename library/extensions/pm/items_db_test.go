@@ -27,6 +27,18 @@ func insertPMTestCommit(t *testing.T, repoURL, hash string) {
 	}
 }
 
+// insertPMTestCommitWithLabels caches an issue commit of the test repository whose header carries the labels, the column the view reads.
+func insertPMTestCommitWithLabels(t *testing.T, hash, labels string) {
+	t.Helper()
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash: hash, RepoURL: "https://github.com/test/repo", Branch: pmTestBranch, AuthorName: "Test User", AuthorEmail: "test@test.com",
+		Message:   "Issue\n\nGitMsg: ext=\"pm\"; type=\"issue\"; labels=\"" + labels + "\"; v=\"0.1.0\"",
+		Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
+	}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+}
+
 func TestInsertPMItem(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/repo"
@@ -223,12 +235,10 @@ func TestGetPMItems_filterStr(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/repo"
 	branch := pmTestBranch
-	insertPMTestCommit(t, repoURL, "filt_1234567")
-	InsertPMItem(PMItem{RepoURL: repoURL, Hash: "filt_1234567", Branch: branch, Type: "issue", State: "open",
-		Labels: cache.ToNullString("priority/high")})
-	insertPMTestCommit(t, repoURL, "filt_2345678")
-	InsertPMItem(PMItem{RepoURL: repoURL, Hash: "filt_2345678", Branch: branch, Type: "issue", State: "open",
-		Labels: cache.ToNullString("priority/low")})
+	insertPMTestCommitWithLabels(t, "filt_1234567", "priority/high")
+	InsertPMItem(PMItem{RepoURL: repoURL, Hash: "filt_1234567", Branch: branch, Type: "issue", State: "open"})
+	insertPMTestCommitWithLabels(t, "filt_2345678", "priority/low")
+	InsertPMItem(PMItem{RepoURL: repoURL, Hash: "filt_2345678", Branch: branch, Type: "issue", State: "open"})
 
 	items, err := GetPMItems(PMQuery{RepoURL: repoURL, Branch: branch, FilterStr: "priority:high"})
 	if err != nil {
@@ -296,12 +306,10 @@ func TestGetPMItems_labelsFilter(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/repo"
 	branch := pmTestBranch
-	insertPMTestCommit(t, repoURL, "lbl1_1234567")
-	InsertPMItem(PMItem{RepoURL: repoURL, Hash: "lbl1_1234567", Branch: branch, Type: "issue", State: "open",
-		Labels: cache.ToNullString("priority/high,kind/bug")})
-	insertPMTestCommit(t, repoURL, "lbl2_1234567")
-	InsertPMItem(PMItem{RepoURL: repoURL, Hash: "lbl2_1234567", Branch: branch, Type: "issue", State: "open",
-		Labels: cache.ToNullString("priority/low")})
+	insertPMTestCommitWithLabels(t, "lbl1_1234567", "priority/high,kind/bug")
+	InsertPMItem(PMItem{RepoURL: repoURL, Hash: "lbl1_1234567", Branch: branch, Type: "issue", State: "open"})
+	insertPMTestCommitWithLabels(t, "lbl2_1234567", "priority/low")
+	InsertPMItem(PMItem{RepoURL: repoURL, Hash: "lbl2_1234567", Branch: branch, Type: "issue", State: "open"})
 
 	items, err := GetPMItems(PMQuery{RepoURL: repoURL, Branch: branch, Labels: []string{"kind/bug"}})
 	if err != nil {

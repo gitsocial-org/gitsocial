@@ -105,7 +105,7 @@ CREATE INDEX IF NOT EXISTS idx_core_commits_repo_timestamp ON core_commits(repo_
 CREATE INDEX IF NOT EXISTS idx_core_commits_repo_branch ON core_commits(repo_url, branch);
 CREATE INDEX IF NOT EXISTS idx_core_commits_edits ON core_commits(edits) WHERE edits IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_core_commits_virtual ON core_commits(repo_url, hash, branch) WHERE is_virtual = 1;
-CREATE INDEX IF NOT EXISTS idx_core_commits_stale ON core_commits(repo_url, branch) WHERE stale_since IS NOT NULL;
+DROP INDEX IF EXISTS idx_core_commits_stale;
 CREATE INDEX IF NOT EXISTS idx_core_commits_author ON core_commits(repo_url, author_email, timestamp DESC) WHERE author_email != '';
 -- Plain indices on the generated effective_* columns. Replaces three
 -- expression indices (idx_core_commits_eff_*) keyed on COALESCE expressions —

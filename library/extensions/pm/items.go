@@ -75,8 +75,8 @@ func InsertPMItem(item PMItem) error {
 		defer func() { _ = tx.Rollback() }()
 		if _, err := tx.Exec(`
 			INSERT INTO pm_items
-			(repo_url, hash, branch, type, state, assignees, due, start_date, end_date, milestone_repo_url, milestone_hash, milestone_branch, sprint_repo_url, sprint_hash, sprint_branch, parent_repo_url, parent_hash, parent_branch, root_repo_url, root_hash, root_branch, labels)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			(repo_url, hash, branch, type, state, assignees, due, start_date, end_date, milestone_repo_url, milestone_hash, milestone_branch, sprint_repo_url, sprint_hash, sprint_branch, parent_repo_url, parent_hash, parent_branch, root_repo_url, root_hash, root_branch)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(repo_url, hash, branch) DO UPDATE SET
 				type = excluded.type,
 				state = excluded.state,
@@ -95,8 +95,7 @@ func InsertPMItem(item PMItem) error {
 				parent_branch = excluded.parent_branch,
 				root_repo_url = excluded.root_repo_url,
 				root_hash = excluded.root_hash,
-				root_branch = excluded.root_branch,
-				labels = excluded.labels`,
+				root_branch = excluded.root_branch`,
 			item.RepoURL, item.Hash, item.Branch,
 			item.Type, item.State, item.Assignees,
 			item.Due, item.StartDate, item.EndDate,
@@ -104,7 +103,6 @@ func InsertPMItem(item PMItem) error {
 			item.SprintRepoURL, item.SprintHash, item.SprintBranch,
 			item.ParentRepoURL, item.ParentHash, item.ParentBranch,
 			item.RootRepoURL, item.RootHash, item.RootBranch,
-			item.Labels,
 		); err != nil {
 			return err
 		}
@@ -129,8 +127,8 @@ func InsertPMItems(items []PMItem) error {
 		defer func() { _ = tx.Rollback() }()
 		stmt, err := tx.Prepare(`
 			INSERT INTO pm_items
-			(repo_url, hash, branch, type, state, assignees, due, start_date, end_date, milestone_repo_url, milestone_hash, milestone_branch, sprint_repo_url, sprint_hash, sprint_branch, parent_repo_url, parent_hash, parent_branch, root_repo_url, root_hash, root_branch, labels)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			(repo_url, hash, branch, type, state, assignees, due, start_date, end_date, milestone_repo_url, milestone_hash, milestone_branch, sprint_repo_url, sprint_hash, sprint_branch, parent_repo_url, parent_hash, parent_branch, root_repo_url, root_hash, root_branch)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(repo_url, hash, branch) DO UPDATE SET
 				type = excluded.type,
 				state = excluded.state,
@@ -149,8 +147,7 @@ func InsertPMItems(items []PMItem) error {
 				parent_branch = excluded.parent_branch,
 				root_repo_url = excluded.root_repo_url,
 				root_hash = excluded.root_hash,
-				root_branch = excluded.root_branch,
-				labels = excluded.labels`)
+				root_branch = excluded.root_branch`)
 		if err != nil {
 			return err
 		}
@@ -164,7 +161,6 @@ func InsertPMItems(items []PMItem) error {
 				item.SprintRepoURL, item.SprintHash, item.SprintBranch,
 				item.ParentRepoURL, item.ParentHash, item.ParentBranch,
 				item.RootRepoURL, item.RootHash, item.RootBranch,
-				item.Labels,
 			); err != nil {
 				return err
 			}

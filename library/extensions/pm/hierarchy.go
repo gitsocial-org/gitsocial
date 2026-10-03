@@ -110,7 +110,7 @@ const childSelectColumns = `c.repo_url, c.hash, c.branch,
 	       p.sprint_repo_url, p.sprint_hash, p.sprint_branch,
 	       p.parent_repo_url, p.parent_hash, p.parent_branch,
 	       p.root_repo_url, p.root_hash, p.root_branch,
-	       p.labels`
+	       c.labels`
 
 // GetChildIssues returns the direct children of the given issue (GITPM.md §1.7):
 // issues whose parent is the issue, plus direct children of a top-level issue

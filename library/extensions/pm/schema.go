@@ -32,13 +32,12 @@ CREATE TABLE IF NOT EXISTS pm_items (
     root_repo_url TEXT,
     root_hash TEXT,
     root_branch TEXT,
-    labels TEXT,
     PRIMARY KEY (repo_url, hash, branch),
     FOREIGN KEY (repo_url, hash, branch) REFERENCES core_commits(repo_url, hash, branch)
 );
 CREATE INDEX IF NOT EXISTS idx_pm_type ON pm_items(type);
 CREATE INDEX IF NOT EXISTS idx_pm_state ON pm_items(state);
-CREATE INDEX IF NOT EXISTS idx_pm_labels ON pm_items(labels);
+DROP INDEX IF EXISTS idx_pm_labels;
 CREATE INDEX IF NOT EXISTS idx_pm_milestone ON pm_items(milestone_repo_url, milestone_hash, milestone_branch);
 CREATE INDEX IF NOT EXISTS idx_pm_sprint ON pm_items(sprint_repo_url, sprint_hash, sprint_branch);
 CREATE INDEX IF NOT EXISTS idx_pm_parent ON pm_items(parent_repo_url, parent_hash, parent_branch);
@@ -108,7 +107,7 @@ SELECT
     p.root_repo_url,
     p.root_hash,
     p.root_branch,
-    COALESCE(c.labels, p.labels) as labels,
+    c.labels,
     COALESCE(si.comments, 0) as comments
 FROM core_commits c
 INNER JOIN pm_items p ON c.repo_url = p.repo_url AND c.hash = p.hash AND c.branch = p.branch
