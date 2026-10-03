@@ -269,16 +269,11 @@ func InsertSocialItem(item SocialItem) error {
 			return err
 		}
 
-		// If upgrading from virtual, update core_commits
-		var wasVirtual int
-		if err := db.QueryRow(`SELECT is_virtual FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
-			item.RepoURL, item.Hash, item.Branch).Scan(&wasVirtual); err == nil && wasVirtual == 1 {
-			if _, err := db.Exec(`
-				UPDATE core_commits SET is_virtual = 0, fetched_at = datetime('now')
-				WHERE repo_url = ? AND hash = ? AND branch = ?`,
-				item.RepoURL, item.Hash, item.Branch); err != nil {
-				return err
-			}
+		// A caller that writes an item without a fetch, such as an import, clears the flag here; a fetch has cleared it in InsertCommits.
+		if _, err := db.Exec(`UPDATE core_commits SET is_virtual = 0, fetched_at = datetime('now')
+			WHERE repo_url = ? AND hash = ? AND branch = ? AND is_virtual = 1`,
+			item.RepoURL, item.Hash, item.Branch); err != nil {
+			return err
 		}
 		if err := dropOtherVirtualRows(db, item.RepoURL, item.Hash, item.Branch); err != nil {
 			return err

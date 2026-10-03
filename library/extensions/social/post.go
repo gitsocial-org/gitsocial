@@ -82,21 +82,9 @@ func buildSocialItem(gc git.Commit, msg *protocol.Message, repoURL, branch strin
 	}
 }
 
-// upgradeVirtualItem converts the virtual row of a fetched commit under its branch to a real one and drops its virtual rows under other branches.
+// upgradeVirtualItem drops the virtual rows of a fetched commit under other branches; InsertCommits has taken over the row under its own branch.
 func upgradeVirtualItem(gc git.Commit, repoURL, branch string) {
 	if err := cache.ExecLocked(func(db *sql.DB) error {
-		if _, err := db.Exec(`
-			UPDATE core_commits
-			SET is_virtual = 0,
-				author_name = ?,
-				author_email = ?,
-				message = ?,
-				timestamp = ?
-			WHERE repo_url = ? AND hash = ? AND branch = ? AND is_virtual = 1`,
-			gc.Author, gc.Email, gc.Message, gc.Timestamp.Format(time.RFC3339),
-			repoURL, gc.Hash, branch); err != nil {
-			return err
-		}
 		return dropOtherVirtualRows(db, repoURL, gc.Hash, branch)
 	}); err != nil {
 		log.Debug("upgrade virtual item failed", "hash", gc.Hash, "error", err)

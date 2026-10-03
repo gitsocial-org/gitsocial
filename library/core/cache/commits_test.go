@@ -585,3 +585,92 @@ func TestHashPrefixMatch(t *testing.T) {
 		t.Errorf("HashPrefixMatch(empty) = %q %v, want a term that matches no hash", cond, args)
 	}
 }
+
+// TestInsertCommits_upgradesVirtualRow pins invariant 6: a fetched commit takes over its virtual row with its real fields, its labels and one FTS row.
+func TestInsertCommits_upgradesVirtualRow(t *testing.T) {
+	setupTestDB(t)
+	const repoURL, hash = "https://github.com/user/virtual", "f1a700000001"
+	if err := ExecLocked(func(db *sql.DB) error {
+		_, err := UpsertVirtualCommit(db, VirtualCommit{RepoURL: repoURL, Hash: hash, Branch: "main", AuthorName: "Snapshot", AuthorEmail: "s@test.com", Message: "snapshot words", Timestamp: time.Now()})
+		return err
+	}); err != nil {
+		t.Fatalf("UpsertVirtualCommit() error = %v", err)
+	}
+	real := "Real words\n\nGitMsg: ext=\"pm\"; type=\"issue\"; labels=\"bug\"; v=\"0.1.0\""
+	if err := InsertCommits([]Commit{{Hash: hash, RepoURL: repoURL, Branch: "main", AuthorName: "Real", AuthorEmail: "real@test.com", Message: real, Timestamp: time.Now()}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+
+	var isVirtual, labelRows, ftsRows int
+	var message, labels string
+	if err := DB().QueryRow(`SELECT is_virtual, message, COALESCE(labels, ''),
+			(SELECT COUNT(*) FROM core_labels l WHERE l.repo_url = c.repo_url AND l.hash = c.hash AND l.branch = c.branch AND l.label = 'bug'),
+			(SELECT COUNT(*) FROM core_fts f WHERE f.rowid = c.rowid AND core_fts MATCH 'Real')
+		FROM core_commits c WHERE repo_url = ? AND hash = ?`, repoURL, hash).Scan(&isVirtual, &message, &labels, &labelRows, &ftsRows); err != nil {
+		t.Fatalf("read the row: %v", err)
+	}
+	if isVirtual != 0 || message != real || labels != "bug" || labelRows != 1 || ftsRows != 1 {
+		t.Errorf("row after the fetch = virtual %d, labels %q, label rows %d, fts rows %d, message %q; want a real row with its labels and one FTS row", isVirtual, labels, labelRows, ftsRows, message)
+	}
+	var snapshotHits int
+	if err := DB().QueryRow(`SELECT COUNT(*) FROM core_fts WHERE core_fts MATCH 'snapshot'`).Scan(&snapshotHits); err != nil || snapshotHits != 0 {
+		t.Errorf("the snapshot text matches %d FTS rows, %v; want none", snapshotHits, err)
+	}
+}
+
+// TestDeleteRepository_removesFTSRows pins invariant 7: the FTS rows of a deleted repository go with it, so an old text does not match a commit that reuses the rowid.
+func TestDeleteRepository_removesFTSRows(t *testing.T) {
+	setupTestDB(t)
+	const oldRepo, newRepo = "https://github.com/user/old", "https://github.com/user/new"
+	if err := InsertCommits([]Commit{{Hash: "01d000000001", RepoURL: oldRepo, Branch: "main", Message: "ancient words", Timestamp: time.Now()}}); err != nil {
+		t.Fatalf("InsertCommits(old) error = %v", err)
+	}
+	var oldRowid int64
+	if err := DB().QueryRow(`SELECT rowid FROM core_commits WHERE repo_url = ?`, oldRepo).Scan(&oldRowid); err != nil {
+		t.Fatalf("read the old rowid: %v", err)
+	}
+	if err := DeleteRepository(oldRepo); err != nil {
+		t.Fatalf("DeleteRepository() error = %v", err)
+	}
+	if err := InsertCommits([]Commit{{Hash: "4e3000000001", RepoURL: newRepo, Branch: "main", Message: "fresh words", Timestamp: time.Now()}}); err != nil {
+		t.Fatalf("InsertCommits(new) error = %v", err)
+	}
+	var newRowid int64
+	if err := DB().QueryRow(`SELECT rowid FROM core_commits WHERE repo_url = ?`, newRepo).Scan(&newRowid); err != nil {
+		t.Fatalf("read the new rowid: %v", err)
+	}
+	if newRowid != oldRowid {
+		t.Fatalf("the new commit took rowid %d, want the reused %d", newRowid, oldRowid)
+	}
+	var ancient, fresh int
+	if err := DB().QueryRow(`SELECT (SELECT COUNT(*) FROM core_fts WHERE core_fts MATCH 'ancient'), (SELECT COUNT(*) FROM core_fts WHERE core_fts MATCH 'fresh')`).Scan(&ancient, &fresh); err != nil {
+		t.Fatalf("query fts: %v", err)
+	}
+	if ancient != 0 || fresh != 1 {
+		t.Errorf("FTS matches: ancient %d, fresh %d; want 0 and 1", ancient, fresh)
+	}
+}
+
+// TestFilterUnfetchedCommits_virtualRowIsUnfetched pins invariant 6: a hash with only a virtual row is still unfetched, so the fetch reaches InsertCommits.
+func TestFilterUnfetchedCommits_virtualRowIsUnfetched(t *testing.T) {
+	setupTestDB(t)
+	const repoURL, hash = "https://github.com/user/virtual-filter", "f1a700000002"
+	if err := ExecLocked(func(db *sql.DB) error {
+		_, err := UpsertVirtualCommit(db, VirtualCommit{RepoURL: repoURL, Hash: hash, Branch: "main", Message: "snapshot", Timestamp: time.Now()})
+		return err
+	}); err != nil {
+		t.Fatalf("UpsertVirtualCommit() error = %v", err)
+	}
+	if got, err := FilterUnfetchedCommits(repoURL, "main", []string{hash}); err != nil || len(got) != 1 {
+		t.Errorf("FilterUnfetchedCommits() = %v, %v, want the hash", got, err)
+	}
+	if got, err := FilterUnfetchedCommitsByRepo(repoURL, []string{hash}); err != nil || len(got) != 1 {
+		t.Errorf("FilterUnfetchedCommitsByRepo() = %v, %v, want the hash", got, err)
+	}
+	if err := InsertCommits([]Commit{{Hash: hash, RepoURL: repoURL, Branch: "main", Message: "real", Timestamp: time.Now()}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	if got, err := FilterUnfetchedCommits(repoURL, "main", []string{hash}); err != nil || len(got) != 0 {
+		t.Errorf("FilterUnfetchedCommits() after the fetch = %v, %v, want none", got, err)
+	}
+}

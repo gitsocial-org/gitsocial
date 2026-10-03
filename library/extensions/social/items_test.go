@@ -1504,6 +1504,7 @@ func TestUpgradeVirtualItem_oneRowPerHash(t *testing.T) {
 	const hash = "7e7000000001"
 	seedVirtualRows(t, repo, hash, itemsTestBranch, movedFromBranch)
 
+	insertItemsTestCommit(t, repo, hash)
 	upgradeVirtualItem(git.Commit{Hash: hash, Author: "Real", Email: "real@test.com", Message: "real", Timestamp: time.Now()}, repo, itemsTestBranch)
 
 	if rows := rowsOfHash(t, repo, hash); len(rows) != 1 || rows[0] != itemsTestBranch+":0:1" {

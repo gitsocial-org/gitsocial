@@ -3705,23 +3705,20 @@ func TestUpgradeVirtualItem_withVirtualCommit(t *testing.T) {
 		return err
 	})
 
-	// Upgrade it
-	upgradeVirtualItem(git.Commit{
-		Hash:      hash,
-		Author:    "Real Author",
-		Email:     "real@t.com",
-		Message:   "real content",
-		Timestamp: time.Now(),
-	}, repoURL, branch)
+	// The fetch of the real commit takes the row over, as every fetch path does before the processor runs.
+	real := git.Commit{Hash: hash, Author: "Real Author", Email: "real@t.com", Message: "real content", Timestamp: time.Now()}
+	if err := cache.InsertCommits([]cache.Commit{{Hash: hash, RepoURL: repoURL, Branch: branch, AuthorName: real.Author, AuthorEmail: real.Email, Message: real.Message, Timestamp: real.Timestamp}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	upgradeVirtualItem(real, repoURL, branch)
 
-	// Verify upgrade
-	isVirtual, _ := cache.QueryLocked(func(db *sql.DB) (int, error) {
-		var v int
-		err := db.QueryRow(`SELECT is_virtual FROM core_commits WHERE repo_url = ? AND hash = ?`, repoURL, hash).Scan(&v)
-		return v, err
-	})
-	if isVirtual != 0 {
-		t.Error("expected is_virtual = 0 after upgrade")
+	var isVirtual int
+	var message string
+	if err := cache.DB().QueryRow(`SELECT is_virtual, message FROM core_commits WHERE repo_url = ? AND hash = ?`, repoURL, hash).Scan(&isVirtual, &message); err != nil {
+		t.Fatalf("read the row: %v", err)
+	}
+	if isVirtual != 0 || message != "real content" {
+		t.Errorf("row after the upgrade = virtual %d, message %q; want a real row with the fetched message", isVirtual, message)
 	}
 }
 
@@ -3751,7 +3748,7 @@ func TestProcessWorkspaceBatch_nonSocialCommit(t *testing.T) {
 		_, err := db.Exec(`UPDATE core_commits SET is_virtual = 1 WHERE hash = ?`, "aabb11335577")
 		return err
 	})
-	// Process a non-social commit with same hash (triggers upgradeVirtualItem path)
+	// The sync inserts the fetched commit, which takes the virtual row over, before the batch runs.
 	commits := []git.Commit{{
 		Hash:      "aabb11335577",
 		Author:    "Real",
@@ -3759,6 +3756,9 @@ func TestProcessWorkspaceBatch_nonSocialCommit(t *testing.T) {
 		Message:   "just a regular commit with no gitmsg header",
 		Timestamp: time.Now(),
 	}}
+	if err := cache.InsertCommits([]cache.Commit{{Hash: commits[0].Hash, RepoURL: repoURL, Branch: branch, AuthorName: commits[0].Author, AuthorEmail: commits[0].Email, Message: commits[0].Message, Timestamp: commits[0].Timestamp}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
 	processWorkspaceBatch(commits, repoURL, branch)
 	// Verify virtual flag cleared
 	isVirtual, _ := cache.QueryLocked(func(db *sql.DB) (int, error) {

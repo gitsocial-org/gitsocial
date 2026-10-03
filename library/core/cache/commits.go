@@ -113,13 +113,13 @@ func insertCommitsBatch(commits []Commit) error {
 // insertCommitsTxn inserts up to commitTxnSize commits in a single transaction.
 //
 // This function only writes rows that belong to the commits being inserted:
-// the commit's own core_commits row, its FTS row (when not an edit), and the
-// edit→canonical link in core_commits_version (when the canonical is already
-// in the cache). All denormalized resolved-state on canonical rows
-// (resolved_message, has_edits, is_retracted, labels, FTS, mutable extension
-// columns) is written by applyEditToCanonical, called once per affected
-// canonical at the end of the loop, which includes each new row of a known
-// canonical. This keeps the canonical-update logic in one place: see versions.go.
+// the commit's own core_commits row, which takes over a virtual row of the
+// same key, its FTS row (when not an edit), and the edit→canonical link in
+// core_commits_version (when the canonical is already in the cache). All
+// denormalized resolved-state on canonical rows (resolved_message, has_edits,
+// is_retracted, labels, FTS, mutable extension columns) is written by
+// applyEditToCanonical, called once per affected canonical at the end of the
+// loop, which includes each new row of a known canonical: see versions.go.
 func insertCommitsTxn(commits []Commit) error {
 	db := dbPtr.Load()
 	if db == nil {
@@ -132,13 +132,23 @@ func insertCommitsTxn(commits []Commit) error {
 	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().UTC().Format(time.RFC3339)
+	// A fetched commit takes over its virtual row; a real row is left as it is, so the statement returns no rowid for it.
 	commitStmt, err := tx.Prepare(`
-		INSERT OR IGNORE INTO core_commits (
+		INSERT INTO core_commits (
 			repo_url, hash, branch, author_name, author_email, message, timestamp,
 			origin_time, edits, labels, fetched_at,
 			origin_author_name, origin_author_email, signer_key,
 			is_edit_commit
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(repo_url, hash, branch) DO UPDATE SET
+			author_name = excluded.author_name, author_email = excluded.author_email,
+			message = excluded.message, timestamp = excluded.timestamp,
+			origin_time = excluded.origin_time, edits = excluded.edits, labels = excluded.labels,
+			fetched_at = excluded.fetched_at,
+			origin_author_name = excluded.origin_author_name, origin_author_email = excluded.origin_author_email,
+			signer_key = excluded.signer_key, is_edit_commit = excluded.is_edit_commit, is_virtual = 0
+		WHERE core_commits.is_virtual = 1
+		RETURNING rowid`)
 	if err != nil {
 		return fmt.Errorf("prepare commit statement: %w", err)
 	}
@@ -213,8 +223,10 @@ func insertCommitsTxn(commits []Commit) error {
 		}
 
 		// signer_key: an empty string is confirmed unsigned; NULL means the git lookup failed at insert, and the backfill retries it.
-		commitResult, err := commitStmt.Exec(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail, c.SignerKey, isEditCommit)
-		if err != nil {
+		var rowid int64
+		err := commitStmt.QueryRow(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail, c.SignerKey, isEditCommit).Scan(&rowid)
+		written := err == nil
+		if err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("insert commit %s: %w", c.Hash, err)
 		}
 
@@ -222,9 +234,7 @@ func insertCommitsTxn(commits []Commit) error {
 		// canonicals this is the authored value; for edits the canonical's
 		// row is later refreshed by applyEditToCanonical with the edit's
 		// labels. Empty/nil labels means we DELETE existing rows and INSERT
-		// none — INSERT OR IGNORE on the commit means the labels haven't
-		// actually changed when the row was already there, so the rebuild
-		// is a no-op write.
+		// none; for a row that was already there the rebuild is a no-op write.
 		labelsStr := ""
 		if labels != nil {
 			labelsStr = *labels
@@ -263,19 +273,15 @@ func insertCommitsTxn(commits []Commit) error {
 			}
 		}
 
-		affected, _ := commitResult.RowsAffected()
-		if affected == 1 {
+		if written {
 			inserted = append(inserted, [2]string{repoURL, c.Hash})
 		}
 
 		// Insert into FTS5 for non-edit commits. Edit commits don't get their
 		// own FTS row; their content reaches FTS via the canonical's row,
-		// which applyEditToCanonical refreshes below. Skip when the commit
-		// row already existed (INSERT OR IGNORE no-op'd, RowsAffected == 0)
-		// — the FTS row is already there. This is what fixes the historical
-		// 3× FTS-row bloat from re-fetches.
-		if isEditCommit == 0 && affected == 1 {
-			rowid, _ := commitResult.LastInsertId()
+		// which applyEditToCanonical refreshes below. A real row that was
+		// already there has its FTS row; a virtual row never had one.
+		if isEditCommit == 0 && written {
 			_, _ = ftsStmt.Exec(rowid, c.Message, resolvedAuthorName+" "+resolvedAuthorEmail)
 		}
 	}
@@ -465,7 +471,7 @@ func GetAllContributors() ([]Contributor, error) {
 // to keep query plans manageable on huge repos (e.g. linux-kernel-scale 1M+ commits).
 const hashFilterBatchSize = 5000
 
-// FilterUnfetchedCommitsByRepo returns hashes not yet in the cache for any branch of this repo.
+// FilterUnfetchedCommitsByRepo returns the hashes with no fetched row under any branch of the repository; a virtual row does not count.
 func FilterUnfetchedCommitsByRepo(repoURL string, hashes []string) ([]string, error) {
 	if len(hashes) == 0 {
 		return nil, nil
@@ -484,7 +490,7 @@ func FilterUnfetchedCommitsByRepo(repoURL string, hashes []string) ([]string, er
 		batch := hashes[start:end]
 		placeholders := strings.Repeat("?,", len(batch))
 		placeholders = placeholders[:len(placeholders)-1]
-		query := `SELECT hash FROM core_commits WHERE repo_url = ? AND hash IN (` + placeholders + `)`
+		query := `SELECT hash FROM core_commits WHERE repo_url = ? AND is_virtual = 0 AND hash IN (` + placeholders + `)`
 		args := make([]interface{}, 0, len(batch)+1)
 		args = append(args, normURL)
 		for _, h := range batch {
@@ -654,29 +660,19 @@ func unsettledBranches(db *sql.DB, repoURL string, settled []string) ([]string, 
 	return out, rows.Err()
 }
 
-// ResetRepositoryData deletes all commits and extension items for a repo.
-// Used when switching between specific branch and * following mode, and when
-// GC'ing a memo session bare repo whose `local:<path>` rows are now orphaned.
+// ResetRepositoryData deletes the commits and extension rows of a repository, when its follow mode changes or a memo session is collected; the repository itself and its list memberships stay.
 func ResetRepositoryData(repoURL string) error {
 	repoURL = protocol.NormalizeURL(repoURL)
 	return ExecLocked(func(db *sql.DB) error {
-		tables := []string{
-			"pm_assignees", "review_reviewers",
-			"social_items", "social_interactions",
-			"pm_items", "release_items", "review_items", "memo_items",
-			"core_commits_version", "core_mentions", "core_trailer_refs",
-			"core_notification_reads", "core_labels", "core_commits",
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("begin tx: %w", err)
 		}
-		// Delete FTS rows by rowid via subquery on core_commits — must run
-		// before core_commits is deleted below, otherwise the subquery is empty.
-		_, _ = db.Exec(`DELETE FROM core_fts WHERE rowid IN (SELECT rowid FROM core_commits WHERE repo_url = ?)`, repoURL)
-		for _, table := range tables {
-			if _, err := db.Exec(`DELETE FROM `+table+` WHERE repo_url = ?`, repoURL); err != nil {
-				// Table may not exist if extension not loaded — skip
-				continue
-			}
+		defer func() { _ = tx.Rollback() }()
+		if err := deleteRepoRows(tx, repoURL, repoRowDeletes); err != nil {
+			return err
 		}
-		return nil
+		return tx.Commit()
 	})
 }
 
@@ -803,7 +799,7 @@ func GetCommitOnAnyBranch(repoURL, hashPrefix string) (Commit, error) {
 	})
 }
 
-// FilterUnfetchedCommits returns hashes that are not yet in the cache.
+// FilterUnfetchedCommits returns the hashes with no fetched row under the branch; a virtual row does not count, so the fetch takes it over.
 func FilterUnfetchedCommits(repoURL, branch string, hashes []string) ([]string, error) {
 	if len(hashes) == 0 {
 		return nil, nil
@@ -823,7 +819,7 @@ func FilterUnfetchedCommits(repoURL, branch string, hashes []string) ([]string, 
 		batch := hashes[start:end]
 		placeholders := strings.Repeat("?,", len(batch))
 		placeholders = placeholders[:len(placeholders)-1]
-		query := `SELECT hash FROM core_commits WHERE repo_url = ? AND branch = ? AND hash IN (` + placeholders + `)`
+		query := `SELECT hash FROM core_commits WHERE repo_url = ? AND branch = ? AND is_virtual = 0 AND hash IN (` + placeholders + `)`
 		args := make([]interface{}, 0, len(batch)+2)
 		args = append(args, normURL, branch)
 		for _, h := range batch {
