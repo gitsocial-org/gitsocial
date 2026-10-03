@@ -24,6 +24,7 @@ var jsonSkipPaths = map[string]bool{
 	"fetch":           true, // network
 	"push":            true, // network
 	"mirror":          true, // network
+	"serve":           true, // owns a port until Ctrl-C
 	"import":          true, // network
 	"import all":      true, // network
 	"import pm":       true, // network

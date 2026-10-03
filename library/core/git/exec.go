@@ -90,13 +90,17 @@ var s3HelperAlias = sync.OnceValue(func() string {
 	return `!"` + exe + `" __git-remote-s3`
 })
 
-// envWithS3HelperAlias adds alias.remote-s3 to the environment via git's
-// GIT_CONFIG_* mechanism, honoring any config entries already present.
+// envWithS3HelperAlias adds alias.remote-s3 to the environment through GIT_CONFIG_*, after the entries already there.
 func envWithS3HelperAlias(env []string) []string {
 	alias := s3HelperAlias()
 	if alias == "" {
 		return env
 	}
+	return AppendConfigEnv(env, [2]string{"alias.remote-s3", alias})
+}
+
+// AppendConfigEnv adds git config key-value pairs to env through GIT_CONFIG_*, numbered after the entries already there.
+func AppendConfigEnv(env []string, pairs ...[2]string) []string {
 	count, countIdx := 0, -1
 	for i, entry := range env {
 		if value, ok := strings.CutPrefix(entry, "GIT_CONFIG_COUNT="); ok {
@@ -106,11 +110,13 @@ func envWithS3HelperAlias(env []string) []string {
 			}
 		}
 	}
-	env = append(env,
-		fmt.Sprintf("GIT_CONFIG_KEY_%d=alias.remote-s3", count),
-		fmt.Sprintf("GIT_CONFIG_VALUE_%d=%s", count, alias),
-	)
-	countEntry := fmt.Sprintf("GIT_CONFIG_COUNT=%d", count+1)
+	for i, pair := range pairs {
+		env = append(env,
+			fmt.Sprintf("GIT_CONFIG_KEY_%d=%s", count+i, pair[0]),
+			fmt.Sprintf("GIT_CONFIG_VALUE_%d=%s", count+i, pair[1]),
+		)
+	}
+	countEntry := fmt.Sprintf("GIT_CONFIG_COUNT=%d", count+len(pairs))
 	if countIdx >= 0 {
 		env[countIdx] = countEntry
 		return env

@@ -138,6 +138,7 @@ func buildRootCmd() *cobra.Command {
 		newRPCCmd(),
 		newImportCmd(),
 		newMirrorCmd(),
+		newServeCmd(),
 		newForkCmd(),
 		newIDCmd(),
 		newPersonalCmd(),

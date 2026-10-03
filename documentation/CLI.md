@@ -59,6 +59,20 @@ gitsocial push --dry-run       # print the plan, send nothing
 gitsocial push --site-only     # rebuild the site, send no refs
 ```
 
+### gitsocial serve
+
+Shows the site of the workspace in a browser. It starts a loopback bucket in the process, pushes the workspace to it and serves the site app from the bucket. The site has no HTML pages. Ctrl-C stops it.
+
+```
+gitsocial serve                      # serving http://127.0.0.1:4747/gitsocial/<repo>/
+gitsocial serve --addr 127.0.0.1:8080
+```
+
+| Item | Value |
+|---|---|
+| bucket root | `~/.cache/gitsocial/serve/<hash>/`, kept between runs |
+| remote | `gitsocial-serve`, in the environment of the serve process; no git config is written |
+
 ### gitsocial mirror
 
 Mirrors a forge-hosted project into a bucket: fetch from the forge, import issues, pull requests, releases and discussions, then push data and code, and rebuild the site. Run it again, or from cron, to refresh the mirror; a run that stops before it completes continues at the next run.

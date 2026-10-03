@@ -52,6 +52,7 @@ Clone the repository from GitHub or GitLab, then run these commands in the repos
 ```bash
 gitsocial import     # import issues, pull requests, releases and discussions
 gitsocial tui        # explore in the terminal
+gitsocial serve      # show the site in the browser
 ```
 
 ### Host your own repository on a bucket
