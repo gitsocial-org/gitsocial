@@ -123,17 +123,13 @@ func GetPosts(workdir string, scope string, opts *GetPostsOptions) Result[[]Post
 	switch {
 	case scope == "timeline":
 		result = getTimelinePosts(workdir, workspaceURL, opts)
-	case scope == "repository:my", scope == "repository:workspace":
-		result = getWorkspacePosts(workdir, workspaceURL, opts)
 	case strings.HasPrefix(scope, "repository:"):
-		rest := strings.TrimPrefix(scope, "repository:")
-		repoURL := rest
-		branch := ""
-		if idx := strings.Index(rest, "@"); idx != -1 {
-			repoURL = rest[:idx]
-			branch = rest[idx+1:]
+		repoURL, branch, _ := strings.Cut(strings.TrimPrefix(scope, "repository:"), "@")
+		if repoURL == "my" || repoURL == "workspace" {
+			result = getWorkspacePosts(workdir, workspaceURL, branch, opts)
+		} else {
+			result = getRepositoryPosts(repoURL, branch, workspaceURL, opts)
 		}
-		result = getRepositoryPosts(repoURL, branch, workspaceURL, opts)
 	case strings.HasPrefix(scope, "list:"):
 		listID := strings.TrimPrefix(scope, "list:")
 		result = getListPosts(listID, workspaceURL, opts)
@@ -317,12 +313,10 @@ func CountTimeline(workdir, gitRoot string) int {
 	return count
 }
 
-// CountRepository returns the total number of posts for a repository scope.
+// CountRepository returns the total number of posts for a repository scope; an empty branch counts every branch.
 func CountRepository(workdir, repoURL, branch string, isWorkspace bool) int {
 	if isWorkspace {
-		workspaceURL := gitmsg.ResolveRepoURL(workdir)
-		count, _ := getAllItemsCount(socialQuery{RepoURL: workspaceURL})
-		return count
+		repoURL = gitmsg.ResolveRepoURL(workdir)
 	}
 	count, _ := getAllItemsCount(socialQuery{RepoURL: repoURL, Branch: branch})
 	return count
@@ -334,12 +328,13 @@ func CountListPosts(listID string) int {
 	return count
 }
 
-// getWorkspacePosts retrieves posts from the workspace repository.
-func getWorkspacePosts(workdir string, workspaceURL string, opts *GetPostsOptions) Result[[]Post] {
+// getWorkspacePosts retrieves posts from the workspace repository; an empty branch reads every branch.
+func getWorkspacePosts(workdir string, workspaceURL, branch string, opts *GetPostsOptions) Result[[]Post] {
 	unpushed, _ := git.GetAllUnpushedCommits(workdir)
 
 	items, err := getSocialItems(socialQuery{
 		RepoURL:          workspaceURL,
+		Branch:           branch,
 		Limit:            opts.Limit,
 		Cursor:           opts.Cursor,
 		Since:            opts.Since,
