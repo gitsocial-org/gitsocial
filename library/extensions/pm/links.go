@@ -55,10 +55,13 @@ func GetLinks(repoURL, hash, branch string) ([]Link, error) {
 	})
 }
 
-// GetLinksTo returns links pointing to an issue (reverse lookup).
+// GetLinksTo returns links pointing to an issue from sources that are not stale (reverse lookup).
 func GetLinksTo(repoURL, hash, branch string) ([]Link, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]Link, error) {
-		rows, err := db.Query(`SELECT from_repo_url, from_hash, from_branch, to_repo_url, to_hash, to_branch, link_type FROM pm_links WHERE to_repo_url = ? AND to_hash = ? AND to_branch = ?`,
+		rows, err := db.Query(`SELECT l.from_repo_url, l.from_hash, l.from_branch, l.to_repo_url, l.to_hash, l.to_branch, l.link_type
+			FROM pm_links l
+			LEFT JOIN core_commits c ON c.repo_url = l.from_repo_url AND c.hash = l.from_hash AND c.branch = l.from_branch
+			WHERE l.to_repo_url = ? AND l.to_hash = ? AND l.to_branch = ? AND c.stale_since IS NULL`,
 			repoURL, hash, branch)
 		if err != nil {
 			return nil, err

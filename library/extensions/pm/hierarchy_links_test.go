@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 )
@@ -284,6 +285,37 @@ func TestIsBlocked_reverseLink(t *testing.T) {
 	res := GetBlocking(blocker.ID)
 	if !res.Success || len(res.Data) != 1 || res.Data[0].Subject != "Target" {
 		t.Errorf("GetBlocking() = %+v, want the blocked issue", res)
+	}
+}
+
+// TestGetLinksTo_excludesStaleSource marks the source of two links stale and expects the target's lists to drop it.
+func TestGetLinksTo_excludesStaleSource(t *testing.T) {
+	setupTestDB(t)
+	workdir := cloneFixture(t)
+	repoURL := gitmsg.ResolveRepoURL(workdir)
+
+	target := newIssue(t, workdir, "Target", CreateIssueOptions{})
+	newIssue(t, workdir, "Source", CreateIssueOptions{Blocks: []string{target.ID}, Related: []string{target.ID}})
+	before := GetIssue(target.ID)
+	if !before.Success || len(before.Data.BlockedBy) != 1 || len(before.Data.Related) != 1 {
+		t.Fatalf("GetIssue() before the stale mark = %+v, want one blocker and one related issue", before)
+	}
+
+	if _, err := cache.MarkCommitsStale(repoURL, PMBranch, map[string]bool{refHash(t, target.ID): true}); err != nil {
+		t.Fatalf("MarkCommitsStale() error = %v", err)
+	}
+	after := GetIssue(target.ID)
+	if !after.Success || len(after.Data.BlockedBy) != 0 || len(after.Data.Related) != 0 {
+		t.Errorf("GetIssue() after the stale mark = %+v, want no blocker and no related issue", after.Data)
+	}
+	if res := GetBlockedBy(target.ID); !res.Success || len(res.Data) != 0 {
+		t.Errorf("GetBlockedBy() = %+v, want no stale blocker", res)
+	}
+	if res := GetRelated(target.ID); !res.Success || len(res.Data) != 0 {
+		t.Errorf("GetRelated() = %+v, want no stale related issue", res)
+	}
+	if IsBlocked(target.ID) {
+		t.Error("IsBlocked() = true although the only blocker is stale")
 	}
 }
 
