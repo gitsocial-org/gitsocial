@@ -460,11 +460,16 @@ func (r *Router) NavItemID() string {
 	path := r.location.Path
 	// Special cases with dynamic nav IDs based on params
 	switch path {
-	case "/social/repository", "/social/repository/branches":
+	case "/social/repository":
 		if _, hasURL := r.location.Params["url"]; hasURL {
 			return "social.timeline" // external repo from timeline
 		}
 		return "social.myrepo"
+	case "/social/repository/branches":
+		if _, hasURL := r.location.Params["url"]; hasURL {
+			return "social.timeline"
+		}
+		return "social.branches"
 	case "/social/list", "/social/list/repos":
 		if listID, ok := r.location.Params["listID"]; ok {
 			return "social.lists." + listID

@@ -579,7 +579,7 @@ func (v *repositoryView) HeaderInfo() (position int, total string) {
 func (v *repositoryView) Title() string {
 	if v.isWorkspace {
 		pos, total := v.HeaderInfo()
-		title := "⎇  " + v.name
+		title := "⊡  " + v.name
 		if total != "" {
 			title += " · " + fmt.Sprintf("%d/%s", pos, total)
 		}
@@ -598,17 +598,17 @@ func (v *repositoryView) Title() string {
 	}
 	switch status {
 	case followStatusMutual:
-		styledParts = append(styledParts, tuicore.MutualTitle.Render("⎇  "+v.name))
+		styledParts = append(styledParts, tuicore.MutualTitle.Render("⊡  "+v.name))
 		if counter != "" {
 			styledParts = append(styledParts, tuicore.MutualTitle.Render(counter))
 		}
 	case followStatusFollowed:
-		styledParts = append(styledParts, tuicore.Title.Render("⎇  ✓ "+v.name))
+		styledParts = append(styledParts, tuicore.Title.Render("⊡  ✓ "+v.name))
 		if counter != "" {
 			styledParts = append(styledParts, tuicore.Title.Render(counter))
 		}
 	default:
-		styledParts = append(styledParts, "⎇  ☐ "+v.name)
+		styledParts = append(styledParts, "⊡  ☐ "+v.name)
 		if counter != "" {
 			styledParts = append(styledParts, counter)
 		}

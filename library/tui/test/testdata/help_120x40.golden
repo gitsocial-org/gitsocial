@@ -6,16 +6,16 @@
 │ ──────────────────────────── ││  repository.                                                                         │
 │  ⌘  Social  ············  S  ││                                                                                      │
 │     ⏱  Timeline              ││  ## How It Works                                                                     │
-│     ⎇  My Repository         ││                                                                                      │
-│     ☷ My Lists              ││  Each item is a commit: posts, issues, pull requests, feedback and releases          │
-│        • Memo Inherits (au...││  are git commits on  gitmsg/*  branches. Fetch and push are git operations:          │
-│     ㋡ My Followers          ││  fetch gets updates and push sends your changes. GitSocial works                     │
-│     ➼  Explore               ││  offline, air-gapped and peer-to-peer.  git clone --mirror  moves the data to a      │
-│  ▢  PM  ················  P  ││  different host, with no API scraping and no data loss.                              │
-│  ⑂  Review  ············  R  ││                                                                                      │
-│  ⏏  Release  ···········  V  ││  ## Workflow                                                                         │
-│  ☞  Memos  ·············  M  ││                                                                                      │
-│                              ││  • Fetch: get updates from the repositories that you follow                          │
+│     ⊡  My Repository         ││                                                                                      │
+│     ⎇  My Branches           ││  Each item is a commit: posts, issues, pull requests, feedback and releases          │
+│     ☷ My Lists              ││  are git commits on  gitmsg/*  branches. Fetch and push are git operations:          │
+│        • Memo Inherits (au...││  fetch gets updates and push sends your changes. GitSocial works                     │
+│     ㋡ My Followers          ││  offline, air-gapped and peer-to-peer.  git clone --mirror  moves the data to a      │
+│     ➼  Explore               ││  different host, with no API scraping and no data loss.                              │
+│  ▢  PM  ················  P  ││                                                                                      │
+│  ⑂  Review  ············  R  ││  ## Workflow                                                                         │
+│  ⏏  Release  ···········  V  ││                                                                                      │
+│  ☞  Memos  ·············  M  ││  • Fetch: get updates from the repositories that you follow                          │
 │                              ││  • Push: send your local changes to your remote                                      │
 │                              ││  • Lists: put repositories into named sets for your timeline                         │
 │                              ││                                                                                      │

@@ -28,9 +28,19 @@ func RegisterNavItems(r *tuinav.NavRegistry) {
 	r.Register(tuinav.NavItem{
 		ID:      "social.myrepo",
 		Label:   "My Repository",
-		Icon:    "⎇",
+		Icon:    "⊡",
 		Parent:  "social",
 		Order:   1,
+		Enabled: true,
+	})
+
+	// My Branches sub-item: the branches of the workspace
+	r.Register(tuinav.NavItem{
+		ID:      "social.branches",
+		Label:   "My Branches",
+		Icon:    "⎇",
+		Parent:  "social",
+		Order:   2,
 		Enabled: true,
 	})
 
@@ -40,7 +50,7 @@ func RegisterNavItems(r *tuinav.NavRegistry) {
 		Label:   "My Lists",
 		Icon:    "☷",
 		Parent:  "social",
-		Order:   2,
+		Order:   3,
 		Enabled: true,
 	})
 
@@ -50,7 +60,7 @@ func RegisterNavItems(r *tuinav.NavRegistry) {
 		Label:   "My Followers",
 		Icon:    "㋡",
 		Parent:  "social",
-		Order:   3,
+		Order:   4,
 		Enabled: true,
 	})
 
@@ -60,7 +70,7 @@ func RegisterNavItems(r *tuinav.NavRegistry) {
 		Label:   "Explore",
 		Icon:    "➼",
 		Parent:  "social",
-		Order:   4,
+		Order:   5,
 		Enabled: true,
 	})
 }

@@ -6,16 +6,16 @@
 │ ──────────────────────────── ││  ▏   A release without a signed tag is rejected at review.                           │
 │  ⌘  Social  ············  S  ││  ▏   kind/policy                                                                     │
 │     ⏱  Timeline              ││                                                                                      │
-│     ⎇  My Repository         ││   ────────────────────────────────────────────────────────────────────────────────   │
-│     ☷ My Lists              ││                                                                                      │
-│        • Memo Inherits (au...││   •  Bob · TIME   · https://github.com/bob/repo#commit:c6d0fad79532@main             │
-│     ㋡ My Followers          ││      Initial commit                                                                  │
-│     ➼  Explore               ││                                                                                      │
-│  ▢  PM  ················  P  ││   ────────────────────────────────────────────────────────────────────────────────   │
-│  ⑂  Review  ············  R  ││                                                                                      │
-│  ⏏  Release  ···········  V  ││   ☞  Alice ⇡ · TIME   · #cac84b5af758@gitmsg/memo                                    │
-│  ☞  Memos  ·············  M  ││      Cache invalidation rules                                                        │
-│                              ││                                                                                      │
+│     ⊡  My Repository         ││   ────────────────────────────────────────────────────────────────────────────────   │
+│     ⎇  My Branches           ││                                                                                      │
+│     ☷ My Lists              ││   •  Bob · TIME   · https://github.com/bob/repo#commit:c6d0fad79532@main             │
+│        • Memo Inherits (au...││      Initial commit                                                                  │
+│     ㋡ My Followers          ││                                                                                      │
+│     ➼  Explore               ││   ────────────────────────────────────────────────────────────────────────────────   │
+│  ▢  PM  ················  P  ││                                                                                      │
+│  ⑂  Review  ············  R  ││   ☞  Alice ⇡ · TIME   · #cac84b5af758@gitmsg/memo                                    │
+│  ⏏  Release  ···········  V  ││      Cache invalidation rules                                                        │
+│  ☞  Memos  ·············  M  ││                                                                                      │
 │                              ││      Storage can be deleted anytime; fetch strategy comes from cache.db metadata.    │
 │                              ││      kind/decision                                                                   │
 │                              ││                                                                                      │

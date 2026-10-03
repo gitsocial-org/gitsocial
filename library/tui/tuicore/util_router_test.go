@@ -179,3 +179,18 @@ func TestLocReviewFeedbackInline(t *testing.T) {
 		t.Errorf("newLine = %q", loc.Param("newLine"))
 	}
 }
+
+func TestRouter_NavItemID_branches(t *testing.T) {
+	r := NewRouter(LocRepoBranches(""))
+	if got := r.NavItemID(); got != "social.branches" {
+		t.Errorf("workspace branches nav item = %q, want social.branches", got)
+	}
+	r.Replace(LocRepoBranches("https://example.com/user/repo"))
+	if got := r.NavItemID(); got != "social.timeline" {
+		t.Errorf("remote branches nav item = %q, want social.timeline", got)
+	}
+	r.Replace(LocMyRepo)
+	if got := r.NavItemID(); got != "social.myrepo" {
+		t.Errorf("my repository nav item = %q, want social.myrepo", got)
+	}
+}

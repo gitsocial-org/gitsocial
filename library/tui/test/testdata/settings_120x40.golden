@@ -6,16 +6,16 @@
 │ ──────────────────────────── ││    fetch.auto.enabled    false  (false · true)  pauses after 1h idle                 │
 │  ⌘  Social  ············  S  ││    fetch.auto.interval   300  s                                                      │
 │     ⏱  Timeline              ││    fetch.auto.backoff    true  (false · true)  doubles per empty cycle, max 30m      │
-│     ⎇  My Repository         ││                                                                                      │
-│     ☷ My Lists              ││  Workspace                                                                           │
-│        • Memo Inherits (au...││    fetch.workspace_mode  (not set)  (default · *)                                    │
-│     ㋡ My Followers          ││                                                                                      │
-│     ➼  Explore               ││  Output  · synced                                                                    │
-│  ▢  PM  ················  P  ││    output.color          auto  (auto · always · never)                               │
-│  ⑂  Review  ············  R  ││                                                                                      │
-│  ⏏  Release  ···········  V  ││  Log  · synced                                                                       │
-│  ☞  Memos  ·············  M  ││    log.level             info  (debug · info · warn · error)                         │
-│                              ││                                                                                      │
+│     ⊡  My Repository         ││                                                                                      │
+│     ⎇  My Branches           ││  Workspace                                                                           │
+│     ☷ My Lists              ││    fetch.workspace_mode  (not set)  (default · *)                                    │
+│        • Memo Inherits (au...││                                                                                      │
+│     ㋡ My Followers          ││  Output  · synced                                                                    │
+│     ➼  Explore               ││    output.color          auto  (auto · always · never)                               │
+│  ▢  PM  ················  P  ││                                                                                      │
+│  ⑂  Review  ············  R  ││  Log  · synced                                                                       │
+│  ⏏  Release  ···········  V  ││    log.level             info  (debug · info · warn · error)                         │
+│  ☞  Memos  ·············  M  ││                                                                                      │
 │                              ││  Display  · synced                                                                   │
 │                              ││    display.show_email    false  (false · true)                                       │
 │                              ││    display.theme         auto  (auto · light · dark)  applies on restart             │

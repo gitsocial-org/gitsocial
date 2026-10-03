@@ -75,7 +75,7 @@ Timeline cards have MaxLines 5 and show interaction counts.
 The title carries the follow state: workspace, followed, mutual or unfollowed.
 
 ```
-╭─ ⎇  ✓ user/repo · 1/5 ─────────────────────────────────────────────────╮
+╭─ ⊡  ✓ user/repo · 1/5 ─────────────────────────────────────────────────╮
 │                                                                         │
 │ ▏•  Alice · 2h ago · #abc123456789                                      │
 │ ▏Hello world!                                                           │
@@ -91,7 +91,7 @@ The title carries the follow state: workspace, followed, mutual or unfollowed.
 
 ### Branches
 
-`b` on a repository opens its branches. The first row reads every branch, and a feature branch of the workspace counts only the commits ahead of the default branch.
+My Branches in the navigation, or `b` on a repository, opens its branches. The first row reads every branch, and a feature branch of the workspace counts only the commits ahead of the default branch.
 
 ```
 ╭─ ⎇  user/repo branches ────────────────────────────────────────────────╮
