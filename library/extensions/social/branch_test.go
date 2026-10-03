@@ -7,9 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 )
 
 // commitsOn returns the hashes git lists on a branch.
@@ -157,4 +159,94 @@ func TestBlogBranchKeepsItsFiles(t *testing.T) {
 		t.Fatalf("RetractPost() failed: %s", r.Error.Message)
 	}
 	assertBlogTree(t, workdir, "retraction", files)
+}
+
+// socialBranchWorkspace returns a workspace whose social branch is the code branch feature/social, started from main.
+func socialBranchWorkspace(t *testing.T) string {
+	t.Helper()
+	workdir := cloneFixture(t)
+	if _, err := git.ExecGit(workdir, []string{"branch", "feature/social", "main"}); err != nil {
+		t.Fatalf("create feature/social: %v", err)
+	}
+	if err := gitmsg.WriteExtConfig(workdir, "social", map[string]interface{}{"branch": "feature/social"}); err != nil {
+		t.Fatalf("WriteExtConfig() error = %v", err)
+	}
+	return workdir
+}
+
+// fullSync runs the workspace sync with this extension's batch function and fails the test on an error.
+func fullSync(t *testing.T, workdir string) {
+	t.Helper()
+	if err := fetch.SyncWorkspace(workdir, []fetch.WorkspaceSyncFunc{SyncWorkspaceBatch}); err != nil {
+		t.Fatalf("SyncWorkspace() error = %v", err)
+	}
+}
+
+// TestSyncWorkspace_editSurvivesMerge checks that a post edited on a code social branch shows the edited text on its live row after the merge, in the long-lived cache and in a rebuild.
+func TestSyncWorkspace_editSurvivesMerge(t *testing.T) {
+	t.Parallel()
+	workdir := socialBranchWorkspace(t)
+	post := CreatePost(workdir, "Before the edit", nil)
+	if !post.Success {
+		t.Fatalf("CreatePost() failed: %s", post.Error.Message)
+	}
+	fullSync(t, workdir)
+	if edit := EditPost(workdir, post.Data.ID, "After the edit", nil); !edit.Success {
+		t.Fatalf("EditPost() failed: %s", edit.Error.Message)
+	}
+	fullSync(t, workdir)
+	if _, err := git.ExecGit(workdir, []string{"merge", "-q", "--no-ff", "-m", "Merge the social branch", "feature/social"}); err != nil {
+		t.Fatalf("merge feature/social: %v", err)
+	}
+	fullSync(t, workdir)
+
+	hash := protocol.ParseRef(post.Data.ID).Value
+	check := func(label, dir string) {
+		t.Helper()
+		item, err := GetSocialItemByRef("#commit:"+hash, gitmsg.ResolveRepoURL(dir))
+		if err != nil {
+			t.Fatalf("%s: GetSocialItemByRef() error = %v", label, err)
+		}
+		if item.Branch != "main" || item.IsStale || !item.IsEdited || item.Content != "After the edit" {
+			t.Errorf("%s: post on %s stale=%v edited=%v content=%q, want the edited text on the live row under main",
+				label, item.Branch, item.IsStale, item.IsEdited, item.Content)
+		}
+	}
+	check("long-lived cache", workdir)
+
+	rebuilt := testutil.CopyRepo(t, workdir)
+	if root, err := git.GetRootDir(rebuilt); err == nil && root != "" {
+		rebuilt = root
+	}
+	fullSync(t, rebuilt)
+	check("rebuild", rebuilt)
+}
+
+// TestEditPost_editTargetAfterMergeStaysOffMain checks that an edit or a retraction aimed at an edit's ID, after the social branch merged, never writes on main.
+func TestEditPost_editTargetAfterMergeStaysOffMain(t *testing.T) {
+	t.Parallel()
+	workdir := socialBranchWorkspace(t)
+	post := CreatePost(workdir, "Before the edit", nil)
+	if !post.Success {
+		t.Fatalf("CreatePost() failed: %s", post.Error.Message)
+	}
+	fullSync(t, workdir)
+	edit := EditPost(workdir, post.Data.ID, "After the edit", nil)
+	if !edit.Success {
+		t.Fatalf("EditPost() failed: %s", edit.Error.Message)
+	}
+	fullSync(t, workdir)
+	if _, err := git.ExecGit(workdir, []string{"merge", "-q", "--no-ff", "-m", "Merge the social branch", "feature/social"}); err != nil {
+		t.Fatalf("merge feature/social: %v", err)
+	}
+	fullSync(t, workdir)
+
+	onMain := len(commitsOn(t, workdir, "main"))
+	if again := EditPost(workdir, edit.Data.ID, "Edited again", nil); again.Success && !commitsOn(t, workdir, "feature/social")[protocol.ParseRef(again.Data.ID).Value] {
+		t.Errorf("edit of an edit's ID on %s, want feature/social", again.Data.Branch)
+	}
+	_ = RetractPost(workdir, edit.Data.ID)
+	if after := len(commitsOn(t, workdir, "main")); after != onMain {
+		t.Errorf("main holds %d commits after the edit and the retraction, want %d", after, onMain)
+	}
 }

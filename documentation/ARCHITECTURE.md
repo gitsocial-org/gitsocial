@@ -266,7 +266,7 @@ Every extension table is keyed by `(repo_url, hash, branch)` into `core_commits`
 - `release_items`, `release_sbom_cache`
 - `memo_items`
 
-`core_commits.edits` stores the raw header value; `core_commits_version` is authoritative. Use `cache.ResolveToCanonical` and `cache.GetLatestVersion`.
+`core_commits.edits` stores the raw header value; `core_commits_version` is authoritative by repository and hash. Use `cache.ResolveToCanonical` and `cache.GetLatestVersion`.
 
 Edit resolution applies only to same-repository edits (GITMSG.md §1.5), so a cross-repository edit is a proposal that has no effect until the owner accepts it. `proposals.Accept` writes an accepting edit: a same-repository edit of the owner that carries `accepts=<proposal>`. The accepting edit has priority in resolution, and its processing writes the `core_edit_acceptances` row. `proposals.Decline` publishes a marker at `refs/gitmsg/core/declines/*`. Both clear the marker of the proposer, and accept has priority over decline.
 
@@ -348,6 +348,7 @@ The workspace sync stores each commit under one branch, its home, and the home i
 | Rebuild | the live rows equal those of a cache built from empty | `TestWorkspaceSync_rebuildEqualsIncremental` |
 | Lookup of a commit | by repository and hash, the live row first | `TestGetCommitOnAnyBranch_prefersLive` |
 | Reference target | matched by repository and hash, the live row first; the stored reference keeps its branch | `TestGetComments_movedCommit`, `TestRecount_movedTarget`, `TestGetTrailerRefsTo_branchlessTrailer`, `TestResolveRefLocation` |
+| Edit resolution | the canonical is matched by repository and hash, and its resolved state is on each row of the hash | `TestApplyEdit_everyRowOfTheHash`, `TestInsertCommits_editAppliesAcrossBranch`, `TestSyncWorkspace_editSurvivesMerge` |
 | Stale source | no mention notification, no trailer notification and no trailer reference | `TestMentionProvider_excludesStaleCommit`, `TestGetTrailerRefsTo_excludesStaleSource` |
 
 A different repository, a mirror or the upstream of a fork, is not workspace content when it is only a git remote. It gets into the cache through a list or a fork registration, under its own URL.
