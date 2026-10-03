@@ -50,32 +50,26 @@ func GetDiffStats(workdir, base, head string) (DiffStats, error) {
 	if err != nil {
 		return DiffStats{}, fmt.Errorf("get diff stats: %w", err)
 	}
-	if output == "" {
-		return DiffStats{}, nil
-	}
+	return parseNumstat(output), nil
+}
+
+// parseNumstat sums the lines of a numstat listing; a binary file counts as a file with no lines.
+func parseNumstat(output string) DiffStats {
 	var stats DiffStats
 	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		parts := strings.Fields(line)
+		parts := strings.Fields(strings.TrimSpace(line))
 		if len(parts) < 3 {
 			continue
 		}
 		stats.Files++
-		if parts[0] != "-" {
-			if n, err := strconv.Atoi(parts[0]); err == nil {
-				stats.Added += n
-			}
+		if n, err := strconv.Atoi(parts[0]); err == nil {
+			stats.Added += n
 		}
-		if parts[1] != "-" {
-			if n, err := strconv.Atoi(parts[1]); err == nil {
-				stats.Removed += n
-			}
+		if n, err := strconv.Atoi(parts[1]); err == nil {
+			stats.Removed += n
 		}
 	}
-	return stats, nil
+	return stats
 }
 
 // parseDiff parses unified diff output into structured FileDiff slices.
