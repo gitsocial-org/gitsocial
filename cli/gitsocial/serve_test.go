@@ -349,3 +349,29 @@ func TestServe_PushFailureKeepsServing(t *testing.T) {
 	next := strings.TrimSpace(gitOut(t, dir, "rev-parse", "main"))
 	waitFor(t, 2*time.Minute, "the next push", func() bool { return bucketRefs(t, c)["refs/heads/main"] == next })
 }
+
+// TestServe_RebuildAfterDelete: a clean exit leaves no tracking ref, and a start after the bucket root is deleted serves the site again.
+func TestServe_RebuildAfterDelete(t *testing.T) {
+	t.Parallel()
+	dir, cacheDir := serveRepo(t)
+	c := startServe(t, dir, cacheDir)
+	main := strings.TrimSpace(gitOut(t, dir, "rev-parse", "main"))
+	stopServe(t, c)
+	if refs := gitOut(t, dir, "for-each-ref", "refs/remotes/"+serveRemote, "refs/gitsocial/tracking/"+serveRemote); refs != "" {
+		t.Errorf("tracking refs after a clean exit:\n%s", refs)
+	}
+	bucket := serveBucketDir(t, dir, cacheDir)
+	if err := os.RemoveAll(filepath.Dir(filepath.Dir(bucket))); err != nil {
+		t.Fatalf("delete the bucket root: %v", err)
+	}
+	c = startServe(t, dir, cacheDir)
+	if status, body := httpGet(t, c.url); status != 200 || !strings.Contains(body, "<title>gitsocial</title>") {
+		t.Errorf("GET %s = %d after the root was deleted, want the app shell", c.url, status)
+	}
+	if refs := bucketRefs(t, c); refs["refs/heads/main"] != main || refs["refs/heads/gitmsg/social"] == "" {
+		t.Errorf("bucket refs after the rebuild = %v, want main at %s and gitmsg/social", refs, main)
+	}
+	if _, err := os.Stat(filepath.Join(bucket, ".gitsocial", "site")); err != nil {
+		t.Errorf("site artifacts after the rebuild: %v", err)
+	}
+}

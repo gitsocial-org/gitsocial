@@ -67,6 +67,11 @@ func applyTrackingReconcile(workdir, remote string, bucketRefs map[string]string
 	}
 }
 
+// DeleteTrackingRefs removes the branch tracking refs and the gitmsg tracking refs of a remote; the next push reconciles them from the bucket again.
+func DeleteTrackingRefs(workdir, remote string) {
+	applyTrackingReconcile(workdir, remote, nil)
+}
+
 // trackingRefsIn returns refname → sha for every ref under the given prefixes.
 func trackingRefsIn(workdir string, prefixes ...string) map[string]string {
 	out := map[string]string{}

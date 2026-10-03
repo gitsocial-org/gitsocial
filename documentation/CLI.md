@@ -73,6 +73,7 @@ gitsocial serve --addr 127.0.0.1:8080
 | bucket root | `~/.cache/gitsocial/serve/<hash>/`, kept between runs |
 | remote | `gitsocial-serve`, in the environment of the serve process; no git config is written |
 | poll | `git for-each-ref refs/heads refs/tags refs/gitmsg` every 2 s; one push at a time |
+| tracking refs | `refs/remotes/gitsocial-serve/*` and `refs/gitsocial/tracking/gitsocial-serve/*`, deleted on exit and written again from the bucket at the next start |
 
 ### gitsocial mirror
 

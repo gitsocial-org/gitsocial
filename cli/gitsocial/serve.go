@@ -44,7 +44,8 @@ again. The site has no HTML pages. Ctrl-C stops it.
 
 The bucket is at <cache-dir>/serve/<hash>/ and stays between runs, so
 the next start pushes the difference. The remote gitsocial-serve is in
-the environment of the serve process only; serve writes no git config.
+the environment of the serve process only; serve writes no git config,
+and it deletes the tracking refs of the remote on exit.
 
 Examples:
   gitsocial serve                     # serving http://127.0.0.1:4747/gitsocial/<repo>/
@@ -67,7 +68,7 @@ Examples:
 	return cmd
 }
 
-// runServe serves the bucket on addr, pushes the workspace to it and pushes again on each ref change until ctx ends.
+// runServe serves the bucket on addr, pushes the workspace to it and again on each ref change until ctx ends, then drops the tracking refs.
 func runServe(ctx context.Context, cfg *Config, addr string, out, errOut io.Writer) error {
 	root, err := git.GetRootDir(cfg.WorkDir)
 	if err != nil {
@@ -95,6 +96,7 @@ func runServe(ctx context.Context, cfg *Config, addr string, out, errOut io.Writ
 	push()
 	fmt.Fprintf(out, "serving http://%s/%s/\n", host, path)
 	watchRefs(ctx, serveInterval, last, func() string { return refsSnapshot(root) }, push)
+	client.DeleteTrackingRefs(root, serveRemote)
 	return nil
 }
 
