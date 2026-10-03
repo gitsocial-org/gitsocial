@@ -61,6 +61,8 @@ var (
 	locSettings      = Location{Path: "/settings"}
 	locCache         = Location{Path: "/cache"}
 	LocMyRepo        = Location{Path: "/social/repository"}
+	LocChanges       = Location{Path: "/social/changes"}
+	LocCommitForm    = Location{Path: "/social/commit-form"}
 	LocLists         = Location{Path: "/lists"}
 	LocAnalytics     = Location{Path: "/analytics"}
 	LocHelp          = Location{Path: "/help"}
@@ -106,6 +108,11 @@ func LocRepoBranches(url string) Location {
 		params["url"] = url
 	}
 	return Location{Path: "/social/repository/branches", Params: params}
+}
+
+// LocCommitFormFor creates the location of the commit form, with the count of files the commit takes.
+func LocCommitFormFor(files int) Location {
+	return Location{Path: LocCommitForm.Path, Params: map[string]string{"files": strconv.Itoa(files)}}
 }
 
 // LocRepoTags creates a location for the tag list of a repository; an empty url is the workspace.
@@ -491,7 +498,7 @@ func (r *Router) NavItemID() string {
 	path := r.location.Path
 	// Special cases with dynamic nav IDs based on params
 	switch path {
-	case "/social/repository", "/social/repository/code":
+	case "/social/repository", "/social/repository/code", "/social/changes", "/social/commit-form":
 		if _, hasURL := r.location.Params["url"]; hasURL {
 			return "social.timeline" // external repo from timeline
 		}

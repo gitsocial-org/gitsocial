@@ -141,6 +141,7 @@ var (
 	Branches      = RegisterContext("social.branches")
 	Code          = RegisterContext("social.code")
 	Tags          = RegisterContext("social.tags")
+	Changes       = RegisterContext("social.changes")
 	Explore       = RegisterContext("social.explore")
 )
 

@@ -117,6 +117,24 @@ My Tags in the navigation, or `t` on a repository or on a branch, opens the tags
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
+### Changes
+
+`w` on My Repository opens the working tree of the workspace: one row per changed or untracked file with the two columns of `git status --short`, and under the list the diff of the selected file, the staged diff before the unstaged one. `s` and `u` stage and unstage the selected file, `S` and `U` every file. `C` opens the commit form when the index holds a change; the commit is the index, through `git commit`, so the hooks and the signing of the repository run as from the shell.
+
+```
+╭─ ±  Changes · 3 files · 2 staged ──────────────────────────────────────╮
+│                                                                         │
+│  ▸ A  added.txt · staged                                                │
+│    MM both.txt · staged, then changed again                             │
+│    ?? new.txt · untracked                                               │
+│                                                                         │
+│  ▌ staged: added.txt  +2                                                │
+│       1 + one                                                           │
+│       2 + two                                                           │
+│                                                                         │
+╰─────────────────────────────────────────────────────────────────────────╯
+```
+
 ### Code
 
 `c` on a repository or on a branch opens the tree of the branch; with no branch picked, the default branch. Enter descends into a directory or opens a file, and `backspace` goes up. A file shows line numbers and syntax color; a line range named by a reference is selected and scrolled into view. A binary file and a Git LFS pointer show their size only. The view reads the workspace or the local clone of a followed repository, and is read-only.
@@ -546,7 +564,7 @@ Each view has a route; a view with no diagram uses the list or the detail layout
 
 | Section | Routes |
 |---|---|
-| Social | `/social/timeline`, `/social/my-repository`, `/social/repository`, `/social/repository/lists`, `/social/repository/branches`, `/social/repository/tags`, `/social/repository/code`, `/social/list`, `/social/list/repos`, `/social/detail`, `/social/thread`, `/social/post-form`, `/social/history`, `/social/history/diff`, `/social/explore`, `/social/followers` |
+| Social | `/social/timeline`, `/social/my-repository`, `/social/repository`, `/social/repository/lists`, `/social/repository/branches`, `/social/repository/tags`, `/social/repository/code`, `/social/changes`, `/social/commit-form`, `/social/list`, `/social/list/repos`, `/social/detail`, `/social/thread`, `/social/post-form`, `/social/history`, `/social/history/diff`, `/social/explore`, `/social/followers` |
 | PM | `/pm/board`, `/pm/issues`, `/pm/issue`, `/pm/new-issue`, `/pm/edit-issue`, `/pm/milestones`, `/pm/milestone`, `/pm/new-milestone`, `/pm/edit-milestone`, `/pm/sprints`, `/pm/sprint`, `/pm/new-sprint`, `/pm/edit-sprint`, `/pm/config`, and `/pm/<item>/history` with `/history/diff` for each item type |
 | Review | `/review/prs`, `/review/pr`, `/review/new-pr`, `/review/edit-pr`, `/review/feedback`, `/review/diff`, `/review/pr/interdiff`, `/review/pr/history`, `/review/pr/history/diff` |
 | Release | `/release/list`, `/release/detail`, `/release/new`, `/release/edit`, `/release/sbom`, `/release/history`, `/release/history/diff`, `/export-artifact` |

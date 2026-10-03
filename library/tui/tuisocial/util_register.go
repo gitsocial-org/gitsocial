@@ -43,6 +43,8 @@ func init() {
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/repository/branches", Context: tuicore.Branches, Title: "Branches", Icon: "⎇"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/repository/code", Context: tuicore.Code, Title: "Code", Icon: "▤"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/repository/tags", Context: tuicore.Tags, Title: "Tags", Icon: "⌂"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/changes", Context: tuicore.Changes, Title: "Changes", Icon: "±"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/commit-form", Context: tuicore.Changes, Title: "Commit", Icon: "±"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/explore", Context: tuicore.Explore, Title: "Explore", Icon: "➼", NavItemID: "social.explore"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/followers", Context: tuicore.Explore, Title: "My Followers", Icon: "㋡", NavItemID: "social.followers"})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/social/history", Context: tuicore.History, Title: "History", Icon: "◉", Component: "VersionPicker"})
@@ -188,6 +190,8 @@ func Register(host tuicore.ViewHost) {
 	host.AddView("/social/repository/branches", newBranchesView())
 	host.AddView("/social/repository/code", newCodeView())
 	host.AddView("/social/repository/tags", newTagsView())
+	host.AddView("/social/changes", newChangesView(state.Workdir))
+	host.AddView("/social/commit-form", newCommitFormView(state.Workdir))
 	host.AddView("/social/post-form", newPostFormView(state.Workdir))
 	explore := newExploreView(state.Workdir)
 	host.AddView("/social/explore", explore)
@@ -220,6 +224,8 @@ func handleSocialMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return handleTimelineLoaded(msg, ctx)
 	case commentCreatedMsg:
 		return handleCommentCreated(msg, ctx)
+	case commitCreatedMsg:
+		return handleCommitCreated(msg, ctx)
 	case retractStartedMsg:
 		return handleRetractStarted(msg, ctx)
 	case postRetractedMsg:
@@ -272,6 +278,18 @@ func handlePostSubmitted(msg postSubmittedMsg, ctx tuicore.AppContext) (bool, te
 	}
 	return true, tea.Batch(statusCmd, func() tea.Msg {
 		return tuicore.NavigateMsg{Location: tuicore.LocDetail(target), Action: tuicore.NavReplace}
+	})
+}
+
+// handleCommitCreated reports a commit, recounts the unpushed badge and returns to the Changes view; an error stays on the form.
+func handleCommitCreated(msg commitCreatedMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
+	if msg.Err != nil {
+		ctx.Host().SetMessage(msg.Err.Error(), tuicore.MessageTypeError)
+		return false, nil // the form clears its submitting state and keeps the text
+	}
+	statusCmd := ctx.Host().SetMessageWithTimeout("Committed "+msg.Hash, tuicore.MessageTypeSuccess, 5*time.Second)
+	return true, tea.Batch(statusCmd, ctx.LoadUnpushedCount(), func() tea.Msg {
+		return tuicore.NavigateMsg{Action: tuicore.NavBack}
 	})
 }
 

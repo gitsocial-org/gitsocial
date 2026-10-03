@@ -82,6 +82,12 @@ func (v *repositoryView) Bindings() []tuicore.Binding {
 					return tuicore.NavigateMsg{Location: tuicore.LocRepoBranches(url), Action: tuicore.NavPush}
 				}
 			}},
+		{Key: "w", Label: "changes", Contexts: []tuicore.Context{tuicore.MyRepository},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
+				return true, func() tea.Msg {
+					return tuicore.NavigateMsg{Location: tuicore.LocChanges, Action: tuicore.NavPush}
+				}
+			}},
 		{Key: "t", Label: "tags", Contexts: []tuicore.Context{tuicore.Repository, tuicore.MyRepository},
 			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				url := v.url

@@ -171,3 +171,27 @@ type tagsLoadedMsg struct {
 	Releases map[string]string // the release hash by tag or version name
 	Err      error
 }
+
+// changesLoadedMsg is sent when the status of the working tree of the workspace has been read
+type changesLoadedMsg struct {
+	Entries []git.StatusEntry
+	Err     error
+}
+
+// fileDiffLoadedMsg is sent when the diff of the selected file has been read; the staged diff comes first when both exist
+type fileDiffLoadedMsg struct {
+	Path  string
+	Diffs []git.FileDiff
+	Err   error
+}
+
+// indexChangedMsg is sent when a stage or an unstage has run
+type indexChangedMsg struct {
+	Err error
+}
+
+// commitCreatedMsg is sent when the commit form has run git commit
+type commitCreatedMsg struct {
+	Hash string
+	Err  error
+}

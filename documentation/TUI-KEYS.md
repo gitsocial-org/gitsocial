@@ -225,6 +225,7 @@
 | `p` | Push |
 | `l` | Lists |
 | `b` | Branches |
+| `w` | Changes |
 | `t` | Tags |
 | `c` | Code |
 | `r` | Refresh |
@@ -325,6 +326,27 @@
 | `k` | Up |
 | `!` | Errors |
 | `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Changes
+
+| Key | Action |
+|-----|--------|
+| `j` | Next file |
+| `k` | Prev file |
+| `s` | Stage |
+| `u` | Unstage |
+| `S/U` | Stage/unstage all |
+| `C` | Commit |
+| `e/E` | Expand |
+| `w` | Wrap |
+| `v` | View mode |
+| `[/]` | Prev/next hunk |
+| `/` | Search |
+| `ctrl+d` | Half-page down |
+| `ctrl+u` | Half-page up |
+| `!` | Errors |
 | `tab` | Focus |
 | `shift+tab` | Focus |
 
