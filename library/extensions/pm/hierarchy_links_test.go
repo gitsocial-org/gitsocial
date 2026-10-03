@@ -355,3 +355,29 @@ func TestIsBlocked_invalidRef(t *testing.T) {
 		t.Error("IsBlocked() = true for an issue that does not exist")
 	}
 }
+
+// TestGetLinks_editWithoutLinksClearsThem pins invariant 9: an edit that carries no link field leaves the issue with no links, forward and reverse.
+func TestGetLinks_editWithoutLinksClearsThem(t *testing.T) {
+	setupTestDB(t)
+	workdir := cloneFixture(t)
+
+	target := newIssue(t, workdir, "Target", CreateIssueOptions{})
+	source := newIssue(t, workdir, "Source", CreateIssueOptions{Related: []string{target.ID}, Blocks: []string{target.ID}})
+	if res := GetIssue(target.ID); !res.Success || len(res.Data.Related) != 1 || len(res.Data.BlockedBy) != 1 {
+		t.Fatalf("GetIssue(target) before the edit = %+v, want one related issue and one blocker", res.Data)
+	}
+	none := []string{}
+	if res := UpdateIssue(workdir, source.ID, UpdateIssueOptions{Related: &none, Blocks: &none}); !res.Success {
+		t.Fatalf("UpdateIssue() failed: %s", res.Error.Message)
+	}
+
+	if res := GetIssue(source.ID); !res.Success || len(res.Data.Related) != 0 || len(res.Data.Blocks) != 0 {
+		t.Errorf("GetIssue(source) after the edit = %+v, want no links", res.Data)
+	}
+	if res := GetIssue(target.ID); !res.Success || len(res.Data.Related) != 0 || len(res.Data.BlockedBy) != 0 {
+		t.Errorf("GetIssue(target) after the edit = %+v, want no related issue and no blocker", res.Data)
+	}
+	if IsBlocked(target.ID) {
+		t.Error("IsBlocked() = true after the edit dropped the blocks link")
+	}
+}
