@@ -118,8 +118,8 @@ func insertCommitsBatch(commits []Commit) error {
 // in the cache). All denormalized resolved-state on canonical rows
 // (resolved_message, has_edits, is_retracted, labels, FTS, mutable extension
 // columns) is written by applyEditToCanonical, called once per affected
-// canonical at the end of the loop. This keeps the canonical-update logic in
-// one place — see versions.go.
+// canonical at the end of the loop, which includes each new row of a known
+// canonical. This keeps the canonical-update logic in one place: see versions.go.
 func insertCommitsTxn(commits []Commit) error {
 	db := dbPtr.Load()
 	if db == nil {
@@ -158,8 +158,8 @@ func insertCommitsTxn(commits []Commit) error {
 	}
 	defer ftsStmt.Close()
 
-	type canonicalKey struct{ repoURL, hash, branch string }
-	canonicals := make(map[canonicalKey]struct{})
+	canonicals := make(map[[2]string]bool)
+	var inserted [][2]string
 
 	for _, c := range commits {
 		branch := c.Branch
@@ -249,8 +249,8 @@ func insertCommitsTxn(commits []Commit) error {
 					canonicalBranch = branch
 				}
 				var exists int
-				if err := tx.QueryRow(`SELECT 1 FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
-					canonicalRepoURL, parsed.Value, canonicalBranch).Scan(&exists); err == nil {
+				if err := tx.QueryRow(`SELECT 1 FROM core_commits WHERE repo_url = ? AND hash = ? LIMIT 1`,
+					canonicalRepoURL, parsed.Value).Scan(&exists); err == nil {
 					retracted := 0
 					if isRetracted {
 						retracted = 1
@@ -258,9 +258,14 @@ func insertCommitsTxn(commits []Commit) error {
 					if _, err := versionStmt.Exec(repoURL, c.Hash, branch, canonicalRepoURL, parsed.Value, canonicalBranch, retracted); err != nil {
 						return fmt.Errorf("insert version record for %s: %w", c.Hash, err)
 					}
-					canonicals[canonicalKey{canonicalRepoURL, parsed.Value, canonicalBranch}] = struct{}{}
+					canonicals[[2]string{canonicalRepoURL, parsed.Value}] = true
 				}
 			}
+		}
+
+		affected, _ := commitResult.RowsAffected()
+		if affected == 1 {
+			inserted = append(inserted, [2]string{repoURL, c.Hash})
 		}
 
 		// Insert into FTS5 for non-edit commits. Edit commits don't get their
@@ -269,20 +274,21 @@ func insertCommitsTxn(commits []Commit) error {
 		// row already existed (INSERT OR IGNORE no-op'd, RowsAffected == 0)
 		// — the FTS row is already there. This is what fixes the historical
 		// 3× FTS-row bloat from re-fetches.
-		if isEditCommit == 0 {
-			if affected, _ := commitResult.RowsAffected(); affected == 1 {
-				rowid, _ := commitResult.LastInsertId()
-				_, _ = ftsStmt.Exec(rowid, c.Message, resolvedAuthorName+" "+resolvedAuthorEmail)
-			}
+		if isEditCommit == 0 && affected == 1 {
+			rowid, _ := commitResult.LastInsertId()
+			_, _ = ftsStmt.Exec(rowid, c.Message, resolvedAuthorName+" "+resolvedAuthorEmail)
 		}
 	}
 
+	if err := addKnownCanonicals(tx, inserted, canonicals); err != nil {
+		return err
+	}
 	// Apply each affected canonical once. If multiple edits in this
 	// batch target the same canonical, applyEditToCanonical picks the latest
 	// by timestamp, so per-canonical work doesn't scale with edit count.
 	for k := range canonicals {
-		if err := applyEditToCanonical(tx, k.repoURL, k.hash, k.branch); err != nil {
-			return fmt.Errorf("apply edit to canonical %s/%s@%s: %w", k.repoURL, k.hash, k.branch, err)
+		if err := applyEditToCanonical(tx, k[0], k[1]); err != nil {
+			return fmt.Errorf("apply edit to canonical %s/%s: %w", k[0], k[1], err)
 		}
 	}
 
@@ -290,6 +296,31 @@ func insertCommitsTxn(commits []Commit) error {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
 	return nil
+}
+
+// addKnownCanonicals adds each inserted pair that already has a version row to the canonicals, in one query on the canonical index.
+func addKnownCanonicals(tx *sql.Tx, inserted [][2]string, canonicals map[[2]string]bool) error {
+	if len(inserted) == 0 {
+		return nil
+	}
+	args := make([]interface{}, 0, 2*len(inserted))
+	for _, pair := range inserted {
+		args = append(args, pair[0], pair[1])
+	}
+	rows, err := tx.Query(`SELECT DISTINCT canonical_repo_url, canonical_hash FROM core_commits_version
+		WHERE (canonical_repo_url, canonical_hash) IN (VALUES `+strings.TrimSuffix(strings.Repeat("(?, ?),", len(inserted)), ",")+`)`, args...)
+	if err != nil {
+		return fmt.Errorf("find known canonicals: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var pair [2]string
+		if err := rows.Scan(&pair[0], &pair[1]); err != nil {
+			return fmt.Errorf("scan known canonical: %w", err)
+		}
+		canonicals[pair] = true
+	}
+	return rows.Err()
 }
 
 // CountCommitsByBranch returns the number of non-virtual cached commits per

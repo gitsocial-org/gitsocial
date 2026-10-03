@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS pm_items (
     root_repo_url TEXT, root_hash TEXT, root_branch TEXT, labels TEXT,
     PRIMARY KEY (repo_url, hash, branch)
 );
+CREATE TABLE IF NOT EXISTS pm_assignees (
+    repo_url TEXT NOT NULL, hash TEXT NOT NULL, branch TEXT NOT NULL, email TEXT NOT NULL,
+    PRIMARY KEY (repo_url, hash, branch, email)
+);
 `
 
 const releaseSchemaForTest = `

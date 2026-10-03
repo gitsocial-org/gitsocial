@@ -15,6 +15,7 @@ import (
 // transaction (insertCommitsTxn) or a top-level ExecLocked call.
 type sqlExecutor interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
+	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
@@ -55,46 +56,46 @@ var editableExtensionTables = []struct {
 	},
 }
 
-// applyEditToCanonical writes a canonical's resolved state from its latest same-repo edit.
-func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canonicalBranch string) error {
+// sameRepoEdits joins each same-repo edit of a canonical to its rows, aliased c, and to an optional join; the query takes the canonical's repository and hash.
+func sameRepoEdits(join string) string {
+	return `FROM core_commits_version v
+	JOIN core_commits c ON c.repo_url = v.edit_repo_url AND c.hash = v.edit_hash ` + join + `
+	WHERE v.canonical_repo_url = ? AND v.canonical_hash = ? AND v.edit_repo_url = v.canonical_repo_url`
+}
+
+// latestEditFirst orders sameRepoEdits by the edit's time, then its live row, then the hash.
+var latestEditFirst = ` ORDER BY c.timestamp DESC, ` + LiveFirstOrder("c") + `, v.edit_hash DESC LIMIT 1`
+
+// applyEditToCanonical writes the resolved state of a canonical to each row of its hash; each field comes from the latest same-repo edit that carries it, else from the canonical.
+func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash string) error {
 	var editRepoURL, editHash, editBranch string
 	var editMessage, editAuthorName, editAuthorEmail string
-	var editLabels sql.NullString
 	var editIsRetracted int
 	err := tx.QueryRow(`
-		SELECT v.edit_repo_url, v.edit_hash, v.edit_branch,
-		       c.message, c.labels, v.is_retracted,
+		SELECT v.edit_repo_url, v.edit_hash, c.branch,
+		       c.message, v.is_retracted,
 		       COALESCE(c.origin_author_name, c.author_name),
 		       COALESCE(c.origin_author_email, c.author_email)
-		FROM core_commits_version v
-		JOIN core_commits c
-		  ON v.edit_repo_url = c.repo_url
-		 AND v.edit_hash = c.hash
-		 AND v.edit_branch = c.branch
-		WHERE v.canonical_repo_url = ?
-		  AND v.canonical_hash = ?
-		  AND v.canonical_branch = ?
-		  AND v.edit_repo_url = v.canonical_repo_url
-		ORDER BY c.timestamp DESC, v.edit_hash DESC
-		LIMIT 1`,
-		canonicalRepoURL, canonicalHash, canonicalBranch,
-	).Scan(&editRepoURL, &editHash, &editBranch, &editMessage, &editLabels, &editIsRetracted,
+		`+sameRepoEdits("")+latestEditFirst,
+		canonicalRepoURL, canonicalHash,
+	).Scan(&editRepoURL, &editHash, &editBranch, &editMessage, &editIsRetracted,
 		&editAuthorName, &editAuthorEmail)
 	if err == sql.ErrNoRows {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("apply edit: find latest edit for %s/%s@%s: %w", canonicalRepoURL, canonicalHash, canonicalBranch, err)
+		return fmt.Errorf("apply edit: find latest edit for %s/%s: %w", canonicalRepoURL, canonicalHash, err)
 	}
 
-	var resolvedAuthorName, resolvedAuthorEmail string
+	var resolvedAuthorName, resolvedAuthorEmail, canonicalMessage string
 	if err := tx.QueryRow(`
-		SELECT COALESCE(origin_author_name, author_name),
-		       COALESCE(origin_author_email, author_email)
-		FROM core_commits
-		WHERE repo_url = ? AND hash = ? AND branch = ?`,
-		canonicalRepoURL, canonicalHash, canonicalBranch,
-	).Scan(&resolvedAuthorName, &resolvedAuthorEmail); err != nil {
+		SELECT COALESCE(c.origin_author_name, c.author_name),
+		       COALESCE(c.origin_author_email, c.author_email), c.message
+		FROM core_commits c
+		WHERE c.repo_url = ? AND c.hash = ?
+		ORDER BY `+LiveFirstOrder("c")+`, c.branch LIMIT 1`,
+		canonicalRepoURL, canonicalHash,
+	).Scan(&resolvedAuthorName, &resolvedAuthorEmail, &canonicalMessage); err != nil {
 		return fmt.Errorf("apply edit: read canonical author: %w", err)
 	}
 	var editorNameArg, editorEmailArg interface{}
@@ -104,8 +105,18 @@ func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canon
 	}
 
 	var labelsArg interface{}
-	if editLabels.Valid {
-		labelsArg = editLabels.String
+	var editLabels string
+	err = tx.QueryRow(`SELECT c.labels `+sameRepoEdits("")+` AND c.labels IS NOT NULL`+latestEditFirst,
+		canonicalRepoURL, canonicalHash).Scan(&editLabels)
+	switch {
+	case err == nil:
+		labelsArg = editLabels
+	case err != sql.ErrNoRows:
+		return fmt.Errorf("apply edit: find latest labels: %w", err)
+	default:
+		if msg := protocol.ParseMessage(canonicalMessage); msg != nil && msg.Header.Fields["labels"] != "" {
+			labelsArg = msg.Header.Fields["labels"]
+		}
 	}
 	if _, err := tx.Exec(`
 		UPDATE core_commits
@@ -117,102 +128,122 @@ func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash, canon
 		    resolved_edit_hash = ?,
 		    resolved_edit_branch = ?,
 		    is_retracted = ?,
-		    labels = COALESCE(?, labels)
-		WHERE repo_url = ? AND hash = ? AND branch = ?`,
+		    labels = ?
+		WHERE repo_url = ? AND hash = ?`,
 		editMessage, editorNameArg, editorEmailArg,
 		editRepoURL, editHash, editBranch,
 		editIsRetracted, labelsArg,
-		canonicalRepoURL, canonicalHash, canonicalBranch,
+		canonicalRepoURL, canonicalHash,
 	); err != nil {
 		return fmt.Errorf("apply edit: update canonical: %w", err)
 	}
 
-	// Rebuild core_labels for the canonical from its (possibly just-updated)
-	// labels column. Read back rather than using editLabels directly because
-	// the UPDATE used COALESCE — when the edit didn't set labels we want to
-	// keep the canonical's existing rows in sync with whatever's there.
-	var canonicalLabels sql.NullString
-	if err := tx.QueryRow(`SELECT labels FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
-		canonicalRepoURL, canonicalHash, canonicalBranch,
-	).Scan(&canonicalLabels); err != nil {
-		return fmt.Errorf("apply edit: read canonical labels: %w", err)
+	var rowids []int64
+	labelsByBranch := map[string]string{}
+	res, err := tx.Query(`SELECT rowid, branch, COALESCE(labels, '') FROM core_commits WHERE repo_url = ? AND hash = ?`,
+		canonicalRepoURL, canonicalHash)
+	if err != nil {
+		return fmt.Errorf("apply edit: read canonical rows: %w", err)
 	}
-	if err := RebuildCSVLinkingTable(tx, "core_labels", "label",
-		canonicalRepoURL, canonicalHash, canonicalBranch, canonicalLabels.String); err != nil {
-		return fmt.Errorf("apply edit: rebuild core_labels: %w", err)
+	for res.Next() {
+		var rowid int64
+		var branch, labels string
+		if err := res.Scan(&rowid, &branch, &labels); err != nil {
+			res.Close()
+			return fmt.Errorf("apply edit: scan canonical row: %w", err)
+		}
+		rowids = append(rowids, rowid)
+		labelsByBranch[branch] = labels
+	}
+	res.Close()
+	if err := res.Err(); err != nil {
+		return fmt.Errorf("apply edit: read canonical rows: %w", err)
+	}
+	for branch, labels := range labelsByBranch {
+		if err := RebuildCSVLinkingTable(tx, "core_labels", "label",
+			canonicalRepoURL, canonicalHash, branch, labels); err != nil {
+			return fmt.Errorf("apply edit: rebuild core_labels: %w", err)
+		}
 	}
 
-	if _, err := tx.Exec(`
-		UPDATE core_commits SET is_edit_commit = 1
-		WHERE repo_url = ? AND hash = ? AND branch = ?`,
-		editRepoURL, editHash, editBranch,
+	if _, err := tx.Exec(`UPDATE core_commits SET is_edit_commit = 1 WHERE repo_url = ? AND hash = ?`,
+		editRepoURL, editHash,
 	); err != nil {
 		return fmt.Errorf("apply edit: mark edit row: %w", err)
 	}
 
 	for _, ext := range editableExtensionTables {
-		// Skip on any error: sql.ErrNoRows means this extension has no
-		// row for the edit (so nothing to propagate); "no such table" means the
-		// extension's schema isn't registered in this DB (cache-only tests).
-		// Either way, the propagation is a no-op for this table.
-		var exists int
-		if err := tx.QueryRow(`SELECT 1 FROM `+ext.table+`
-			WHERE repo_url = ? AND hash = ? AND branch = ?`,
-			editRepoURL, editHash, editBranch,
-		).Scan(&exists); err != nil {
-			continue
+		if err := propagateExtensionColumns(tx, ext.table, ext.cols, ext.csvLinks, canonicalRepoURL, canonicalHash); err != nil {
+			return err
 		}
-		// Row-value SET copies all mutable columns in one statement.
-		// Pre-checking the edit row above avoids the row-value-with-no-rows
-		// gotcha (SQLite would NULL the canonical's columns).
-		if _, err := tx.Exec(`UPDATE `+ext.table+` SET (`+ext.cols+`) =
-			(SELECT `+ext.cols+` FROM `+ext.table+`
-			 WHERE repo_url = ? AND hash = ? AND branch = ?)
-			WHERE repo_url = ? AND hash = ? AND branch = ?`,
-			editRepoURL, editHash, editBranch,
-			canonicalRepoURL, canonicalHash, canonicalBranch,
+	}
+
+	// core_fts is contentless, so each row of the canonical is refreshed by a delete and an insert.
+	for _, rowid := range rowids {
+		if _, err := tx.Exec(`DELETE FROM core_fts WHERE rowid = ?`, rowid); err != nil {
+			return fmt.Errorf("apply edit: delete canonical fts: %w", err)
+		}
+		if _, err := tx.Exec(`INSERT INTO core_fts(rowid, content, author) VALUES (?, ?, ?)`,
+			rowid, editMessage, resolvedAuthorName+" "+resolvedAuthorEmail,
 		); err != nil {
-			return fmt.Errorf("apply edit: propagate %s fields: %w", ext.table, err)
-		}
-		// Rebuild any CSV linking tables that mirror columns we just copied.
-		for _, link := range ext.csvLinks {
-			var csv sql.NullString
-			if err := tx.QueryRow(`SELECT `+link.col+` FROM `+ext.table+`
-				WHERE repo_url = ? AND hash = ? AND branch = ?`,
-				canonicalRepoURL, canonicalHash, canonicalBranch,
-			).Scan(&csv); err != nil {
-				if err == sql.ErrNoRows {
-					continue
-				}
-				return fmt.Errorf("apply edit: read canonical %s.%s: %w", ext.table, link.col, err)
-			}
-			if err := RebuildCSVLinkingTable(tx, link.linkTable, link.valueCol,
-				canonicalRepoURL, canonicalHash, canonicalBranch, csv.String); err != nil {
-				return fmt.Errorf("apply edit: rebuild %s: %w", link.linkTable, err)
-			}
+			return fmt.Errorf("apply edit: insert canonical fts: %w", err)
 		}
 	}
+	return nil
+}
 
-	// Refresh the canonical's FTS row to point at the latest edit's content.
-	// FTS5 is in contentless mode keyed on core_commits.rowid; resolve the
-	// canonical's rowid once, then DELETE+INSERT (contentless tables don't
-	// support UPDATE).
-	var canonicalRowid int64
-	if err := tx.QueryRow(`SELECT rowid FROM core_commits
-		WHERE repo_url = ? AND hash = ? AND branch = ?`,
-		canonicalRepoURL, canonicalHash, canonicalBranch,
-	).Scan(&canonicalRowid); err != nil {
-		return fmt.Errorf("apply edit: read canonical rowid: %w", err)
+// propagateExtensionColumns copies an extension's mutable columns from the latest same-repo edit that has a row in its table to each row of the canonical, and rebuilds the linking tables of those rows.
+func propagateExtensionColumns(tx sqlExecutor, table, cols string, links []csvLinkSpec, canonicalRepoURL, canonicalHash string) error {
+	// Any error skips the table: no edit has a row, or the extension's schema is not registered.
+	var editRepoURL, editHash, sourceBranch string
+	if err := tx.QueryRow(`SELECT x.repo_url, x.hash, x.branch `+
+		sameRepoEdits(`JOIN `+table+` x ON x.repo_url = c.repo_url AND x.hash = c.hash AND x.branch = c.branch`)+latestEditFirst,
+		canonicalRepoURL, canonicalHash,
+	).Scan(&editRepoURL, &editHash, &sourceBranch); err != nil {
+		return nil
 	}
-	if _, err := tx.Exec(`DELETE FROM core_fts WHERE rowid = ?`, canonicalRowid); err != nil {
-		return fmt.Errorf("apply edit: delete canonical fts: %w", err)
-	}
-	if _, err := tx.Exec(`INSERT INTO core_fts(rowid, content, author) VALUES (?, ?, ?)`,
-		canonicalRowid, editMessage, resolvedAuthorName+" "+resolvedAuthorEmail,
+	// The source row exists, so the row-value SET cannot NULL the canonical's columns.
+	if _, err := tx.Exec(`UPDATE `+table+` SET (`+cols+`) =
+		(SELECT `+cols+` FROM `+table+`
+		 WHERE repo_url = ? AND hash = ? AND branch = ?)
+		WHERE repo_url = ? AND hash = ?`,
+		editRepoURL, editHash, sourceBranch,
+		canonicalRepoURL, canonicalHash,
 	); err != nil {
-		return fmt.Errorf("apply edit: insert canonical fts: %w", err)
+		return fmt.Errorf("apply edit: propagate %s fields: %w", table, err)
 	}
+	for _, link := range links {
+		if err := rebuildExtensionLinks(tx, table, link, canonicalRepoURL, canonicalHash); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+// rebuildExtensionLinks rebuilds one linking table for each extension row of a hash from its CSV column.
+func rebuildExtensionLinks(tx sqlExecutor, table string, link csvLinkSpec, repoURL, hash string) error {
+	res, err := tx.Query(`SELECT branch, COALESCE(`+link.col+`, '') FROM `+table+` WHERE repo_url = ? AND hash = ?`, repoURL, hash)
+	if err != nil {
+		return fmt.Errorf("apply edit: read canonical %s.%s: %w", table, link.col, err)
+	}
+	values := map[string]string{}
+	for res.Next() {
+		var branch, csv string
+		if err := res.Scan(&branch, &csv); err != nil {
+			res.Close()
+			return fmt.Errorf("apply edit: scan canonical %s.%s: %w", table, link.col, err)
+		}
+		values[branch] = csv
+	}
+	res.Close()
+	if err := res.Err(); err != nil {
+		return fmt.Errorf("apply edit: read canonical %s.%s: %w", table, link.col, err)
+	}
+	for branch, csv := range values {
+		if err := RebuildCSVLinkingTable(tx, link.linkTable, link.valueCol, repoURL, hash, branch, csv); err != nil {
+			return fmt.Errorf("apply edit: rebuild %s: %w", link.linkTable, err)
+		}
+	}
 	return nil
 }
 
@@ -280,12 +311,12 @@ func ProcessVersionFromHeader(msg *protocol.Message, commitHash, repoURL, branch
 func InsertVersion(editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch string, isRetracted bool) error {
 	return ExecLocked(func(db *sql.DB) error {
 		var count int
-		if err := db.QueryRow(`SELECT COUNT(*) FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
-			canonicalRepoURL, canonicalHash, canonicalBranch).Scan(&count); err != nil {
+		if err := db.QueryRow(`SELECT COUNT(*) FROM core_commits WHERE repo_url = ? AND hash = ?`,
+			canonicalRepoURL, canonicalHash).Scan(&count); err != nil {
 			return fmt.Errorf("version insert: check canonical: %w", err)
 		}
 		if count == 0 {
-			return fmt.Errorf("version insert: canonical commit not found: %s#%s@%s", canonicalRepoURL, canonicalHash, canonicalBranch)
+			return fmt.Errorf("version insert: canonical commit not found: %s#%s", canonicalRepoURL, canonicalHash)
 		}
 		retracted := 0
 		if isRetracted {
@@ -298,7 +329,7 @@ func InsertVersion(editRepoURL, editHash, editBranch, canonicalRepoURL, canonica
 			editRepoURL, editHash, editBranch, canonicalRepoURL, canonicalHash, canonicalBranch, retracted); err != nil {
 			return err
 		}
-		return applyEditToCanonical(db, canonicalRepoURL, canonicalHash, canonicalBranch)
+		return applyEditToCanonical(db, canonicalRepoURL, canonicalHash)
 	})
 }
 
@@ -320,23 +351,18 @@ func SyncEditExtensionFields(edits []EditKey) {
 		return
 	}
 	_ = ExecLocked(func(db *sql.DB) error {
-		type canonicalKey struct{ repoURL, hash, branch string }
-		seen := make(map[canonicalKey]struct{}, len(edits))
+		seen := make(map[[2]string]bool, len(edits))
 		for _, e := range edits {
-			var canonRepoURL, canonHash, canonBranch string
-			err := db.QueryRow(`SELECT canonical_repo_url, canonical_hash, canonical_branch
+			var canonical [2]string
+			err := db.QueryRow(`SELECT canonical_repo_url, canonical_hash
 				FROM core_commits_version
-				WHERE edit_repo_url = ? AND edit_hash = ? AND edit_branch = ?`,
-				e.RepoURL, e.Hash, e.Branch).Scan(&canonRepoURL, &canonHash, &canonBranch)
-			if err != nil {
+				WHERE edit_repo_url = ? AND edit_hash = ? LIMIT 1`,
+				e.RepoURL, e.Hash).Scan(&canonical[0], &canonical[1])
+			if err != nil || seen[canonical] {
 				continue
 			}
-			k := canonicalKey{canonRepoURL, canonHash, canonBranch}
-			if _, ok := seen[k]; ok {
-				continue
-			}
-			seen[k] = struct{}{}
-			_ = applyEditToCanonical(db, canonRepoURL, canonHash, canonBranch)
+			seen[canonical] = true
+			_ = applyEditToCanonical(db, canonical[0], canonical[1])
 		}
 		return nil
 	})
@@ -611,14 +637,13 @@ func ReconcileVersions() (int, error) {
 	// Phase 2: Write version records and apply each affected canonical once.
 	// Multiple edits targeting the same canonical fold into a single
 	// applyEditToCanonical call (which already picks the latest by timestamp).
-	type canonicalKey struct{ repoURL, hash, branch string }
 	created := 0
 	err = ExecLocked(func(db *sql.DB) error {
-		canonicals := make(map[canonicalKey]struct{}, len(pending))
+		canonicals := make(map[[2]string]bool, len(pending))
 		for _, p := range pending {
 			var exists int
-			if err := db.QueryRow(`SELECT 1 FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`,
-				p.canonicalRepoURL, p.canonicalHash, p.canonicalBranch).Scan(&exists); err != nil {
+			if err := db.QueryRow(`SELECT 1 FROM core_commits WHERE repo_url = ? AND hash = ? LIMIT 1`,
+				p.canonicalRepoURL, p.canonicalHash).Scan(&exists); err != nil {
 				continue
 			}
 			retracted := 0
@@ -631,11 +656,11 @@ func ReconcileVersions() (int, error) {
 				VALUES (?, ?, ?, ?, ?, ?, ?)`,
 				p.editRepoURL, p.editHash, p.editBranch, p.canonicalRepoURL, p.canonicalHash, p.canonicalBranch, retracted); err == nil {
 				created++
-				canonicals[canonicalKey{p.canonicalRepoURL, p.canonicalHash, p.canonicalBranch}] = struct{}{}
+				canonicals[[2]string{p.canonicalRepoURL, p.canonicalHash}] = true
 			}
 		}
 		for k := range canonicals {
-			if err := applyEditToCanonical(db, k.repoURL, k.hash, k.branch); err != nil {
+			if err := applyEditToCanonical(db, k[0], k[1]); err != nil {
 				return fmt.Errorf("reconcile: %w", err)
 			}
 		}
