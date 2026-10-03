@@ -89,6 +89,21 @@ The title carries the follow state: workspace, followed, mutual or unfollowed.
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
+### Branches
+
+`b` on a repository opens its branches. The first row reads every branch, and a feature branch of the workspace counts only the commits ahead of the default branch.
+
+```
+╭─ ⎇  user/repo branches ────────────────────────────────────────────────╮
+│                                                                         │
+│  ▸ All branches · 16 commits                                            │
+│    feature/dark · 3 ahead · 1h ago                                      │
+│    main · 12 commits · 1d ago · default                                 │
+│    gitmsg/social · 1 commit · 2d ago                                    │
+│                                                                         │
+╰─────────────────────────────────────────────────────────────────────────╯
+```
+
 ### List repositories
 
 The view is a text list, with an input field for a local list.
@@ -493,7 +508,7 @@ Each view has a route; a view with no diagram uses the list or the detail layout
 
 | Section | Routes |
 |---|---|
-| Social | `/social/timeline`, `/social/my-repository`, `/social/repository`, `/social/repository/lists`, `/social/list`, `/social/list/repos`, `/social/detail`, `/social/thread`, `/social/post-form`, `/social/history`, `/social/history/diff`, `/social/explore`, `/social/followers` |
+| Social | `/social/timeline`, `/social/my-repository`, `/social/repository`, `/social/repository/lists`, `/social/repository/branches`, `/social/list`, `/social/list/repos`, `/social/detail`, `/social/thread`, `/social/post-form`, `/social/history`, `/social/history/diff`, `/social/explore`, `/social/followers` |
 | PM | `/pm/board`, `/pm/issues`, `/pm/issue`, `/pm/new-issue`, `/pm/edit-issue`, `/pm/milestones`, `/pm/milestone`, `/pm/new-milestone`, `/pm/edit-milestone`, `/pm/sprints`, `/pm/sprint`, `/pm/new-sprint`, `/pm/edit-sprint`, `/pm/config`, and `/pm/<item>/history` with `/history/diff` for each item type |
 | Review | `/review/prs`, `/review/pr`, `/review/new-pr`, `/review/edit-pr`, `/review/feedback`, `/review/diff`, `/review/pr/interdiff`, `/review/pr/history`, `/review/pr/history/diff` |
 | Release | `/release/list`, `/release/detail`, `/release/new`, `/release/edit`, `/release/sbom`, `/release/history`, `/release/history/diff`, `/export-artifact` |

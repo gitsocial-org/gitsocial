@@ -60,6 +60,8 @@ gitsocial social fetch                      # every repository in every list; `g
 
 `list add` fetches the URL that you type; `list remove` accepts each form of it, because GitSocial compares URLs by identity. A repository is in a list one time, on one branch or on all branches. The timeline reads the branch that the member names, the `gitmsg/social` branch of the repository, and all branches of the workspace.
 
+In the TUI, the Repository view reads all branches of a repository unless a branch is picked. `b` lists the branches with their commit counts, and Enter opens one ([TUI-KEYS.md](TUI-KEYS.md#branches)).
+
 ## Followers
 
 A repository follows the workspace when one of its lists contains the workspace URL. GitSocial finds followers during a fetch.
