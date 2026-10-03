@@ -120,7 +120,7 @@ func processSocialCommit(gc git.Commit, msg *protocol.Message, repoURL, branch s
 			}
 		}
 	} else {
-		upgradeVirtualItem(gc, repoURL)
+		upgradeVirtualItem(gc, repoURL, branch)
 	}
 }
 

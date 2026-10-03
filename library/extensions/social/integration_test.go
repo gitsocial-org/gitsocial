@@ -3712,7 +3712,7 @@ func TestUpgradeVirtualItem_withVirtualCommit(t *testing.T) {
 		Email:     "real@t.com",
 		Message:   "real content",
 		Timestamp: time.Now(),
-	}, repoURL)
+	}, repoURL, branch)
 
 	// Verify upgrade
 	isVirtual, _ := cache.QueryLocked(func(db *sql.DB) (int, error) {

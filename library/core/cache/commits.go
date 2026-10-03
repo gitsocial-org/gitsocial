@@ -35,16 +35,16 @@ type VirtualCommit struct {
 	Timestamp   time.Time
 }
 
-// UpsertVirtualCommit inserts a placeholder commit under the caller's write lock, keeping any existing row.
-func UpsertVirtualCommit(db *sql.DB, vc VirtualCommit) error {
+// UpsertVirtualCommit inserts a placeholder commit under the caller's write lock when the repository has no row of its hash, and reports whether it did.
+func UpsertVirtualCommit(db *sql.DB, vc VirtualCommit) (bool, error) {
 	if vc.RepoURL == "" || vc.Hash == "" || vc.Branch == "" {
-		return fmt.Errorf("upsert virtual commit: repo/hash/branch required")
+		return false, fmt.Errorf("upsert virtual commit: repo/hash/branch required")
 	}
-	_, err := db.Exec(`
+	res, err := db.Exec(`
 		INSERT INTO core_commits
 		(repo_url, hash, branch, author_name, author_email, message, timestamp, is_virtual)
-		VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-		ON CONFLICT(repo_url, hash, branch) DO NOTHING`,
+		SELECT ?, ?, ?, ?, ?, ?, ?, 1
+		WHERE NOT EXISTS (SELECT 1 FROM core_commits WHERE repo_url = ? AND hash = ?)`,
 		vc.RepoURL,
 		vc.Hash,
 		vc.Branch,
@@ -52,11 +52,14 @@ func UpsertVirtualCommit(db *sql.DB, vc VirtualCommit) error {
 		vc.AuthorEmail,
 		vc.Message,
 		vc.Timestamp.Format(time.RFC3339),
+		vc.RepoURL,
+		vc.Hash,
 	)
 	if err != nil {
-		return fmt.Errorf("upsert virtual commit: %w", err)
+		return false, fmt.Errorf("upsert virtual commit: %w", err)
 	}
-	return nil
+	inserted, _ := res.RowsAffected() // a driver without the count reads as no insert
+	return inserted == 1, nil
 }
 
 // commitInsertBatchSize bounds how many commits go into a single InsertCommits

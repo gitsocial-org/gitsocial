@@ -489,3 +489,38 @@ func TestMarkCommitsStaleByHome_settledBranchIsNotRead(t *testing.T) {
 		t.Error("a row with no home under a branch that is not settled stayed live")
 	}
 }
+
+// TestUpsertVirtualCommit_skipsWhenRowExists pins invariant 9: no virtual row is written for a hash that has a row in the repository.
+func TestUpsertVirtualCommit_skipsWhenRowExists(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/user/repo"
+	if err := InsertCommits([]Commit{{Hash: "aaa111111111", RepoURL: repoURL, Branch: "main", Message: "real", Timestamp: time.Now()}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	cases := []struct {
+		hash, branch string
+		want         bool
+	}{
+		{"aaa111111111", "feature/x", false},
+		{"aaa111111111", "main", false},
+		{"bbb222222222", "feature/x", true},
+		{"bbb222222222", "main", false},
+	}
+	for _, tc := range cases {
+		var inserted bool
+		err := ExecLocked(func(db *sql.DB) error {
+			var err error
+			inserted, err = UpsertVirtualCommit(db, VirtualCommit{RepoURL: repoURL, Hash: tc.hash, Branch: tc.branch, Message: "snapshot", Timestamp: time.Now()})
+			return err
+		})
+		if err != nil {
+			t.Fatalf("UpsertVirtualCommit(%s@%s) error = %v", tc.hash, tc.branch, err)
+		}
+		if inserted != tc.want {
+			t.Errorf("UpsertVirtualCommit(%s@%s) = %v, want %v", tc.hash, tc.branch, inserted, tc.want)
+		}
+	}
+	if rows := staleByBranch(t, "aaa111111111"); len(rows) != 1 {
+		t.Errorf("rows of a fetched hash = %v, want only the fetched row", rows)
+	}
+}

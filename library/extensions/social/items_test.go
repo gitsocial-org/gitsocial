@@ -1436,3 +1436,94 @@ func TestRecountAll_movedTarget(t *testing.T) {
 		}
 	}
 }
+
+// rowsOfHash lists each cached row of a hash as branch:is_virtual:has_social_item.
+func rowsOfHash(t *testing.T, repo, hash string) []string {
+	t.Helper()
+	rows, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
+		r, err := db.Query(`SELECT c.branch || ':' || c.is_virtual || ':' || (s.hash IS NOT NULL) FROM core_commits c
+			LEFT JOIN social_items s ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
+			WHERE c.repo_url = ? AND c.hash = ? ORDER BY c.branch`, repo, hash)
+		if err != nil {
+			return nil, err
+		}
+		defer r.Close()
+		var out []string
+		for r.Next() {
+			var row string
+			if err := r.Scan(&row); err != nil {
+				return nil, err
+			}
+			out = append(out, row)
+		}
+		return out, r.Err()
+	})
+	if err != nil {
+		t.Fatalf("read rows: %v", err)
+	}
+	items, err := cache.QueryLocked(func(db *sql.DB) (int, error) {
+		var n int
+		err := db.QueryRow(`SELECT COUNT(*) FROM social_items WHERE repo_url = ? AND hash = ?`, repo, hash).Scan(&n)
+		return n, err
+	})
+	if err != nil {
+		t.Fatalf("count social items: %v", err)
+	}
+	if items != len(rows) {
+		t.Errorf("social items of the hash = %d, want one per row %v", items, rows)
+	}
+	return rows
+}
+
+// seedVirtualRows caches a hash as a virtual post under each branch.
+func seedVirtualRows(t *testing.T, repo, hash string, branches ...string) {
+	t.Helper()
+	for _, branch := range branches {
+		if err := cache.InsertCommits([]cache.Commit{{
+			Hash: hash, RepoURL: repo, Branch: branch, AuthorName: "Snapshot", AuthorEmail: "s@test.com",
+			Message: "snapshot", Timestamp: time.Date(2025, 10, 20, 12, 0, 0, 0, time.UTC),
+		}}); err != nil {
+			t.Fatalf("InsertCommits(%s) error = %v", branch, err)
+		}
+		if err := InsertSocialItem(SocialItem{RepoURL: repo, Hash: hash, Branch: branch, Type: "post"}); err != nil {
+			t.Fatalf("InsertSocialItem(%s) error = %v", branch, err)
+		}
+	}
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`UPDATE core_commits SET is_virtual = 1 WHERE repo_url = ? AND hash = ?`, repo, hash)
+		return err
+	}); err != nil {
+		t.Fatalf("mark virtual: %v", err)
+	}
+}
+
+// TestUpgradeVirtualItem_oneRowPerHash pins invariant 10: the upgrade keeps the row under the fetched branch and drops the other virtual rows.
+func TestUpgradeVirtualItem_oneRowPerHash(t *testing.T) {
+	setupTestDB(t)
+	repo := "https://github.com/virtual/upgrade"
+	const hash = "7e7000000001"
+	seedVirtualRows(t, repo, hash, itemsTestBranch, movedFromBranch)
+
+	upgradeVirtualItem(git.Commit{Hash: hash, Author: "Real", Email: "real@test.com", Message: "real", Timestamp: time.Now()}, repo, itemsTestBranch)
+
+	if rows := rowsOfHash(t, repo, hash); len(rows) != 1 || rows[0] != itemsTestBranch+":0:1" {
+		t.Errorf("rows = %v, want one fetched row under %s with its item", rows, itemsTestBranch)
+	}
+}
+
+// TestInsertSocialItem_dropsOtherVirtualRows pins invariant 10 on the path of a fetched social commit.
+func TestInsertSocialItem_dropsOtherVirtualRows(t *testing.T) {
+	setupTestDB(t)
+	repo := "https://github.com/virtual/social"
+	const hash = "7e7000000002"
+	seedVirtualRows(t, repo, hash, movedFromBranch)
+	insertItemsTestCommit(t, repo, hash)
+
+	if err := InsertSocialItem(SocialItem{RepoURL: repo, Hash: hash, Branch: itemsTestBranch, Type: "post"}); err != nil {
+		t.Fatalf("InsertSocialItem() error = %v", err)
+	}
+
+	if rows := rowsOfHash(t, repo, hash); len(rows) != 1 || rows[0] != itemsTestBranch+":0:1" {
+		t.Errorf("rows = %v, want one fetched row under %s with its item", rows, itemsTestBranch)
+	}
+}

@@ -248,7 +248,7 @@ func insertSocialItems(items []SocialItem) error {
 func InsertSocialItem(item SocialItem) error {
 	return cache.ExecLocked(func(db *sql.DB) error {
 		if item.IsVirtual {
-			if err := cache.UpsertVirtualCommit(db, cache.VirtualCommit{
+			inserted, err := cache.UpsertVirtualCommit(db, cache.VirtualCommit{
 				RepoURL:     item.RepoURL,
 				Hash:        item.Hash,
 				Branch:      item.Branch,
@@ -256,11 +256,12 @@ func InsertSocialItem(item SocialItem) error {
 				AuthorEmail: item.AuthorEmail,
 				Message:     item.Content,
 				Timestamp:   item.Timestamp,
-			}); err != nil {
+			})
+			if err != nil || !inserted {
 				return err
 			}
 			// A virtual item never overwrites a fetched row and never counts.
-			_, err := db.Exec(`
+			_, err = db.Exec(`
 				INSERT INTO social_items
 				(repo_url, hash, branch, type, original_repo_url, original_hash, original_branch, reply_to_repo_url, reply_to_hash, reply_to_branch)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -278,6 +279,9 @@ func InsertSocialItem(item SocialItem) error {
 				item.RepoURL, item.Hash, item.Branch); err != nil {
 				return err
 			}
+		}
+		if err := dropOtherVirtualRows(db, item.RepoURL, item.Hash, item.Branch); err != nil {
+			return err
 		}
 
 		_, err := db.Exec(socialItemUpsert, socialItemArgs(item)...)

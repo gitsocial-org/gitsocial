@@ -40,7 +40,7 @@ func processWorkspaceBatch(commits []git.Commit, repoURL, defaultBranch string) 
 				}
 			}
 		} else {
-			upgradeVirtualItem(gc, repoURL)
+			upgradeVirtualItem(gc, repoURL, branch)
 		}
 	}
 	if err := insertSocialItems(socialItems); err != nil {
@@ -82,23 +82,45 @@ func buildSocialItem(gc git.Commit, msg *protocol.Message, repoURL, branch strin
 	}
 }
 
-// upgradeVirtualItem converts a virtual item to a real one when fetched.
-func upgradeVirtualItem(gc git.Commit, repoURL string) {
+// upgradeVirtualItem converts the virtual row of a fetched commit under its branch to a real one and drops its virtual rows under other branches.
+func upgradeVirtualItem(gc git.Commit, repoURL, branch string) {
 	if err := cache.ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec(`
+		if _, err := db.Exec(`
 			UPDATE core_commits
 			SET is_virtual = 0,
 				author_name = ?,
 				author_email = ?,
 				message = ?,
 				timestamp = ?
-			WHERE repo_url = ? AND hash = ? AND is_virtual = 1`,
+			WHERE repo_url = ? AND hash = ? AND branch = ? AND is_virtual = 1`,
 			gc.Author, gc.Email, gc.Message, gc.Timestamp.Format(time.RFC3339),
-			repoURL, gc.Hash)
-		return err
+			repoURL, gc.Hash, branch); err != nil {
+			return err
+		}
+		return dropOtherVirtualRows(db, repoURL, gc.Hash, branch)
 	}); err != nil {
 		log.Debug("upgrade virtual item failed", "hash", gc.Hash, "error", err)
 	}
+}
+
+// dropOtherVirtualRows deletes the virtual rows of a hash under other branches, with their social items, once a fetched row of it is under branch.
+func dropOtherVirtualRows(db *sql.DB, repoURL, hash, branch string) error {
+	// One seek on idx_core_commits_virtual; a hash with no other virtual row stops here.
+	var other bool
+	if err := db.QueryRow(`SELECT EXISTS (SELECT 1 FROM core_commits WHERE is_virtual = 1 AND repo_url = ? AND hash = ? AND branch != ?)`,
+		repoURL, hash, branch).Scan(&other); err != nil || !other {
+		return err
+	}
+	others := `SELECT repo_url, hash, branch FROM core_commits WHERE is_virtual = 1 AND repo_url = ? AND hash = ? AND branch != ?
+		AND EXISTS (SELECT 1 FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ? AND is_virtual = 0)`
+	args := []interface{}{repoURL, hash, branch, repoURL, hash, branch}
+	if _, err := db.Exec(`DELETE FROM social_items WHERE (repo_url, hash, branch) IN (`+others+`)`, args...); err != nil {
+		return fmt.Errorf("drop virtual social items: %w", err)
+	}
+	if _, err := db.Exec(`DELETE FROM core_commits WHERE (repo_url, hash, branch) IN (`+others+`)`, args...); err != nil {
+		return fmt.Errorf("drop virtual commits: %w", err)
+	}
+	return nil
 }
 
 // GetPosts retrieves posts based on scope (timeline, repository, list, etc.).
