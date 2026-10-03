@@ -104,6 +104,19 @@ My Branches in the navigation, or `b` on a repository, opens its branches. The f
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
+### Tags
+
+My Tags in the navigation, or `t` on a repository or on a branch, opens the tags of the local clone, highest version first. A row shows the commits since the previous tag, the date and the author, and a release mark when a release names the tag. Enter opens that release, else the diff of the tagged commit; `c` opens the code at the tag.
+
+```
+╭─ ⌂  user/repo tags ────────────────────────────────────────────────────╮
+│                                                                         │
+│  ▸ v1.0.0 · 4 commits since v0.9.0 · 1h ago · Alice · release           │
+│    v0.9.0 · 12 commits · 1d ago · Bob                                   │
+│                                                                         │
+╰─────────────────────────────────────────────────────────────────────────╯
+```
+
 ### Code
 
 `c` on a repository or on a branch opens the tree of the branch; with no branch picked, the default branch. Enter descends into a directory or opens a file, and `backspace` goes up. A file shows line numbers and syntax color; a line range named by a reference is selected and scrolled into view. A binary file and a Git LFS pointer show their size only. The view reads the workspace or the local clone of a followed repository, and is read-only.
@@ -533,7 +546,7 @@ Each view has a route; a view with no diagram uses the list or the detail layout
 
 | Section | Routes |
 |---|---|
-| Social | `/social/timeline`, `/social/my-repository`, `/social/repository`, `/social/repository/lists`, `/social/repository/branches`, `/social/repository/code`, `/social/list`, `/social/list/repos`, `/social/detail`, `/social/thread`, `/social/post-form`, `/social/history`, `/social/history/diff`, `/social/explore`, `/social/followers` |
+| Social | `/social/timeline`, `/social/my-repository`, `/social/repository`, `/social/repository/lists`, `/social/repository/branches`, `/social/repository/tags`, `/social/repository/code`, `/social/list`, `/social/list/repos`, `/social/detail`, `/social/thread`, `/social/post-form`, `/social/history`, `/social/history/diff`, `/social/explore`, `/social/followers` |
 | PM | `/pm/board`, `/pm/issues`, `/pm/issue`, `/pm/new-issue`, `/pm/edit-issue`, `/pm/milestones`, `/pm/milestone`, `/pm/new-milestone`, `/pm/edit-milestone`, `/pm/sprints`, `/pm/sprint`, `/pm/new-sprint`, `/pm/edit-sprint`, `/pm/config`, and `/pm/<item>/history` with `/history/diff` for each item type |
 | Review | `/review/prs`, `/review/pr`, `/review/new-pr`, `/review/edit-pr`, `/review/feedback`, `/review/diff`, `/review/pr/interdiff`, `/review/pr/history`, `/review/pr/history/diff` |
 | Release | `/release/list`, `/release/detail`, `/release/new`, `/release/edit`, `/release/sbom`, `/release/history`, `/release/history/diff`, `/export-artifact` |

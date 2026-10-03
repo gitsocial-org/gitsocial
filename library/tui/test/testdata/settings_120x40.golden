@@ -8,15 +8,15 @@
 │     ⏱  Timeline              ││    fetch.auto.backoff    true  (false · true)  doubles per empty cycle, max 30m      │
 │     ⊡  My Repository         ││                                                                                      │
 │     ⎇  My Branches           ││  Workspace                                                                           │
-│     ☷ My Lists              ││    fetch.workspace_mode  (not set)  (default · *)                                    │
-│        • Memo Inherits (au...││                                                                                      │
-│     ㋡ My Followers          ││  Output  · synced                                                                    │
-│     ➼  Explore               ││    output.color          auto  (auto · always · never)                               │
-│  ▢  PM  ················  P  ││                                                                                      │
-│  ⑂  Review  ············  R  ││  Log  · synced                                                                       │
-│  ⏏  Release  ···········  V  ││    log.level             info  (debug · info · warn · error)                         │
-│  ☞  Memos  ·············  M  ││                                                                                      │
-│                              ││  Display  · synced                                                                   │
+│     ⌂  My Tags               ││    fetch.workspace_mode  (not set)  (default · *)                                    │
+│     ☷ My Lists              ││                                                                                      │
+│        • Memo Inherits (au...││  Output  · synced                                                                    │
+│     ㋡ My Followers          ││    output.color          auto  (auto · always · never)                               │
+│     ➼  Explore               ││                                                                                      │
+│  ▢  PM  ················  P  ││  Log  · synced                                                                       │
+│  ⑂  Review  ············  R  ││    log.level             info  (debug · info · warn · error)                         │
+│  ⏏  Release  ···········  V  ││                                                                                      │
+│  ☞  Memos  ·············  M  ││  Display  · synced                                                                   │
 │                              ││    display.show_email    false  (false · true)                                       │
 │                              ││    display.theme         auto  (auto · light · dark)  applies on restart             │
 │                              ││                                                                                      │

@@ -320,3 +320,20 @@ func TestGetReleaseItemByHashPrefix_liveFirst(t *testing.T) {
 		t.Errorf("GetReleaseItemByHashPrefix(gone) = %+v, %v, want the stale row", item, err)
 	}
 }
+
+// TestReleaseTags maps a tag and a version to the hash of their release and leaves out a release of another repository.
+func TestReleaseTags(t *testing.T) {
+	setupTestDB(t)
+	repo := "https://github.com/test/release-tags"
+	insertReleaseTestCommit(t, repo, "aa0012345678")
+	InsertReleaseItem(ReleaseItem{RepoURL: repo, Hash: "aa0012345678", Branch: "gitmsg/release", Tag: cache.ToNullString("v1.0.0"), Version: cache.ToNullString("1.0.0")})
+	insertReleaseTestCommit(t, "https://github.com/test/other", "bb0012345678")
+	InsertReleaseItem(ReleaseItem{RepoURL: "https://github.com/test/other", Hash: "bb0012345678", Branch: "gitmsg/release", Tag: cache.ToNullString("v2.0.0")})
+	tags, err := ReleaseTags(repo)
+	if err != nil {
+		t.Fatalf("ReleaseTags: %v", err)
+	}
+	if tags["v1.0.0"] != "aa0012345678" || tags["1.0.0"] != "aa0012345678" || len(tags) != 2 {
+		t.Errorf("tags = %v, want v1.0.0 and 1.0.0 of this repository only", tags)
+	}
+}

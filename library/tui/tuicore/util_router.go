@@ -108,6 +108,15 @@ func LocRepoBranches(url string) Location {
 	return Location{Path: "/social/repository/branches", Params: params}
 }
 
+// LocRepoTags creates a location for the tag list of a repository; an empty url is the workspace.
+func LocRepoTags(url string) Location {
+	params := map[string]string{}
+	if url != "" {
+		params["url"] = url
+	}
+	return Location{Path: "/social/repository/tags", Params: params}
+}
+
 // LocRepoCode creates a location for the code view of a repository at a path; an empty url is the workspace, an empty branch its default branch, and a line range of 0 none.
 func LocRepoCode(url, branch, path string, line, lineEnd int) Location {
 	params := map[string]string{}
@@ -492,6 +501,11 @@ func (r *Router) NavItemID() string {
 			return "social.timeline"
 		}
 		return "social.branches"
+	case "/social/repository/tags":
+		if _, hasURL := r.location.Params["url"]; hasURL {
+			return "social.timeline"
+		}
+		return "social.tags"
 	case "/social/list", "/social/list/repos":
 		if listID, ok := r.location.Params["listID"]; ok {
 			return "social.lists." + listID

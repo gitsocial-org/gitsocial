@@ -36,6 +36,7 @@ func (v *branchesView) Bindings() []tuicore.Binding {
 	return []tuicore.Binding{
 		{Key: "enter", Label: "open", Contexts: []tuicore.Context{tuicore.Branches}, Handler: noop},
 		{Key: "c", Label: "code", Contexts: []tuicore.Context{tuicore.Branches}, Handler: noop},
+		{Key: "t", Label: "tags", Contexts: []tuicore.Context{tuicore.Branches}, Handler: noop},
 		{Key: "j", Label: "down", Contexts: []tuicore.Context{tuicore.Branches}, Handler: noop},
 		{Key: "k", Label: "up", Contexts: []tuicore.Context{tuicore.Branches}, Handler: noop},
 	}
@@ -146,6 +147,11 @@ func (v *branchesView) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 		return v.openSelected()
 	case "c":
 		return v.openCode()
+	case "t":
+		url := v.url
+		return func() tea.Msg {
+			return tuicore.NavigateMsg{Location: tuicore.LocRepoTags(url), Action: tuicore.NavPush}
+		}
 	}
 	return nil
 }

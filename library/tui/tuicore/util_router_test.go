@@ -180,6 +180,18 @@ func TestLocReviewFeedbackInline(t *testing.T) {
 	}
 }
 
+// TestRouter_NavItemID_tags maps the workspace tags to their nav item and a remote's tags to the timeline.
+func TestRouter_NavItemID_tags(t *testing.T) {
+	r := NewRouter(LocRepoTags(""))
+	if got := r.NavItemID(); got != "social.tags" {
+		t.Errorf("workspace tags nav item = %q, want social.tags", got)
+	}
+	r.Replace(LocRepoTags("https://example.com/user/repo"))
+	if got := r.NavItemID(); got != "social.timeline" {
+		t.Errorf("remote tags nav item = %q, want social.timeline", got)
+	}
+}
+
 func TestRouter_NavItemID_branches(t *testing.T) {
 	r := NewRouter(LocRepoBranches(""))
 	if got := r.NavItemID(); got != "social.branches" {

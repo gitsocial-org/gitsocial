@@ -69,15 +69,7 @@ func newCodeView() *codeView {
 // Activate resolves the repository directory and the branch the location names, then reads the tree or the file at its path.
 func (v *codeView) Activate(state *tuicore.State) tea.Cmd {
 	loc := state.Router.Location()
-	url := loc.Param("url")
-	originURL := git.GetOriginURL(state.Workdir)
-	v.isWorkspace = url == "" || protocol.NormalizeURL(url) == protocol.NormalizeURL(originURL)
-	v.url, v.name, v.repoDir = url, protocol.GetDisplayName(url), state.Workdir
-	if v.isWorkspace {
-		v.url, v.name = "", "My Repository"
-	} else {
-		v.repoDir = storage.GetStorageDir(state.CacheDir, protocol.NormalizeURL(url))
-	}
+	v.url, v.name, v.repoDir, v.isWorkspace = localRepo(state, loc.Param("url"))
 	v.branch = loc.Param("branch")
 	v.path = strings.Trim(loc.Param("path"), "/")
 	v.lineStart, _ = strconv.Atoi(loc.Param("line"))
@@ -90,8 +82,8 @@ func (v *codeView) Activate(state *tuicore.State) tea.Cmd {
 	v.loading = true
 	repoDir, branch, path, isWorkspace := v.repoDir, v.branch, v.path, v.isWorkspace
 	return func() tea.Msg {
-		if _, err := os.Stat(repoDir); err != nil {
-			return codeLoadedMsg{Err: fmt.Errorf("no local clone of this repository: follow it to read its code")}
+		if err := requireLocalClone(repoDir); err != nil {
+			return codeLoadedMsg{Err: err}
 		}
 		if branch == "" {
 			branch = defaultCodeBranch(repoDir, isWorkspace)
@@ -114,6 +106,23 @@ func (v *codeView) Activate(state *tuicore.State) tea.Cmd {
 		}
 		return msg
 	}
+}
+
+// localRepo resolves a location's url to the workspace or to the local clone of a followed repository: the url to keep, the display name, the git directory and whether it is the workspace.
+func localRepo(state *tuicore.State, url string) (keepURL, name, repoDir string, isWorkspace bool) {
+	originURL := git.GetOriginURL(state.Workdir)
+	if url == "" || protocol.NormalizeURL(url) == protocol.NormalizeURL(originURL) {
+		return "", "My Repository", state.Workdir, true
+	}
+	return url, protocol.GetDisplayName(url), storage.GetStorageDir(state.CacheDir, protocol.NormalizeURL(url)), false
+}
+
+// requireLocalClone fails when a repository has no directory to read.
+func requireLocalClone(repoDir string) error {
+	if _, err := os.Stat(repoDir); err != nil {
+		return fmt.Errorf("no local clone of this repository: follow it to read its code")
+	}
+	return nil
 }
 
 // defaultCodeBranch is the default branch by the home rule for the workspace, else what the clone says, else the checked-out branch.

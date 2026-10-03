@@ -343,3 +343,29 @@ func scanResolvedRow(s cache.RowScanner) (*ReleaseItem, error) {
 	item.IsEdited, item.HasProposedEdits = meta.IsEdited, meta.HasProposed
 	return &item, nil
 }
+
+// ReleaseTags returns the hash of the live release that names each tag or version of a repository, keyed by that name.
+func ReleaseTags(repoURL string) (map[string]string, error) {
+	return cache.QueryLocked(func(db *sql.DB) (map[string]string, error) {
+		rows, err := db.Query(`SELECT v.hash, v.tag, v.version FROM release_items_resolved v
+			WHERE v.repo_url = ? AND `+cache.LiveItemFilter, repoURL)
+		if err != nil {
+			return nil, fmt.Errorf("release tags: %w", err)
+		}
+		defer rows.Close()
+		tags := map[string]string{}
+		for rows.Next() {
+			var hash string
+			var tag, version sql.NullString
+			if err := rows.Scan(&hash, &tag, &version); err != nil {
+				return nil, fmt.Errorf("release tags: %w", err)
+			}
+			for _, name := range []string{tag.String, version.String} {
+				if name != "" {
+					tags[name] = hash
+				}
+			}
+		}
+		return tags, rows.Err()
+	})
+}

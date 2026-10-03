@@ -164,3 +164,10 @@ type codeLoadedMsg struct {
 	Content string
 	Err     error
 }
+
+// tagsLoadedMsg is sent when the tags of a repository are read from its local clone
+type tagsLoadedMsg struct {
+	Tags     []tagRow
+	Releases map[string]string // the release hash by tag or version name
+	Err      error
+}

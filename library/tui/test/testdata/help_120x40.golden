@@ -8,15 +8,15 @@
 │     ⏱  Timeline              ││  ## How It Works                                                                     │
 │     ⊡  My Repository         ││                                                                                      │
 │     ⎇  My Branches           ││  Each item is a commit: posts, issues, pull requests, feedback and releases          │
-│     ☷ My Lists              ││  are git commits on  gitmsg/*  branches. Fetch and push are git operations:          │
-│        • Memo Inherits (au...││  fetch gets updates and push sends your changes. GitSocial works                     │
-│     ㋡ My Followers          ││  offline, air-gapped and peer-to-peer.  git clone --mirror  moves the data to a      │
-│     ➼  Explore               ││  different host, with no API scraping and no data loss.                              │
-│  ▢  PM  ················  P  ││                                                                                      │
-│  ⑂  Review  ············  R  ││  ## Workflow                                                                         │
-│  ⏏  Release  ···········  V  ││                                                                                      │
-│  ☞  Memos  ·············  M  ││  • Fetch: get updates from the repositories that you follow                          │
-│                              ││  • Push: send your local changes to your remote                                      │
+│     ⌂  My Tags               ││  are git commits on  gitmsg/*  branches. Fetch and push are git operations:          │
+│     ☷ My Lists              ││  fetch gets updates and push sends your changes. GitSocial works                     │
+│        • Memo Inherits (au...││  offline, air-gapped and peer-to-peer.  git clone --mirror  moves the data to a      │
+│     ㋡ My Followers          ││  different host, with no API scraping and no data loss.                              │
+│     ➼  Explore               ││                                                                                      │
+│  ▢  PM  ················  P  ││  ## Workflow                                                                         │
+│  ⑂  Review  ············  R  ││                                                                                      │
+│  ⏏  Release  ···········  V  ││  • Fetch: get updates from the repositories that you follow                          │
+│  ☞  Memos  ·············  M  ││  • Push: send your local changes to your remote                                      │
 │                              ││  • Lists: put repositories into named sets for your timeline                         │
 │                              ││                                                                                      │
 │                              ││  To follow a person, add their repository to a list. Their posts show in             │

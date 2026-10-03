@@ -280,6 +280,8 @@ func (p *NavPanel) cursorToLocation() Location {
 		return LocMyRepo
 	case "social.branches":
 		return LocRepoBranches("")
+	case "social.tags":
+		return LocRepoTags("")
 	case "social.lists":
 		return LocLists
 	case "social.explore":

@@ -44,13 +44,23 @@ func RegisterNavItems(r *tuinav.NavRegistry) {
 		Enabled: true,
 	})
 
+	// My Tags sub-item: the tags of the workspace
+	r.Register(tuinav.NavItem{
+		ID:      "social.tags",
+		Label:   "My Tags",
+		Icon:    "⌂",
+		Parent:  "social",
+		Order:   3,
+		Enabled: true,
+	})
+
 	// My Lists sub-item
 	r.Register(tuinav.NavItem{
 		ID:      "social.lists",
 		Label:   "My Lists",
 		Icon:    "☷",
 		Parent:  "social",
-		Order:   3,
+		Order:   4,
 		Enabled: true,
 	})
 
@@ -60,7 +70,7 @@ func RegisterNavItems(r *tuinav.NavRegistry) {
 		Label:   "My Followers",
 		Icon:    "㋡",
 		Parent:  "social",
-		Order:   4,
+		Order:   5,
 		Enabled: true,
 	})
 
@@ -70,7 +80,7 @@ func RegisterNavItems(r *tuinav.NavRegistry) {
 		Label:   "Explore",
 		Icon:    "➼",
 		Parent:  "social",
-		Order:   5,
+		Order:   6,
 		Enabled: true,
 	})
 }

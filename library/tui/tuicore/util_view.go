@@ -140,6 +140,7 @@ var (
 	RepoLists     = RegisterContext("social.repo_lists")
 	Branches      = RegisterContext("social.branches")
 	Code          = RegisterContext("social.code")
+	Tags          = RegisterContext("social.tags")
 	Explore       = RegisterContext("social.explore")
 )
 
