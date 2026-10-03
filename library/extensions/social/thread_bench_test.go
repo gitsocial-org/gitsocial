@@ -191,9 +191,9 @@ func benchAssertPlan(b *testing.B, reader string, indexes []string, query string
 func benchAssertReaderPlans(b *testing.B, root benchNode) {
 	b.Helper()
 	benchAssertPlan(b, "comment reader", []string{"idx_social_original"},
-		commentsQuery(benchBranch), "", root.repoURL, root.hash, benchBranch)
+		commentsQuery, "", root.repoURL, root.hash)
 	benchAssertPlan(b, "thread reader", threadPlanIndexes, threadQuery(1),
-		root.repoURL, root.hash, benchBranch, root.hash, benchBranch, root.repoURL, "")
+		root.repoURL, root.hash, benchBranch, root.hash, root.repoURL, "")
 }
 
 // BenchmarkGetThread reads a wide root and a deep leaf out of a seeded 100k-row cache.

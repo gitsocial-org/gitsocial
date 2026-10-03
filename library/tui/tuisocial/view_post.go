@@ -394,7 +394,7 @@ func (v *postView) handleKey(msg tea.KeyPressMsg, state *tuicore.State) tea.Cmd 
 		}
 		if v.selectedIndex >= 0 && v.selectedIndex < len(v.thread) {
 			selected := v.thread[v.selectedIndex]
-			if selected.ID != v.requestedPostID {
+			if !social.SamePost(selected.ID, v.requestedPostID) {
 				item := tuicore.NewItem(selected.ID, "social", string(selected.Type), selected.Timestamp, selected)
 				if selected.HeaderExt != "" && selected.HeaderExt != "social" {
 					item.OriginalExt = selected.HeaderExt
@@ -653,7 +653,7 @@ func (v *postView) handleThreadLoaded(msg threadLoadedMsg) {
 	v.prevSelectedIndex = -1 // Force auto-scroll on first render
 	// Find anchor index for initial selection (thread contains [parents...] + [anchor] + [children...])
 	for i, p := range msg.Posts {
-		if p.ID == v.requestedPostID {
+		if social.SamePost(p.ID, v.requestedPostID) {
 			v.post = p
 			v.selectedIndex = i
 			if v.highlightQuery != "" {
@@ -727,7 +727,7 @@ func (v *postView) renderSearchFooter() string {
 func (v *postView) renderContent() string {
 	resolver := func(postID string) (social.Post, bool) {
 		for _, p := range v.thread {
-			if p.ID == postID {
+			if social.SamePost(p.ID, postID) {
 				return p, true
 			}
 		}
@@ -736,7 +736,7 @@ func (v *postView) renderContent() string {
 	// Find anchor index
 	anchorIdx := 0
 	for i, p := range v.thread {
-		if p.ID == v.requestedPostID {
+		if social.SamePost(p.ID, v.requestedPostID) {
 			anchorIdx = i
 			break
 		}
@@ -925,7 +925,7 @@ func (v *postView) selectedPostLinks() []tuicore.CardLink {
 	p := v.thread[v.selectedIndex]
 	resolver := func(postID string) (social.Post, bool) {
 		for _, tp := range v.thread {
-			if tp.ID == postID {
+			if social.SamePost(tp.ID, postID) {
 				return tp, true
 			}
 		}

@@ -68,7 +68,7 @@ func commentsByContent(t *testing.T, workdir, postHash string) map[string]social
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	branch := gitmsg.GetExtBranch(workdir, "social")
 	postRef := protocol.CreateRef(protocol.RefTypeCommit, postHash, repoURL, branch)
-	comments, err := social.GetComments(repoURL, postHash, branch, postRef)
+	comments, err := social.GetComments(repoURL, postHash, postRef)
 	if err != nil {
 		t.Fatalf("GetComments() error = %v", err)
 	}

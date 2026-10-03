@@ -33,7 +33,7 @@ func GetItemComments(itemRef string, workspaceURL string) Result[[]social.Post] 
 	}
 
 	itemID := protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch)
-	posts, err := social.GetComments(item.RepoURL, item.Hash, item.Branch, itemID)
+	posts, err := social.GetComments(item.RepoURL, item.Hash, itemID)
 	if err != nil {
 		return result.Err[[]social.Post]("QUERY_FAILED", err.Error())
 	}

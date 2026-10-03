@@ -9,29 +9,19 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// commentsQuery joins social_items directly, so idx_social_original drives the plan. An empty branch matches any.
-func commentsQuery(branch string) string {
-	original := "s.original_repo_url = ? AND s.original_hash = ?"
-	if branch != "" {
-		original += " AND s.original_branch = ?"
-	}
-	return baseDirectSelect + `
-		WHERE s.type = 'comment' AND ` + original + `
+// commentsQuery joins social_items directly, so idx_social_original drives the plan; the original matches by repository and hash.
+var commentsQuery = baseDirectSelect + `
+		WHERE s.type = 'comment' AND s.original_repo_url = ? AND s.original_hash = ?
 		  AND c.is_edit_commit = 0
 		  AND c.is_retracted = 0
 		  AND (c.stale_since IS NULL OR c.is_virtual = 1)
 		ORDER BY COALESCE(c.origin_time, c.timestamp) DESC`
-}
 
-// GetComments reads the live comments on an item, sorted into the reply tree under rootRef.
-func GetComments(repoURL, hash, branch, rootRef string) ([]Post, error) {
+// GetComments reads the live comments on an item, on any branch of its reference, sorted into the reply tree under rootRef.
+func GetComments(repoURL, hash, rootRef string) ([]Post, error) {
 	items, err := cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
 		// The empty workspace URL leaves the FollowsYou mark unset, as each comment reader already does.
-		args := []interface{}{"", repoURL, hash}
-		if branch != "" {
-			args = append(args, branch)
-		}
-		rows, err := db.Query(commentsQuery(branch), args...)
+		rows, err := db.Query(commentsQuery, "", repoURL, hash)
 		if err != nil {
 			return nil, err
 		}
@@ -52,20 +42,44 @@ func GetComments(repoURL, hash, branch, rootRef string) ([]Post, error) {
 	return posts, nil
 }
 
-// normalizedKey creates a unique key from a post ID for map lookups.
+// normalizedKey keys a post ID by repository and hash, so each branch value of a reference names one post.
 func normalizedKey(id string) string {
 	parsed := protocol.ParseRef(id)
 	if parsed.Value == "" {
 		return id
 	}
-	return parsed.Repository + "|" + parsed.Value + "|" + parsed.Branch
+	return parsed.Repository + "|" + parsed.Value
+}
+
+// SamePost reports whether two post IDs name one commit, whatever branch each names.
+func SamePost(a, b string) bool {
+	return normalizedKey(a) == normalizedKey(b)
+}
+
+// oneRowPerPost keeps one post per key, the live fetched row over a stale or virtual one.
+func oneRowPerPost(posts []Post) []Post {
+	index := make(map[string]int, len(posts))
+	out := make([]Post, 0, len(posts))
+	for _, p := range posts {
+		key := normalizedKey(p.ID)
+		i, seen := index[key]
+		if !seen {
+			index[key] = len(out)
+			out = append(out, p)
+			continue
+		}
+		if (out[i].IsStale || out[i].IsVirtual) && !p.IsStale && !p.IsVirtual {
+			out[i] = p
+		}
+	}
+	return out
 }
 
 // sortThreadTree organizes posts into a depth-first tree structure.
 func sortThreadTree(rootID string, posts []Post) []Post {
 	normalizedRootID := normalizedKey(rootID)
 	childrenMap := make(map[string][]Post)
-	for _, p := range posts {
+	for _, p := range oneRowPerPost(posts) {
 		if normalizedKey(p.ID) == normalizedRootID {
 			continue
 		}

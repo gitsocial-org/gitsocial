@@ -31,6 +31,11 @@ func HasProposedColumn(itemAlias string) string {
                 AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cve.edit_repo_url AND dd.edit_hash = cve.edit_hash AND dd.edit_branch = cve.edit_branch)) AS has_proposed`
 }
 
+// LiveFirstOrder is the ORDER BY terms that put the live row of a hash first, then a fetched row; a caller ends the order with its preferred branch, then the branch name.
+func LiveFirstOrder(alias string) string {
+	return alias + ".stale_since IS NOT NULL, " + alias + ".is_virtual"
+}
+
 // ResolvedSelect builds the standard resolved-view SELECT used by extensions:
 // common commit columns, the extension's own columns, flag columns, comments,
 // and the has_proposed marker, FROM the given view aliased as v. Rows produced

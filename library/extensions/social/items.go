@@ -105,14 +105,15 @@ var baseDirectSelect = `
 	LEFT JOIN social_followers sf ON c.repo_url = sf.repo_url AND sf.workspace_url = ?
 `
 
-// getCachedCommit retrieves a commit from the cache and parses it as a social item.
+// getCachedCommit reads one row of a commit, live first and then the given branch, and parses it as a social item.
 func getCachedCommit(repoURL, hash, branch string) (*SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) (*SocialItem, error) {
 		var item SocialItem
 		var ts string
 		err := db.QueryRow(`
-			SELECT repo_url, hash, branch, author_name, author_email, message, timestamp
-			FROM core_commits WHERE repo_url = ? AND hash = ? AND branch = ?`, repoURL, hash, branch).Scan(
+			SELECT c.repo_url, c.hash, c.branch, c.author_name, c.author_email, c.message, c.timestamp
+			FROM core_commits c WHERE c.repo_url = ? AND c.hash = ?
+			ORDER BY `+cache.LiveFirstOrder("c")+`, c.branch = ? DESC, c.branch LIMIT 1`, repoURL, hash, branch).Scan(
 			&item.RepoURL, &item.Hash, &item.Branch, &item.AuthorName, &item.AuthorEmail,
 			&item.Content, &ts,
 		)
@@ -465,7 +466,7 @@ func GetSocialItem(repoURL, hash, branch string, workspaceURL string) (*SocialIt
 	})
 }
 
-// GetSocialItemByRef looks up a social item by its ref string (e.g., "repo#commit:hash@branch"); a ref without a branch matches any branch.
+// GetSocialItemByRef looks up a social item by repository and hash on any branch, the live row first and then the branch of the ref.
 func GetSocialItemByRef(refStr string, workspaceURL string) (*SocialItem, error) {
 	parsed := protocol.ParseRef(refStr)
 	if parsed.Type != protocol.RefTypeCommit {
@@ -475,16 +476,13 @@ func GetSocialItemByRef(refStr string, workspaceURL string) (*SocialItem, error)
 	if ref.Hash == "" {
 		return nil, sql.ErrNoRows
 	}
-	if ref.Branch == "" {
-		return cache.QueryLocked(func(db *sql.DB) (*SocialItem, error) {
-			query := baseSelectFromView + `
-				WHERE v.repo_url = ? AND v.hash = ?
-				  AND NOT v.is_edit_commit AND NOT v.is_retracted
-				ORDER BY v.timestamp DESC LIMIT 1`
-			return scanResolvedRow(db.QueryRow(query, workspaceURL, ref.RepoURL, ref.Hash))
-		})
-	}
-	return GetSocialItem(ref.RepoURL, ref.Hash, ref.Branch, workspaceURL)
+	return cache.QueryLocked(func(db *sql.DB) (*SocialItem, error) {
+		query := baseSelectFromView + `
+			WHERE v.repo_url = ? AND v.hash = ?
+			  AND NOT v.is_edit_commit AND NOT v.is_retracted
+			ORDER BY ` + cache.LiveFirstOrder("v") + `, v.branch = ? DESC, v.branch LIMIT 1`
+		return scanResolvedRow(db.QueryRow(query, workspaceURL, ref.RepoURL, ref.Hash, ref.Branch))
+	})
 }
 
 type socialQuery struct {
@@ -685,7 +683,7 @@ func uniqueURLs(root string, extras []string) []string {
 	return out
 }
 
-// threadQuery walks the reply chain down from one root, matching matchCount original repo URLs.
+// threadQuery walks the reply chain down from one root, matching the original by hash in matchCount repo URLs.
 func threadQuery(matchCount int) string {
 	// One matches CTE, not an OR: the OR made the outer query scan core_commits.
 	return `
@@ -698,7 +696,7 @@ func threadQuery(matchCount int) string {
 			SELECT repo_url, hash, branch FROM descendants
 			UNION
 			SELECT repo_url, hash, branch FROM social_items
-			WHERE original_hash = ? AND original_branch = ?
+			WHERE original_hash = ?
 			  AND original_repo_url IN (` + placeholders(matchCount) + `)
 		)` + baseDirectSelect + `
 		WHERE (c.repo_url, c.hash, c.branch) IN (SELECT repo_url, hash, branch FROM matches)
@@ -713,8 +711,8 @@ func getThread(rootRepoURL, rootHash, rootBranch string, workspaceURL string, fo
 		matchURLs := uniqueURLs(rootRepoURL, forkURLs)
 		query := threadQuery(len(matchURLs))
 
-		args := make([]interface{}, 0, 5+len(matchURLs)+1)
-		args = append(args, rootRepoURL, rootHash, rootBranch, rootHash, rootBranch)
+		args := make([]interface{}, 0, 4+len(matchURLs)+1)
+		args = append(args, rootRepoURL, rootHash, rootBranch, rootHash)
 		for _, u := range matchURLs {
 			args = append(args, u)
 		}
@@ -940,7 +938,7 @@ func SocialItemToPost(item SocialItem) Post {
 	}
 }
 
-// getParentChain retrieves ancestor posts in a reply chain.
+// getParentChain retrieves ancestor posts in a reply chain; the original step ends at the live row of the original.
 func getParentChain(repoURL, hash, branch string, workspaceURL string) ([]SocialItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]SocialItem, error) {
 		// The CTE walks the reply-to chain up, then joins core_commits rather than the view.
@@ -953,7 +951,12 @@ func getParentChain(repoURL, hash, branch string, workspaceURL string) ([]Social
 				JOIN social_items ai ON ai.repo_url = a.repo_url AND ai.hash = a.hash AND ai.branch = a.branch
 				JOIN core_commits p ON
 					(ai.reply_to_repo_url IS NOT NULL AND p.repo_url = ai.reply_to_repo_url AND p.hash = ai.reply_to_hash AND p.branch = ai.reply_to_branch)
-					OR (ai.reply_to_repo_url IS NULL AND ai.original_repo_url IS NOT NULL AND p.repo_url = ai.original_repo_url AND p.hash = ai.original_hash AND p.branch = ai.original_branch)
+					OR (ai.reply_to_repo_url IS NULL AND ai.original_repo_url IS NOT NULL AND p.repo_url = ai.original_repo_url AND p.hash = ai.original_hash
+						AND p.branch = COALESCE(
+							(SELECT o.branch FROM core_commits o WHERE o.repo_url = ai.original_repo_url AND o.hash = ai.original_hash AND o.branch = ai.original_branch
+								AND o.stale_since IS NULL AND o.is_virtual = 0),
+							(SELECT o.branch FROM core_commits o WHERE o.repo_url = ai.original_repo_url AND o.hash = ai.original_hash
+								ORDER BY ` + cache.LiveFirstOrder("o") + `, o.branch LIMIT 1)))
 				WHERE a.depth < 50
 			)` + baseDirectSelect + `
 			WHERE (c.repo_url, c.hash, c.branch) IN (SELECT repo_url, hash, branch FROM ancestors WHERE depth > 0)

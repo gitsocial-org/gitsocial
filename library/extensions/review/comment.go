@@ -18,7 +18,7 @@ func GetPRComments(prRef string, workspaceURL string) Result[[]social.Post] {
 
 // GetCommentsByKey reads a review item's comments on any branch, from its known composite key.
 func GetCommentsByKey(repoURL, hash, rootRef string) Result[[]social.Post] {
-	posts, err := social.GetComments(repoURL, hash, "", rootRef)
+	posts, err := social.GetComments(repoURL, hash, rootRef)
 	if err != nil {
 		return result.Err[[]social.Post]("QUERY_FAILED", err.Error())
 	}

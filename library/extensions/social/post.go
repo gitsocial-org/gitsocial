@@ -439,10 +439,12 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 		return failure[[]Post]("INVALID_REF", "invalid post ID: "+postID)
 	}
 
+	// The root is the live row of the hash, whatever branch the ref names.
 	branch := parsed.Branch
-	if branch == "" {
-		branch = "main"
+	if root, err := cache.GetCommitOnAnyBranch(parsed.Repository, parsed.Value); err == nil {
+		branch = root.Branch
 	}
+	rootID := protocol.CreateRef(protocol.RefTypeCommit, parsed.Value, parsed.Repository, branch)
 
 	// Every unpushed commit, so a cross-extension item in the thread gets the badge.
 	unpushed, _ := git.GetAllUnpushedCommits(workdir)
@@ -469,7 +471,7 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 			p.Display.IsWorkspacePost = true
 			_, p.Display.IsUnpushed = unpushed[item.Hash]
 		}
-		if p.ID == canonicalPostID {
+		if item.RepoURL == parsed.Repository && item.Hash == parsed.Value {
 			p.Depth = 0
 			rootPost = p
 		}
@@ -489,7 +491,7 @@ func getThreadPosts(workdir, postID string, workspaceURL string) Result[[]Post] 
 		}
 	}
 
-	sorted := sortThreadTree(canonicalPostID, posts)
+	sorted := sortThreadTree(rootID, posts)
 
 	result := make([]Post, 0, len(parentItems)+len(sorted)+1)
 	for _, item := range parentItems {
