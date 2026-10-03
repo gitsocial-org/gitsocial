@@ -2062,9 +2062,13 @@ func resolveRefLocation(ref, workspaceURL string) tuicore.Location {
 	if parsed.Type != protocol.RefTypeCommit || parsed.Value == "" {
 		return tuicore.LocTimeline
 	}
+	repoURL := parsed.Repository
+	if repoURL == "" {
+		repoURL = workspaceURL
+	}
 	hits, err := cache.DetectExtension(parsed.Value)
 	if err == nil {
-		for _, h := range hits {
+		for _, h := range hitsOfRepoFirst(hits, repoURL) {
 			switch h.Extension {
 			case "review":
 				return tuicore.LocReviewPRDetail(h.Hash)
@@ -2085,19 +2089,27 @@ func resolveRefLocation(ref, workspaceURL string) tuicore.Location {
 			}
 		}
 	}
-	repoURL := parsed.Repository
-	if repoURL == "" {
-		repoURL = workspaceURL
-	}
-	// A cached commit opens as a post, under the branch the cache stores it on; an unfetched one lands on the raw commit view.
-	commit, err := cache.GetCommit(repoURL, parsed.Value, parsed.Branch)
-	if err != nil {
-		commit, err = cache.GetCommitOnAnyBranch(repoURL, parsed.Value)
-	}
-	if err == nil {
+	// A cached commit opens as a post under its live row, whatever branch the ref names; an unfetched one lands on the raw commit view.
+	if commit, err := cache.GetCommitOnAnyBranch(repoURL, parsed.Value); err == nil {
 		return tuicore.LocDetail(protocol.CreateRef(protocol.RefTypeCommit, commit.Hash, commit.RepoURL, commit.Branch))
 	}
 	return tuicore.LocCommitDiff(parsed.Value)
+}
+
+// hitsOfRepoFirst puts the hits of one repository first, each group in the order DetectExtension gave.
+func hitsOfRepoFirst(hits []cache.ExtensionHit, repoURL string) []cache.ExtensionHit {
+	out := make([]cache.ExtensionHit, 0, len(hits))
+	for _, h := range hits {
+		if h.RepoURL == repoURL {
+			out = append(out, h)
+		}
+	}
+	for _, h := range hits {
+		if h.RepoURL != repoURL {
+			out = append(out, h)
+		}
+	}
+	return out
 }
 
 // buildPushConfirmPrompt builds the one-line confirm: every target with how the

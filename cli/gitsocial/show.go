@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -48,9 +49,9 @@ Examples:
 				}
 			}
 
-			// Fast dispatch: detect which extension owns this hash via raw table lookup,
-			// then call only the matching getter instead of trying all 4 sequentially.
-			if hits, err := cache.DetectExtension(bareRef); err == nil && len(hits) > 0 {
+			// The hash alone picks the extension getter, because the branch of a ref is historical.
+			hash, _, _ := strings.Cut(bareRef, "@")
+			if hits, err := cache.DetectExtension(hash); err == nil && len(hits) > 0 {
 				if first, other := ambiguousHashes(hits); other != "" {
 					PrintError(cmd, fmt.Sprintf("hash %q is ambiguous between %s and %s: use a longer prefix", bareRef, first, other))
 					return exit(ExitError)

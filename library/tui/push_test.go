@@ -110,7 +110,7 @@ func TestBuildRemotePickerChoices_PersistRoundDropsExtras(t *testing.T) {
 	}
 }
 
-// TestResolveRefLocation maps a ref through the cache: a pm hit opens the issue, a cached commit its post, a miss the raw commit.
+// TestResolveRefLocation maps a ref through the cache: a pm hit opens the issue, a cached commit its post on the live row, a miss the raw commit.
 func TestResolveRefLocation(t *testing.T) {
 	testutil.OpenTempCache(t, "")
 	hash := "cafe12345678"
@@ -143,6 +143,52 @@ func TestResolveRefLocation(t *testing.T) {
 	wantPost := tuicore.LocDetail("https://example.com/r#commit:" + code + "@feature/x")
 	if post.Path != wantPost.Path || post.Param("postID") != wantPost.Param("postID") {
 		t.Errorf("cached commit = %+v, want %+v", post, wantPost)
+	}
+	moved := "d00d12345678"
+	for _, branch := range []string{"feature/y", "main"} {
+		if err := cache.InsertCommits([]cache.Commit{{
+			Hash: moved, RepoURL: "https://example.com/r", Branch: branch,
+			AuthorName: "T", AuthorEmail: "t@t.com", Message: "a merged commit", Timestamp: time.Now(),
+		}}); err != nil {
+			t.Fatalf("InsertCommits: %v", err)
+		}
+	}
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`UPDATE core_commits SET stale_since = '2025-10-21T00:00:00Z' WHERE hash = ? AND branch = 'feature/y'`, moved)
+		return err
+	}); err != nil {
+		t.Fatalf("mark the old row stale: %v", err)
+	}
+	live := resolveRefLocation("#commit:"+moved+"@feature/y", "https://example.com/r")
+	wantLive := tuicore.LocDetail("https://example.com/r#commit:" + moved + "@main")
+	if live.Path != wantLive.Path || live.Param("postID") != wantLive.Param("postID") {
+		t.Errorf("ref with the old branch = %+v, want the live row %+v", live, wantLive)
+	}
+	shared := "5aed12345678"
+	for _, repo := range []string{"https://example.com/fork", "https://example.com/r"} {
+		if err := cache.InsertCommits([]cache.Commit{{
+			Hash: shared, RepoURL: repo, Branch: "gitmsg/social",
+			AuthorName: "T", AuthorEmail: "t@t.com", Message: "a mirrored post", Timestamp: time.Now(),
+		}}); err != nil {
+			t.Fatalf("InsertCommits: %v", err)
+		}
+		if err := cache.ExecLocked(func(db *sql.DB) error {
+			_, err := db.Exec(`INSERT INTO social_items (repo_url, hash, branch, type) VALUES (?, ?, 'gitmsg/social', 'post')`, repo, shared)
+			return err
+		}); err != nil {
+			t.Fatalf("insert social item: %v", err)
+		}
+	}
+	for ref, repo := range map[string]string{
+		"#commit:" + shared:                             "https://example.com/r",
+		"https://example.com/fork#commit:" + shared:     "https://example.com/fork",
+		"https://example.com/r#commit:" + shared + "@x": "https://example.com/r",
+	} {
+		got := resolveRefLocation(ref, "https://example.com/r")
+		want := tuicore.LocDetail(repo + "#commit:" + shared + "@gitmsg/social")
+		if got.Path != want.Path || got.Param("postID") != want.Param("postID") {
+			t.Errorf("resolveRefLocation(%s) = %+v, want the item of %s", ref, got, repo)
+		}
 	}
 	miss := resolveRefLocation("#commit:0123456789ab", "https://example.com/r")
 	if miss.Path != tuicore.LocCommitDiff("0123456789ab").Path {

@@ -176,9 +176,9 @@ func buildSelect(tables []extTable, hasInteractions bool) string {
 		commentsExpr = "COALESCE(sic.comments, 0)"
 	}
 
-	// Build LEFT JOINs for extension tables
+	// Each extension row joins its own commit row, so a hash with a stale row gives one result.
 	for _, t := range tables {
-		joins = append(joins, "LEFT JOIN "+t.table+" "+t.alias+" ON r.repo_url = "+t.alias+".repo_url AND r.hash = "+t.alias+".hash")
+		joins = append(joins, "LEFT JOIN "+t.table+" "+t.alias+" ON r.repo_url = "+t.alias+".repo_url AND r.hash = "+t.alias+".hash AND r.branch = "+t.alias+".branch")
 	}
 
 	query := `SELECT r.repo_url, r.hash, r.branch,

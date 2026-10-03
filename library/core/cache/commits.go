@@ -650,34 +650,41 @@ type ExtensionHit struct {
 	Branch    string
 }
 
-// DetectExtension returns which extension table(s) contain a given hash.
-// Uses direct index lookups on raw tables — no resolved views.
+// hashPrefixMatch returns a WHERE term on a hash column that seeks an index, and its arguments: equality for a 12-character hash, else a range over the lowercase hex prefix.
+func hashPrefixMatch(column, prefix string) (string, []interface{}) {
+	prefix = strings.ToLower(prefix)
+	if len(prefix) == 12 {
+		return column + " = ?", []interface{}{prefix}
+	}
+	// "g" sorts after every hex digit, so the range holds each hash that starts with the prefix.
+	return column + " >= ? AND " + column + " < ?", []interface{}{prefix, prefix + "g"}
+}
+
+// DetectExtension returns the extension rows of a hash from the raw tables, the live and fetched row first.
 func DetectExtension(hash string) ([]ExtensionHit, error) {
 	if !isHexString(hash) {
 		return nil, fmt.Errorf("detect extension: invalid hash")
 	}
 	return QueryLocked(func(db *sql.DB) ([]ExtensionHit, error) {
-		var cond string
-		var arg string
-		if len(hash) == 12 {
-			cond = "hash = ?"
-			arg = hash
-		} else {
-			cond = "hash LIKE ? ESCAPE '\\'"
-			arg = EscapeLike(hash) + "%"
+		cond, condArgs := hashPrefixMatch("hash", hash)
+		query := `SELECT h.ext, h.type, h.repo_url, h.hash, h.branch FROM (
+			SELECT 0 as rank, 'review' as ext, type, repo_url, hash, branch FROM review_items WHERE ` + cond + `
+			UNION ALL
+			SELECT 1, 'pm', type, repo_url, hash, branch FROM pm_items WHERE ` + cond + `
+			UNION ALL
+			SELECT 2, 'release', tag, repo_url, hash, branch FROM release_items WHERE ` + cond + `
+			UNION ALL
+			SELECT 3, 'social', type, repo_url, hash, branch FROM social_items WHERE ` + cond + `
+			UNION ALL
+			SELECT 4, 'memo', type, repo_url, hash, branch FROM memo_items WHERE ` + cond + `
+		) h
+		LEFT JOIN core_commits c ON c.repo_url = h.repo_url AND c.hash = h.hash AND c.branch = h.branch
+		ORDER BY c.repo_url IS NULL, ` + LiveFirstOrder("c") + `, h.rank, h.repo_url, h.branch`
+		args := make([]interface{}, 0, 5*len(condArgs))
+		for range 5 {
+			args = append(args, condArgs...)
 		}
-		query := `SELECT ext, type, repo_url, hash, branch FROM (
-			SELECT 'review' as ext, type, repo_url, hash, branch FROM review_items WHERE ` + cond + `
-			UNION ALL
-			SELECT 'pm', type, repo_url, hash, branch FROM pm_items WHERE ` + cond + `
-			UNION ALL
-			SELECT 'release', tag, repo_url, hash, branch FROM release_items WHERE ` + cond + `
-			UNION ALL
-			SELECT 'social', type, repo_url, hash, branch FROM social_items WHERE ` + cond + `
-			UNION ALL
-			SELECT 'memo', type, repo_url, hash, branch FROM memo_items WHERE ` + cond + `
-		)`
-		rows, err := db.Query(query, arg, arg, arg, arg, arg)
+		rows, err := db.Query(query, args...)
 		if err != nil {
 			return nil, fmt.Errorf("detect extension: %w", err)
 		}
@@ -702,8 +709,10 @@ func GetCommit(repoURL, hashPrefix, branch string) (Commit, error) {
 	return QueryLocked(func(db *sql.DB) (Commit, error) {
 		var c Commit
 		var ts string
-		err := db.QueryRow(`SELECT hash, repo_url, branch, author_name, author_email, message, timestamp FROM core_commits WHERE repo_url = ? AND hash LIKE ? AND branch = ? LIMIT 1`,
-			repoURL, hashPrefix+"%", branch).Scan(&c.Hash, &c.RepoURL, &c.Branch, &c.AuthorName, &c.AuthorEmail, &c.Message, &ts)
+		cond, condArgs := hashPrefixMatch("hash", hashPrefix)
+		args := append(append([]interface{}{repoURL}, condArgs...), branch)
+		err := db.QueryRow(`SELECT hash, repo_url, branch, author_name, author_email, message, timestamp FROM core_commits WHERE repo_url = ? AND `+cond+` AND branch = ? LIMIT 1`,
+			args...).Scan(&c.Hash, &c.RepoURL, &c.Branch, &c.AuthorName, &c.AuthorEmail, &c.Message, &ts)
 		if err != nil {
 			return Commit{}, fmt.Errorf("get commit: %w", err)
 		}
@@ -723,8 +732,10 @@ func GetCommitOnAnyBranch(repoURL, hashPrefix string) (Commit, error) {
 	return QueryLocked(func(db *sql.DB) (Commit, error) {
 		var c Commit
 		var ts string
-		err := db.QueryRow(`SELECT hash, repo_url, branch, author_name, author_email, message, timestamp FROM core_commits WHERE repo_url = ? AND hash LIKE ? ORDER BY stale_since IS NOT NULL, is_virtual LIMIT 1`,
-			repoURL, hashPrefix+"%").Scan(&c.Hash, &c.RepoURL, &c.Branch, &c.AuthorName, &c.AuthorEmail, &c.Message, &ts)
+		cond, condArgs := hashPrefixMatch("c.hash", hashPrefix)
+		args := append([]interface{}{repoURL}, condArgs...)
+		err := db.QueryRow(`SELECT c.hash, c.repo_url, c.branch, c.author_name, c.author_email, c.message, c.timestamp FROM core_commits c WHERE c.repo_url = ? AND `+cond+` ORDER BY `+LiveFirstOrder("c")+`, c.branch LIMIT 1`,
+			args...).Scan(&c.Hash, &c.RepoURL, &c.Branch, &c.AuthorName, &c.AuthorEmail, &c.Message, &ts)
 		if err != nil {
 			return Commit{}, fmt.Errorf("get commit: %w", err)
 		}

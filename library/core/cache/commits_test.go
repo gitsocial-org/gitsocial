@@ -524,3 +524,49 @@ func TestUpsertVirtualCommit_skipsWhenRowExists(t *testing.T) {
 		t.Errorf("rows of a fetched hash = %v, want only the fetched row", rows)
 	}
 }
+
+// TestDetectExtension_liveFirst pins invariant 12: the live, fetched row of a hash is the first hit, by full hash or by prefix.
+func TestDetectExtension_liveFirst(t *testing.T) {
+	schemaMu.Lock()
+	extensionSchemas["memo"] = `CREATE TABLE IF NOT EXISTS memo_items (repo_url TEXT NOT NULL, hash TEXT NOT NULL, branch TEXT NOT NULL, type TEXT, PRIMARY KEY (repo_url, hash, branch));`
+	schemaMu.Unlock()
+	t.Cleanup(func() {
+		schemaMu.Lock()
+		delete(extensionSchemas, "memo")
+		schemaMu.Unlock()
+	})
+	setupTestDBWithAllSchemas(t)
+	repoURL := "https://github.com/user/repo"
+	const hash = "abcdef123456"
+	if err := ExecLocked(func(db *sql.DB) error {
+		for _, row := range []struct {
+			branch     string
+			virtual    int
+			staleSince interface{}
+		}{
+			{"a-virtual", 1, nil},
+			{"b-stale", 0, "2025-10-21T00:00:00Z"},
+			{"main", 0, nil},
+		} {
+			if _, err := db.Exec(`INSERT INTO core_commits (repo_url, hash, branch, message, timestamp, is_virtual, stale_since) VALUES (?, ?, ?, 'm', '2025-10-20T12:00:00Z', ?, ?)`,
+				repoURL, hash, row.branch, row.virtual, row.staleSince); err != nil {
+				return err
+			}
+			if _, err := db.Exec(`INSERT INTO social_items (repo_url, hash, branch, type) VALUES (?, ?, ?, 'post')`, repoURL, hash, row.branch); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed rows: %v", err)
+	}
+	for _, prefix := range []string{hash, "abcdef12", "ABCDEF12"} {
+		hits, err := DetectExtension(prefix)
+		if err != nil {
+			t.Fatalf("DetectExtension(%s) error = %v", prefix, err)
+		}
+		if len(hits) != 3 || hits[0].Branch != "main" {
+			t.Errorf("DetectExtension(%s) = %+v, want 3 hits with the live row under main first", prefix, hits)
+		}
+	}
+}

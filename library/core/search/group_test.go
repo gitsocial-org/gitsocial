@@ -1,4 +1,4 @@
-// group_test.go - Tests for search result grouping over a seeded cache
+// group_test.go - Tests for the search query and result grouping over a seeded cache
 package search
 
 import (
@@ -507,4 +507,29 @@ func TestToGroupedItem(t *testing.T) {
 			t.Errorf("Subject tail = %q, want ...", got[100:])
 		}
 	})
+}
+
+// TestSearch_movedItemOnce checks that an item with a stale and a live row of one hash is one result, from the live row.
+func TestSearch_movedItemOnce(t *testing.T) {
+	cache.RegisterSchema("social", socialSchemaForSearchTest)
+	testutil.OpenTempCache(t, "")
+	const hash = "abcabcabcabc"
+	for _, branch := range []string{"feature/x", "main"} {
+		if err := cache.InsertCommits([]cache.Commit{{
+			Hash: hash, RepoURL: testRepoURL, Branch: branch, AuthorName: "Alice", AuthorEmail: "alice@test.com",
+			Message: "Moved post", Timestamp: time.Date(2026, 3, 14, 12, 0, 0, 0, time.UTC),
+		}}); err != nil {
+			t.Fatalf("InsertCommits(%s): %v", branch, err)
+		}
+		execTestSQL(t, `INSERT INTO social_items (repo_url, hash, branch, type) VALUES (?, ?, ?, 'post')`, testRepoURL, hash, branch)
+	}
+	execTestSQL(t, `UPDATE core_commits SET stale_since = '2026-03-14T13:00:00Z' WHERE repo_url = ? AND hash = ? AND branch = 'feature/x'`, testRepoURL, hash)
+
+	items, err := queryItems(searchQuery{RepoURL: testRepoURL})
+	if err != nil {
+		t.Fatalf("queryItems: %v", err)
+	}
+	if len(items) != 1 || items[0].Branch != "main" || items[0].Extension != "social" {
+		t.Errorf("items = %+v, want one social item from the live row under main", items)
+	}
 }
