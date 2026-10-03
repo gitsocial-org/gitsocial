@@ -278,9 +278,11 @@ func getIssueStateChangeNotifications(userEmail string, unreadOnly bool, limit i
 			FROM core_commits_version cv
 			JOIN core_commits ec ON cv.edit_repo_url = ec.repo_url AND cv.edit_hash = ec.hash AND cv.edit_branch = ec.branch
 			JOIN pm_items pi ON cv.edit_repo_url = pi.repo_url AND cv.edit_hash = pi.hash AND cv.edit_branch = pi.branch
-			JOIN pm_items_resolved pr ON cv.canonical_repo_url = pr.repo_url AND cv.canonical_hash = pr.hash AND cv.canonical_branch = pr.branch
+			JOIN pm_items_resolved pr ON cv.canonical_repo_url = pr.repo_url AND cv.canonical_hash = pr.hash
+			 AND pr.branch = ` + cache.LiveItemBranch("pm_items", "cv.canonical_repo_url", "cv.canonical_hash") + `
 			LEFT JOIN core_notification_reads nr ON ec.repo_url = nr.repo_url AND ec.hash = nr.hash AND ec.branch = nr.branch
-			WHERE pi.state IN ('closed', 'canceled', 'open')
+			WHERE cv.edit_branch = ` + cache.LiveItemBranch("pm_items", "cv.edit_repo_url", "cv.edit_hash") + `
+			  AND pi.state IN ('closed', 'canceled', 'open')
 			  AND pr.type = 'issue'
 			  AND pr.assignees LIKE '%' || ? || '%' ESCAPE '\'
 			  AND COALESCE(ec.origin_author_email, ec.author_email) != ?

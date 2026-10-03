@@ -362,6 +362,14 @@ func SyncEditExtensionFields(edits []EditKey) {
 	})
 }
 
+// EditRowids is a subquery of the rowid of the live row of each edit of a canonical; it takes the canonical's repository and hash.
+func EditRowids() string {
+	return `SELECT e.rowid FROM core_commits_version v
+		JOIN core_commits e ON e.repo_url = v.edit_repo_url AND e.hash = v.edit_hash
+		 AND e.branch = ` + LiveBranch("v.edit_repo_url", "v.edit_hash") + `
+		WHERE v.canonical_repo_url = ? AND v.canonical_hash = ?`
+}
+
 // GetLatestVersion returns the live row of the latest same-repo edit of a canonical, matched by repository and hash.
 // If no edits exist, returns the canonical commit info with HasEdits=false.
 func GetLatestVersion(canonicalRepoURL, canonicalHash, canonicalBranch string) (LatestVersionResult, error) {

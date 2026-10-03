@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/text"
 )
 
@@ -202,7 +203,7 @@ func buildSelect(tables []extTable, hasInteractions bool) string {
 	       ` + sbomExpr + ` as item_sbom,
 	       ` + commentsExpr + ` as item_comments,
 	       ` + milestoneExpr + ` as item_milestone,
-	       EXISTS(SELECT 1 FROM core_commits_version cv WHERE cv.canonical_repo_url = r.repo_url AND cv.canonical_hash = r.hash AND cv.canonical_branch = r.branch AND cv.edit_repo_url != cv.canonical_repo_url AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cv.edit_repo_url AND d.edit_hash = cv.edit_hash AND d.edit_branch = cv.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cv.edit_repo_url AND dd.edit_hash = cv.edit_hash AND dd.edit_branch = cv.edit_branch)) as has_proposed
+	       EXISTS(SELECT 1 FROM core_commits_version cv WHERE cv.canonical_repo_url = r.repo_url AND cv.canonical_hash = r.hash AND cv.edit_repo_url != cv.canonical_repo_url AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cv.edit_repo_url AND d.edit_hash = cv.edit_hash AND d.edit_branch = cv.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cv.edit_repo_url AND dd.edit_hash = cv.edit_hash AND dd.edit_branch = cv.edit_branch)) as has_proposed
 	FROM core_commits r
 	` + strings.Join(joins, "\n\t")
 
@@ -251,12 +252,15 @@ func buildResolvedStateExpr(has map[string]bool) string {
 	}
 
 	editStateExpr := "COALESCE(" + strings.Join(editCols, ", ") + ")"
+	// The latest edit with a state, by its time, then its live row, then the hash, as applyEditToCanonical picks it.
 	subquery := "(SELECT " + editStateExpr +
-		" FROM core_commits_version v " + strings.Join(editJoins, " ") +
-		" WHERE v.canonical_repo_url = r.repo_url AND v.canonical_hash = r.hash AND v.canonical_branch = r.branch" +
+		" FROM core_commits_version v JOIN core_commits ec ON ec.repo_url = v.edit_repo_url AND ec.hash = v.edit_hash AND ec.branch = v.edit_branch " +
+		strings.Join(editJoins, " ") +
+		" WHERE v.canonical_repo_url = r.repo_url AND v.canonical_hash = r.hash" +
 		" AND v.is_retracted = 0" +
 		" AND v.edit_repo_url = v.canonical_repo_url" +
-		" ORDER BY v.rowid DESC LIMIT 1)"
+		" AND " + editStateExpr + " IS NOT NULL" +
+		" ORDER BY ec.timestamp DESC, " + cache.LiveFirstOrder("ec") + ", v.edit_hash DESC LIMIT 1)"
 
 	parts := make([]string, 0, 1+len(rawFallbacks))
 	parts = append(parts, subquery)
@@ -270,7 +274,7 @@ func stateExistsClause(table, state string, args *[]interface{}) string {
 	*args = append(*args, state, state)
 	return `(EXISTS (SELECT 1 FROM ` + table + ` _sr WHERE _sr.repo_url = r.repo_url AND _sr.hash = r.hash AND _sr.branch = r.branch AND _sr.state = ?)` +
 		` OR EXISTS (SELECT 1 FROM core_commits_version _sv JOIN ` + table + ` _se ON _sv.edit_repo_url = _se.repo_url AND _sv.edit_hash = _se.hash AND _sv.edit_branch = _se.branch` +
-		` WHERE _sv.canonical_repo_url = r.repo_url AND _sv.canonical_hash = r.hash AND _sv.canonical_branch = r.branch AND _sv.is_retracted = 0 AND _sv.edit_repo_url = _sv.canonical_repo_url AND _se.state = ?))`
+		` WHERE _sv.canonical_repo_url = r.repo_url AND _sv.canonical_hash = r.hash AND _sv.is_retracted = 0 AND _sv.edit_repo_url = _sv.canonical_repo_url AND _se.state = ?))`
 }
 
 // coalesceStr builds a COALESCE expression for text columns from available aliases.

@@ -488,7 +488,7 @@ type StateChangeInfo struct {
 	MergeHead   string
 }
 
-// GetStateChangeInfo finds who triggered a state change (merged/closed) for a PR.
+// GetStateChangeInfo finds who triggered a state change (merged/closed) for a PR, matched by repository and hash.
 func GetStateChangeInfo(repoURL, hash, branch string, state PRState) (*StateChangeInfo, error) {
 	return cache.QueryLocked(func(db *sql.DB) (*StateChangeInfo, error) {
 		var name, email, ts, message string
@@ -497,11 +497,11 @@ func GetStateChangeInfo(repoURL, hash, branch string, state PRState) (*StateChan
 			FROM core_commits_version v
 			JOIN core_commits c ON v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash AND v.edit_branch = c.branch
 			JOIN review_items ri ON v.edit_repo_url = ri.repo_url AND v.edit_hash = ri.hash AND v.edit_branch = ri.branch
-			WHERE v.canonical_repo_url = ? AND v.canonical_hash = ? AND v.canonical_branch = ?
+			WHERE v.canonical_repo_url = ? AND v.canonical_hash = ?
 			AND ri.state = ?
-			ORDER BY c.timestamp DESC
+			ORDER BY c.timestamp DESC, `+cache.LiveFirstOrder("c")+`, c.branch = ? DESC
 			LIMIT 1`,
-			repoURL, hash, branch, string(state),
+			repoURL, hash, string(state), branch,
 		).Scan(&name, &email, &ts, &message)
 		if err != nil {
 			return nil, err

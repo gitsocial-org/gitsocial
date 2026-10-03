@@ -533,3 +533,77 @@ func TestSearch_movedItemOnce(t *testing.T) {
 		t.Errorf("items = %+v, want one social item from the live row under main", items)
 	}
 }
+
+// TestSearch_editedMovedItem checks that the search finds the edited text of a moved item once, from the live row, and not the old text.
+func TestSearch_editedMovedItem(t *testing.T) {
+	cache.RegisterSchema("social", socialSchemaForSearchTest)
+	testutil.OpenTempCache(t, "")
+	const hash, editHash = "abcabcabcabc", "defdefdefdef"
+	edit := "Rewritten words\n\nGitMsg: ext=\"social\"; type=\"post\"; edits=\"#commit:" + hash + "@feature/x\"; v=\"0.1.0\""
+	for _, branch := range []string{"feature/x", "main"} {
+		if err := cache.InsertCommits([]cache.Commit{
+			{Hash: hash, RepoURL: testRepoURL, Branch: branch, AuthorName: "Alice", AuthorEmail: "alice@test.com",
+				Message: "Moved post", Timestamp: time.Date(2026, 3, 14, 12, 0, 0, 0, time.UTC)},
+			{Hash: editHash, RepoURL: testRepoURL, Branch: branch, AuthorName: "Alice", AuthorEmail: "alice@test.com",
+				Message: edit, Timestamp: time.Date(2026, 3, 14, 13, 0, 0, 0, time.UTC)},
+		}); err != nil {
+			t.Fatalf("InsertCommits(%s): %v", branch, err)
+		}
+		execTestSQL(t, `INSERT INTO social_items (repo_url, hash, branch, type) VALUES (?, ?, ?, 'post')`, testRepoURL, hash, branch)
+	}
+	execTestSQL(t, `UPDATE core_commits SET stale_since = '2026-03-14T14:00:00Z' WHERE repo_url = ? AND branch = 'feature/x'`, testRepoURL)
+
+	items, err := queryItems(searchQuery{RepoURL: testRepoURL, TextSearch: "Rewritten"})
+	if err != nil {
+		t.Fatalf("queryItems: %v", err)
+	}
+	if len(items) != 1 || items[0].Hash != hash || items[0].Branch != "main" {
+		t.Errorf("items for the edited text = %+v, want the item once from the live row under main", items)
+	}
+	old, err := queryItems(searchQuery{RepoURL: testRepoURL, TextSearch: "Moved"})
+	if err != nil {
+		t.Fatalf("queryItems: %v", err)
+	}
+	if len(old) != 0 {
+		t.Errorf("items for the old text = %+v, want none", old)
+	}
+}
+
+// TestSearch_stateOfLatestEditByHash checks that the state of an item comes from its latest edit by time, matched by repository and hash, when the edits arrive out of order and name another branch.
+func TestSearch_stateOfLatestEditByHash(t *testing.T) {
+	cache.RegisterSchema("pm", pmSchemaForSearchTest)
+	cache.RegisterSchema("review", reviewSchemaForSearchTest)
+	testutil.OpenTempCache(t, "")
+	const issue, older, newer = "abcabcabcabc", "bcdbcdbcdbcd", "cdecdecdecde"
+	edit := func(state string) string {
+		return "Issue\n\nGitMsg: ext=\"pm\"; type=\"issue\"; state=\"" + state + "\"; edits=\"#commit:" + issue + "@feature/x\"; v=\"0.1.0\""
+	}
+	at := func(hour int) time.Time { return time.Date(2026, 3, 14, hour, 0, 0, 0, time.UTC) }
+	for _, c := range []cache.Commit{
+		{Hash: issue, Message: "Issue\n\nGitMsg: ext=\"pm\"; type=\"issue\"; state=\"open\"; v=\"0.1.0\"", Timestamp: at(12)},
+		{Hash: newer, Message: edit("closed"), Timestamp: at(14)},
+		{Hash: older, Message: edit("open"), Timestamp: at(13)},
+	} {
+		c.RepoURL, c.Branch, c.AuthorName, c.AuthorEmail = testRepoURL, "main", "Alice", "alice@test.com"
+		if err := cache.InsertCommits([]cache.Commit{c}); err != nil {
+			t.Fatalf("InsertCommits(%s): %v", c.Hash, err)
+		}
+	}
+	execTestSQL(t, `INSERT INTO pm_items (repo_url, hash, branch, type, state) VALUES (?, ?, 'main', 'issue', 'open'), (?, ?, 'main', 'issue', 'closed'), (?, ?, 'main', 'issue', 'open')`,
+		testRepoURL, issue, testRepoURL, newer, testRepoURL, older)
+
+	items, err := queryItems(searchQuery{RepoURL: testRepoURL})
+	if err != nil {
+		t.Fatalf("queryItems: %v", err)
+	}
+	if len(items) != 1 || items[0].State != "closed" {
+		t.Errorf("items = %+v, want the issue once with the state of the newer edit", items)
+	}
+	closed, err := queryItems(searchQuery{RepoURL: testRepoURL, State: "closed"})
+	if err != nil {
+		t.Fatalf("queryItems: %v", err)
+	}
+	if len(closed) != 1 || closed[0].Hash != issue {
+		t.Errorf("items in state closed = %+v, want the issue through its edit", closed)
+	}
+}

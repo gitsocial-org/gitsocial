@@ -46,6 +46,14 @@ func CanonicalBranch(alias string) string {
 	return `COALESCE(` + LiveBranch(alias+".canonical_repo_url", alias+".canonical_hash") + `, ` + alias + `.canonical_branch)`
 }
 
+// LiveItemBranch is a scalar subquery of the branch of the live row of a hash among the rows of an extension table, from the SQL expressions of its repository and hash.
+func LiveItemBranch(table, repoExpr, hashExpr string) string {
+	return `(SELECT li.branch FROM ` + table + ` li
+		JOIN core_commits lc ON lc.repo_url = li.repo_url AND lc.hash = li.hash AND lc.branch = li.branch
+		WHERE li.repo_url = ` + repoExpr + ` AND li.hash = ` + hashExpr +
+		` ORDER BY ` + LiveFirstOrder("lc") + `, li.branch LIMIT 1)`
+}
+
 // ResolvedSelect builds the standard resolved-view SELECT used by extensions:
 // common commit columns, the extension's own columns, flag columns, comments,
 // and the has_proposed marker, FROM the given view aliased as v. Rows produced

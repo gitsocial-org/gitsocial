@@ -2,6 +2,7 @@
 package notifications
 
 import (
+	"database/sql"
 	"testing"
 	"time"
 
@@ -228,5 +229,44 @@ func TestEditProvider_GetNotifications_retractedEdit(t *testing.T) {
 	}
 	if !en.IsRetracted {
 		t.Error("expected IsRetracted=true on retracted edit")
+	}
+}
+
+func TestEditNotifications_movedCanonicalOnce(t *testing.T) {
+	setupTestDB(t)
+	workdir := setupGitRepo(t) // alice@example.com
+	ts := time.Date(2026, 3, 14, 12, 0, 0, 0, time.UTC)
+	edit := protocol.FormatMessage("edit msg", protocol.Header{
+		Ext: "social", V: "0.1.0", Fields: map[string]string{"type": "post", "edits": "#commit:ca0999999999@feature/x"},
+	}, nil)
+	for _, branch := range []string{"feature/x", "main"} {
+		if err := cache.InsertCommits([]cache.Commit{
+			{RepoURL: editTestRepoURL, Hash: "ca0999999999", Branch: branch, AuthorName: "Alice", AuthorEmail: "alice@example.com", Message: "canonical msg", Timestamp: ts},
+			{RepoURL: editTestRepoURL, Hash: "ed0999999999", Branch: branch, AuthorName: "Bob", AuthorEmail: "bob@example.com", Message: edit, Timestamp: ts.Add(time.Minute)},
+		}); err != nil {
+			t.Fatalf("InsertCommits(%s) error = %v", branch, err)
+		}
+	}
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`UPDATE core_commits SET stale_since = '2026-03-15T00:00:00Z' WHERE repo_url = ? AND branch = 'feature/x'`, editTestRepoURL)
+		return err
+	}); err != nil {
+		t.Fatalf("mark stale: %v", err)
+	}
+
+	p := &editProvider{}
+	items, err := p.GetNotifications(workdir, Filter{})
+	if err != nil {
+		t.Fatalf("GetNotifications() error = %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("got %d notifications, want one for the edit", len(items))
+	}
+	en, _ := items[0].Item.(EditNotification)
+	if items[0].Branch != "main" || en.CanonicalBranch != "main" {
+		t.Errorf("notification on %s for a canonical on %s, want both on the live rows under main", items[0].Branch, en.CanonicalBranch)
+	}
+	if count, err := p.GetUnreadCount(workdir); err != nil || count != 1 {
+		t.Errorf("GetUnreadCount() = %d (%v), want 1", count, err)
 	}
 }

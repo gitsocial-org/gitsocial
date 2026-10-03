@@ -2,8 +2,11 @@
 package pm
 
 import (
+	"database/sql"
 	"testing"
+	"time"
 
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
@@ -104,5 +107,43 @@ func TestGetNotifications_unreadOnly(t *testing.T) {
 	}
 	if count != 0 {
 		t.Errorf("GetUnreadCount() = %d after MarkAsRead, want 0", count)
+	}
+}
+
+// TestIssueStateChange_movedOnce checks one state-change notification for an edit with rows on two branches, whose reference names a branch with no row.
+func TestIssueStateChange_movedOnce(t *testing.T) {
+	setupTestDB(t)
+	const repoURL = "https://github.com/test/moved"
+	const issue, edit = "aa0011223344", "bb0011223344"
+	ts := time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)
+	closeMsg := "Issue\n\nGitMsg: ext=\"pm\"; type=\"issue\"; state=\"closed\"; assignees=\"me@x.com\"; edits=\"#commit:" + issue + "@feature/x\"; v=\"0.1.0\""
+	for _, branch := range []string{"gitmsg/pm", "main"} {
+		if err := cache.InsertCommits([]cache.Commit{
+			{Hash: issue, RepoURL: repoURL, Branch: branch, AuthorName: "Alice", AuthorEmail: "alice@x.com", Message: "Issue", Timestamp: ts},
+			{Hash: edit, RepoURL: repoURL, Branch: branch, AuthorName: "Bob", AuthorEmail: "bob@x.com", Message: closeMsg, Timestamp: ts.Add(time.Hour)},
+		}); err != nil {
+			t.Fatalf("InsertCommits(%s) error = %v", branch, err)
+		}
+		for _, item := range []PMItem{
+			{RepoURL: repoURL, Hash: issue, Branch: branch, Type: "issue", State: "open", Assignees: sql.NullString{String: "me@x.com", Valid: true}},
+			{RepoURL: repoURL, Hash: edit, Branch: branch, Type: "issue", State: "closed", Assignees: sql.NullString{String: "me@x.com", Valid: true}},
+		} {
+			if err := InsertPMItem(item); err != nil {
+				t.Fatalf("InsertPMItem() error = %v", err)
+			}
+		}
+	}
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`UPDATE core_commits SET stale_since = '2025-10-22T00:00:00Z' WHERE repo_url = ? AND branch = 'gitmsg/pm'`, repoURL)
+		return err
+	}); err != nil {
+		t.Fatalf("mark stale: %v", err)
+	}
+	got, err := getIssueStateChangeNotifications("me@x.com", false, 0)
+	if err != nil {
+		t.Fatalf("getIssueStateChangeNotifications() error = %v", err)
+	}
+	if len(got) != 1 || got[0].Hash != edit || got[0].Branch != "main" {
+		t.Errorf("notifications = %+v, want one for the edit on its live row under main", got)
 	}
 }

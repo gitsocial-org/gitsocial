@@ -26,6 +26,18 @@ type EditNotification struct {
 	IsRetracted      bool
 }
 
+// editNotificationsFrom joins each edit to its live row and keeps the edits of the user's canonicals by others; it takes the user's email twice.
+var editNotificationsFrom = `FROM core_commits_version v
+	JOIN core_commits ec ON v.edit_repo_url = ec.repo_url
+	                    AND v.edit_hash = ec.hash
+	                    AND v.edit_branch = ec.branch
+	LEFT JOIN core_notification_reads r ON v.edit_repo_url = r.repo_url
+	                                   AND v.edit_hash = r.hash
+	                                   AND v.edit_branch = r.branch
+	WHERE v.edit_branch = ` + cache.LiveBranch("v.edit_repo_url", "v.edit_hash") + `
+	  AND EXISTS (SELECT 1 FROM core_commits cc WHERE cc.repo_url = v.canonical_repo_url AND cc.hash = v.canonical_hash AND cc.author_email = ?)
+	  AND ec.author_email != ?`
+
 // GetNotifications returns notifications for edit commits authored by someone
 // other than the current user, where the canonical item being edited was
 // authored by the current user.
@@ -37,23 +49,11 @@ func (p *editProvider) GetNotifications(workdir string, filter Filter) ([]Notifi
 	return cache.QueryLocked(func(db *sql.DB) ([]Notification, error) {
 		query := `
 			SELECT v.edit_repo_url, v.edit_hash, v.edit_branch,
-			       v.canonical_repo_url, v.canonical_hash, v.canonical_branch,
+			       v.canonical_repo_url, v.canonical_hash, ` + cache.CanonicalBranch("v") + `,
 			       v.is_retracted,
 			       ec.author_name, ec.author_email, ec.timestamp,
 			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END as is_read
-			FROM core_commits_version v
-			JOIN core_commits ec ON v.edit_repo_url = ec.repo_url
-			                    AND v.edit_hash = ec.hash
-			                    AND v.edit_branch = ec.branch
-			JOIN core_commits cc ON v.canonical_repo_url = cc.repo_url
-			                    AND v.canonical_hash = cc.hash
-			                    AND v.canonical_branch = cc.branch
-			LEFT JOIN core_notification_reads r ON v.edit_repo_url = r.repo_url
-			                                   AND v.edit_hash = r.hash
-			                                   AND v.edit_branch = r.branch
-			WHERE cc.author_email = ?
-			  AND ec.author_email != ?
-		`
+			` + editNotificationsFrom
 		args := []interface{}{userEmail, userEmail}
 		if filter.UnreadOnly {
 			query += " AND r.repo_url IS NULL"
@@ -122,18 +122,7 @@ func (p *editProvider) GetUnreadCount(workdir string) (int, error) {
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
 		var count int
 		err := db.QueryRow(`
-			SELECT COUNT(*) FROM core_commits_version v
-			JOIN core_commits ec ON v.edit_repo_url = ec.repo_url
-			                    AND v.edit_hash = ec.hash
-			                    AND v.edit_branch = ec.branch
-			JOIN core_commits cc ON v.canonical_repo_url = cc.repo_url
-			                    AND v.canonical_hash = cc.hash
-			                    AND v.canonical_branch = cc.branch
-			LEFT JOIN core_notification_reads r ON v.edit_repo_url = r.repo_url
-			                                   AND v.edit_hash = r.hash
-			                                   AND v.edit_branch = r.branch
-			WHERE cc.author_email = ?
-			  AND ec.author_email != ?
+			SELECT COUNT(*) `+editNotificationsFrom+`
 			  AND r.repo_url IS NULL
 		`, userEmail, userEmail).Scan(&count)
 		return count, err

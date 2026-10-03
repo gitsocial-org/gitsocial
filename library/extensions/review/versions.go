@@ -65,16 +65,17 @@ func GetPRVersions(prRef, workspaceURL string) Result[[]PRVersion] {
 		// ord keeps the canonical first and the hash breaks a same-second tie, so
 		// version numbers and the draft-to-ready walk are stable.
 		query := `
-			SELECT 0 AS ord, repo_url, hash, branch, author_name, author_email, message, timestamp, edits
-			FROM core_commits
-			WHERE repo_url = ? AND hash = ? AND branch = ?
+			SELECT * FROM (
+				SELECT 0 AS ord, c.repo_url, c.hash, c.branch, c.author_name, c.author_email, c.message, c.timestamp, c.edits
+				FROM core_commits c
+				WHERE c.repo_url = ? AND c.hash = ?
+				ORDER BY ` + cache.LiveFirstOrder("c") + `, c.branch = ? DESC, c.branch LIMIT 1)
 			UNION ALL
 			SELECT 1 AS ord, c.repo_url, c.hash, c.branch, c.author_name, c.author_email, c.message, c.timestamp, c.edits
 			FROM core_commits c
-			JOIN core_commits_version v ON v.edit_repo_url = c.repo_url AND v.edit_hash = c.hash AND v.edit_branch = c.branch
-			WHERE v.canonical_repo_url = ? AND v.canonical_hash = ? AND v.canonical_branch = ?
+			WHERE c.rowid IN (` + cache.EditRowids() + `)
 			ORDER BY ord ASC, timestamp ASC, hash ASC`
-		dbRows, err := db.Query(query, canonicalRepoURL, canonicalHash, canonicalBranch, canonicalRepoURL, canonicalHash, canonicalBranch)
+		dbRows, err := db.Query(query, canonicalRepoURL, canonicalHash, canonicalBranch, canonicalRepoURL, canonicalHash)
 		if err != nil {
 			return nil, err
 		}

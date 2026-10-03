@@ -614,3 +614,41 @@ func TestGetFeedbackNotifications_unreadOnly(t *testing.T) {
 		t.Errorf("expected 0 unread feedback, got %d", len(notifs))
 	}
 }
+
+// TestPRStateChange_movedOnce checks one merge notification for an edit with rows on two branches, whose reference names a branch with no row.
+func TestPRStateChange_movedOnce(t *testing.T) {
+	setupTestDB(t)
+	const repoURL = "https://github.com/test/moved-notify"
+	const prHash, editHash = "ac0011223344", "bc0011223344"
+	ts := time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)
+	merged := "PR\n\nGitMsg: ext=\"review\"; type=\"pull-request\"; state=\"merged\"; edits=\"#commit:" + prHash + "@feature/x\"; v=\"0.1.0\""
+	for _, branch := range []string{reviewTestBranch, "main"} {
+		if err := cache.InsertCommits([]cache.Commit{
+			{Hash: prHash, RepoURL: repoURL, Branch: branch, AuthorName: "Me", AuthorEmail: "me@x.com", Message: "PR", Timestamp: ts},
+			{Hash: editHash, RepoURL: repoURL, Branch: branch, AuthorName: "Bob", AuthorEmail: "bob@x.com", Message: merged, Timestamp: ts.Add(time.Hour)},
+		}); err != nil {
+			t.Fatalf("InsertCommits(%s) error = %v", branch, err)
+		}
+		for _, item := range []ReviewItem{
+			{RepoURL: repoURL, Hash: prHash, Branch: branch, Type: "pull-request", State: cache.ToNullString("open")},
+			{RepoURL: repoURL, Hash: editHash, Branch: branch, Type: "pull-request", State: cache.ToNullString("merged")},
+		} {
+			if err := InsertReviewItem(item); err != nil {
+				t.Fatalf("InsertReviewItem() error = %v", err)
+			}
+		}
+	}
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`UPDATE core_commits SET stale_since = '2025-10-22T00:00:00Z' WHERE repo_url = ? AND branch = ?`, repoURL, reviewTestBranch)
+		return err
+	}); err != nil {
+		t.Fatalf("mark stale: %v", err)
+	}
+	got, err := getPRStateChangeNotifications("me@x.com", false)
+	if err != nil {
+		t.Fatalf("getPRStateChangeNotifications() error = %v", err)
+	}
+	if len(got) != 1 || got[0].Hash != editHash || got[0].Branch != "main" {
+		t.Errorf("notifications = %+v, want one for the edit on its live row under main", got)
+	}
+}

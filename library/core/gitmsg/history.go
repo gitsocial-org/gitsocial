@@ -59,10 +59,7 @@ func GetHistory(ref string, workspaceURL string) ([]MessageVersion, error) {
 			UNION ALL
 			SELECT c.repo_url, c.hash, c.branch, c.author_name, c.author_email, c.message, c.timestamp, c.edits
 			FROM core_commits c
-			WHERE c.rowid IN (SELECT e.rowid FROM core_commits_version v
-				JOIN core_commits e ON e.repo_url = v.edit_repo_url AND e.hash = v.edit_hash
-				 AND e.branch = ` + cache.LiveBranch("v.edit_repo_url", "v.edit_hash") + `
-				WHERE v.canonical_repo_url = ? AND v.canonical_hash = ?)
+			WHERE c.rowid IN (` + cache.EditRowids() + `)
 			ORDER BY timestamp DESC`
 
 		rows, err := db.Query(query, canonicalRepoURL, canonicalHash, canonicalBranch, canonicalRepoURL, canonicalHash)

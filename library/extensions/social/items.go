@@ -462,12 +462,14 @@ func itemRefs(db *sql.DB, k itemKey) (original, replyTo itemKey) {
 	return nullKey(oRepo, oHash, oBranch), nullKey(rRepo, rHash, rBranch)
 }
 
-// canonicalOf returns the canonical an edit or retraction replaces.
+// canonicalOf returns the canonical an edit or retraction replaces, matched by repository and hash, on the canonical's live row.
 func canonicalOf(db *sql.DB, k itemKey) (itemKey, bool) {
 	var canonical itemKey
 	err := db.QueryRow(`
-		SELECT canonical_repo_url, canonical_hash, canonical_branch FROM core_commits_version
-		WHERE edit_repo_url = ? AND edit_hash = ? AND edit_branch = ?`,
+		SELECT v.canonical_repo_url, v.canonical_hash, `+cache.CanonicalBranch("v")+`
+		FROM core_commits_version v
+		WHERE v.edit_repo_url = ? AND v.edit_hash = ?
+		ORDER BY v.edit_branch = ? DESC LIMIT 1`,
 		k.repoURL, k.hash, k.branch,
 	).Scan(&canonical.repoURL, &canonical.hash, &canonical.branch)
 	return canonical, err == nil

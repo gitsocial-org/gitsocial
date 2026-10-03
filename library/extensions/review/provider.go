@@ -378,9 +378,11 @@ func getPRStateChangeNotifications(userEmail string, unreadOnly bool) ([]notific
 			FROM core_commits_version cv
 			JOIN core_commits ec ON cv.edit_repo_url = ec.repo_url AND cv.edit_hash = ec.hash AND cv.edit_branch = ec.branch
 			JOIN review_items ri ON cv.edit_repo_url = ri.repo_url AND cv.edit_hash = ri.hash AND cv.edit_branch = ri.branch
-			JOIN review_items_resolved pr ON cv.canonical_repo_url = pr.repo_url AND cv.canonical_hash = pr.hash AND cv.canonical_branch = pr.branch
+			JOIN review_items_resolved pr ON cv.canonical_repo_url = pr.repo_url AND cv.canonical_hash = pr.hash
+			 AND pr.branch = ` + cache.LiveItemBranch("review_items", "cv.canonical_repo_url", "cv.canonical_hash") + `
 			LEFT JOIN core_notification_reads nr ON ec.repo_url = nr.repo_url AND ec.hash = nr.hash AND ec.branch = nr.branch
-			WHERE ri.state IN ('merged', 'closed')
+			WHERE cv.edit_branch = ` + cache.LiveItemBranch("review_items", "cv.edit_repo_url", "cv.edit_hash") + `
+			  AND ri.state IN ('merged', 'closed')
 			  AND pr.type = 'pull-request'
 			  AND pr.author_email = ?
 			  AND COALESCE(ec.origin_author_email, ec.author_email) != ?

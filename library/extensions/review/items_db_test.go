@@ -631,3 +631,83 @@ func TestGetPullRequestsWithForks_scanError(t *testing.T) {
 		t.Error("should fail when view has wrong columns")
 	}
 }
+
+func TestGetPRVersions_movedCanonical(t *testing.T) {
+	setupTestDB(t)
+	const repoURL = "https://github.com/test/moved"
+	const prHash, editHash = "aa0011223344", "bb0011223344"
+	ts := time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)
+	pr := "Moved PR\n\nGitMsg: ext=\"review\"; type=\"pull-request\"; state=\"open\"; v=\"0.1.0\""
+	edit := "Moved PR\n\nGitMsg: ext=\"review\"; type=\"pull-request\"; state=\"merged\"; edits=\"#commit:" + prHash + "@" + reviewTestBranch + "\"; v=\"0.1.0\""
+	for _, branch := range []string{reviewTestBranch, "main"} {
+		if err := cache.InsertCommits([]cache.Commit{
+			{Hash: prHash, RepoURL: repoURL, Branch: branch, AuthorName: "A", AuthorEmail: "a@test.com", Message: pr, Timestamp: ts},
+			{Hash: editHash, RepoURL: repoURL, Branch: branch, AuthorName: "B", AuthorEmail: "b@test.com", Message: edit, Timestamp: ts.Add(time.Hour)},
+		}); err != nil {
+			t.Fatalf("InsertCommits(%s) error = %v", branch, err)
+		}
+	}
+	for _, item := range []ReviewItem{
+		{RepoURL: repoURL, Hash: prHash, Branch: reviewTestBranch, Type: "pull-request", State: cache.ToNullString("open")},
+		{RepoURL: repoURL, Hash: editHash, Branch: reviewTestBranch, Type: "pull-request", State: cache.ToNullString("merged")},
+	} {
+		if err := InsertReviewItem(item); err != nil {
+			t.Fatalf("InsertReviewItem() error = %v", err)
+		}
+	}
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`UPDATE core_commits SET stale_since = '2025-10-22T00:00:00Z' WHERE repo_url = ? AND branch = ?`, repoURL, reviewTestBranch)
+		return err
+	}); err != nil {
+		t.Fatalf("mark stale: %v", err)
+	}
+
+	res := GetPRVersions(repoURL+"#commit:"+prHash+"@"+reviewTestBranch, repoURL)
+	if !res.Success {
+		t.Fatalf("GetPRVersions() failed: %s", res.Error.Message)
+	}
+	if len(res.Data) != 2 || res.Data[0].CommitHash != prHash || res.Data[1].CommitHash != editHash {
+		t.Fatalf("GetPRVersions() = %+v, want the original and one edit", res.Data)
+	}
+	if res.Data[0].Branch != "main" || res.Data[1].Branch != "main" {
+		t.Errorf("version branches = %s, %s, want the live rows under main", res.Data[0].Branch, res.Data[1].Branch)
+	}
+	info, err := GetStateChangeInfo(repoURL, prHash, "main", PRStateMerged)
+	if err != nil || info.AuthorEmail != "b@test.com" {
+		t.Errorf("GetStateChangeInfo() = %+v (%v), want the merge by the editor", info, err)
+	}
+}
+
+// TestGetStateChangeInfo_liveFirst checks that between two merges at one time, the edit on a live row wins over one whose only row is stale.
+func TestGetStateChangeInfo_liveFirst(t *testing.T) {
+	setupTestDB(t)
+	const repoURL = "https://github.com/test/live-first"
+	const prHash, staleEdit, liveEdit = "ad0011223344", "bd0011223344", "cd0011223344"
+	ts := time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)
+	merged := "PR\n\nGitMsg: ext=\"review\"; type=\"pull-request\"; state=\"merged\"; edits=\"#commit:" + prHash + "@" + reviewTestBranch + "\"; v=\"0.1.0\""
+	if err := cache.InsertCommits([]cache.Commit{
+		{Hash: prHash, RepoURL: repoURL, Branch: reviewTestBranch, AuthorName: "A", AuthorEmail: "a@test.com", Message: "PR", Timestamp: ts},
+		{Hash: staleEdit, RepoURL: repoURL, Branch: reviewTestBranch, AuthorName: "S", AuthorEmail: "stale@test.com", Message: merged, Timestamp: ts.Add(time.Hour)},
+		{Hash: liveEdit, RepoURL: repoURL, Branch: "main", AuthorName: "L", AuthorEmail: "live@test.com", Message: merged, Timestamp: ts.Add(time.Hour)},
+	}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	for _, item := range []ReviewItem{
+		{RepoURL: repoURL, Hash: staleEdit, Branch: reviewTestBranch, Type: "pull-request", State: cache.ToNullString("merged")},
+		{RepoURL: repoURL, Hash: liveEdit, Branch: "main", Type: "pull-request", State: cache.ToNullString("merged")},
+	} {
+		if err := InsertReviewItem(item); err != nil {
+			t.Fatalf("InsertReviewItem() error = %v", err)
+		}
+	}
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`UPDATE core_commits SET stale_since = '2025-10-22T00:00:00Z' WHERE repo_url = ? AND hash = ?`, repoURL, staleEdit)
+		return err
+	}); err != nil {
+		t.Fatalf("mark stale: %v", err)
+	}
+	info, err := GetStateChangeInfo(repoURL, prHash, reviewTestBranch, PRStateMerged)
+	if err != nil || info.AuthorEmail != "live@test.com" {
+		t.Errorf("GetStateChangeInfo() = %+v (%v), want the merge on the live row", info, err)
+	}
+}
