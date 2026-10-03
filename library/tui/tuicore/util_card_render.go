@@ -24,8 +24,8 @@ var (
 	codeBlockRe = regexp.MustCompile("(?s)(?:```(\\w*)\\n(.*?)```|~~~(\\w*)\\n(.*?)~~~)")
 	// Matches bare URLs (not inside markdown link syntax or HTML attributes)
 	urlRe = regexp.MustCompile(`https?://[^\s)>\]"]+`)
-	// refRe matches a workspace-relative commit, tag or branch ref at a boundary; the grammar mirrors the site renderers.
-	refRe = regexp.MustCompile(`(^|[\s([{"'<])(#(?:commit:[0-9a-f]{7,40}(?:@[\w./-]+)?|(?:tag|branch):[\w./-]+))`)
+	// refRe matches a workspace-relative commit, tag, branch or file ref at a boundary; the grammar is that of GITMSG.md and the site renderers.
+	refRe = regexp.MustCompile(`(^|[\s([{"'<])(#(?:commit:[0-9a-f]{7,40}(?:@[\w./-]+)?|(?:tag|branch):[\w./-]+|file:[\w./-]+@[\w./-]+(?::(?:L\d+(?:-\d+)?|[\w./-]+))?))`)
 	// Matches markdown links [text](http-url) with capture groups
 	mdLinkExtractRe = regexp.MustCompile(`\[([^\]]+)\]\((https?://[^)]+)\)`)
 	// Matches markdown images ![alt](url) with optional {attrs} suffix (GitLab/Kramdown)

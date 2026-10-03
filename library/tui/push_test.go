@@ -182,6 +182,14 @@ func TestResolveRefLocation(t *testing.T) {
 	if remote.Param("url") != "https://example.com/other" || remote.Param("branch") != "main" {
 		t.Errorf("remote branch ref = %+v, want the Repository view of that repository on main", remote)
 	}
+	file := resolveRefLocation("#file:src/auth.go@main:L42-50", "https://example.com/r")
+	if file.Path != "/social/repository/code" || file.Param("url") != "" || file.Param("branch") != "main" || file.Param("path") != "src/auth.go" || file.Param("line") != "42" || file.Param("lineEnd") != "50" {
+		t.Errorf("file ref = %+v, want the Code view on main at src/auth.go lines 42-50", file)
+	}
+	atTag := resolveRefLocation("https://example.com/other#file:README.md@main:v1.0.0", "https://example.com/r")
+	if atTag.Param("url") != "https://example.com/other" || atTag.Param("branch") != "v1.0.0" || atTag.Param("path") != "README.md" || atTag.Param("line") != "" {
+		t.Errorf("file ref at a tag = %+v, want the Code view of that repository at v1.0.0", atTag)
+	}
 	code := "beef12345678"
 	if err := cache.InsertCommits([]cache.Commit{{
 		Hash: code, RepoURL: "https://example.com/r", Branch: "feature/x",
