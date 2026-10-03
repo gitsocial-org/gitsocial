@@ -350,6 +350,7 @@ The workspace sync stores each commit under one branch, its home, and the home i
 | Reference target | matched by repository and hash, the live row first; the stored reference keeps its branch | `TestGetComments_movedCommit`, `TestRecount_movedTarget`, `TestGetTrailerRefsTo_branchlessTrailer`, `TestResolveRefLocation` |
 | Edit resolution | the canonical is matched by repository and hash, and its resolved state is on each row of the hash | `TestApplyEdit_everyRowOfTheHash`, `TestInsertCommits_editAppliesAcrossBranch`, `TestSyncWorkspace_editSurvivesMerge` |
 | Stale source | no mention notification, no trailer notification and no trailer reference | `TestMentionProvider_excludesStaleCommit`, `TestGetTrailerRefsTo_excludesStaleSource` |
+| Stale row | in no list, count or notification; a lookup by hash takes the live row first | `TestGetPMItems_excludesStaleCommit`, `TestGetPMItemByHashPrefix_liveFirst`, `TestNotifications_excludesStaleComment` |
 
 A different repository, a mirror or the upstream of a fork, is not workspace content when it is only a git remote. It gets into the cache through a list or a fork registration, under its own URL.
 

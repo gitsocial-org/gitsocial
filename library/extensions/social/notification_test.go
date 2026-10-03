@@ -237,3 +237,36 @@ func TestUserThreads_movedOriginal(t *testing.T) {
 	}
 	t.Errorf("notifications = %+v, want the comment under the new branch", notifs)
 }
+
+// TestNotifications_excludesStaleComment pins invariant 3: a stale comment on a workspace post does not notify and does not count.
+func TestNotifications_excludesStaleComment(t *testing.T) {
+	workdir := initWorkspace(t)
+	workspaceURL := gitmsg.ResolveRepoURL(workdir)
+	const other, post, comment = "https://github.com/stale/other", "57a1e0000001", "57a1e0000002"
+	at := time.Date(2025, 10, 22, 12, 0, 0, 0, time.UTC)
+	if err := cache.InsertCommits([]cache.Commit{
+		{Hash: post, RepoURL: workspaceURL, Branch: "gitmsg/social", AuthorName: "Me", AuthorEmail: git.GetUserEmail(workdir), Message: "Mine", Timestamp: at},
+		{Hash: comment, RepoURL: other, Branch: "gitmsg/social", AuthorName: "Other", AuthorEmail: "other@test.com", Message: "Theirs", Timestamp: at.Add(time.Hour)},
+	}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	if err := InsertSocialItem(SocialItem{RepoURL: other, Hash: comment, Branch: "gitmsg/social", Type: "comment",
+		OriginalRepoURL: cache.ToNullString(workspaceURL), OriginalHash: cache.ToNullString(post), OriginalBranch: cache.ToNullString("gitmsg/social")}); err != nil {
+		t.Fatalf("InsertSocialItem() error = %v", err)
+	}
+	if notifs, err := getNotifications(workdir, notificationFilter{}); err != nil || len(notifs) != 1 {
+		t.Fatalf("getNotifications() before the stale mark = %d, %v, want 1", len(notifs), err)
+	}
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`UPDATE core_commits SET stale_since = '2025-10-23T00:00:00Z' WHERE repo_url = ? AND hash = ?`, other, comment)
+		return err
+	}); err != nil {
+		t.Fatalf("mark stale: %v", err)
+	}
+	if notifs, err := getNotifications(workdir, notificationFilter{}); err != nil || len(notifs) != 0 {
+		t.Errorf("getNotifications() after the stale mark = %+v, %v, want none", notifs, err)
+	}
+	if count, err := getUnreadCount(workdir); err != nil || count != 0 {
+		t.Errorf("getUnreadCount() = %d, %v, want 0", count, err)
+	}
+}

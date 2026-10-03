@@ -132,8 +132,7 @@ func GetReleaseItems(repoURL, branch, cursor string, limit int) ([]ReleaseItem, 
 			args = append(args, cursor)
 		}
 
-		where = append(where, "NOT v.is_edit_commit")
-		where = append(where, "NOT v.is_retracted")
+		where = append(where, cache.LiveItemFilter)
 
 		sqlQuery := baseSelectFromView
 		if len(where) > 0 {
@@ -177,8 +176,7 @@ func CountReleases(repoURL, branch string) (int, error) {
 			where = append(where, "v.branch = ?")
 			args = append(args, branch)
 		}
-		where = append(where, "NOT v.is_edit_commit")
-		where = append(where, "NOT v.is_retracted")
+		where = append(where, cache.LiveItemFilter)
 		query := "SELECT COUNT(*) FROM release_items_resolved v"
 		if len(where) > 0 {
 			query += " WHERE " + strings.Join(where, " AND ")
@@ -262,7 +260,7 @@ func GetArtifactURL(rel Release, filename string) string {
 	return base + "/" + filename
 }
 
-// GetReleaseItemByHashPrefix retrieves a release item by hash prefix, refusing a prefix that several items share.
+// GetReleaseItemByHashPrefix retrieves a release item by hash prefix, its live row first, refusing a prefix that several items share.
 func GetReleaseItemByHashPrefix(hashPrefix string) (*ReleaseItem, error) {
 	hashes, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
 		rows, err := db.Query(`SELECT DISTINCT hash FROM release_items_resolved
@@ -294,7 +292,7 @@ func GetReleaseItemByHashPrefix(hashPrefix string) (*ReleaseItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) (*ReleaseItem, error) {
 		query := baseSelectFromView + `
 			WHERE v.hash = ? AND NOT v.is_edit_commit AND NOT v.is_retracted
-			ORDER BY v.timestamp DESC LIMIT 1`
+			ORDER BY ` + cache.LiveFirstOrder("v") + `, v.timestamp DESC LIMIT 1`
 		return scanResolvedRow(db.QueryRow(query, hashes[0]))
 	})
 }
@@ -304,7 +302,7 @@ func GetReleaseItemByTagOrVersion(value string) (*ReleaseItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) (*ReleaseItem, error) {
 		query := baseSelectFromView + `
 			WHERE (v.tag = ? OR v.version = ?) AND NOT v.is_edit_commit AND NOT v.is_retracted
-			ORDER BY v.timestamp DESC LIMIT 1`
+			ORDER BY ` + cache.LiveFirstOrder("v") + `, v.timestamp DESC LIMIT 1`
 		row := db.QueryRow(query, value, value)
 		return scanResolvedRow(row)
 	})
@@ -318,7 +316,7 @@ func GetReleaseItemByFullRef(refPrefix string) (*ReleaseItem, error) {
 		query := baseSelectFromView + `
 			WHERE (v.repo_url || '#commit:' || v.hash || '@' || v.branch) LIKE ? ESCAPE '\'
 			  AND NOT v.is_edit_commit AND NOT v.is_retracted
-			ORDER BY v.timestamp DESC LIMIT 1`
+			ORDER BY ` + cache.LiveFirstOrder("v") + `, v.timestamp DESC LIMIT 1`
 		row := db.QueryRow(query, cache.EscapeLike(refPrefix)+"%")
 		return scanResolvedRow(row)
 	})

@@ -250,3 +250,73 @@ func TestGetReleaseItemByRef_noBranch(t *testing.T) {
 		t.Errorf("Hash = %q, want %q", item.Hash, hash)
 	}
 }
+
+// markStale sets stale_since on one cached row.
+func markStale(t *testing.T, repoURL, hash, branch string) {
+	t.Helper()
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`UPDATE core_commits SET stale_since = '2025-10-22T00:00:00Z' WHERE repo_url = ? AND hash = ? AND branch = ?`, repoURL, hash, branch)
+		return err
+	}); err != nil {
+		t.Fatalf("mark stale: %v", err)
+	}
+}
+
+// insertReleaseTestCommitOn caches one commit under the given branch.
+func insertReleaseTestCommitOn(t *testing.T, repoURL, hash, branch string) {
+	t.Helper()
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash: hash, RepoURL: repoURL, Branch: branch, AuthorName: "Test User", AuthorEmail: "test@test.com",
+		Message: "test commit", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
+	}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+}
+
+// TestGetReleases_excludesStaleCommit pins invariant 1: the release list and its count leave out a stale row.
+func TestGetReleases_excludesStaleCommit(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/test/stale-release"
+	for i, hash := range []string{"5a1e00000001", "5a1e00000002"} {
+		insertReleaseTestCommit(t, repoURL, hash)
+		if err := InsertReleaseItem(ReleaseItem{RepoURL: repoURL, Hash: hash, Branch: releaseTestBranch, Tag: cache.ToNullString("v1." + string(rune('0'+i)))}); err != nil {
+			t.Fatalf("InsertReleaseItem() error = %v", err)
+		}
+	}
+	markStale(t, repoURL, "5a1e00000002", releaseTestBranch)
+
+	res := GetReleases(repoURL, releaseTestBranch, "", 0)
+	if !res.Success || len(res.Data) != 1 || res.Data[0].Tag != "v1.0" {
+		t.Errorf("GetReleases() = %+v, want the one live release", res)
+	}
+	if count, err := CountReleases(repoURL, releaseTestBranch); err != nil || count != 1 {
+		t.Errorf("CountReleases() = %d, %v, want 1", count, err)
+	}
+}
+
+// TestGetReleaseItemByHashPrefix_liveFirst pins invariant 2: a prefix lookup opens the live row of a moved release, and still finds a stale-only one.
+func TestGetReleaseItemByHashPrefix_liveFirst(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/test/prefix-release"
+	const moved, gone = "11fe00000001", "11fe00000002"
+	for _, row := range []struct{ hash, branch string }{{moved, "feature/x"}, {moved, releaseTestBranch}, {gone, "feature/x"}} {
+		insertReleaseTestCommitOn(t, repoURL, row.hash, row.branch)
+		if err := InsertReleaseItem(ReleaseItem{RepoURL: repoURL, Hash: row.hash, Branch: row.branch, Tag: cache.ToNullString("v" + row.hash)}); err != nil {
+			t.Fatalf("InsertReleaseItem() error = %v", err)
+		}
+	}
+	markStale(t, repoURL, moved, "feature/x")
+	markStale(t, repoURL, gone, "feature/x")
+
+	if _, err := GetReleaseItemByHashPrefix("11fe000000"); err == nil {
+		t.Fatal("GetReleaseItemByHashPrefix() accepted a prefix two releases share")
+	}
+	item, err := GetReleaseItemByHashPrefix(moved)
+	if err != nil || item.Branch != releaseTestBranch {
+		t.Errorf("GetReleaseItemByHashPrefix(moved) = %+v, %v, want the live row under %s", item, err, releaseTestBranch)
+	}
+	item, err = GetReleaseItemByHashPrefix(gone)
+	if err != nil || item.Branch != "feature/x" {
+		t.Errorf("GetReleaseItemByHashPrefix(gone) = %+v, %v, want the stale row", item, err)
+	}
+}

@@ -561,7 +561,7 @@ func socialWhere(q socialQuery) ([]string, []interface{}) {
 		args = append(args, q.Cursor)
 	}
 
-	where = append(where, "NOT v.is_edit_commit", "NOT v.is_retracted", "(v.stale_since IS NULL OR v.is_virtual = 1)")
+	where = append(where, cache.LiveItemFilter)
 	return where, args
 }
 
@@ -594,7 +594,7 @@ func placeholders(n int) string {
 // timelineWheres returns one WHERE clause per timeline source, with its args.
 func timelineWheres(listIDs []string, workspaceURL string, forkURLs []string, cursor string) ([]string, [][]interface{}) {
 	gitmsgFilter := " AND v.branch NOT LIKE 'refs/gitmsg/%'"
-	editFilter := " AND NOT v.is_edit_commit AND NOT v.is_retracted AND (v.stale_since IS NULL OR v.is_virtual = 1)"
+	editFilter := " AND " + cache.LiveItemFilter
 	if cursor != "" {
 		editFilter += " AND v.timestamp < ?"
 	}

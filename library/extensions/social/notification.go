@@ -42,7 +42,7 @@ const notifiableItems = `
 	s.type IN ('comment', 'repost', 'quote')
 	  AND s.repo_url != ?
 	  AND COALESCE(c.origin_author_email, c.author_email) != ?
-	  AND NOT c.is_edit_commit AND NOT c.is_retracted
+	  AND NOT c.is_edit_commit AND NOT c.is_retracted AND (c.stale_since IS NULL OR c.is_virtual = 1)
 	  AND (
 	    s.original_repo_url = ?
 	    OR (EXISTS (

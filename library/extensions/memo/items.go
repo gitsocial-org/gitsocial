@@ -108,7 +108,7 @@ func GetMemoItemByRef(refStr, defaultRepoURL string) (*MemoItem, error) {
 	return GetMemoItemByHashPrefix(hash)
 }
 
-// GetMemoItemByHashPrefix retrieves a memo by hash prefix, refusing a prefix that several memos share.
+// GetMemoItemByHashPrefix retrieves a memo by hash prefix, its live row first, refusing a prefix that several memos share.
 func GetMemoItemByHashPrefix(hashPrefix string) (*MemoItem, error) {
 	hashes, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
 		rows, err := db.Query(`SELECT DISTINCT hash FROM memo_items_resolved
@@ -140,7 +140,7 @@ func GetMemoItemByHashPrefix(hashPrefix string) (*MemoItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) (*MemoItem, error) {
 		query := baseSelectFromView + `
 			WHERE v.hash = ? AND NOT v.is_edit_commit AND NOT v.is_retracted
-			ORDER BY v.timestamp DESC LIMIT 1`
+			ORDER BY ` + cache.LiveFirstOrder("v") + `, v.timestamp DESC LIMIT 1`
 		return scanResolvedRow(db.QueryRow(query, hashes[0]))
 	})
 }

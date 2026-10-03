@@ -106,7 +106,7 @@ func getForkIssueNotifications(userEmail string, forkURLs []string, unreadOnly b
 			WHERE v.type = 'issue'
 			  AND v.repo_url IN (` + ph + `)
 			  AND v.author_email != ?
-			  AND NOT v.is_edit_commit AND NOT v.is_retracted`
+			  AND ` + cache.LiveItemFilter
 		args := make([]interface{}, 0, len(forkURLs)+1)
 		for _, u := range forkURLs {
 			args = append(args, u)
@@ -191,7 +191,7 @@ func getAssignedIssueNotifications(userEmail string, unreadOnly bool, limit int)
 			WHERE v.type = 'issue'
 			  AND v.assignees LIKE '%' || ? || '%' ESCAPE '\'
 			  AND v.author_email != ?
-			  AND NOT v.is_edit_commit AND NOT v.is_retracted`
+			  AND ` + cache.LiveItemFilter
 		args := []interface{}{cache.EscapeLike(userEmail), userEmail}
 		if unreadOnly {
 			query += " AND nr.repo_url IS NULL"
@@ -286,6 +286,7 @@ func getIssueStateChangeNotifications(userEmail string, unreadOnly bool, limit i
 			  AND pr.type = 'issue'
 			  AND pr.assignees LIKE '%' || ? || '%' ESCAPE '\'
 			  AND COALESCE(ec.origin_author_email, ec.author_email) != ?
+			  AND ec.stale_since IS NULL
 			  AND NOT pr.is_retracted`
 		args := []interface{}{cache.EscapeLike(userEmail), userEmail}
 		if unreadOnly {

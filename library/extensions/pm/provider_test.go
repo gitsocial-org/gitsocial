@@ -147,3 +147,26 @@ func TestIssueStateChange_movedOnce(t *testing.T) {
 		t.Errorf("notifications = %+v, want one for the edit on its live row under main", got)
 	}
 }
+
+// TestAssignedIssueNotifications_excludesStaleCommit pins invariant 1 for the provider: an assigned issue whose row is stale does not notify.
+func TestAssignedIssueNotifications_excludesStaleCommit(t *testing.T) {
+	setupTestDB(t)
+	const repoURL, issue = "https://github.com/test/stale-assigned", "a551a1e00001"
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash: issue, RepoURL: repoURL, Branch: pmTestBranch, AuthorName: "Alice", AuthorEmail: "alice@x.com",
+		Message: "Issue", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
+	}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	if err := InsertPMItem(PMItem{RepoURL: repoURL, Hash: issue, Branch: pmTestBranch, Type: "issue", State: "open",
+		Assignees: sql.NullString{String: "me@x.com", Valid: true}}); err != nil {
+		t.Fatalf("InsertPMItem() error = %v", err)
+	}
+	if got, err := getAssignedIssueNotifications("me@x.com", false, 0); err != nil || len(got) != 1 {
+		t.Fatalf("getAssignedIssueNotifications() before the stale mark = %d, %v, want 1", len(got), err)
+	}
+	markStale(t, repoURL, issue, pmTestBranch)
+	if got, err := getAssignedIssueNotifications("me@x.com", false, 0); err != nil || len(got) != 0 {
+		t.Errorf("getAssignedIssueNotifications() after the stale mark = %d, %v, want 0", len(got), err)
+	}
+}

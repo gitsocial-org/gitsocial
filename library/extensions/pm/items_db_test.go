@@ -2,6 +2,7 @@
 package pm
 
 import (
+	"database/sql"
 	"strings"
 	"testing"
 	"time"
@@ -403,5 +404,79 @@ func TestGetIssue_ambiguousPrefix(t *testing.T) {
 	}
 	if got := GetMilestone("a1"); !got.Success {
 		t.Errorf("GetMilestone() of a prefix matching one milestone failed: %s", got.Error.Message)
+	}
+}
+
+// markStale sets stale_since on one cached row.
+func markStale(t *testing.T, repoURL, hash, branch string) {
+	t.Helper()
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`UPDATE core_commits SET stale_since = '2025-10-22T00:00:00Z' WHERE repo_url = ? AND hash = ? AND branch = ?`, repoURL, hash, branch)
+		return err
+	}); err != nil {
+		t.Fatalf("mark stale: %v", err)
+	}
+}
+
+// insertPMTestCommitOn caches one commit under the given branch.
+func insertPMTestCommitOn(t *testing.T, repoURL, hash, branch string) {
+	t.Helper()
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash: hash, RepoURL: repoURL, Branch: branch, AuthorName: "Test User", AuthorEmail: "test@test.com",
+		Message: "test commit", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
+	}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+}
+
+// TestGetPMItems_excludesStaleCommit pins invariant 1: a list and its count leave out an issue whose row is stale.
+func TestGetPMItems_excludesStaleCommit(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/test/stale"
+	for _, hash := range []string{"5a1e00000001", "5a1e00000002"} {
+		insertPMTestCommit(t, repoURL, hash)
+		if err := InsertPMItem(PMItem{RepoURL: repoURL, Hash: hash, Branch: pmTestBranch, Type: "issue", State: "open"}); err != nil {
+			t.Fatalf("InsertPMItem() error = %v", err)
+		}
+	}
+	markStale(t, repoURL, "5a1e00000002", pmTestBranch)
+
+	q := PMQuery{Types: []string{"issue"}, RepoURL: repoURL}
+	items, err := GetPMItems(q)
+	if err != nil {
+		t.Fatalf("GetPMItems() error = %v", err)
+	}
+	if len(items) != 1 || items[0].Hash != "5a1e00000001" {
+		t.Errorf("GetPMItems() = %d items, want the one live issue", len(items))
+	}
+	if count, err := GetPMItemsCount(q); err != nil || count != 1 {
+		t.Errorf("GetPMItemsCount() = %d, %v, want 1", count, err)
+	}
+}
+
+// TestGetPMItemByHashPrefix_liveFirst pins invariant 2: a prefix lookup opens the live row of a moved issue, and still finds a stale-only one.
+func TestGetPMItemByHashPrefix_liveFirst(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/test/prefix"
+	const moved, gone = "11fe00000001", "11fe00000002"
+	for _, row := range []struct{ hash, branch string }{{moved, "feature/x"}, {moved, pmTestBranch}, {gone, "feature/x"}} {
+		insertPMTestCommitOn(t, repoURL, row.hash, row.branch)
+		if err := InsertPMItem(PMItem{RepoURL: repoURL, Hash: row.hash, Branch: row.branch, Type: "issue", State: "open"}); err != nil {
+			t.Fatalf("InsertPMItem() error = %v", err)
+		}
+	}
+	markStale(t, repoURL, moved, "feature/x")
+	markStale(t, repoURL, gone, "feature/x")
+
+	if _, err := GetPMItemByHashPrefix("11fe000000", ""); err == nil {
+		t.Fatal("GetPMItemByHashPrefix() accepted a prefix two issues share")
+	}
+	item, err := GetPMItemByHashPrefix("11fe00000001", "")
+	if err != nil || item.Branch != pmTestBranch {
+		t.Errorf("GetPMItemByHashPrefix(moved) = %+v, %v, want the live row under %s", item, err, pmTestBranch)
+	}
+	item, err = GetPMItemByHashPrefix("11fe00000002", "")
+	if err != nil || item.Branch != "feature/x" {
+		t.Errorf("GetPMItemByHashPrefix(gone) = %+v, %v, want the stale row", item, err)
 	}
 }

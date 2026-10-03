@@ -652,3 +652,26 @@ func TestPRStateChange_movedOnce(t *testing.T) {
 		t.Errorf("notifications = %+v, want one for the edit on its live row under main", got)
 	}
 }
+
+// TestReviewRequestedNotifications_excludesStaleCommit pins invariant 1 for the provider: a stale pull request does not ask for a review.
+func TestReviewRequestedNotifications_excludesStaleCommit(t *testing.T) {
+	setupTestDB(t)
+	const repoURL, pr = "https://github.com/test/stale-requested", "5e71e5700001"
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash: pr, RepoURL: repoURL, Branch: reviewTestBranch, AuthorName: "Alice", AuthorEmail: "alice@x.com",
+		Message: "PR", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
+	}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	if err := InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: pr, Branch: reviewTestBranch, Type: "pull-request",
+		State: cache.ToNullString("open"), Reviewers: cache.ToNullString("me@x.com")}); err != nil {
+		t.Fatalf("InsertReviewItem() error = %v", err)
+	}
+	if got, err := getReviewRequestedNotifications("me@x.com", false); err != nil || len(got) != 1 {
+		t.Fatalf("getReviewRequestedNotifications() before the stale mark = %d, %v, want 1", len(got), err)
+	}
+	markStale(t, repoURL, pr, reviewTestBranch)
+	if got, err := getReviewRequestedNotifications("me@x.com", false); err != nil || len(got) != 0 {
+		t.Errorf("getReviewRequestedNotifications() after the stale mark = %d, %v, want 0", len(got), err)
+	}
+}

@@ -66,7 +66,7 @@ func getNewReleaseNotifications(workspaceURL, workdir string, unreadOnly bool, l
 			WHERE v.repo_url != ?
 			  AND v.repo_url IN (SELECT lr.repo_url FROM core_list_repositories lr
 			                     JOIN core_lists l ON lr.list_id = l.id WHERE l.workdir = ?)
-			  AND NOT v.is_edit_commit AND NOT v.is_retracted`
+			  AND ` + cache.LiveItemFilter
 		args := []interface{}{workspaceURL, workdir}
 		if unreadOnly {
 			query += " AND nr.repo_url IS NULL"
@@ -148,7 +148,7 @@ func countUnreadReleases(workspaceURL, workdir string) (int, error) {
 			WHERE v.repo_url != ?
 			  AND v.repo_url IN (SELECT lr.repo_url FROM core_list_repositories lr
 			                     JOIN core_lists l ON lr.list_id = l.id WHERE l.workdir = ?)
-			  AND NOT v.is_edit_commit AND NOT v.is_retracted
+			  AND `+cache.LiveItemFilter+`
 			  AND nr.repo_url IS NULL
 		`, workspaceURL, workdir).Scan(&count)
 		return count, err

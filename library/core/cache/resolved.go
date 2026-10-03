@@ -35,6 +35,9 @@ func LiveFirstOrder(alias string) string {
 	return alias + ".stale_since IS NOT NULL, " + alias + ".is_virtual"
 }
 
+// LiveItemFilter keeps the rows a list shows from a resolved view aliased v: not an edit, not retracted, and live or virtual.
+const LiveItemFilter = `NOT v.is_edit_commit AND NOT v.is_retracted AND (v.stale_since IS NULL OR v.is_virtual = 1)`
+
 // LiveBranch is a scalar subquery of the branch of the live row of a hash, from the SQL expressions of its repository and hash.
 func LiveBranch(repoExpr, hashExpr string) string {
 	return `(SELECT lb.branch FROM core_commits lb WHERE lb.repo_url = ` + repoExpr + ` AND lb.hash = ` + hashExpr +

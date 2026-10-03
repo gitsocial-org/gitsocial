@@ -137,7 +137,7 @@ func getForkPRNotifications(workspaceURL, userEmail string, forkURLs []string, u
 			WHERE v.type = 'pull-request'
 			  AND v.repo_url IN (` + ph + `)
 			  AND v.author_email != ?
-			  AND NOT v.is_edit_commit AND NOT v.is_retracted
+			  AND ` + cache.LiveItemFilter + `
 			  AND COALESCE(v.draft, 0) = 0`
 		args := make([]interface{}, 0, len(forkURLs)+2)
 		for _, u := range forkURLs {
@@ -214,7 +214,7 @@ func getFeedbackNotifications(workspaceURL, userEmail string, unreadOnly bool) (
 			    )
 			  )
 			  AND v.author_email != ?
-			  AND NOT v.is_edit_commit AND NOT v.is_retracted`
+			  AND ` + cache.LiveItemFilter
 		args := []interface{}{workspaceURL, userEmail, userEmail}
 		if unreadOnly {
 			query += " AND nr.repo_url IS NULL"
@@ -298,7 +298,7 @@ func getReviewRequestedNotifications(userEmail string, unreadOnly bool) ([]notif
 			  AND COALESCE(v.draft, 0) = 0
 			  AND v.reviewers LIKE '%' || ? || '%' ESCAPE '\'
 			  AND v.author_email != ?
-			  AND NOT v.is_edit_commit AND NOT v.is_retracted`
+			  AND ` + cache.LiveItemFilter
 		args := []interface{}{cache.EscapeLike(userEmail), userEmail}
 		if unreadOnly {
 			query += " AND nr.repo_url IS NULL"
@@ -386,6 +386,7 @@ func getPRStateChangeNotifications(userEmail string, unreadOnly bool) ([]notific
 			  AND pr.type = 'pull-request'
 			  AND pr.author_email = ?
 			  AND COALESCE(ec.origin_author_email, ec.author_email) != ?
+			  AND ec.stale_since IS NULL
 			  AND NOT pr.is_retracted`
 		args := []interface{}{userEmail, userEmail}
 		if unreadOnly {

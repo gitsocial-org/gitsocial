@@ -225,7 +225,7 @@ func GetPMItemByRef(refStr string, defaultRepoURL string) (*PMItem, error) {
 	return GetPMItem(ref.RepoURL, ref.Hash, ref.Branch)
 }
 
-// GetPMItemByHashPrefix finds a PM item by hash prefix and type (empty for any), refusing a prefix that several items share.
+// GetPMItemByHashPrefix finds a PM item by hash prefix and type (empty for any), its live row first, refusing a prefix that several items share.
 func GetPMItemByHashPrefix(hashPrefix, itemType string) (*PMItem, error) {
 	hashes, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
 		rows, err := db.Query(`SELECT DISTINCT hash FROM pm_items_resolved
@@ -257,7 +257,7 @@ func GetPMItemByHashPrefix(hashPrefix, itemType string) (*PMItem, error) {
 	return cache.QueryLocked(func(db *sql.DB) (*PMItem, error) {
 		query := baseSelectFromView + `
 			WHERE v.hash = ? AND (? = '' OR v.type = ?) AND NOT v.is_edit_commit AND NOT v.is_retracted
-			ORDER BY v.timestamp DESC LIMIT 1`
+			ORDER BY ` + cache.LiveFirstOrder("v") + `, v.timestamp DESC LIMIT 1`
 		return scanResolvedRow(db.QueryRow(query, hashes[0], itemType, itemType))
 	})
 }
@@ -402,8 +402,7 @@ func GetPMItems(q PMQuery) ([]PMItem, error) {
 			args = append(args, q.Cursor)
 		}
 
-		where = append(where, "NOT v.is_edit_commit")
-		where = append(where, "NOT v.is_retracted")
+		where = append(where, cache.LiveItemFilter)
 
 		sqlQuery := baseSelectFromView
 		if len(where) > 0 {
@@ -488,8 +487,7 @@ func GetPMItemsCount(q PMQuery) (int, error) {
 			where = append(where, "v.branch = ?")
 			args = append(args, q.Branch)
 		}
-		where = append(where, "NOT v.is_edit_commit")
-		where = append(where, "NOT v.is_retracted")
+		where = append(where, cache.LiveItemFilter)
 		query := "SELECT COUNT(*) FROM pm_items_resolved v"
 		if len(where) > 0 {
 			query += " WHERE " + strings.Join(where, " AND ")

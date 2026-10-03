@@ -158,7 +158,7 @@ func GetReviewItemByRef(refStr string, defaultRepoURL string) (*ReviewItem, erro
 	return GetReviewItem(repoURL, parsed.Value, parsed.Branch)
 }
 
-// findByHash resolves a full or short commit hash to one review item, refusing an ambiguous prefix.
+// findByHash resolves a full or short commit hash to one review item, its live row first, refusing an ambiguous prefix.
 func findByHash(repoURL, prefix string) (*ReviewItem, error) {
 	hashes, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
 		query := `SELECT DISTINCT hash FROM review_items_resolved
@@ -200,7 +200,7 @@ func findByHash(repoURL, prefix string) (*ReviewItem, error) {
 			query += " AND v.repo_url = ?"
 			args = append(args, repoURL)
 		}
-		return scanResolvedRow(db.QueryRow(query+" ORDER BY v.timestamp DESC LIMIT 1", args...))
+		return scanResolvedRow(db.QueryRow(query+" ORDER BY "+cache.LiveFirstOrder("v")+", v.timestamp DESC LIMIT 1", args...))
 	})
 }
 
@@ -264,8 +264,7 @@ func getReviewItems(q reviewQuery) ([]ReviewItem, error) {
 			args = append(args, q.Cursor)
 		}
 
-		where = append(where, "NOT v.is_edit_commit")
-		where = append(where, "NOT v.is_retracted")
+		where = append(where, cache.LiveItemFilter)
 
 		sqlQuery := baseSelectFromView
 		if len(where) > 0 {
@@ -301,7 +300,7 @@ func getReviewItems(q reviewQuery) ([]ReviewItem, error) {
 func CountPullRequests(repoURL string, states []string) (int, error) {
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
 		query := `SELECT COUNT(*) FROM review_items_resolved v
-			WHERE v.type = 'pull-request' AND NOT v.is_edit_commit AND NOT v.is_retracted`
+			WHERE v.type = 'pull-request' AND ` + cache.LiveItemFilter
 		var args []interface{}
 		if repoURL != "" {
 			query += " AND v.repo_url = ?"
@@ -384,8 +383,7 @@ func GetPullRequestsWithForks(workspaceURL, workspaceBranch string, forkURLs, st
 			where = append(where, "v.timestamp < ?")
 			args = append(args, cursor)
 		}
-		where = append(where, "NOT v.is_edit_commit")
-		where = append(where, "NOT v.is_retracted")
+		where = append(where, cache.LiveItemFilter)
 		sqlQuery := baseSelectFromView + " WHERE " + strings.Join(where, " AND ") + " ORDER BY v.timestamp DESC"
 		if limit > 0 {
 			sqlQuery += " LIMIT ?"

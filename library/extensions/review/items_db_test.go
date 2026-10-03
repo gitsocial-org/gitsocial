@@ -711,3 +711,77 @@ func TestGetStateChangeInfo_liveFirst(t *testing.T) {
 		t.Errorf("GetStateChangeInfo() = %+v (%v), want the merge on the live row", info, err)
 	}
 }
+
+// markStale sets stale_since on one cached row.
+func markStale(t *testing.T, repoURL, hash, branch string) {
+	t.Helper()
+	if err := cache.ExecLocked(func(db *sql.DB) error {
+		_, err := db.Exec(`UPDATE core_commits SET stale_since = '2025-10-22T00:00:00Z' WHERE repo_url = ? AND hash = ? AND branch = ?`, repoURL, hash, branch)
+		return err
+	}); err != nil {
+		t.Fatalf("mark stale: %v", err)
+	}
+}
+
+// insertReviewTestCommitOn caches one commit under the given branch.
+func insertReviewTestCommitOn(t *testing.T, repoURL, hash, branch string) {
+	t.Helper()
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash: hash, RepoURL: repoURL, Branch: branch, AuthorName: "Test User", AuthorEmail: "test@test.com",
+		Message: "test commit", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
+	}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+}
+
+// TestGetPullRequests_excludesStaleCommit pins invariant 1: the pull request list and its count leave out a stale row.
+func TestGetPullRequests_excludesStaleCommit(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/test/stale-pr"
+	for _, hash := range []string{"5a1e00000001", "5a1e00000002"} {
+		insertReviewTestCommit(t, repoURL, hash)
+		if err := InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: hash, Branch: reviewTestBranch, Type: "pull-request", State: cache.ToNullString("open")}); err != nil {
+			t.Fatalf("InsertReviewItem() error = %v", err)
+		}
+	}
+	markStale(t, repoURL, "5a1e00000002", reviewTestBranch)
+
+	res := GetPullRequests(repoURL, reviewTestBranch, nil, "", 0)
+	if !res.Success || len(res.Data) != 1 || res.Data[0].ID != "https://github.com/test/stale-pr#commit:5a1e00000001@"+reviewTestBranch {
+		t.Errorf("GetPullRequests() = %+v, want the one live pull request", res)
+	}
+	if count, err := CountPullRequests(repoURL, nil); err != nil || count != 1 {
+		t.Errorf("CountPullRequests() = %d, %v, want 1", count, err)
+	}
+	withForks := GetPullRequestsWithForks(repoURL, reviewTestBranch, []string{"https://github.com/fork/stale-pr"}, nil, "", 0)
+	if !withForks.Success || len(withForks.Data) != 1 {
+		t.Errorf("GetPullRequestsWithForks() = %+v, want the one live pull request", withForks)
+	}
+}
+
+// TestFindByHash_liveFirst pins invariant 2: a hash lookup opens the live row of a moved pull request, and still finds a stale-only one.
+func TestFindByHash_liveFirst(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/test/prefix-pr"
+	const moved, gone = "11fe00000001", "11fe00000002"
+	for _, row := range []struct{ hash, branch string }{{moved, "feature/x"}, {moved, reviewTestBranch}, {gone, "feature/x"}} {
+		insertReviewTestCommitOn(t, repoURL, row.hash, row.branch)
+		if err := InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: row.hash, Branch: row.branch, Type: "pull-request", State: cache.ToNullString("open")}); err != nil {
+			t.Fatalf("InsertReviewItem() error = %v", err)
+		}
+	}
+	markStale(t, repoURL, moved, "feature/x")
+	markStale(t, repoURL, gone, "feature/x")
+
+	if _, err := findByHash(repoURL, "11fe000000"); err == nil {
+		t.Fatal("findByHash() accepted a prefix two pull requests share")
+	}
+	item, err := findByHash(repoURL, moved)
+	if err != nil || item.Branch != reviewTestBranch {
+		t.Errorf("findByHash(moved) = %+v, %v, want the live row under %s", item, err, reviewTestBranch)
+	}
+	item, err = findByHash("", gone)
+	if err != nil || item.Branch != "feature/x" {
+		t.Errorf("findByHash(gone) = %+v, %v, want the stale row", item, err)
+	}
+}

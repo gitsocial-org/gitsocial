@@ -652,3 +652,36 @@ func TestGetAnalytics_withReviewData(t *testing.T) {
 		t.Errorf("TotalFeedback = %d, want 1", data.Review.TotalFeedback)
 	}
 }
+
+// TestGetAnalytics_milestoneCountsExcludeStale pins invariant 3: a stale issue does not count toward its milestone.
+func TestGetAnalytics_milestoneCountsExcludeStale(t *testing.T) {
+	setupTestDBWithAllSchemas(t)
+	now := time.Now().UTC()
+	repoURL := "https://github.com/user/repo"
+	insertTestCommit(t, repoURL, "milestone_h", now.Add(-3*time.Hour))
+	insertTestCommit(t, repoURL, "issue1_hash", now.Add(-1*time.Hour))
+	insertTestCommit(t, repoURL, "issue2_hash", now.Add(-2*time.Hour))
+	if err := ExecLocked(func(db *sql.DB) error {
+		if _, err := db.Exec(`INSERT INTO pm_items (repo_url, hash, branch, type, state, due) VALUES (?, ?, 'main', 'milestone', 'open', '2026-03-01')`, repoURL, "milestone_h"); err != nil {
+			return err
+		}
+		for _, row := range []struct{ hash, state string }{{"issue1_hash", "open"}, {"issue2_hash", "closed"}} {
+			if _, err := db.Exec(`INSERT INTO pm_items (repo_url, hash, branch, type, state, milestone_repo_url, milestone_hash, milestone_branch)
+				VALUES (?, ?, 'main', 'issue', ?, ?, 'milestone_h', 'main')`, repoURL, row.hash, row.state, repoURL); err != nil {
+				return err
+			}
+		}
+		_, err := db.Exec(`UPDATE core_commits SET stale_since = ? WHERE hash = 'issue2_hash'`, now.Format(time.RFC3339))
+		return err
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	data, err := GetAnalytics(repoURL)
+	if err != nil {
+		t.Fatalf("GetAnalytics() error = %v", err)
+	}
+	if len(data.PM.Milestones) != 1 || data.PM.Milestones[0].Total != 1 || data.PM.Milestones[0].Closed != 0 {
+		t.Errorf("Milestones = %+v, want one milestone with 1 open issue and no closed one", data.PM.Milestones)
+	}
+}

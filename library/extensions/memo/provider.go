@@ -98,7 +98,7 @@ func getMemoCommentNotifications(userEmail string, filter notifications.Filter) 
 			WHERE s.type = 'comment'
 			  AND COALESCE(mc.origin_author_email, mc.author_email) = ?
 			  AND COALESCE(c.origin_author_email, c.author_email) != ?
-			  AND NOT c.is_edit_commit AND NOT c.is_retracted`
+			  AND NOT c.is_edit_commit AND NOT c.is_retracted AND c.stale_since IS NULL`
 		args := []interface{}{userEmail, userEmail}
 		if filter.UnreadOnly {
 			query += " AND r.repo_url IS NULL"

@@ -703,9 +703,11 @@ func queryPMAnalytics(db *sql.DB, thirtyDaysAgo, repoURL string) *PMAnalytics {
 
 	// Milestones
 	q = `SELECT v.effective_message, p.due,
-		(SELECT COUNT(*) FROM pm_items i WHERE i.type='issue'
+		(SELECT COUNT(*) FROM pm_items i JOIN core_commits v ON i.repo_url=v.repo_url AND i.hash=v.hash AND i.branch=v.branch
+			WHERE i.type='issue' AND ` + resolvedFilter + `
 			AND i.milestone_repo_url=p.repo_url AND i.milestone_hash=p.hash AND i.milestone_branch=p.branch) total,
-		(SELECT COUNT(*) FROM pm_items i WHERE i.type='issue' AND i.state='closed'
+		(SELECT COUNT(*) FROM pm_items i JOIN core_commits v ON i.repo_url=v.repo_url AND i.hash=v.hash AND i.branch=v.branch
+			WHERE i.type='issue' AND i.state='closed' AND ` + resolvedFilter + `
 			AND i.milestone_repo_url=p.repo_url AND i.milestone_hash=p.hash AND i.milestone_branch=p.branch) closed
 		FROM pm_items p JOIN core_commits v ON p.repo_url=v.repo_url AND p.hash=v.hash AND p.branch=v.branch
 		WHERE p.type='milestone' AND p.state='open' AND ` + resolvedFilter + rfv + `
