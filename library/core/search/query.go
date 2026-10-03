@@ -102,7 +102,6 @@ func availableTables(db *sql.DB) []extTable {
 // buildSelect constructs the SELECT with LEFT JOINs for available extension tables.
 func buildSelect(tables []extTable, hasInteractions bool) string {
 	var socialTypeExpr, extCaseExpr, itemTypeExpr string
-	joins := make([]string, 0, len(tables)+1)
 
 	// Build COALESCE for social type
 	socialTypeExpr = "'unknown'"
@@ -173,13 +172,7 @@ func buildSelect(tables []extTable, hasInteractions bool) string {
 
 	commentsExpr := "0"
 	if hasInteractions {
-		joins = append(joins, "LEFT JOIN social_interactions sic ON r.repo_url = sic.repo_url AND r.hash = sic.hash AND r.branch = sic.branch")
 		commentsExpr = "COALESCE(sic.comments, 0)"
-	}
-
-	// Each extension row joins its own commit row, so a hash with a stale row gives one result.
-	for _, t := range tables {
-		joins = append(joins, "LEFT JOIN "+t.table+" "+t.alias+" ON r.repo_url = "+t.alias+".repo_url AND r.hash = "+t.alias+".hash AND r.branch = "+t.alias+".branch")
 	}
 
 	query := `SELECT r.repo_url, r.hash, r.branch,
@@ -204,10 +197,22 @@ func buildSelect(tables []extTable, hasInteractions bool) string {
 	       ` + commentsExpr + ` as item_comments,
 	       ` + milestoneExpr + ` as item_milestone,
 	       EXISTS(SELECT 1 FROM core_commits_version cv WHERE cv.canonical_repo_url = r.repo_url AND cv.canonical_hash = r.hash AND cv.edit_repo_url != cv.canonical_repo_url AND NOT EXISTS (SELECT 1 FROM core_edit_acceptances d WHERE d.edit_repo_url = cv.edit_repo_url AND d.edit_hash = cv.edit_hash AND d.edit_branch = cv.edit_branch) AND NOT EXISTS (SELECT 1 FROM core_edit_declines dd WHERE dd.edit_repo_url = cv.edit_repo_url AND dd.edit_hash = cv.edit_hash AND dd.edit_branch = cv.edit_branch)) as has_proposed
-	FROM core_commits r
-	` + strings.Join(joins, "\n\t")
+	` + buildFrom(tables, hasInteractions)
 
 	return query
+}
+
+// buildFrom constructs the FROM clause with the LEFT JOINs the list and the count query share.
+func buildFrom(tables []extTable, hasInteractions bool) string {
+	joins := make([]string, 0, len(tables)+1)
+	if hasInteractions {
+		joins = append(joins, "LEFT JOIN social_interactions sic ON r.repo_url = sic.repo_url AND r.hash = sic.hash AND r.branch = sic.branch")
+	}
+	// Each extension row joins its own commit row, so a hash with a stale row gives one result.
+	for _, t := range tables {
+		joins = append(joins, "LEFT JOIN "+t.table+" "+t.alias+" ON r.repo_url = "+t.alias+".repo_url AND r.hash = "+t.alias+".hash AND r.branch = "+t.alias+".branch")
+	}
+	return "FROM core_commits r\n\t" + strings.Join(joins, "\n\t")
 }
 
 // buildMilestoneExpr builds an expression for the message of an item's milestone.

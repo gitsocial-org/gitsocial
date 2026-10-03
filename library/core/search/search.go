@@ -3,6 +3,7 @@ package search
 
 import (
 	"database/sql"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -153,7 +154,10 @@ func Search(workdir string, params Params) (Result, error) {
 	// When SQL LIMIT is active, get the true total count for pagination
 	var trueTotal int
 	if q.SQLLimit > 0 {
-		trueTotal, _ = queryCount(q)
+		trueTotal, err = queryCount(q)
+		if err != nil {
+			return Result{}, fmt.Errorf("count results: %w", err)
+		}
 	}
 
 	items, err := queryItems(q)
@@ -254,7 +258,7 @@ func resolveListID(value string) string {
 func queryCount(q searchQuery) (int, error) {
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
 		whereClause, args := buildWhere(q, db)
-		query := "SELECT COUNT(*) FROM core_commits r" + whereClause
+		query := "SELECT COUNT(*) " + buildFrom(availableTables(db), tableExists(db, "social_interactions")) + whereClause
 		var count int
 		err := db.QueryRow(query, args...).Scan(&count)
 		return count, err

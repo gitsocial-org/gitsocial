@@ -607,3 +607,32 @@ func TestSearch_stateOfLatestEditByHash(t *testing.T) {
 		t.Errorf("items in state closed = %+v, want the issue through its edit", closed)
 	}
 }
+
+// TestSearch_countWithTypeFilterEqualsListLength checks that the count of a search with a social type filter matches its list, so a limit reports the total and has_more.
+func TestSearch_countWithTypeFilterEqualsListLength(t *testing.T) {
+	seedCorpus(t)
+	const hashSecondPost = "0000000000007777"
+	seedCommit(t, hashSecondPost, "Carol", "carol@test.com", "Hello again", "social", map[string]string{"type": "post"}, 6)
+	execTestSQL(t, `INSERT INTO social_items (repo_url, hash, branch, type) VALUES (?, ?, 'main', 'post')`, testRepoURL, hashSecondPost)
+
+	q := searchQuery{RepoURL: testRepoURL, Types: []string{"post"}}
+	items, err := queryItems(q)
+	if err != nil {
+		t.Fatalf("queryItems: %v", err)
+	}
+	count, err := queryCount(q)
+	if err != nil {
+		t.Fatalf("queryCount: %v", err)
+	}
+	if count != len(items) || count != 2 {
+		t.Errorf("count = %d, list has %d items, want 2 and 2", count, len(items))
+	}
+
+	result, err := Search(t.TempDir(), Params{Query: "type:post", Repo: testRepoURL, Limit: 1})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(result.Results) != 1 || result.Total != 2 || !result.HasMore {
+		t.Errorf("Search with limit 1 = %d results, total %d, has_more %v; want 1, 2, true", len(result.Results), result.Total, result.HasMore)
+	}
+}
