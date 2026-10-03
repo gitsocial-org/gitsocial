@@ -570,3 +570,18 @@ func TestDetectExtension_liveFirst(t *testing.T) {
 		}
 	}
 }
+
+// TestHashPrefixMatch pins invariant 4: a full hash matches by equality, a prefix by a range, both in lowercase.
+func TestHashPrefixMatch(t *testing.T) {
+	cond, args := HashPrefixMatch("hash", "ABCDEF123456")
+	if cond != "hash = ?" || len(args) != 1 || args[0] != "abcdef123456" {
+		t.Errorf("HashPrefixMatch(full) = %q %v, want an equality on the lowercase hash", cond, args)
+	}
+	cond, args = HashPrefixMatch("c.hash", "AbC")
+	if cond != "c.hash >= ? AND c.hash < ?" || len(args) != 2 || args[0] != "abc" || args[1] != "abcg" {
+		t.Errorf("HashPrefixMatch(prefix) = %q %v, want a range from abc to abcg", cond, args)
+	}
+	if cond, args = HashPrefixMatch("hash", ""); cond != "hash = ?" || len(args) != 1 || args[0] != "" {
+		t.Errorf("HashPrefixMatch(empty) = %q %v, want a term that matches no hash", cond, args)
+	}
+}

@@ -111,9 +111,10 @@ func GetMemoItemByRef(refStr, defaultRepoURL string) (*MemoItem, error) {
 // GetMemoItemByHashPrefix retrieves a memo by hash prefix, its live row first, refusing a prefix that several memos share.
 func GetMemoItemByHashPrefix(hashPrefix string) (*MemoItem, error) {
 	hashes, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
+		cond, args := cache.HashPrefixMatch("hash", hashPrefix)
 		rows, err := db.Query(`SELECT DISTINCT hash FROM memo_items_resolved
-			WHERE hash LIKE ? ESCAPE '\' AND NOT is_edit_commit AND NOT is_retracted
-			LIMIT 2`, cache.EscapeLike(hashPrefix)+"%")
+			WHERE `+cond+` AND NOT is_edit_commit AND NOT is_retracted
+			LIMIT 2`, args...)
 		if err != nil {
 			return nil, err
 		}

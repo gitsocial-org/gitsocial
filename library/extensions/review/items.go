@@ -161,9 +161,9 @@ func GetReviewItemByRef(refStr string, defaultRepoURL string) (*ReviewItem, erro
 // findByHash resolves a full or short commit hash to one review item, its live row first, refusing an ambiguous prefix.
 func findByHash(repoURL, prefix string) (*ReviewItem, error) {
 	hashes, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
+		cond, args := cache.HashPrefixMatch("hash", prefix)
 		query := `SELECT DISTINCT hash FROM review_items_resolved
-			WHERE hash LIKE ? ESCAPE '\' AND NOT is_edit_commit AND NOT is_retracted`
-		args := []interface{}{cache.EscapeLike(prefix) + "%"}
+			WHERE ` + cond + ` AND NOT is_edit_commit AND NOT is_retracted`
 		if repoURL != "" {
 			query += " AND repo_url = ?"
 			args = append(args, repoURL)

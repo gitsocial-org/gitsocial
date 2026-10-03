@@ -568,15 +568,17 @@ func MarkCommitsStaleByRepo(repoURL string, liveHashes map[string]bool) (int, er
 func MarkCommitsStaleByHome(repoURL string, homes map[string]string, settled []string) (int, error) {
 	repoURL = protocol.NormalizeURL(repoURL)
 	return QueryLocked(func(db *sql.DB) (int, error) {
-		query := `SELECT hash, branch, stale_since FROM core_commits WHERE repo_url = ? AND is_virtual = 0`
-		args := []interface{}{repoURL}
-		if len(settled) > 0 {
-			query += ` AND branch NOT IN (` + strings.TrimSuffix(strings.Repeat("?,", len(settled)), ",") + `)`
-			for _, branch := range settled {
-				args = append(args, branch)
-			}
+		branches, err := unsettledBranches(db, repoURL, settled)
+		if err != nil || len(branches) == 0 {
+			return 0, err
 		}
-		rows, err := db.Query(query, args...)
+		// branch IN (...) seeks idx_core_commits_repo_branch; NOT IN read every row of the repository.
+		args := []interface{}{repoURL}
+		for _, branch := range branches {
+			args = append(args, branch)
+		}
+		rows, err := db.Query(`SELECT hash, branch, stale_since FROM core_commits WHERE repo_url = ? AND is_virtual = 0
+			AND branch IN (`+strings.TrimSuffix(strings.Repeat("?,", len(branches)), ",")+`)`, args...)
 		if err != nil {
 			return 0, fmt.Errorf("query commits for stale check: %w", err)
 		}
@@ -626,6 +628,30 @@ func MarkCommitsStaleByHome(repoURL string, homes map[string]string, settled []s
 		}
 		return len(toStale), nil
 	})
+}
+
+// unsettledBranches returns the branches the repository has rows under, less the settled ones, from a skip-ahead scan of the branch index.
+func unsettledBranches(db *sql.DB, repoURL string, settled []string) ([]string, error) {
+	skip := make(map[string]bool, len(settled))
+	for _, branch := range settled {
+		skip[branch] = true
+	}
+	rows, err := db.Query(`SELECT DISTINCT branch FROM core_commits WHERE repo_url = ?`, repoURL)
+	if err != nil {
+		return nil, fmt.Errorf("query branches for stale check: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var branch string
+		if err := rows.Scan(&branch); err != nil {
+			return nil, fmt.Errorf("scan branch for stale check: %w", err)
+		}
+		if !skip[branch] {
+			out = append(out, branch)
+		}
+	}
+	return out, rows.Err()
 }
 
 // ResetRepositoryData deletes all commits and extension items for a repo.
@@ -681,10 +707,10 @@ type ExtensionHit struct {
 	Branch    string
 }
 
-// hashPrefixMatch returns a WHERE term on a hash column that seeks an index, and its arguments: equality for a 12-character hash, else a range over the lowercase hex prefix.
-func hashPrefixMatch(column, prefix string) (string, []interface{}) {
+// HashPrefixMatch returns a WHERE term on a hash column that seeks an index, and its arguments: equality for a 12-character hash, else a range over the lowercase hex prefix; an empty prefix matches no hash.
+func HashPrefixMatch(column, prefix string) (string, []interface{}) {
 	prefix = strings.ToLower(prefix)
-	if len(prefix) == 12 {
+	if len(prefix) == 12 || prefix == "" {
 		return column + " = ?", []interface{}{prefix}
 	}
 	// "g" sorts after every hex digit, so the range holds each hash that starts with the prefix.
@@ -697,7 +723,7 @@ func DetectExtension(hash string) ([]ExtensionHit, error) {
 		return nil, fmt.Errorf("detect extension: invalid hash")
 	}
 	return QueryLocked(func(db *sql.DB) ([]ExtensionHit, error) {
-		cond, condArgs := hashPrefixMatch("hash", hash)
+		cond, condArgs := HashPrefixMatch("hash", hash)
 		query := `SELECT h.ext, h.type, h.repo_url, h.hash, h.branch FROM (
 			SELECT 0 as rank, 'review' as ext, type, repo_url, hash, branch FROM review_items WHERE ` + cond + `
 			UNION ALL
@@ -740,7 +766,7 @@ func GetCommit(repoURL, hashPrefix, branch string) (Commit, error) {
 	return QueryLocked(func(db *sql.DB) (Commit, error) {
 		var c Commit
 		var ts string
-		cond, condArgs := hashPrefixMatch("hash", hashPrefix)
+		cond, condArgs := HashPrefixMatch("hash", hashPrefix)
 		args := append(append([]interface{}{repoURL}, condArgs...), branch)
 		err := db.QueryRow(`SELECT hash, repo_url, branch, author_name, author_email, message, timestamp FROM core_commits WHERE repo_url = ? AND `+cond+` AND branch = ? LIMIT 1`,
 			args...).Scan(&c.Hash, &c.RepoURL, &c.Branch, &c.AuthorName, &c.AuthorEmail, &c.Message, &ts)
@@ -763,7 +789,7 @@ func GetCommitOnAnyBranch(repoURL, hashPrefix string) (Commit, error) {
 	return QueryLocked(func(db *sql.DB) (Commit, error) {
 		var c Commit
 		var ts string
-		cond, condArgs := hashPrefixMatch("c.hash", hashPrefix)
+		cond, condArgs := HashPrefixMatch("c.hash", hashPrefix)
 		args := append([]interface{}{repoURL}, condArgs...)
 		err := db.QueryRow(`SELECT c.hash, c.repo_url, c.branch, c.author_name, c.author_email, c.message, c.timestamp FROM core_commits c WHERE c.repo_url = ? AND `+cond+` ORDER BY `+LiveFirstOrder("c")+`, c.branch LIMIT 1`,
 			args...).Scan(&c.Hash, &c.RepoURL, &c.Branch, &c.AuthorName, &c.AuthorEmail, &c.Message, &ts)

@@ -392,8 +392,9 @@ func buildWhere(q searchQuery, db *sql.DB, tables []extTable) (string, []interfa
 		}
 	}
 	if q.HashPrefix != "" {
-		where = append(where, "r.hash LIKE ? || '%'")
-		args = append(args, q.HashPrefix)
+		cond, condArgs := cache.HashPrefixMatch("r.hash", q.HashPrefix)
+		where = append(where, cond)
+		args = append(args, condArgs...)
 	}
 	// Bare hash terms match either the commit at that hash (self) or any commit
 	// whose message mentions the hash (cherry-pick / revert / trailer / prose).
@@ -401,8 +402,9 @@ func buildWhere(q searchQuery, db *sql.DB, tables []extTable) (string, []interfa
 	if len(q.HashTerms) > 0 {
 		var orClauses []string
 		for _, h := range q.HashTerms {
-			orClauses = append(orClauses, "r.hash LIKE ? || '%'")
-			args = append(args, h)
+			cond, condArgs := cache.HashPrefixMatch("r.hash", h)
+			orClauses = append(orClauses, cond)
+			args = append(args, condArgs...)
 			if ftsAvailable(db) {
 				orClauses = append(orClauses, "r.rowid IN (SELECT rowid FROM core_fts WHERE core_fts MATCH ?)")
 				args = append(args, ftsQuery(h))

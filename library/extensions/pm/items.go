@@ -228,9 +228,10 @@ func GetPMItemByRef(refStr string, defaultRepoURL string) (*PMItem, error) {
 // GetPMItemByHashPrefix finds a PM item by hash prefix and type (empty for any), its live row first, refusing a prefix that several items share.
 func GetPMItemByHashPrefix(hashPrefix, itemType string) (*PMItem, error) {
 	hashes, err := cache.QueryLocked(func(db *sql.DB) ([]string, error) {
+		cond, args := cache.HashPrefixMatch("hash", hashPrefix)
 		rows, err := db.Query(`SELECT DISTINCT hash FROM pm_items_resolved
-			WHERE hash LIKE ? ESCAPE '\' AND (? = '' OR type = ?) AND NOT is_edit_commit AND NOT is_retracted
-			LIMIT 2`, cache.EscapeLike(hashPrefix)+"%", itemType, itemType)
+			WHERE `+cond+` AND (? = '' OR type = ?) AND NOT is_edit_commit AND NOT is_retracted
+			LIMIT 2`, append(args, itemType, itemType)...)
 		if err != nil {
 			return nil, err
 		}

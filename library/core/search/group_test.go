@@ -673,3 +673,27 @@ func TestSearch_stateFilterReadsResolvedState(t *testing.T) {
 		t.Errorf("state closed = %+v, total %d; want the issue once in state closed", closed.Results, closed.Total)
 	}
 }
+
+// TestSearch_hashPrefixRange pins invariant 4: a hash filter matches the hashes that start with the prefix, in any case, and a LIKE wildcard in it matches nothing.
+func TestSearch_hashPrefixRange(t *testing.T) {
+	testutil.OpenTempCache(t, "")
+	if err := cache.InsertCommits([]cache.Commit{{
+		Hash: "abcdef123456", RepoURL: testRepoURL, Branch: "main", AuthorName: "Alice", AuthorEmail: "alice@test.com",
+		Message: "Prefixed", Timestamp: time.Date(2026, 3, 14, 12, 0, 0, 0, time.UTC),
+	}}); err != nil {
+		t.Fatalf("InsertCommits: %v", err)
+	}
+	for prefix, want := range map[string]int{"abcdef": 1, "ABCDEF": 1, "abcdef123456": 1, "abcdef_": 0, "abcdeg": 0} {
+		items, err := queryItems(searchQuery{RepoURL: testRepoURL, HashPrefix: prefix})
+		if err != nil {
+			t.Fatalf("queryItems(%q): %v", prefix, err)
+		}
+		if len(items) != want {
+			t.Errorf("hash prefix %q matched %d items, want %d", prefix, len(items), want)
+		}
+	}
+	items, err := queryItems(searchQuery{RepoURL: testRepoURL, HashTerms: []string{"ABCDEF12"}})
+	if err != nil || len(items) != 1 {
+		t.Errorf("hash term in upper case matched %d items, %v, want 1", len(items), err)
+	}
+}

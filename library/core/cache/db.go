@@ -116,9 +116,10 @@ CREATE INDEX IF NOT EXISTS idx_core_commits_repo_eff_timestamp
     ON core_commits(repo_url, effective_timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_core_commits_eff_author
     ON core_commits(repo_url, effective_author_email, effective_timestamp DESC);
--- DetectExtension and search hash-prefix filters scan by hash without a
--- repo_url, so the (repo_url, hash, branch) PK can't be used. A plain
--- index on hash makes "hash LIKE 'abc%'" an index range scan.
+-- DetectExtension and the search hash filter look a hash up without a
+-- repo_url, so the primary key does not serve them. The index serves
+-- hash = ? and a range on a prefix (HashPrefixMatch), not LIKE: the LIKE
+-- optimization does not apply to a BINARY column.
 CREATE INDEX IF NOT EXISTS idx_core_commits_hash ON core_commits(hash);
 
 -- Core: Version tracking (edit relationships)
