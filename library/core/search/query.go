@@ -148,15 +148,7 @@ func buildSelect(tables []extTable, hasInteractions bool) string {
 		itemTypeExpr = "'unknown'"
 	}
 
-	// Track available aliases for extension-specific columns
-	has := map[string]bool{}
-	for _, t := range tables {
-		has[t.alias] = true
-	}
-
-	// Build extension-specific column expressions
-	// State resolves through version chain: latest edit's state, then canonical's raw state.
-	// This handles cases where applyEditToCanonical hasn't propagated to the canonical's raw row.
+	has := aliasSet(tables)
 	stateExpr := buildResolvedStateExpr(has)
 	assigneesExpr := coalesceStr(has, [][2]string{{"pi", "assignees"}})
 	dueExpr := coalesceStr(has, [][2]string{{"pi", "due"}})
@@ -213,6 +205,15 @@ func buildFrom(tables []extTable, hasInteractions bool) string {
 		joins = append(joins, "LEFT JOIN "+t.table+" "+t.alias+" ON r.repo_url = "+t.alias+".repo_url AND r.hash = "+t.alias+".hash AND r.branch = "+t.alias+".branch")
 	}
 	return "FROM core_commits r\n\t" + strings.Join(joins, "\n\t")
+}
+
+// aliasSet maps the alias of each available extension table to true.
+func aliasSet(tables []extTable) map[string]bool {
+	has := make(map[string]bool, len(tables))
+	for _, t := range tables {
+		has[t.alias] = true
+	}
+	return has
 }
 
 // buildMilestoneExpr builds an expression for the message of an item's milestone.
@@ -273,15 +274,6 @@ func buildResolvedStateExpr(has map[string]bool) string {
 	return "COALESCE(" + strings.Join(parts, ", ") + ", '')"
 }
 
-// stateExistsClause builds a WHERE clause that checks state on both the canonical's
-// raw extension row AND the latest edit's extension row via the version chain.
-func stateExistsClause(table, state string, args *[]interface{}) string {
-	*args = append(*args, state, state)
-	return `(EXISTS (SELECT 1 FROM ` + table + ` _sr WHERE _sr.repo_url = r.repo_url AND _sr.hash = r.hash AND _sr.branch = r.branch AND _sr.state = ?)` +
-		` OR EXISTS (SELECT 1 FROM core_commits_version _sv JOIN ` + table + ` _se ON _sv.edit_repo_url = _se.repo_url AND _sv.edit_hash = _se.hash AND _sv.edit_branch = _se.branch` +
-		` WHERE _sv.canonical_repo_url = r.repo_url AND _sv.canonical_hash = r.hash AND _sv.is_retracted = 0 AND _sv.edit_repo_url = _sv.canonical_repo_url AND _se.state = ?))`
-}
-
 // coalesceStr builds a COALESCE expression for text columns from available aliases.
 func coalesceStr(has map[string]bool, aliasCols [][2]string) string {
 	var parts []string
@@ -311,7 +303,7 @@ func coalesceInt(has map[string]bool, aliasCols [][2]string) string {
 }
 
 // buildWhere constructs WHERE clause and args for search queries.
-func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
+func buildWhere(q searchQuery, db *sql.DB, tables []extTable) (string, []interface{}) {
 	var args []interface{}
 	var where []string
 
@@ -443,21 +435,10 @@ func buildWhere(q searchQuery, db *sql.DB) (string, []interface{}) {
 		where = append(where, subq)
 	}
 
-	// Extension-specific filters check both the canonical's raw row and the latest
-	// edit's row via the version chain, so stale canonical rows are still matched.
+	// The state filter reads the resolved state, the same expression the list query shows.
 	if q.State != "" {
-		var stateClauses []string
-		if q.State == "open" || q.State == "closed" || q.State == "canceled" {
-			stateClauses = append(stateClauses, stateExistsClause("pm_items", q.State, &args))
-		}
-		if q.State == "open" || q.State == "merged" || q.State == "closed" {
-			stateClauses = append(stateClauses, stateExistsClause("review_items", q.State, &args))
-		}
-		if len(stateClauses) == 1 {
-			where = append(where, stateClauses[0])
-		} else if len(stateClauses) > 1 {
-			where = append(where, "("+strings.Join(stateClauses, " OR ")+")")
-		}
+		where = append(where, buildResolvedStateExpr(aliasSet(tables))+" = ?")
+		args = append(args, q.State)
 	}
 	if q.Draft {
 		where = append(where, "EXISTS (SELECT 1 FROM review_items rir2 WHERE rir2.repo_url = r.repo_url AND rir2.hash = r.hash AND rir2.branch = r.branch AND rir2.draft = 1)")

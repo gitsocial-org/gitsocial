@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 )
@@ -634,5 +635,41 @@ func TestSearch_countWithTypeFilterEqualsListLength(t *testing.T) {
 	}
 	if len(result.Results) != 1 || result.Total != 2 || !result.HasMore {
 		t.Errorf("Search with limit 1 = %d results, total %d, has_more %v; want 1, 2, true", len(result.Results), result.Total, result.HasMore)
+	}
+}
+
+// TestSearch_stateFilterReadsResolvedState checks that an issue closed by an edit is not in state open and is in state closed.
+func TestSearch_stateFilterReadsResolvedState(t *testing.T) {
+	cache.RegisterSchema("pm", pmSchemaForSearchTest)
+	cache.RegisterSchema("review", reviewSchemaForSearchTest)
+	testutil.OpenTempCache(t, "")
+	workdir := t.TempDir()
+	repoURL := gitmsg.ResolveRepoURL(workdir)
+	const issue, closing = "abcabcabcabc", "bcdbcdbcdbcd"
+	for _, c := range []cache.Commit{
+		{Hash: issue, Message: "Issue\n\nGitMsg: ext=\"pm\"; type=\"issue\"; state=\"open\"; v=\"0.1.0\"", Timestamp: time.Date(2026, 3, 14, 12, 0, 0, 0, time.UTC)},
+		{Hash: closing, Message: "Issue\n\nGitMsg: ext=\"pm\"; type=\"issue\"; state=\"closed\"; edits=\"#commit:" + issue + "\"; v=\"0.1.0\"", Timestamp: time.Date(2026, 3, 14, 13, 0, 0, 0, time.UTC)},
+	} {
+		c.RepoURL, c.Branch, c.AuthorName, c.AuthorEmail = repoURL, "main", "Alice", "alice@test.com"
+		if err := cache.InsertCommits([]cache.Commit{c}); err != nil {
+			t.Fatalf("InsertCommits(%s): %v", c.Hash, err)
+		}
+	}
+	execTestSQL(t, `INSERT INTO pm_items (repo_url, hash, branch, type, state) VALUES (?, ?, 'main', 'issue', 'open'), (?, ?, 'main', 'issue', 'closed')`,
+		repoURL, issue, repoURL, closing)
+
+	open, err := Search(workdir, Params{Type: "issue", State: "open"})
+	if err != nil {
+		t.Fatalf("Search open: %v", err)
+	}
+	if len(open.Results) != 0 || open.Total != 0 {
+		t.Errorf("state open = %d results, total %d; want none for an issue closed by an edit", len(open.Results), open.Total)
+	}
+	closed, err := Search(workdir, Params{Type: "issue", State: "closed"})
+	if err != nil {
+		t.Fatalf("Search closed: %v", err)
+	}
+	if len(closed.Results) != 1 || closed.Results[0].Hash != issue || closed.Results[0].State != "closed" || closed.Total != 1 {
+		t.Errorf("state closed = %+v, total %d; want the issue once in state closed", closed.Results, closed.Total)
 	}
 }

@@ -257,8 +257,9 @@ func resolveListID(value string) string {
 // queryCount returns the total count of items matching the search filters (no LIMIT).
 func queryCount(q searchQuery) (int, error) {
 	return cache.QueryLocked(func(db *sql.DB) (int, error) {
-		whereClause, args := buildWhere(q, db)
-		query := "SELECT COUNT(*) " + buildFrom(availableTables(db), tableExists(db, "social_interactions")) + whereClause
+		tables := availableTables(db)
+		whereClause, args := buildWhere(q, db, tables)
+		query := "SELECT COUNT(*) " + buildFrom(tables, tableExists(db, "social_interactions")) + whereClause
 		var count int
 		err := db.QueryRow(query, args...).Scan(&count)
 		return count, err
@@ -271,7 +272,7 @@ func queryItems(q searchQuery) ([]Item, error) {
 		tables := availableTables(db)
 		hasInteractions := tableExists(db, "social_interactions")
 		selectClause := buildSelect(tables, hasInteractions)
-		whereClause, args := buildWhere(q, db)
+		whereClause, args := buildWhere(q, db, tables)
 		query := selectClause + whereClause + " ORDER BY r.effective_timestamp DESC"
 		if q.SQLLimit > 0 {
 			query += " LIMIT ?"
