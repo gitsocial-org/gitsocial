@@ -733,11 +733,12 @@
   /* Columns grow from the 15rem floor, so the space a collapsed or hidden
      column frees goes to the expanded ones instead of staying blank. */
   .board-col { flex: 1 1 15rem; min-width: 15rem; background: var(--chip); border-radius: var(--r-panel); padding: var(--sp-3); }
-  /* A collapsed column shows only its slim header, so it stops taking a full lane
-     of horizontal space while remaining a visible, re-expandable stub. A column
-     with no issues starts collapsed (boardColumnEl), so it keeps its place and
-     its count without an empty lane. */
+  /* A collapsed column is an upright strip: caret, name set top to bottom, hide.
+     A column with no issues starts collapsed (boardColumnEl), so it keeps its
+     place and its count without an empty lane. */
   .board-col.board-col-collapsed { flex: 0 0 auto; min-width: 0; }
+  .board-col-collapsed .board-col-head { flex-direction: column; margin-bottom: 0; }
+  .board-col-collapsed .board-col-name { writing-mode: vertical-rl; }
   /* Edge fades on the scroll box, the .home-fade cue turned sideways: a quiet
      gradient over a clipped edge, toggled from the scroll position in JS. The
      fades stop above the row's scrollbar gutter. */
