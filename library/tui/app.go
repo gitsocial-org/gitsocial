@@ -390,18 +390,27 @@ func (m Model) loadInitialUnreadCount() tea.Cmd {
 	}
 }
 
-// loadInitialUnpushedCount loads the unpushed commit count across all extension branches.
+// loadInitialUnpushedCount counts the commits a push sends: the extension branches and the code branches a push publishes.
 func (m Model) loadInitialUnpushedCount() tea.Cmd {
 	workdir := m.workdir
 	return func() tea.Msg {
-		total := 0
-		for _, branch := range gitmsg.GetExtBranches(workdir) {
-			if counts, err := gitmsg.GetUnpushedCounts(workdir, branch, ""); err == nil && counts != nil {
-				total += counts.Posts
-			}
-		}
-		return tuicore.UnpushedCountMsg{Count: total}
+		return tuicore.UnpushedCountMsg{Count: countUnpushed(workdir)}
 	}
+}
+
+// countUnpushed sums the unpushed commits of the extension branches and of the code branches a push publishes.
+func countUnpushed(workdir string) int {
+	total := 0
+	for _, branch := range gitmsg.GetExtBranches(workdir) {
+		if counts, err := gitmsg.GetUnpushedCounts(workdir, branch, ""); err == nil && counts != nil {
+			total += counts.Posts
+		}
+	}
+	codeBranches, _ := review.CodeBranchesToPush(workdir, git.PushRemote(workdir))
+	for _, n := range codeBranches {
+		total += n
+	}
+	return total
 }
 
 // loadUnpushedLFSCount runs `git lfs push --dry-run` against origin (network)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
@@ -111,6 +112,46 @@ func TestBuildRemotePickerChoices_PersistRoundDropsExtras(t *testing.T) {
 }
 
 // TestResolveRefLocation maps a ref through the cache: a pm hit opens the issue, a cached commit its post on the live row, a miss the raw commit.
+// TestCountUnpushed_countsWhatAPushSends: the badge sums the extension branches and the default branch ahead of the remote.
+func TestCountUnpushed_countsWhatAPushSends(t *testing.T) {
+	dir := t.TempDir()
+	if err := git.Init(dir, "main"); err != nil {
+		t.Fatalf("git.Init() error = %v", err)
+	}
+	for _, args := range [][]string{{"config", "user.email", "t@t.com"}, {"config", "user.name", "T"}} {
+		if _, err := git.ExecGit(dir, args); err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
+	}
+	commit := func(message string) {
+		if _, err := git.CreateCommit(dir, git.CommitOptions{Message: message, AllowEmpty: true}); err != nil {
+			t.Fatalf("CreateCommit(%q) error = %v", message, err)
+		}
+	}
+	commit("base")
+	bare := t.TempDir()
+	for _, args := range [][]string{{"init", "-q", "--bare", bare}, {"remote", "add", "origin", bare}, {"push", "-q", "origin", "main"}} {
+		if _, err := git.ExecGit(dir, args); err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
+	}
+	if got := countUnpushed(dir); got != 0 {
+		t.Fatalf("countUnpushed() after the push = %d, want 0", got)
+	}
+	commit("code one")
+	commit("code two")
+	if _, err := git.ExecGit(dir, []string{"checkout", "-q", "--orphan", "gitmsg/pm"}); err != nil {
+		t.Fatalf("checkout: %v", err)
+	}
+	commit("an issue")
+	if _, err := git.ExecGit(dir, []string{"checkout", "-q", "main"}); err != nil {
+		t.Fatalf("checkout: %v", err)
+	}
+	if got := countUnpushed(dir); got != 3 {
+		t.Errorf("countUnpushed() = %d, want 3 (two code commits and one issue)", got)
+	}
+}
+
 func TestResolveRefLocation(t *testing.T) {
 	testutil.OpenTempCache(t, "")
 	hash := "cafe12345678"
