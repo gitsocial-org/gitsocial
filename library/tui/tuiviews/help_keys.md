@@ -135,6 +135,7 @@
 |-----|--------|
 | CardList navigation | (see Shared Navigation) |
 | `m` | Read |
+| `M` | Read all |
 | `u` | Unread |
 | `U` | Unread all |
 | `r` | Refresh |
@@ -580,6 +581,7 @@
 | `d` | Diff |
 | `r` | Review |
 | `c` | Comment |
+| `M` | Merge |
 | `C` | Close |
 | `e` | Edit |
 | `a` | Actions |

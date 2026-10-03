@@ -75,6 +75,8 @@ func TestDisplay(t *testing.T) {
 		// The fork's cross-repo edit of the workspace issue is the seeded event.
 		assertRendersItem(t, h, tuicore.Location{Path: "/notifications"}, "Bob edited your item", "bob/repo")
 		assertFitsTerminal(t, h)
+		// M is a reserved sidebar letter; the footer shows the view's read all on request.
+		assertContains(t, stripANSI(h.Rendered()), "M:read all")
 	})
 	t.Run("Memos", func(t *testing.T) {
 		assertRendersItem(t, h, tuicore.Location{Path: "/memo/list"},

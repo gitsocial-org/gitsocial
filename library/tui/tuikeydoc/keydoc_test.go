@@ -128,3 +128,16 @@ func TestGeneratedKeysDocIsCurrent(t *testing.T) {
 		t.Error("documentation/TUI-KEYS.md drifted from the generator; run: gitsocial docs keybindings > documentation/TUI-KEYS.md, then go generate ./library/tui/tuiviews")
 	}
 }
+
+// TestViewActionOnReservedLetter keeps a view's own action on an extension letter in its table and drops the sidebar label.
+func TestViewActionOnReservedLetter(t *testing.T) {
+	if !viewActionOnReservedLetter(KeyDoc{Key: "M", Label: "read all"}) {
+		t.Error("M:read all should keep its row")
+	}
+	if viewActionOnReservedLetter(KeyDoc{Key: "M", Label: "memos"}) {
+		t.Error("M:memos is the sidebar label and should be dropped")
+	}
+	if viewActionOnReservedLetter(KeyDoc{Key: "q", Label: "quit"}) {
+		t.Error("q is not an extension letter")
+	}
+}

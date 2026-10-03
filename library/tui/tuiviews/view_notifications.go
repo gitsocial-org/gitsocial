@@ -476,7 +476,8 @@ func (v *NotificationsView) Render(state *tuicore.State) string {
 		content = v.cardlist.View()
 	}
 
-	footer := tuicore.RenderFooter(state.Registry, tuicore.Notifications, nil)
+	// M (read all) is bound to a letter reserved for a sidebar shortcut, so the footer shows it only on request.
+	footer := tuicore.RenderFooterInclude(state.Registry, tuicore.Notifications, nil, map[string]bool{"M": true})
 	return wrapper.Render(content, footer)
 }
 

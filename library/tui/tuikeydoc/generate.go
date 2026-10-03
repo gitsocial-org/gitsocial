@@ -101,7 +101,8 @@ func writeContext(b *strings.Builder, ctx ContextDoc) {
 		"@": true, "%": true,
 	}
 	for _, k := range ctx.Keys {
-		if globalKeys[k.Key] {
+		// A view action on a reserved letter, such as M:merge or M:read all, keeps its row; the sidebar label does not.
+		if globalKeys[k.Key] && !viewActionOnReservedLetter(k) {
 			continue
 		}
 		// Skip global esc/back (but keep view-specific esc like "exit input", "exit mode")
@@ -119,6 +120,16 @@ func writeContext(b *strings.Builder, ctx ContextDoc) {
 		fmt.Fprintf(b, "| `%s` | %s |\n", k.Key, capitalize(k.Label))
 	}
 	b.WriteString("\n")
+}
+
+// viewActionOnReservedLetter reports whether a binding on an extension letter carries a view's own label rather than the sidebar one.
+func viewActionOnReservedLetter(k KeyDoc) bool {
+	for _, ek := range tuicore.ExtensionKeys {
+		if ek.Key == k.Key {
+			return k.Label != ek.Label
+		}
+	}
+	return false
 }
 
 // capitalize uppercases the first letter of a string.
