@@ -347,6 +347,7 @@ The workspace sync stores each commit under one branch, its home, and the home i
 | Origin sync | ingests with the sync functions in `Options.WorkspaceSyncs`; with none, the gate stays open for the caller | `TestSyncWorkspaceOrigin_runsTheWorkspaceSyncs` |
 | Rebuild | the live rows equal those of a cache built from empty | `TestWorkspaceSync_rebuildEqualsIncremental` |
 | Lookup of a commit | by repository and hash, the live row first | `TestGetCommitOnAnyBranch_prefersLive` |
+| Reference target | matched by repository and hash, the live row first; the stored reference keeps its branch | `TestGetComments_movedCommit`, `TestRecount_movedTarget`, `TestGetTrailerRefsTo_branchlessTrailer`, `TestResolveRefLocation` |
 | Stale source | no mention notification, no trailer notification and no trailer reference | `TestMentionProvider_excludesStaleCommit`, `TestGetTrailerRefsTo_excludesStaleSource` |
 
 A different repository, a mirror or the upstream of a fork, is not workspace content when it is only a git remote. It gets into the cache through a list or a fork registration, under its own URL.
