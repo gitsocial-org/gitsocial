@@ -18,6 +18,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
+// allBranches is the branch value that reads every branch of a repository.
+const allBranches = "*"
+
 // repositoryView displays posts from a specific repository.
 type repositoryView struct {
 	name        string
@@ -151,7 +154,7 @@ func (v *repositoryView) Activate(state *tuicore.State) tea.Cmd {
 		// My repository
 		v.isWorkspace = true
 		v.url = originURL
-		v.branch = gitmsg.GetExtBranch(state.Workdir, "social")
+		v.branch = branchOrAll(branch)
 		v.originURL = v.url
 		v.name = "My Repository"
 		v.fetchedMonths = nil
@@ -161,10 +164,7 @@ func (v *repositoryView) Activate(state *tuicore.State) tea.Cmd {
 	// Remote repository
 	v.isWorkspace = false
 	v.url = url
-	v.branch = branch
-	if v.branch == "" {
-		v.branch = "main"
-	}
+	v.branch = branchOrAll(branch)
 	v.name = protocol.GetDisplayName(url)
 
 	// Get last fetch time from cache
@@ -200,6 +200,34 @@ func (v *repositoryView) Activate(state *tuicore.State) tea.Cmd {
 	return v.loadPosts()
 }
 
+// branchOrAll returns the branch a location names, or every branch when it names none.
+func branchOrAll(branch string) string {
+	if branch == "" {
+		return allBranches
+	}
+	return branch
+}
+
+// scope returns the GetPosts scope of the view, with the branch when one is picked.
+func (v *repositoryView) scope() string {
+	scope := "repository:workspace"
+	if !v.isWorkspace {
+		scope = "repository:" + v.url
+	}
+	if v.branch != allBranches {
+		scope += "@" + v.branch
+	}
+	return scope
+}
+
+// scopeBranch returns the branch the social queries take, empty for every branch; the fetch takes v.branch, where * is every branch.
+func (v *repositoryView) scopeBranch() string {
+	if v.branch == allBranches {
+		return ""
+	}
+	return v.branch
+}
+
 // loadPosts fetches posts for the current repository. The total count is
 // loaded asynchronously so the page render isn't blocked on a multi-second
 // COUNT(*) over huge repos.
@@ -209,16 +237,10 @@ func (v *repositoryView) loadPosts() tea.Cmd {
 	v.pag.HasMore = false
 	workdir := v.workdir
 	limit := v.pag.Limit()
-	scope := "repository:workspace"
-	if !v.isWorkspace {
-		scope = "repository:" + v.url
-		if v.branch != "" {
-			scope += "@" + v.branch
-		}
-	}
+	scope := v.scope()
 	isWs := v.isWorkspace
 	repoURL := v.url
-	repoBranch := v.branch
+	repoBranch := v.scopeBranch()
 	pageCmd := func() tea.Msg {
 		result := social.GetPosts(workdir, scope, &social.GetPostsOptions{Limit: limit + 1})
 		if !result.Success {
@@ -238,13 +260,7 @@ func (v *repositoryView) loadMorePosts() tea.Cmd {
 	v.pag.StartLoading()
 	workdir := v.workdir
 	cursor := v.pag.Cursor
-	scope := "repository:workspace"
-	if !v.isWorkspace {
-		scope = "repository:" + v.url
-		if v.branch != "" {
-			scope += "@" + v.branch
-		}
-	}
+	scope := v.scope()
 	return func() tea.Msg {
 		result := social.GetPosts(workdir, scope, &social.GetPostsOptions{Limit: tuicore.PageSize + 1, Cursor: cursor})
 		if !result.Success {
@@ -549,14 +565,15 @@ func (v *repositoryView) HeaderInfo() (position int, total string) {
 }
 
 // Title returns the fully formatted header for the repository view.
-// Format: repo name · n/m · x ago · date range · [lists] · url · @branch
+// Format: repo name · n/m · x ago · date range · [lists] · url#branch:name, or url · all branches
 func (v *repositoryView) Title() string {
 	if v.isWorkspace {
 		pos, total := v.HeaderInfo()
+		title := "⎇  " + v.name
 		if total != "" {
-			return tuicore.MeTitle.Render("⎇  " + v.name + " · " + fmt.Sprintf("%d/%s", pos, total))
+			title += " · " + fmt.Sprintf("%d/%s", pos, total)
 		}
-		return tuicore.MeTitle.Render("⎇  " + v.name)
+		return tuicore.MeTitle.Render(title) + " · " + tuicore.Dim.Render(v.branchLabel())
 	}
 	if v.name == "" {
 		return "Repository"
@@ -605,19 +622,27 @@ func (v *repositoryView) Title() string {
 		dimParts = append(dimParts, indicator)
 	}
 	if v.url != "" {
-		branch := v.branch
-		if branch == "" {
-			branch = "main"
-		}
-		repoRef := protocol.CreateRef(protocol.RefTypeBranch, branch, v.url, "")
-		treeURL := protocol.BranchURL(v.url, branch)
-		dimParts = append(dimParts, tuicore.Hyperlink(treeURL, repoRef))
+		dimParts = append(dimParts, v.branchLabel())
 	}
 	result := strings.Join(styledParts, " · ")
 	if len(dimParts) > 0 {
 		result += " · " + tuicore.Dim.Render(strings.Join(dimParts, " · "))
 	}
 	return result
+}
+
+// branchLabel returns the branch part of the title: the branch ref, linked for a remote, or "all branches".
+func (v *repositoryView) branchLabel() string {
+	switch {
+	case v.isWorkspace && v.branch == allBranches:
+		return "all branches"
+	case v.isWorkspace:
+		return protocol.CreateRef(protocol.RefTypeBranch, v.branch, "", "")
+	case v.branch == allBranches:
+		return tuicore.Hyperlink(v.url, v.url) + " · all branches"
+	}
+	repoRef := protocol.CreateRef(protocol.RefTypeBranch, v.branch, v.url, "")
+	return tuicore.Hyperlink(protocol.BranchURL(v.url, v.branch), repoRef)
 }
 
 // GetDisplayItemAt returns the full DisplayItem at the given index.
