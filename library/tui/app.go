@@ -2058,9 +2058,12 @@ func buildImportConfirmPrompt(repoURL string, found, mapped importpkg.ItemCounts
 	return "Import " + strings.Join(parts, ", ") + " from " + repoURL + "?"
 }
 
-// resolveRefLocation maps a commit or tag ref to its item's view through the cache, else to the raw commit diff.
+// resolveRefLocation maps a commit or tag ref to its item's view through the cache, else to the raw commit diff; a branch ref opens the Repository view on that branch.
 func resolveRefLocation(ref, workspaceURL string) tuicore.Location {
 	parsed := protocol.ParseRef(ref)
+	if parsed.Type == protocol.RefTypeBranch && parsed.Value != "" {
+		return tuicore.LocRepository(parsed.Repository, parsed.Value)
+	}
 	if parsed.Type == protocol.RefTypeTag && parsed.Value != "" {
 		if item, err := release.GetReleaseItemByTagOrVersion(parsed.Value); err == nil {
 			return tuicore.LocReleaseDetail(item.Hash)

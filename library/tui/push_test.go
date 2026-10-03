@@ -173,6 +173,15 @@ func TestResolveRefLocation(t *testing.T) {
 	if got.Path != want.Path || got.Param("issueID") != want.Param("issueID") {
 		t.Errorf("resolveRefLocation = %+v, want %+v", got, want)
 	}
+	branch := resolveRefLocation("#branch:feature/x", "https://example.com/r")
+	wantBranch := tuicore.LocRepository("", "feature/x")
+	if branch.Path != wantBranch.Path || branch.Param("url") != "" || branch.Param("branch") != "feature/x" {
+		t.Errorf("branch ref = %+v, want the workspace Repository view on the branch %+v", branch, wantBranch)
+	}
+	remote := resolveRefLocation("https://example.com/other#branch:main", "https://example.com/r")
+	if remote.Param("url") != "https://example.com/other" || remote.Param("branch") != "main" {
+		t.Errorf("remote branch ref = %+v, want the Repository view of that repository on main", remote)
+	}
 	code := "beef12345678"
 	if err := cache.InsertCommits([]cache.Commit{{
 		Hash: code, RepoURL: "https://example.com/r", Branch: "feature/x",

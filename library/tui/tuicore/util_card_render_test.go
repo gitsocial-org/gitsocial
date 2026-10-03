@@ -173,13 +173,13 @@ func TestVerifiedBadgeComesFromFlags(t *testing.T) {
 
 // TestExtractURLs_refsRideTheList: a commit ref extracts beside bare URLs and restores as an internal anchor.
 func TestExtractURLs_refsRideTheList(t *testing.T) {
-	content := "fixed in #commit:abc123def456@gitmsg/pm, see https://example.com and #commit:1234567."
+	content := "fixed in #commit:abc123def456@gitmsg/pm, see https://example.com and #commit:1234567, on #branch:feature/x."
 	stripped, urls := extractURLs(content)
-	if len(urls) != 3 {
-		t.Fatalf("extracted = %v, want the two refs and the url", urls)
+	if len(urls) != 4 {
+		t.Fatalf("extracted = %v, want the three refs and the url", urls)
 	}
-	if urls[0] != "#commit:abc123def456@gitmsg/pm" || urls[2] != "#commit:1234567" {
-		t.Errorf("refs = %q and %q, want the trailing period trimmed", urls[0], urls[2])
+	if urls[0] != "#commit:abc123def456@gitmsg/pm" || urls[2] != "#commit:1234567" || urls[3] != "#branch:feature/x" {
+		t.Errorf("refs = %q, %q and %q, want the trailing period and comma trimmed", urls[0], urls[2], urls[3])
 	}
 	anchors := NewAnchorCollector("t", -1)
 	restored := restoreURLs(stripped, urls, anchors, false)
@@ -187,8 +187,8 @@ func TestExtractURLs_refsRideTheList(t *testing.T) {
 		t.Errorf("restored text lost the ref: %q", restored)
 	}
 	zones := anchors.Zones()
-	if len(zones) != 3 {
-		t.Fatalf("zones = %d, want 3", len(zones))
+	if len(zones) != 4 {
+		t.Fatalf("zones = %d, want 4", len(zones))
 	}
 	if zones[0].Location.Path != "/ref" || zones[0].Location.Param("ref") != "#commit:abc123def456@gitmsg/pm" {
 		t.Errorf("ref zone location = %+v, want /ref carrying the ref", zones[0].Location)
