@@ -206,6 +206,7 @@
 | CardList navigation | (see Shared Navigation) |
 | `l` | Lists |
 | `a` | Add to my lists |
+| `b` | Branches |
 | `[/]` | Older/newer |
 | `r` | Refresh |
 | `!` | Errors |
@@ -220,6 +221,7 @@
 | `n` | New post |
 | `p` | Push |
 | `l` | Lists |
+| `b` | Branches |
 | `r` | Refresh |
 | `!` | Errors |
 | `tab` | Focus |
@@ -273,6 +275,18 @@
 | `j` | Down |
 | `k` | Up |
 | `p` | Push |
+| `!` | Errors |
+| `/` | Search |
+| `tab` | Focus |
+| `shift+tab` | Focus |
+
+### Branches
+
+| Key | Action |
+|-----|--------|
+| `enter` | Open |
+| `j` | Down |
+| `k` | Up |
 | `!` | Errors |
 | `/` | Search |
 | `tab` | Focus |

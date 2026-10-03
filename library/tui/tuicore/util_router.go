@@ -86,13 +86,25 @@ func LocSocialPostForm(mode, targetID string) Location {
 	return Location{Path: "/social/post-form", Params: params}
 }
 
-// LocRepository creates a location for a repository view.
+// LocRepository creates a location for a repository view; an empty url is the workspace, and an empty branch is all branches.
 func LocRepository(url, branch string) Location {
-	params := map[string]string{"url": url}
+	params := map[string]string{}
+	if url != "" {
+		params["url"] = url
+	}
 	if branch != "" {
 		params["branch"] = branch
 	}
 	return Location{Path: "/social/repository", Params: params}
+}
+
+// LocRepoBranches creates a location for the branch list of a repository; an empty url is the workspace.
+func LocRepoBranches(url string) Location {
+	params := map[string]string{}
+	if url != "" {
+		params["url"] = url
+	}
+	return Location{Path: "/social/repository/branches", Params: params}
 }
 
 // LocList creates a location for a list posts view.
@@ -448,7 +460,7 @@ func (r *Router) NavItemID() string {
 	path := r.location.Path
 	// Special cases with dynamic nav IDs based on params
 	switch path {
-	case "/social/repository":
+	case "/social/repository", "/social/repository/branches":
 		if _, hasURL := r.location.Params["url"]; hasURL {
 			return "social.timeline" // external repo from timeline
 		}

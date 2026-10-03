@@ -138,6 +138,7 @@ var (
 	History       = RegisterContext("social.history")
 	HistoryDiff   = RegisterContext("social.history_diff")
 	RepoLists     = RegisterContext("social.repo_lists")
+	Branches      = RegisterContext("social.branches")
 	Explore       = RegisterContext("social.explore")
 )
 

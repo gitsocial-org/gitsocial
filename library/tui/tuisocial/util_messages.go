@@ -147,3 +147,10 @@ type repoListsLoadedMsg struct {
 	Lists []cache.ExternalRepoList
 	Err   error
 }
+
+// branchesLoadedMsg is sent when the branches of a repository are read from the cache
+type branchesLoadedMsg struct {
+	Branches []cache.BranchSummary
+	Default  string // the default branch of the workspace, empty for a remote
+	Err      error
+}

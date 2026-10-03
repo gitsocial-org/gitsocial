@@ -72,6 +72,16 @@ func (v *repositoryView) Bindings() []tuicore.Binding {
 				}
 				return true, ctx.Panel.SearchInRepository()
 			}},
+		{Key: "b", Label: "branches", Contexts: []tuicore.Context{tuicore.Repository, tuicore.MyRepository},
+			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
+				url := v.url
+				if v.isWorkspace {
+					url = ""
+				}
+				return true, func() tea.Msg {
+					return tuicore.NavigateMsg{Location: tuicore.LocRepoBranches(url), Action: tuicore.NavPush}
+				}
+			}},
 		{Key: "[/]", Label: "older/newer", Contexts: []tuicore.Context{tuicore.Repository},
 			Handler: func(ctx *tuicore.HandlerContext) (bool, tea.Cmd) {
 				return false, nil // Handled by view

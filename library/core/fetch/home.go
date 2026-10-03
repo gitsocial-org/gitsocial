@@ -94,6 +94,24 @@ func defaultHomeBranch(names []string, byName map[string]*homeBranch, originHead
 	return ""
 }
 
+// DefaultBranch returns the default branch of a workspace by the home rule, or "" when it has no code branch.
+func DefaultBranch(workdir string) (string, error) {
+	gate, err := listHomeRefs(workdir)
+	if err != nil {
+		return "", err
+	}
+	stable, _ := parseHomeRefs(gate)
+	return defaultOfStable(stable), nil
+}
+
+// defaultOfStable returns the first stable branch when it is a code branch.
+func defaultOfStable(stable []homeBranch) string {
+	if len(stable) > 0 && !strings.HasPrefix(stable[0].name, contentPrefix) {
+		return stable[0].name
+	}
+	return ""
+}
+
 // branchRefs returns the refs of the given branches.
 func branchRefs(branches []homeBranch) []string {
 	var refs []string

@@ -63,8 +63,8 @@ func resolveWorkspaceSyncContext(workdir string, procs []WorkspaceSyncFunc) (*wo
 		stable:        stable,
 		code:          code,
 	}
-	if len(stable) > 0 && !strings.HasPrefix(stable[0].name, contentPrefix) {
-		ctx.defaultBranch = stable[0].name
+	if name := defaultOfStable(stable); name != "" {
+		ctx.defaultBranch = name
 	}
 	// The fast path needs a tip that this sync wrote and a cache that still has its rows.
 	if lastGate, ok := strings.CutPrefix(persisted, homeMarker); ok {
