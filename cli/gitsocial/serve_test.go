@@ -75,7 +75,7 @@ func startServe(t *testing.T, dir, cacheDir string) *serveChild {
 	}
 	go func() { c.waited <- c.cmd.Wait() }()
 	t.Cleanup(func() { stopServe(t, c) })
-	waitFor(t, 2*time.Minute, "the serving line", func() bool {
+	waitFor(t, "the serving line", func() bool {
 		select {
 		case err := <-c.waited:
 			c.waited <- err
@@ -110,10 +110,10 @@ func stopServe(t *testing.T, c *serveChild) {
 	}
 }
 
-// waitFor polls cond every 100 ms until it holds or the timeout passes.
-func waitFor(t *testing.T, timeout time.Duration, what string, cond func() bool) {
+// waitFor polls cond every 100 ms until it holds or two minutes pass.
+func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
+	deadline := time.Now().Add(2 * time.Minute)
 	for !cond() {
 		if time.Now().After(deadline) {
 			t.Fatalf("timeout waiting for %s", what)
@@ -184,6 +184,7 @@ func TestServeEnv_AppendsConfig(t *testing.T) {
 		"remote.gitsocial-serve.url":   "s3://127.0.0.1:1/gitsocial/repo",
 		"remote.gitsocial-serve.fetch": "+refs/heads/*:refs/remotes/gitsocial-serve/*",
 		"gitsocial.pushSite":           "true",
+		"core.hooksPath":               os.DevNull,
 	} {
 		cmd := exec.Command("git", "-C", dir, "config", "--get", key)
 		cmd.Env = env
@@ -327,7 +328,17 @@ func TestServeWatch_Coalesces(t *testing.T) {
 	}
 }
 
-// TestServe_PushFailureKeepsServing: a rejected push leaves the last build served and prints the error, and the next change pushes again.
+// TestServe_RewrittenBranchReplacesBucket: an amended branch replaces the branch of the bucket.
+func TestServe_RewrittenBranchReplacesBucket(t *testing.T) {
+	t.Parallel()
+	dir, cacheDir := serveRepo(t)
+	c := startServe(t, dir, cacheDir)
+	gitOut(t, dir, "commit", "--amend", "--allow-empty", "-m", "amended")
+	amended := strings.TrimSpace(gitOut(t, dir, "rev-parse", "main"))
+	waitFor(t, "the forced push", func() bool { return bucketRefs(t, c)["refs/heads/main"] == amended })
+}
+
+// TestServe_PushFailureKeepsServing: a failed push leaves the last build served and prints the error, and the next change pushes again.
 func TestServe_PushFailureKeepsServing(t *testing.T) {
 	t.Parallel()
 	dir, cacheDir := serveRepo(t)
@@ -336,18 +347,19 @@ func TestServe_PushFailureKeepsServing(t *testing.T) {
 	if refs := bucketRefs(t, c); refs["refs/heads/main"] != served {
 		t.Fatalf("bucket main = %q, want %s after the first push", refs["refs/heads/main"], served)
 	}
-	gitOut(t, dir, "commit", "--amend", "--allow-empty", "-m", "amended")
-	waitFor(t, 2*time.Minute, "the push error", func() bool { return strings.Contains(c.stderr.String(), "gitsocial: push:") })
+	gitOut(t, dir, "checkout", "--detach")
+	gitOut(t, dir, "tag", "detached")
+	waitFor(t, "the push error", func() bool { return strings.Contains(c.stderr.String(), "gitsocial: push:") })
 	if status, body := httpGet(t, c.url); status != 200 || !strings.Contains(body, "<title>gitsocial</title>") {
 		t.Errorf("GET %s = %d after a failed push, want the served build", c.url, status)
 	}
 	if refs := bucketRefs(t, c); refs["refs/heads/main"] != served {
-		t.Errorf("bucket main = %q after a rejected push, want %s", refs["refs/heads/main"], served)
+		t.Errorf("bucket main = %q after a failed push, want %s", refs["refs/heads/main"], served)
 	}
-	gitOut(t, dir, "reset", "--hard", served)
+	gitOut(t, dir, "checkout", "main")
 	gitOut(t, dir, "commit", "--allow-empty", "-m", "next")
 	next := strings.TrimSpace(gitOut(t, dir, "rev-parse", "main"))
-	waitFor(t, 2*time.Minute, "the next push", func() bool { return bucketRefs(t, c)["refs/heads/main"] == next })
+	waitFor(t, "the next push", func() bool { return bucketRefs(t, c)["refs/heads/main"] == next })
 }
 
 // TestServe_RebuildAfterDelete: a clean exit leaves no tracking ref, and a start after the bucket root is deleted serves the site again.

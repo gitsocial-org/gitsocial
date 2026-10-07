@@ -772,17 +772,17 @@ func syncMirrorBranches(cmd *cobra.Command, cfg *Config, defaultOnly bool) error
 
 // runMirrorPush pushes to every target, then drains the site pages cursor.
 func runMirrorPush(cmd *cobra.Command, cfg *Config, targets []mirrorTarget, f *mirrorFlags) error {
-	var siteProgress objstore.Progress
+	var siteProgress, step objstore.Progress
 	siteDone := func() {}
 	if !cfg.JSONOutput {
-		siteProgress, siteDone = objstore.WriterProgress(cmd.ErrOrStderr())
+		siteProgress, step, siteDone = objstore.WriterProgress(cmd.ErrOrStderr())
 	}
 	defer siteDone()
 	failed := false
 	for _, t := range targets {
 		var onBranch func(branch string, done, total int)
-		if siteProgress != nil {
-			onBranch = func(branch string, done, total int) { siteProgress(branch, done, total) }
+		if step != nil {
+			onBranch = func(branch string, done, total int) { step(branch, done, total) }
 		}
 		opts := client.Options{
 			NoCode:      f.noCode,

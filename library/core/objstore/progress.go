@@ -65,10 +65,22 @@ func newProgressWriter(w io.Writer, tty bool) *progressWriter {
 	return &progressWriter{w: w, tty: tty, thr: newThrottle(interval)}
 }
 
-// WriterProgress returns a throttled Progress hook on w plus the function that closes its pending TTY line, on the same policy the git-spawned helper uses.
-func WriterProgress(w io.Writer) (Progress, func()) {
+// WriterProgress returns a throttled Progress hook on w, a step hook that prints full lines, and the function that closes the pending TTY line, on the same policy the git-spawned helper uses.
+func WriterProgress(w io.Writer) (progress, step Progress, finish func()) {
 	pw := newProgressWriter(w, writerIsTTY(w))
-	return pw.Progress(), pw.finish
+	return pw.Progress(), pw.step, pw.finish
+}
+
+// step renders one update as a full line outside the throttle, because a child process prints the detail of the step after it.
+func (p *progressWriter) step(phase string, done, total int) {
+	line := formatProgress(phase, done, total)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.tty && p.dirty {
+		fmt.Fprint(p.w, "\n")
+	}
+	p.dirty = false
+	fmt.Fprintln(p.w, line)
 }
 
 // Progress returns the hook bound to this writer, or nil for a nil writer.

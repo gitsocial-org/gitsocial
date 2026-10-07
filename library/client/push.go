@@ -26,6 +26,7 @@ type Options struct {
 	SiteOnly    bool // rebuild only the site, no data push; any failure is an error
 	AllBranches bool // send every local branch (refs/heads/*), not just reasoned
 	Full        bool // detach a thin fork relationship: upload everything the bucket lacks
+	Force       bool // force each transfer of the data push, for a remote that is a copy of the workspace
 }
 
 // SiteOutcome is the site step's result in a push. Published is true
@@ -147,7 +148,7 @@ func Push(workdir, remote string, opts Options, onBranch gitmsg.PushBranchProgre
 	// against the tracking refs the last push wrote.
 	codeBranches := resolveCodeBranches(workdir, opts.NoCode, remote)
 
-	pushResult, err := gitmsg.PushWithProgress(workdir, opts.DryRun, codeBranches, remote, opts.AllBranches, onBranch)
+	pushResult, err := gitmsg.PushWithProgress(workdir, opts.DryRun, codeBranches, remote, opts.AllBranches, opts.Force, onBranch)
 	if err != nil {
 		return nil, err
 	}

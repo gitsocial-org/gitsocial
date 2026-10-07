@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
 	"github.com/gitsocial-org/gitsocial/library/client"
@@ -45,7 +46,9 @@ again. The site has no HTML pages. Ctrl-C stops it.
 The bucket is at <cache-dir>/serve/<hash>/ and stays between runs, so
 the next start pushes the difference. The remote gitsocial-serve is in
 the environment of the serve process only; serve writes no git config,
-and it deletes the tracking refs of the remote on exit.
+and it deletes the tracking refs of the remote on exit. A push to the
+bucket runs no git hook and is a forced push, so a rewritten branch
+replaces the branch of the bucket.
 
 Examples:
   gitsocial serve                     # serving http://127.0.0.1:4747/gitsocial/<repo>/
@@ -94,10 +97,24 @@ func runServe(ctx context.Context, cfg *Config, addr string, out, errOut io.Writ
 	push := func() { servePush(ctx, root, errOut) }
 	last := refsSnapshot(root)
 	push()
-	fmt.Fprintf(out, "serving http://%s/%s/\n", host, path)
+	fmt.Fprint(out, serveBanner("http://"+host+"/"+path+"/", out == io.Writer(os.Stdout) && isatty.IsTerminal(os.Stdout.Fd()), os.Getenv("NO_COLOR") == ""))
 	watchRefs(ctx, serveInterval, last, func() string { return refsSnapshot(root) }, push)
 	client.DeleteTrackingRefs(root, serveRemote)
 	return nil
+}
+
+// serveBanner returns the line that tells the site URL: a block on a terminal, with colors when color is set, and the plain serving line for a pipe.
+func serveBanner(url string, terminal, color bool) string {
+	if !terminal {
+		return "serving " + url + "\n"
+	}
+	bold, green, cyan, dim, reset := "\033[1m", "\033[32m", "\033[36m", "\033[2m", "\033[0m"
+	if !color {
+		bold, green, cyan, dim, reset = "", "", "", "", ""
+	}
+	return "\n  " + bold + "gitsocial serve" + reset + "\n\n" +
+		"  " + green + "➜" + reset + "  " + bold + "Local:" + reset + "  " + cyan + url + reset + "\n" +
+		"  " + green + "➜" + reset + "  " + dim + "Ctrl-C stops the server; a ref change pushes again" + reset + "\n\n"
 }
 
 // refsSnapshot returns the names and tips of the branches, tags and state refs, or "" when git cannot list them.
@@ -137,7 +154,7 @@ func serveHost(addr net.Addr) string {
 	return net.JoinHostPort("127.0.0.1", strconv.Itoa(tcp.Port))
 }
 
-// serveConfigPairs returns the git config of the serve remote: its URL, its fetch refspec, the site overrides and the site switch.
+// serveConfigPairs returns the git config of the serve remote: its URL, its fetch refspec, the site overrides, the site switch and an empty hooks path.
 func serveConfigPairs(remoteURL string) [][2]string {
 	return [][2]string{
 		{"remote." + serveRemote + ".url", remoteURL},
@@ -145,6 +162,7 @@ func serveConfigPairs(remoteURL string) [][2]string {
 		{"remote." + serveRemote + "." + objstore.SiteOverridePublishKey, "true"},
 		{"remote." + serveRemote + "." + objstore.SiteOverridePagesKey, "false"},
 		{"gitsocial.pushSite", "true"},
+		{"core.hooksPath", os.DevNull},
 	}
 }
 
@@ -175,11 +193,11 @@ const serveSitePassCap = 16
 
 // servePush pushes the workspace to the serve remote until the site is complete and reports a failure; the served build stays, and a stopped serve reports nothing.
 func servePush(ctx context.Context, root string, errOut io.Writer) {
-	progress, finish := objstore.WriterProgress(errOut)
+	progress, step, finish := objstore.WriterProgress(errOut)
 	defer finish()
-	onBranch := func(branch string, done, total int) { progress(serveRemote+" "+branch, done, total) }
+	onBranch := func(branch string, done, total int) { step(serveRemote+" "+branch, done, total) }
 	for pass := 0; pass < serveSitePassCap; pass++ {
-		res, err := client.Push(root, serveRemote, client.Options{}, onBranch, progress)
+		res, err := client.Push(root, serveRemote, client.Options{Force: true}, onBranch, progress)
 		switch {
 		case ctx.Err() != nil:
 			return

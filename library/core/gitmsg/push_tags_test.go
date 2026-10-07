@@ -27,7 +27,7 @@ func TestPushTags_noTagsSkipsEmptyRemote(t *testing.T) {
 		t.Fatalf("add origin: %v", err)
 	}
 
-	count, err := pushTags(work, "origin", true, false)
+	count, err := pushTags(work, "origin", true, false, false)
 	if err != nil {
 		t.Fatalf("pushTags dry run on an empty remote with no tags: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestPushTags_noTagsSkipsEmptyRemote(t *testing.T) {
 	if _, err := git.ExecGit(work, []string{"tag", "v0.0.1-test"}); err != nil {
 		t.Fatalf("tag: %v", err)
 	}
-	count, err = pushTags(work, "origin", true, false)
+	count, err = pushTags(work, "origin", true, false, false)
 	if err != nil {
 		t.Fatalf("pushTags dry run with one tag: %v", err)
 	}

@@ -169,7 +169,7 @@ func extraAllBranches(workdir string, codeBranches map[string]int) []string {
 // — plain push, no auto-merge — so the gitmsg/review push only publishes PRs
 // whose head is reachable on the remote.
 func Push(workdir string, dryRun bool, codeBranches map[string]int, remote string, allBranches bool) (*PushResult, error) {
-	return PushWithProgress(workdir, dryRun, codeBranches, remote, allBranches, nil)
+	return PushWithProgress(workdir, dryRun, codeBranches, remote, allBranches, false, nil)
 }
 
 // PushBranchProgress reports which branch is being pushed and its position in
@@ -184,8 +184,10 @@ type PushBranchProgress func(branch string, done, total int)
 // PushWithProgress is Push with a coarse per-branch progress callback. See Push.
 // remote is the target ("" resolves via git.PushRemote). The tags push runs
 // unconditionally even when the preview is empty (tags are uncountable offline),
-// so a tags-only change is still published.
-func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, remote string, allBranches bool, onBranch PushBranchProgress) (*PushResult, error) {
+// so a tags-only change is still published. force makes each transfer a forced
+// push and skips the merge of a diverged extension branch, for a remote that
+// is a copy of the workspace.
+func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, remote string, allBranches, force bool, onBranch PushBranchProgress) (*PushResult, error) {
 	if remote == "" {
 		remote = git.PushRemote(workdir)
 	}
@@ -213,7 +215,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		result.CodeCommits += bp.Commits
 		step(bp.Branch)
 		if !dryRun {
-			if _, err := execGitTransfer(workdir, []string{"push", "--quiet", remote, bp.Branch}, done < total); err != nil {
+			if _, err := execGitTransfer(workdir, pushArgs(remote, bp.Branch, force), done < total); err != nil {
 				return nil, wrapCodePushError(remote, bp.Branch, err)
 			}
 		}
@@ -226,14 +228,14 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		result.AllBranches++
 		step(branch)
 		if !dryRun {
-			if _, err := execGitTransfer(workdir, []string{"push", "--quiet", remote, branch}, done < total); err != nil {
+			if _, err := execGitTransfer(workdir, pushArgs(remote, branch, force), done < total); err != nil {
 				return nil, wrapCodePushError(remote, branch, err)
 			}
 		}
 	}
 
 	step("tags")
-	tags, err := pushTags(workdir, remote, dryRun, done < total)
+	tags, err := pushTags(workdir, remote, dryRun, force, done < total)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +245,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		result.Commits += bp.Commits
 		step(bp.Branch)
 		if !dryRun {
-			if err := pushBranchWithMergeTo(workdir, remote, bp.Branch, done < total); err != nil {
+			if err := pushExtBranch(workdir, remote, bp.Branch, force, done < total); err != nil {
 				return nil, fmt.Errorf("push %s: %w", bp.Branch, err)
 			}
 		}
@@ -252,9 +254,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 	if preview.Refs > 0 {
 		step("refs/gitmsg/*")
 		if !dryRun {
-			if _, err := execGitTransfer(workdir, []string{
-				"push", "--quiet", remote, "refs/gitmsg/*:refs/gitmsg/*",
-			}, done < total); err != nil {
+			if _, err := execGitTransfer(workdir, pushArgs(remote, "refs/gitmsg/*:refs/gitmsg/*", force), done < total); err != nil {
 				return nil, wrapStateRefPushError(err)
 			}
 			// The just-pushed state refs now match the remote; mirror them into the
@@ -265,6 +265,23 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 	}
 
 	return result, nil
+}
+
+// pushArgs returns the arguments of a quiet push of refspec to remote, forced when force is set.
+func pushArgs(remote, refspec string, force bool) []string {
+	if force {
+		return []string{"push", "--quiet", "--force", remote, refspec}
+	}
+	return []string{"push", "--quiet", remote, refspec}
+}
+
+// pushExtBranch pushes an extension branch: forced it replaces the remote branch and writes nothing to the workspace, otherwise a diverged branch merges first.
+func pushExtBranch(workdir, remote, branch string, force, more bool) error {
+	if !force {
+		return pushBranchWithMergeTo(workdir, remote, branch, more)
+	}
+	_, err := execGitTransfer(workdir, pushArgs(remote, branch, true), more)
+	return err
 }
 
 // RemoteIsEmpty reports whether the resolved remote advertises zero refs — the
@@ -292,7 +309,7 @@ func RemoteIsEmpty(workdir, remote string) bool {
 // one ref per line, "=" marking up-to-date tags (not counted); a rejected tag
 // surfaces as a git error. --dry-run contacts the remote but updates nothing.
 // A workspace without the remote configured is a no-op, like code branches.
-func pushTags(workdir, remote string, dryRun, more bool) (int, error) {
+func pushTags(workdir, remote string, dryRun, force, more bool) (int, error) {
 	if _, err := git.ExecGit(workdir, []string{"remote", "get-url", remote}); err != nil {
 		return 0, nil
 	}
@@ -304,6 +321,9 @@ func pushTags(workdir, remote string, dryRun, more bool) (int, error) {
 	args := []string{"push", remote, "--tags", "--porcelain"}
 	if dryRun {
 		args = append(args, "--dry-run")
+	}
+	if force {
+		args = append(args, "--force")
 	}
 	out, err := execGitTransfer(workdir, args, more)
 	if err != nil {
