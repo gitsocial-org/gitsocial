@@ -462,6 +462,43 @@ func TestGetPMItems_excludesStaleCommit(t *testing.T) {
 	}
 }
 
+// TestGetPMItems_excludesActionRows: an edit that has a timeline action is still in no issue list.
+func TestGetPMItems_excludesActionRows(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/test/actions"
+	commit := func(hash, header string, minute int) cache.Commit {
+		return cache.Commit{
+			Hash: hash, RepoURL: repoURL, Branch: pmTestBranch, AuthorName: "Test User", AuthorEmail: "test@test.com",
+			Message:   "Issue\n\nGitMsg: ext=\"pm\"; type=\"issue\"; " + header + "; v=\"0.1.0\"",
+			Timestamp: time.Date(2025, 10, 21, 12, minute, 0, 0, time.UTC),
+		}
+	}
+	if err := cache.InsertCommits([]cache.Commit{
+		commit("ac7100000001", `state="open"`, 0),
+		commit("ac7100000002", `edits="#commit:ac7100000001@`+pmTestBranch+`"; state="closed"`, 1),
+	}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	for hash, state := range map[string]string{"ac7100000001": "open", "ac7100000002": "closed"} {
+		if err := InsertPMItem(PMItem{RepoURL: repoURL, Hash: hash, Branch: pmTestBranch, Type: "issue", State: state}); err != nil {
+			t.Fatalf("InsertPMItem() error = %v", err)
+		}
+	}
+	cache.SyncEditExtensionFields([]cache.EditKey{{RepoURL: repoURL, Hash: "ac7100000002", Branch: pmTestBranch}})
+
+	q := PMQuery{Types: []string{"issue"}, RepoURL: repoURL}
+	items, err := GetPMItems(q)
+	if err != nil {
+		t.Fatalf("GetPMItems() error = %v", err)
+	}
+	if len(items) != 1 || items[0].Hash != "ac7100000001" || items[0].State != "closed" {
+		t.Errorf("GetPMItems() = %+v, want the one issue, closed, and no row for the edit", items)
+	}
+	if count, err := GetPMItemsCount(q); err != nil || count != 1 {
+		t.Errorf("GetPMItemsCount() = %d, %v, want 1", count, err)
+	}
+}
+
 // TestGetPMItemByHashPrefix_liveFirst pins invariant 2: a prefix lookup opens the live row of a moved issue, and still finds a stale-only one.
 func TestGetPMItemByHashPrefix_liveFirst(t *testing.T) {
 	setupTestDB(t)

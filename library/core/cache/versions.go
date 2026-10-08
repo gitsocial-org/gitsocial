@@ -178,6 +178,10 @@ func applyEditToCanonical(tx sqlExecutor, canonicalRepoURL, canonicalHash string
 		}
 	}
 
+	if err := writeEditActions(tx, canonicalRepoURL, canonicalHash, canonicalMessage); err != nil {
+		return err
+	}
+
 	// core_fts is contentless, so each row of the canonical is refreshed by a delete and an insert.
 	for _, rowid := range rowids {
 		if _, err := tx.Exec(`DELETE FROM core_fts WHERE rowid = ?`, rowid); err != nil {

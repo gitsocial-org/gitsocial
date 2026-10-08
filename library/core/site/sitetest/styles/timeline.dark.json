@@ -34,6 +34,17 @@
       "borderRadius": "10px"
     },
     {
+      "shape": "div.card-head",
+      "padding": "9.6px 14.4px",
+      "margin": "0px 0px 9.6px",
+      "fontSize": "21px",
+      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "color": "rgb(230, 233, 237)",
+      "backgroundColor": "srgb(1 1 1 / 0.06)",
+      "borderLeftColor": "srgb(0.9 0.91 0.93 / 0.18)",
+      "borderRadius": "10px"
+    },
+    {
       "shape": "span.meta.meta-lead > div.body-clamp-wrap > div.clickable.dimmed.reply-quote",
       "padding": "9.6px 14.4px",
       "margin": "0px 0px 9.6px",
@@ -81,6 +92,17 @@
     },
     {
       "shape": "span.type-glyph > span.chip.planned.state > a.subject",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "21px",
+      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "color": "rgb(230, 233, 237)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(230, 233, 237)",
+      "borderRadius": "0px"
+    },
+    {
+      "shape": "span.type-glyph > span.meta.meta-lead",
       "padding": "0px",
       "margin": "0px",
       "fontSize": "21px",
@@ -149,6 +171,17 @@
     }
   ],
   ".meta": [
+    {
+      "shape": "span.author > a.subject > span.reltime",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
+      "color": "srgb(0.62 0.63 0.67)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "srgb(0.62 0.63 0.67)",
+      "borderRadius": "0px"
+    },
     {
       "shape": "span.author > span.reltime > a.hash > span.chip",
       "padding": "0px",

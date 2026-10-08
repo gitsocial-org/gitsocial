@@ -2909,6 +2909,61 @@
     return items.filter((it) => ((it.header && it.header.type) || "") === spec.type);
   }
 
+  // headerAction names the timeline action of a version from its header and that of the version before it; a null prev is a first version. Mirrors headerAction in core/cache/actions.go.
+  function headerAction(prev, cur) {
+    if (cur.retracted === "true") return "";
+    const review = cur["review-state"];
+    if (review && (!prev || review !== prev["review-state"])) return review;
+    if (!prev) return "";
+    const state = cur.state;
+    if (state && state !== prev.state) return state === "open" ? "reopened" : state === "active" ? "started" : state === "planned" ? "" : state;
+    return prev.draft === "true" && cur.draft !== "true" && state === "open" ? "ready" : "";
+  }
+
+  // itemActions returns the action entries of a lane's resolved items: each edit that changes a state, and each review with a review-state.
+  function itemActions(items, ext, branch) {
+    const byShort = new Map(items.map((it) => [it.commit.short, it]));
+    const out = [];
+    for (const it of items) {
+      let prev = null;
+      for (const v of it.versions || []) {
+        const own = Object.assign({}, v.commit.gitmsg || {});
+        // An orphan edit stands in for a first version that is not loaded, so it has no version before it.
+        const action = !prev && own.edits ? "" : headerAction(prev, own);
+        if (own.retracted === "true") continue;
+        // A version that omits a field keeps the value of the version before it.
+        for (const k of ["state", "review-state"]) if (!own[k] && prev && prev[k]) own[k] = prev[k];
+        prev = own;
+        if (!action) continue;
+        const target = own.type === "feedback" ? (byShort.get(refHash(own["pull-request"] || "")) || it) : it;
+        out.push({
+          commit: v.commit, header: own, content: v.content, rawMessage: v.commit.rawMessage, edited: false, editorName: "",
+          author: effectiveAuthor(v.commit, v.commit.gitmsg), effectiveTime: v.effectiveTime, versions: [],
+          _ext: ext, _branch: branch, _action: action, _target: target,
+          _subject: own.type === "feedback" ? itemSubject(target) : (v.commit.subject || itemSubject(it)),
+        });
+      }
+    }
+    return out;
+  }
+
+  // timelineEntries tags a lane's timeline items and adds the lane's action entries.
+  function timelineEntries(spec, items) {
+    const typed = timelineTyped(spec, items);
+    for (const it of typed) { it._ext = spec.ext; it._branch = spec.branch; }
+    return spec.ext === "pm" || spec.ext === "review" ? typed.concat(itemActions(items, spec.ext, spec.branch)) : typed;
+  }
+
+  // dropMergeCloses hides the closed action of an issue when the same author merged a pull request that closes it in the 60 seconds before.
+  function dropMergeCloses(entries) {
+    const merges = entries.filter((e) => e._action === "merged" && e.header.closes);
+    if (!merges.length) return entries;
+    return entries.filter((e) => !(e._action === "closed" && e._ext === "pm" && merges.some((m) =>
+      e.effectiveTime >= m.effectiveTime && e.effectiveTime - m.effectiveTime <= 60 &&
+      eqFold(effectiveAuthorEmail(e.commit, e.commit.gitmsg), effectiveAuthorEmail(m.commit, m.commit.gitmsg)) &&
+      m.header.closes.split(",").some((ref) => refHash(ref.trim()) === e._target.commit.short))));
+  }
+
   // loadTimelineItems builds the merged timeline feed and hydrates every item; the interactive route uses loadTimelineWindow.
   async function loadTimelineItems(ctx) {
     const out = [];
@@ -2916,15 +2971,9 @@
       Promise.all(TIMELINE_SPECS.map(async (spec) => ({ spec, items: await loadExtItems(ctx, spec.ext) }))),
       resolveCodeItems(ctx, WALK_CAP),
     ]);
-    for (const { spec, items } of lanes) {
-      for (const it of timelineTyped(spec, items)) {
-        it._ext = spec.ext; it._branch = spec.branch;
-        out.push(it);
-      }
-    }
+    for (const { spec, items } of lanes) out.push(...timelineEntries(spec, items));
     for (const it of code.items) { it._ext = "code"; out.push(it); }
-    out.sort((a, b) => b.effectiveTime - a.effectiveTime);
-    return out;
+    return dropMergeCloses(out).sort((a, b) => b.effectiveTime - a.effectiveTime);
   }
 
   // resolveExtItems returns an ext's resolved items un-hydrated, walking far enough to surface need items or exhaust the branch.
@@ -3228,7 +3277,7 @@
     const tl = ctx.timeline || (ctx.timeline = { shown: 0 });
     tl.shown = extend ? tl.shown + TIMELINE_WINDOW : TIMELINE_WINDOW;
     const need = tl.shown;
-    const merged = [];
+    let merged = [];
     let more = false;
     // Every lane in parallel: each is an independent chain, and the plain-code lane joins the same batch.
     const [lanes, code] = await Promise.all([
@@ -3237,14 +3286,11 @@
     ]);
     for (const { spec, r } of lanes) {
       if (r.more) more = true;
-      for (const it of timelineTyped(spec, r.items)) {
-        it._ext = spec.ext; it._branch = spec.branch;
-        merged.push(it);
-      }
+      merged.push(...timelineEntries(spec, r.items));
     }
     if (code.more) more = true;
     for (const it of code.items) { it._ext = "code"; merged.push(it); }
-    merged.sort((a, b) => b.effectiveTime - a.effectiveTime);
+    merged = dropMergeCloses(merged).sort((a, b) => b.effectiveTime - a.effectiveTime);
     const windowItems = merged.slice(0, need);
     const hydrated = hydrateItems(ctx, windowItems).catch(() => { /* a body that fails to read leaves its card on the index subject */ });
     return { items: windowItems, truncated: more || merged.length > need, hydrated };
@@ -4492,7 +4538,7 @@
     reviewSummary, suggestionBody,
     loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadBranchLogIndexed, loadCompareCommitsWindow, loadGraphWindow, orderGraphWindow, assignGraphLanes, GRAPH_WINDOW,
     loadItemsIndex, loadOlderItemShards, olderItemBytes, loadBodyIndex, extWalkState, indexCommit, metaCommit, hydrateItem, hydrateItems,
-    loadTimelineItems, loadTimelineWindow, HOME_ROWS, compactCount, loadNavCounts, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
+    loadTimelineItems, loadTimelineWindow, headerAction, itemActions, dropMergeCloses, HOME_ROWS, compactCount, loadNavCounts, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
     loadCommitsPage, loadCommitsLayout, COMMITS_PAGE_SIZE,
     manifestFor, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
     parseTree, getTree, resolvePath, listBranches, listTags, orderTagTies, orderedTags, tagsByCommit, loadSiteTags, loadTagRange, tagRangeWindow, tagRangeFiles, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,

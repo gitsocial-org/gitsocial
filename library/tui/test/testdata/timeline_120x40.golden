@@ -1,4 +1,4 @@
-╭─ ※  GitSocial ───────────────╮╭─ ⏱  Timeline · 1/21 ─────────────────────────────────────────────────────────────────╮
+╭─ ※  GitSocial ───────────────╮╭─ ⏱  Timeline · 1/23 ─────────────────────────────────────────────────────────────────╮
 │                              ││                                                                                      │
 │  ⌕  Search  ············  /  ││  ▏☞  Carol · TIME                                                                    │
 │  ⚑  Notifications  ·····  @  ││  ▏   Sign every release tag                                                          │
@@ -13,10 +13,15 @@
 │        • Memo Inherits (au...││                                                                                      │
 │     ㋡ My Followers          ││   ────────────────────────────────────────────────────────────────────────────────   │
 │     ➼  Explore               ││                                                                                      │
-│  ▢  PM  ················  P  ││   ☞  Alice ⇡ · TIME   · #cac84b5af758@gitmsg/memo                                    │
-│  ⑂  Review  ············  R  ││      Cache invalidation rules                                                        │
+│  ▢  PM  ················  P  ││   ⑂  Alice ⇡ · TIME   · #006ab2b6bfde@gitmsg/review                                  │
+│  ⑂  Review  ············  R  ││      merged pull request "Add theme toggle component"                                │
 │  ⏏  Release  ···········  V  ││                                                                                      │
-│  ☞  Memos  ·············  M  ││      Storage can be deleted anytime; fetch strategy comes from cache.db metadata.    │
+│  ☞  Memos  ·············  M  ││   ────────────────────────────────────────────────────────────────────────────────   │
+│                              ││                                                                                      │
+│                              ││   ☞  Alice ⇡ · TIME   · #cac84b5af758@gitmsg/memo                                    │
+│                              ││      Cache invalidation rules                                                        │
+│                              ││                                                                                      │
+│                              ││      Storage can be deleted anytime; fetch strategy comes from cache.db metadata.    │
 │                              ││      kind/decision                                                                   │
 │                              ││                                                                                      │
 │                              ││   ────────────────────────────────────────────────────────────────────────────────   │
@@ -24,13 +29,8 @@
 │                              ││   ☞  Alice ⇡ ✎ · TIME   · #1234026e62fa@gitmsg/memo                                  │
 │                              ││      Review checklist (updated)                                                      │
 │                              ││                                                                                      │
-│                              ││      Check the spec before the code.                                                 │
-│                              ││      kind/howto                                                                      │
-│                              ││                                                                                      │
-│                              ││   ────────────────────────────────────────────────────────────────────────────────   │
-│                              ││                                                                                      │
-│ ──────────────────────────── ││   •  Alice ⇡ · TIME   · #95346f2791cd@main                                           │
-│  ⚙  Configuration            ││      Merge branch '_gitmsg-merge-tmp' into main                                      │
+│ ──────────────────────────── ││      Check the spec before the code.                                                 │
+│  ⚙  Configuration            ││      kind/howto                                                                      │
 │  ⚿  Identity                 ││                                                                                      │
 │  ⛁  Cache  ········ XXXKB    ││   ────────────────────────────────────────────────────────────────────────────────   │
 │  ⌨  Settings                 ││                                                                                      │

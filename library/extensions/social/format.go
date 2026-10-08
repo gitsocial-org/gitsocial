@@ -38,6 +38,9 @@ func FormatPost(post Post) string {
 	}
 
 	content := strings.TrimSpace(post.Content)
+	if post.Action != "" {
+		content = ActionText(post)
+	}
 	content = mdImageRe.ReplaceAllStringFunc(content, func(match string) string {
 		subs := mdImageRe.FindStringSubmatch(match)
 		label := "IMAGE"
@@ -78,6 +81,45 @@ func FormatPost(post Post) string {
 	lines = append(lines, fmt.Sprintf("  %s · %s", repoName, hash))
 
 	return strings.Join(lines, "\n")
+}
+
+// ActionLine returns the text of an action entry without its actor and time: the verb, the type and subject of the item, and the issues a merge closes.
+func ActionLine(post Post) string {
+	verb := post.Action
+	switch post.Action {
+	case "changes-requested":
+		verb = "requested changes on"
+	case "ready":
+		verb = "marked ready"
+	}
+	itemType := strings.ReplaceAll(post.HeaderType, "-", " ")
+	if post.HeaderType == "feedback" {
+		itemType = "pull request"
+	}
+	line := verb + " " + itemType
+	if post.ActionSubject != "" {
+		line += " \"" + post.ActionSubject + "\""
+	}
+	if len(post.Closes) > 0 {
+		short := make([]string, 0, len(post.Closes))
+		for _, ref := range post.Closes {
+			short = append(short, "#"+text.Truncate(protocol.ParseRef(strings.TrimSpace(ref)).Value, 7))
+		}
+		line += " · closes " + strings.Join(short, ", ")
+	}
+	return line
+}
+
+// ActionText returns the action line of an entry and, for a review, the first line of its text below it.
+func ActionText(post Post) string {
+	line := ActionLine(post)
+	if post.HeaderType != "feedback" {
+		return line
+	}
+	if first, _, _ := strings.Cut(strings.TrimSpace(post.Content), "\n"); first != "" {
+		return line + "\n" + first
+	}
+	return line
 }
 
 // FormatTimeline formats a list of posts as a separated timeline.

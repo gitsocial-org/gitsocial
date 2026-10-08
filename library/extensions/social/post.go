@@ -286,7 +286,7 @@ func getTimelinePosts(workdir string, workspaceURL string, opts *GetPostsOptions
 
 	posts := make([]Post, 0, len(items))
 	for _, item := range items {
-		post := SocialItemToPost(item)
+		post := timelinePost(item)
 		if item.RepoURL == workspaceURL {
 			post.Display.IsWorkspacePost = true
 			_, post.Display.IsUnpushed = unpushed[item.Hash]
@@ -399,7 +399,7 @@ func getListPosts(listID string, workspaceURL string, opts *GetPostsOptions) Res
 
 	posts := make([]Post, 0, len(items))
 	for _, item := range items {
-		posts = append(posts, SocialItemToPost(item))
+		posts = append(posts, timelinePost(item))
 	}
 
 	return success(posts)

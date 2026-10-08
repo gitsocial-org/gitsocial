@@ -252,7 +252,7 @@ SQLite: WAL, 64 MB page cache, temp store in memory, 16 connections, 256 MB mmap
 
 Every extension table is keyed by `(repo_url, hash, branch)` into `core_commits` and carries the extension's prefix. Column lists are in `core/cache/db.go` and each extension's `schema.go`.
 
-- `core_commits(repo_url, hash, branch, author_name, author_email, message, timestamp, edits, is_virtual, origin_author_name, origin_author_email, ...)` plus the generated `effective_*` columns
+- `core_commits(repo_url, hash, branch, author_name, author_email, message, timestamp, edits, is_virtual, origin_author_name, origin_author_email, action, ...)` plus the generated `effective_*` columns
 - `core_commits_version(edit_repo_url, edit_hash, edit_branch, canonical_repo_url, canonical_hash, canonical_branch, is_retracted)`: edit to canonical, authoritative for versioning
 - `core_repositories`, `core_repository_meta`, `core_sync_tips`: followed and workspace repositories, their metadata, and the tips of the last workspace fetch
 - `core_lists`, `core_list_repositories`: lists and their members
@@ -285,6 +285,21 @@ LEFT JOIN {ext}_items e ON c.repo_url = e.repo_url AND c.hash = e.hash AND c.bra
 ```
 
 The denormalized columns `resolved_message`, `has_edits` and `is_retracted` are written only by `applyEditToCanonical` in `core/cache/versions.go`.
+
+`core_commits.action` is the [timeline action](SOCIAL.md#timeline-actions) of a commit, NULL for none. The commit insert writes it for a first version, and `applyEditToCanonical` writes it for each edit of a canonical on each pass, so the value does not depend on the order of arrival. Only the timeline admits an edit row, through `cache.TimelineItemFilter`.
+
+| Rule | Test |
+|---|---|
+| The action of an edit is the same for each order of arrival | `TestAction_orderOfArrival` |
+| A text, label or assignee edit has no action | `TestAction_textEditHasNone` |
+| A proposal and a retraction have no action | `TestAction_proposalAndRetractionHaveNone` |
+| A merge, a ready mark and a review have their action | `TestAction_pullRequestAndReview` |
+| The timeline has the item at its creation time and each action at its own time | `TestTimeline_actionEntries` |
+| A stale row of an action is in no timeline | `TestTimeline_excludesStaleAction` |
+| A merge that closes an issue gives one entry | `TestTimeline_mergeHidesIssueClose` |
+| The actions of a retracted item are in no timeline | `TestTimeline_excludesActionOfRetractedItem` |
+| No list other than the timeline shows an edit row | `TestGetPMItems_excludesActionRows` |
+| The site app derives the same action as the cache | `TestParityActions`, `unit_timeline_actions.js` |
 
 Use the view when the WHERE clause is on `core_commits` columns. Join `core_commits` to the extension table directly when the WHERE clause is selective on extension columns (`pm_items.state = 'open'`) or the query is a recursive CTE over extension relationships; otherwise, the planner scans `core_commits`. `social.GetComments`, and the thread and notification readers inside `social`, are the examples.
 

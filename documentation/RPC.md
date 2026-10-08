@@ -140,7 +140,7 @@ Params:
 - `until` (string): RFC 3339 timestamp upper bound; the server ignores a value that does not parse
 - `includeImplicit` (boolean): Include implicit posts
 
-Posts come back newest first. A param this list does not name is ignored.
+Posts come back newest first. A param this list does not name is ignored. The `timeline` and `list:<id>` scopes also return [action entries](SOCIAL.md#timeline-actions): a post with `Action` set. For a state change, `EditOf` is the item; a review is its own item.
 
 Result: `Post[]`
 
@@ -1176,6 +1176,9 @@ Times are RFC 3339 strings. Refs are strings in `#commit:hash@branch` or `url#co
 | `Display` | object | render hints: `RepositoryName`, `CommitURL`, `IsVerified`, `Badge` and siblings |
 | `OriginalExtension`, `OriginalType` | string | the referenced item's extension and type |
 | `HeaderExt`, `HeaderType`, `HeaderState` | string | raw GitMsg header fields |
+| `Action` | string | the [timeline action](SOCIAL.md#timeline-actions) of the commit; empty for a content entry |
+| `ActionSubject` | string | the subject of the item that the action is on |
+| `Closes` | string[] | the issue refs that a `merged` action closes |
 | `Labels` | string[] | |
 | `Origin` | object | import provenance, `null` when the post is native |
 | `Raw` | object | `{"Commit": {...}, "GitMsg": {...}}`, the parsed commit and message |

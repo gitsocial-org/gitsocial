@@ -161,6 +161,7 @@ The shell and the pages:
 - `index.html` has two owners: the page layer while it is effective, the shell otherwise. Every rebuild with an effective page layer writes it again.
 - The page layer and the app render markdown with one grammar, ported between JS and Go and asserted equal.
 - An adopted copy (GITMSG.md §1.5) shows its original author and time, and the repository it came from, on both renderers. Neither renderer lists a cross-repository edit, which is a proposal.
+- The timeline of the app shows [timeline actions](SOCIAL.md#timeline-actions). The app derives them in the browser from the edits and reviews that the item shards hold, so the artifacts do not change. `headerAction` has one definition in two places, `gs-core.js` and `core/cache/actions.go`, asserted equal on `sitetest/action_fixtures.json`. The timeline of the page layer lists posts only.
 - File discovery reads the default branch's tree from the local object database of the pusher and, when it cannot read the tree, keeps the published set.
 - A changed default branch rewrites every page.
 - The Tags page shows each tag's date and author, its commit count since the previous tag, and a release chip for a tag that a release names.

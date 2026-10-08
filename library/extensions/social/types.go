@@ -85,6 +85,10 @@ type Post struct {
 	HeaderExt   string
 	HeaderType  string
 	HeaderState string
+	// Action is the timeline action of the commit ("" for a content entry), ActionSubject the subject of the item it acts on, and Closes the issues a merge closes.
+	Action        string
+	ActionSubject string
+	Closes        []string
 	// Labels carries scoped tags parsed from the GitMsg `labels` header field.
 	Labels []string
 	Origin *protocol.Origin

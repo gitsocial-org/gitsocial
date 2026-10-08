@@ -57,6 +57,10 @@ type SocialItem struct {
 	HeaderExt   string
 	HeaderType  string
 	HeaderState string
+	// Action is the timeline action of the commit, ActionSubject the subject of the item it acts on, and Closes the issues a merge closes.
+	Action        string
+	ActionSubject string
+	Closes        []string
 }
 
 // baseSelectFromView is the SELECT every social_items_resolved query builds on.
@@ -71,6 +75,7 @@ var baseSelectFromView = `
 	       v.editor_name, v.editor_email,
 	       v.edit_repo_url, v.edit_hash, v.edit_branch,
 	       COALESCE(v.labels, ''),
+	       COALESCE(v.action, ''),
 	       (sf.repo_url IS NOT NULL) as follows_workspace,
 	       ` + cache.HasProposedColumn("v") + `
 	FROM social_items_resolved v
@@ -97,6 +102,7 @@ var baseDirectSelect = `
 	       c.resolved_editor_name, c.resolved_editor_email,
 	       c.resolved_edit_repo_url, c.resolved_edit_hash, c.resolved_edit_branch,
 	       COALESCE(c.labels, ''),
+	       COALESCE(c.action, ''),
 	       (sf.repo_url IS NOT NULL),
 	       ` + cache.HasProposedColumn("c") + `
 	FROM core_commits c
@@ -586,10 +592,20 @@ func placeholders(n int) string {
 	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
 }
 
+// mergeCloseFilter hides the closed action of an issue when the same author merged a pull request that closes it in the 60 seconds before.
+const mergeCloseFilter = ` AND NOT (v.action = 'closed' AND EXISTS (
+	SELECT 1 FROM core_commits_version cv
+	JOIN core_commits mc ON mc.repo_url = v.repo_url AND mc.action = 'merged'
+	 AND mc.effective_author_email = v.author_email
+	 AND mc.effective_timestamp <= v.timestamp
+	 AND mc.effective_timestamp >= strftime('%Y-%m-%dT%H:%M:%SZ', v.timestamp, '-60 seconds')
+	 AND instr(mc.message, 'closes="') > 0 AND instr(mc.message, cv.canonical_hash) > 0
+	WHERE cv.edit_repo_url = v.repo_url AND cv.edit_hash = v.hash))`
+
 // timelineWheres returns one WHERE clause per timeline source, with its args.
 func timelineWheres(listIDs []string, workspaceURL string, forkURLs []string, cursor string) ([]string, [][]interface{}) {
 	gitmsgFilter := " AND v.branch NOT LIKE 'refs/gitmsg/%'"
-	editFilter := " AND " + cache.LiveItemFilter
+	editFilter := " AND " + cache.TimelineItemFilter + mergeCloseFilter
 	if cursor != "" {
 		editFilter += " AND v.timestamp < ?"
 	}
@@ -817,6 +833,27 @@ func extractHeaderFields(rawMessage string) (ext, typ, state string) {
 	return msg.Header.Ext, msg.Header.Fields["type"], msg.Header.Fields["state"]
 }
 
+// actionTarget returns the subject of the item an action commit acts on, and the issues that a merge closes.
+func actionTarget(rawMessage, action string) (subject string, closes []string) {
+	msg := protocol.ParseMessage(rawMessage)
+	if msg == nil {
+		return "", nil
+	}
+	// An edit carries the subject of its item; a review names its pull request in the first reference, and has no subject without one.
+	subject = msg.Content
+	if msg.Header.Fields["type"] == "feedback" {
+		subject = ""
+		if len(msg.References) > 0 {
+			subject = strings.TrimPrefix(strings.TrimSpace(msg.References[0].Metadata), ">")
+		}
+	}
+	subject, _, _ = strings.Cut(strings.TrimSpace(subject), "\n")
+	if action == "merged" && msg.Header.Fields["closes"] != "" {
+		closes = strings.Split(msg.Header.Fields["closes"], ",")
+	}
+	return subject, closes
+}
+
 // scanResolvedRows scans every row an item query returns.
 func scanResolvedRows(rows *sql.Rows) ([]SocialItem, error) {
 	var items []SocialItem
@@ -848,6 +885,7 @@ func scanResolvedRow(s cache.RowScanner) (*SocialItem, error) {
 		&editorName, &editorEmail,
 		&editRepoURL, &editHash, &editBranch,
 		&labelsStr,
+		&item.Action,
 		&followsWorkspace, &hasProposed,
 	)
 	if err != nil {
@@ -857,6 +895,9 @@ func scanResolvedRow(s cache.RowScanner) (*SocialItem, error) {
 		item.Content = protocol.ExtractCleanContent(message.String)
 		item.OriginalExtension, item.OriginalType = extractOriginalExtType(message.String)
 		item.HeaderExt, item.HeaderType, item.HeaderState = extractHeaderFields(message.String)
+	}
+	if item.Action != "" && originalMessage.Valid {
+		item.ActionSubject, item.Closes = actionTarget(originalMessage.String, item.Action)
 	}
 	if originalMessage.Valid {
 		if msg := protocol.ParseMessage(originalMessage.String); msg != nil {
@@ -881,6 +922,13 @@ func scanResolvedRow(s cache.RowScanner) (*SocialItem, error) {
 	item.FollowsWorkspace = followsWorkspace == 1
 	item.HasProposedEdits = hasProposed == 1
 	return &item, nil
+}
+
+// timelinePost converts a timeline row to a Post with its action; only a timeline entry carries one, so each other view shows a review as the item it is.
+func timelinePost(item SocialItem) Post {
+	post := SocialItemToPost(item)
+	post.Action, post.ActionSubject, post.Closes = item.Action, item.ActionSubject, item.Closes
+	return post
 }
 
 // SocialItemToPost converts a SocialItem to a Post for API responses.

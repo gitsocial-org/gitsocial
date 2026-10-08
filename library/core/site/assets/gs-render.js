@@ -819,8 +819,33 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     });
   }
 
+  // ACTION_VERBS words each action whose name is not its verb.
+  const ACTION_VERBS = { "changes-requested": "requested changes on", ready: "marked ready" };
+
+  // actionCard renders a timeline action as one line: the actor, the verb, the type and subject of the item, the time, and the issues a merge closes.
+  function actionCard(item) {
+    const target = item._target;
+    const type = item._ext === "review" ? "pull request" : (item.header.type || "issue");
+    const row = el("span", { class: "meta meta-lead" }, [
+      authorEl(authorLabel(item.author, item.commit.authorName || item.commit.authorEmail), effectiveAuthorEmail(item.commit, item.commit.gitmsg)),
+      " " + (ACTION_VERBS[item._action] || item._action) + " " + type + " ",
+      el("a", { class: "subject", href: commitRef(target.commit.hash, item._branch) }, [item._subject || "(untitled)"]),
+      " · ", timeEl(item.effectiveTime),
+    ]);
+    for (const ref of item._action === "merged" && item.header.closes ? item.header.closes.split(",") : []) {
+      const h = refHash(ref.trim());
+      if (h) row.append(" · closes ", el("a", { class: "hash", href: commitRef(h, "gitmsg/pm") }, [h.slice(0, 7)]));
+    }
+    return card({
+      parts: [el("div", { class: "card-head" }, [typeGlyphEl(target, item._ext), row])],
+      variant: "action",
+      nav: { hash: target.commit.hash, branch: item._branch },
+    });
+  }
+
   // timelineCard dispatches a merged-timeline item to the card for its extension.
   function timelineCard(item, counts) {
+    if (item._action) return actionCard(item);
     if (item._ext === "code") return commitCard(item.commit, item._branch || "", { chip: true });
     if (item._ext === "pm") return issueCard(item, 0, counts);
     if (item._ext === "review") return prCard(item, counts);

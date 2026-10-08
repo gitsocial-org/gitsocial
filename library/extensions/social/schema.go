@@ -65,6 +65,7 @@ SELECT
     c.is_virtual,
     c.stale_since,
     c.labels,
+    c.action,
     COALESCE(s.type, 'post') as type,
     s.original_repo_url,
     s.original_hash,

@@ -59,8 +59,8 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 	} else {
 		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: tuicore.FormatTime(post.Timestamp)})
 	}
-	// Show state for cross-extension items (PRs, issues) right after time
-	if post.HeaderState != "" && post.HeaderExt != "" && post.HeaderExt != "social" {
+	// Show state for cross-extension items (PRs, issues) right after time; an action entry names it in its text
+	if post.Action == "" && post.HeaderState != "" && post.HeaderExt != "" && post.HeaderExt != "social" {
 		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: post.HeaderState})
 	}
 	if post.Interactions.Comments > 0 {
@@ -104,6 +104,9 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 	if !post.Display.IsWorkspacePost {
 		repoForLinks = post.Repository
 		content = tuicore.ResolveContentURLs(content, repoForLinks, "")
+	}
+	if post.Action != "" {
+		content = social.ActionText(post)
 	}
 
 	if originURL != "" {
@@ -214,6 +217,12 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 			card.Header.Icon = "↩"
 		}
 	}
+	switch post.Action {
+	case "approved":
+		card.Header.Icon = "✓"
+	case "changes-requested":
+		card.Header.Icon = "✗"
+	}
 	if post.HeaderExt == "release" {
 		card.Header.Icon = "⏏"
 	}
@@ -310,6 +319,11 @@ func postsToItems(posts []social.Post, userEmail string, showEmail bool, workdir
 			// for correct card rendering (data is social.Post, not pm.Issue)
 			item.OriginalExt = p.HeaderExt
 			item.OriginalType = p.HeaderType
+			// An action entry is an edit commit, and its detail view takes the item it edits.
+			if p.Action != "" && p.EditOf != "" {
+				target := protocol.ResolveRefWithDefaults(p.EditOf, p.Repository, p.Branch)
+				item.OriginalID = protocol.CreateRef(protocol.RefTypeCommit, target.Hash, target.RepoURL, target.Branch)
+			}
 		}
 		items[i] = item
 	}

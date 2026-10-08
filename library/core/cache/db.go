@@ -51,7 +51,7 @@ func RegisterSchema(name, schema string) {
 // schemaVersion is bumped whenever the core schema changes in a way that
 // requires reseeding the cache. Open() compares user_version to this and
 // nukes-and-recreates the file when it lags. Bump on every breaking change.
-const schemaVersion = 5
+const schemaVersion = 6
 
 const coreSchema = `
 -- Core: Raw commits (1:1 with git, per repo+branch). The is_retracted/has_edits/
@@ -85,6 +85,8 @@ CREATE TABLE IF NOT EXISTS core_commits (
     resolved_edit_repo_url TEXT,
     resolved_edit_hash TEXT,
     resolved_edit_branch TEXT,
+    -- action is the timeline action of the commit (closed, merged, approved), NULL for none.
+    action TEXT,
     -- Generated columns: VIRTUAL (recomputed on access; indexed values stored
     -- in the index). effective_message picks the latest edit's content when
     -- one exists; effective_author_*/timestamp prefer origin_* (set on

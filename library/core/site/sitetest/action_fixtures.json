@@ -1,0 +1,23 @@
+{
+  "_comment": "Shared fixtures for the timeline action of a version: headerAction in core/cache/actions.go and in gs-core.js must give the same action for a header and the header of the version before it. A null prev is a first version.",
+  "cases": [
+    { "name": "first version of an issue", "prev": null, "cur": { "type": "issue", "state": "open" }, "expect": "" },
+    { "name": "issue closed", "prev": { "state": "open" }, "cur": { "state": "closed" }, "expect": "closed" },
+    { "name": "issue reopened", "prev": { "state": "closed" }, "cur": { "state": "open" }, "expect": "reopened" },
+    { "name": "milestone canceled", "prev": { "state": "open" }, "cur": { "state": "canceled" }, "expect": "canceled" },
+    { "name": "sprint started", "prev": { "state": "planned" }, "cur": { "state": "active" }, "expect": "started" },
+    { "name": "sprint completed", "prev": { "state": "active" }, "cur": { "state": "completed" }, "expect": "completed" },
+    { "name": "sprint back to planned", "prev": { "state": "active" }, "cur": { "state": "planned" }, "expect": "" },
+    { "name": "same state, new labels", "prev": { "state": "open" }, "cur": { "state": "open", "labels": "kind/bug" }, "expect": "" },
+    { "name": "no state in the edit", "prev": { "state": "open" }, "cur": { "labels": "kind/bug" }, "expect": "" },
+    { "name": "pull request merged", "prev": { "state": "open" }, "cur": { "state": "merged" }, "expect": "merged" },
+    { "name": "draft marked ready", "prev": { "state": "open", "draft": "true" }, "cur": { "state": "open" }, "expect": "ready" },
+    { "name": "converted to draft", "prev": { "state": "open" }, "cur": { "state": "open", "draft": "true" }, "expect": "" },
+    { "name": "draft closed", "prev": { "state": "open", "draft": "true" }, "cur": { "state": "closed" }, "expect": "closed" },
+    { "name": "review approved", "prev": null, "cur": { "type": "feedback", "review-state": "approved" }, "expect": "approved" },
+    { "name": "review comment", "prev": null, "cur": { "type": "feedback", "file": "a.go" }, "expect": "" },
+    { "name": "review text edited", "prev": { "review-state": "approved" }, "cur": { "review-state": "approved" }, "expect": "" },
+    { "name": "review changed", "prev": { "review-state": "approved" }, "cur": { "review-state": "changes-requested" }, "expect": "changes-requested" },
+    { "name": "retraction", "prev": { "state": "open" }, "cur": { "state": "closed", "retracted": "true" }, "expect": "" }
+  ]
+}

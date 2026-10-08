@@ -138,15 +138,15 @@ func insertCommitsTxn(commits []Commit) error {
 			repo_url, hash, branch, author_name, author_email, message, timestamp,
 			origin_time, edits, labels, fetched_at,
 			origin_author_name, origin_author_email, signer_key,
-			is_edit_commit
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			is_edit_commit, action
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(repo_url, hash, branch) DO UPDATE SET
 			author_name = excluded.author_name, author_email = excluded.author_email,
 			message = excluded.message, timestamp = excluded.timestamp,
 			origin_time = excluded.origin_time, edits = excluded.edits, labels = excluded.labels,
 			fetched_at = excluded.fetched_at,
 			origin_author_name = excluded.origin_author_name, origin_author_email = excluded.origin_author_email,
-			signer_key = excluded.signer_key, is_edit_commit = excluded.is_edit_commit, is_virtual = 0
+			signer_key = excluded.signer_key, is_edit_commit = excluded.is_edit_commit, action = excluded.action, is_virtual = 0
 		WHERE core_commits.is_virtual = 1
 		RETURNING rowid`)
 	if err != nil {
@@ -185,9 +185,13 @@ func insertCommitsTxn(commits []Commit) error {
 		var originAuthorName *string
 		var originAuthorEmail *string
 		var isRetracted bool
+		var action *string
 		if msg := protocol.ParseMessage(c.Message); msg != nil {
 			if e := msg.Header.Fields["edits"]; e != "" {
 				edits = &e
+			} else if a := headerAction(nil, msg.Header.Fields); a != "" {
+				// The action of an edit needs the version before it, so applyEditToCanonical writes it.
+				action = &a
 			}
 			if ot := msg.Header.Fields["origin-time"]; ot != "" {
 				originTime = &ot
@@ -224,7 +228,7 @@ func insertCommitsTxn(commits []Commit) error {
 
 		// signer_key: an empty string is confirmed unsigned; NULL means the git lookup failed at insert, and the backfill retries it.
 		var rowid int64
-		err := commitStmt.QueryRow(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail, c.SignerKey, isEditCommit).Scan(&rowid)
+		err := commitStmt.QueryRow(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail, c.SignerKey, isEditCommit, action).Scan(&rowid)
 		written := err == nil
 		if err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("insert commit %s: %w", c.Hash, err)

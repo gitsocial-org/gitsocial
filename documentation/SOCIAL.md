@@ -75,8 +75,28 @@ gitsocial social followers [--json]
 - Where social messages are stored is specified in [GITMSG.md §3.4](../specs/GITMSG.md#34-content-branch).
 - Lists are at `refs/gitmsg/social/lists/<name>/`, one ref per member and metadata at `_meta` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)).
 - The timeline excludes retracted posts ([GITMSG.md §1.5](../specs/GITMSG.md#15-versioning)) and stale commits ([ARCHITECTURE.md](ARCHITECTURE.md#cache)). It sorts by effective timestamp, newest first, and imported content sorts by its origin time.
+- The timeline shows an action as an entry of one line at the time of the action; see [Timeline actions](#timeline-actions).
 - The comment, repost and quote counts of a card include only the items that are not retracted, so retracting a comment decreases the comment count.
 - A comment names the branch that its commit was on. After a merge moves the commit to another branch, its thread and its counts follow the commit, and a new comment names the branch that the commit is on now ([ARCHITECTURE.md](ARCHITECTURE.md#workspace-home-branch)).
 - `gitsocial social log` lists an item by its own type: a comment on a post is a comment, not a post.
 - Mentions, replies, comments and reposts of workspace posts create [notifications](NOTIFICATIONS.md#types).
 - In the TUI, `S` opens the timeline ([TUI-KEYS.md](TUI-KEYS.md#social-extension)).
+
+### Timeline actions
+
+An action is derived from commits that exist already: an edit that changes a state, or a review. No command writes an action.
+
+| Action | Shown for | Source |
+|---|---|---|
+| `closed`, `reopened`, `canceled` | issue, milestone, sprint | an edit whose `state` differs from the version before it |
+| `started`, `completed` | sprint | an edit that changes `state` to `active` or `completed` |
+| `merged`, `closed`, `reopened` | pull request | an edit whose `state` differs from the version before it |
+| `ready` | pull request | an edit that removes `draft="true"` from an open pull request |
+| `approved`, `changes-requested` | pull request | a review with `review-state`; an edit of the review only when the value changes |
+
+- The version before an edit is the earlier version of the same repository by commit time, then by hash.
+- An edit of text, labels or assignees, a retraction, an edit from another repository and a conversion to draft are not actions.
+- A merge that closes issues shows one entry that names them. The `closed` entry of an issue is hidden when the same author merged a pull request that closes it not more than 60 seconds before.
+- Only the timeline shows an action entry, for all lists or for one list (`-l`). Issue, pull request and repository lists show items only, and a review shows there with its full text.
+- When two versions of an item have the same commit time, the TUI orders them by hash and the site by history, so the two can name the action on different edits.
+- The site derives an action only when the first version of the item is in the part of the history that the browser has loaded. Before that, it shows the edit as an item card.
