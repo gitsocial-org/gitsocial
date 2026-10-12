@@ -906,10 +906,12 @@ Result: for one remote, the object below; for more than one remote, an array of 
 ```json
 {
   "push": {"...": "per-branch push counts"},
-  "site": {"published": true, "complete": true},
+  "site": {"published": true, "complete": true, "forkPullRequests": {"count": 2, "bytes": 1363149}},
   "emptyBoot": false
 }
 ```
+
+`site.forkPullRequests` is present when the `forkPullRequests` site key is on ([STATIC-SITE.md](STATIC-SITE.md#fork-pull-requests)).
 
 #### core.status
 

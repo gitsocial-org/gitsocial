@@ -44,17 +44,18 @@ func TestWorkspaceSiteCustomizationRoundTrip(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(workdir) })
 
 	want := SiteCustomization{
-		Title:        "Thread Demo",
-		Accent:       "#0a7",
-		AccentDark:   "#0dd",
-		Favicon:      "favicon.png",
-		Image:        "og-card.png",
-		URL:          "https://example.com/",
-		Description:  "A demo site",
-		Publish:      "true",
-		Pages:        "true",
-		FilesInclude: "*.txt",
-		FilesExclude: "secret/*",
+		Title:            "Thread Demo",
+		Accent:           "#0a7",
+		AccentDark:       "#0dd",
+		Favicon:          "favicon.png",
+		Image:            "og-card.png",
+		URL:              "https://example.com/",
+		Description:      "A demo site",
+		Publish:          "true",
+		Pages:            "true",
+		ForkPullRequests: "true",
+		FilesInclude:     "*.txt",
+		FilesExclude:     "secret/*",
 	}
 	if err := WriteWorkspaceSiteCustomization(workdir, want); err != nil {
 		t.Fatalf("WriteWorkspaceSiteCustomization() error = %v", err)

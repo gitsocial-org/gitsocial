@@ -285,3 +285,80 @@ func TestSiteForks_pendingHead(t *testing.T) {
 		t.Errorf("manifest without a source = %+v, want no items", m)
 	}
 }
+
+// noteCollector returns a note function and the notes it receives.
+func noteCollector() (func(string), *[]string) {
+	notes := &[]string{}
+	return func(msg string) { *notes = append(*notes, msg) }, notes
+}
+
+func TestSiteForks_offDeletesArea(t *testing.T) {
+	client, _, refs, _, pull := forkFixture(t)
+	on := SiteCustomization{Publish: "true", ForkPullRequests: "true"}
+	note, notes := noteCollector()
+	if area := maintainSiteForks(client, "", refs, on, sourceOf(pull), note); area == nil || area.Count != 1 {
+		t.Fatalf("area with the key on = %+v, want one pull request", area)
+	}
+	before := bucketSnapshot(t, client)
+	off := SiteCustomization{Publish: "true"}
+	if area := maintainSiteForks(client, "", refs, off, sourceOf(pull), note); area != nil {
+		t.Errorf("area with the key off = %+v, want none", area)
+	}
+	if keys, _ := client.List(siteForksPrefix); len(keys) != 0 {
+		t.Errorf("keys left after the key went off: %v", keys)
+	}
+	if len(*notes) != 0 {
+		t.Errorf("notes = %v, want none", *notes)
+	}
+	after := bucketSnapshot(t, client)
+	if len(after) != len(before) {
+		t.Errorf("keys outside the area changed: %d before, %d after", len(before), len(after))
+	}
+	// With the key off and no area, the pass writes nothing.
+	maintainSiteForks(client, "", refs, off, sourceOf(pull), note)
+	if keys, _ := client.List(siteForksPrefix); len(keys) != 0 {
+		t.Errorf("the key off wrote %v", keys)
+	}
+}
+
+func TestSiteForks_lockFreezesArea(t *testing.T) {
+	client, _, refs, _, pull := forkFixture(t)
+	on := SiteCustomization{Publish: "true", ForkPullRequests: "true"}
+	note, notes := noteCollector()
+	maintainSiteForks(client, "", refs, on, sourceOf(pull), note)
+	if err := client.Put(siteForksLockKey, []byte("frozen\n")); err != nil {
+		t.Fatal(err)
+	}
+	frozen := bucketSnapshot(t, client)
+	for key := range frozen {
+		if !strings.HasPrefix(key, siteForksPrefix) {
+			delete(frozen, key)
+		}
+	}
+	keys, _ := client.List(siteForksPrefix)
+	for _, key := range keys {
+		body, _ := client.Get(key)
+		frozen[key] = string(body)
+	}
+	pull.Head = ""
+	area := maintainSiteForks(client, "", refs, on, sourceOf(pull), note)
+	if area == nil || area.Count != 1 || area.Bytes == 0 {
+		t.Errorf("area under the lock = %+v, want the frozen manifest's count and bytes", area)
+	}
+	if maintainSiteForks(client, "", refs, SiteCustomization{Publish: "true"}, sourceOf(pull), note) != nil {
+		t.Error("the key off under the lock reports an area")
+	}
+	if len(*notes) != 2 || !strings.Contains((*notes)[0], "locked") {
+		t.Errorf("notes = %v, want one lock note per pass", *notes)
+	}
+	keys, _ = client.List(siteForksPrefix)
+	if len(keys) != len(frozen) {
+		t.Fatalf("keys under the lock = %v, want the frozen %d", keys, len(frozen))
+	}
+	for _, key := range keys {
+		body, _ := client.Get(key)
+		if frozen[key] != string(body) {
+			t.Errorf("%s changed under the lock", key)
+		}
+	}
+}

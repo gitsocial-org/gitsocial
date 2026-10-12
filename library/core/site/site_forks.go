@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
@@ -34,6 +35,8 @@ const (
 	siteForksManifestKey = siteForksPrefix + "manifest.json"
 	// siteForksPackPrefix holds one immutable pack per open head, named as git names it.
 	siteForksPackPrefix = siteForksPrefix + "pack/"
+	// siteForksLockKey is the marker the owner puts to freeze the area: while it exists the push writes and deletes nothing there.
+	siteForksLockKey = siteForksPrefix + "lock"
 	// siteForksVersion is the manifest schema version; another version reads as absent.
 	siteForksVersion = 1
 	// siteForkPackCap is the pack size over which a head is not written and its entry says tooLarge.
@@ -61,12 +64,49 @@ type siteForkEntry struct {
 	TooLarge  bool   `json:"tooLarge,omitempty"`
 }
 
-// maintainSiteForks runs the fork pull request step and reports a failure as one note, since the area never fails a push.
-func maintainSiteForks(client *objstore.Client, prefix string, refs map[string]string, forks ForkPullSource, note func(string)) *ForkPullArea {
+// maintainSiteForks runs the fork pull request step: frozen under the lock, deleted with the key off, written with it on; a failure is one note, since the area never fails a push.
+func maintainSiteForks(client *objstore.Client, prefix string, refs map[string]string, cfg SiteCustomization, forks ForkPullSource, note func(string)) *ForkPullArea {
+	on := cfg.ForkPullRequests == "true"
+	keys, err := client.List(prefix + siteForksPrefix)
+	if err != nil {
+		note("fork pull requests: " + err.Error())
+		return nil
+	}
+	if slices.Contains(keys, prefix+siteForksLockKey) {
+		note("fork pull requests: locked by " + siteForksLockKey + ", nothing written")
+		if !on {
+			return nil
+		}
+		return readForkArea(client, prefix)
+	}
+	if !on {
+		for _, key := range keys {
+			if err := client.Delete(key); err != nil {
+				note("fork pull requests: delete " + key + ": " + err.Error())
+				return nil
+			}
+		}
+		return nil
+	}
 	area, err := writeSiteForks(client, prefix, refs, forks)
 	if err != nil {
 		note("fork pull requests: " + err.Error())
 		return nil
+	}
+	return area
+}
+
+// readForkArea reports the area as its manifest lists it, nil when the manifest is absent or at another version.
+func readForkArea(client *objstore.Client, prefix string) *ForkPullArea {
+	var m siteForkManifest
+	if found, err := objstore.ReadCompressedJSON(client, prefix+siteForksManifestKey, &m); err != nil || !found || m.Version != siteForksVersion {
+		return nil
+	}
+	area := &ForkPullArea{Bytes: m.Bytes}
+	for _, e := range m.Items {
+		if e.Head != "" || e.Pending || e.TooLarge {
+			area.Count++
+		}
 	}
 	return area
 }

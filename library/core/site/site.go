@@ -375,7 +375,7 @@ func Rebuild(remoteURL string, env objstore.HelperEnv, workdir string, ov objsto
 		note("fork pull requests: " + err.Error())
 		return true, complete, nil, nil
 	}
-	return true, complete, maintainSiteForks(client, prefix, refs, forks, note), nil
+	return true, complete, maintainSiteForks(client, prefix, refs, eff, forks, note), nil
 }
 
 // rebuildSite is Rebuild over a resolved client and prefix; complete is false when a bootstrap still owes work a later pass must finish.

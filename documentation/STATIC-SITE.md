@@ -2,7 +2,7 @@
 
 The static site is a website of the repository that `gitsocial mirror` and `gitsocial push` build in a bucket, as static files that the browser reads directly: timeline, issues and boards, pull requests, releases, code, search, analytics.
 
-[Mirror](#mirror) · [Publish](#publish) · [Customization](#customization) · [HTML pages](#html-pages) · [Design](#design) · [Testing](#testing) · [Reference](#reference)
+[Mirror](#mirror) · [Publish](#publish) · [Customization](#customization) · [HTML pages](#html-pages) · [Fork pull requests](#fork-pull-requests) · [Design](#design) · [Testing](#testing) · [Reference](#reference)
 
 ## Mirror
 
@@ -47,6 +47,7 @@ Values are in the `site` object of the core config ref and reach the bucket as `
 | `accent`, `accentDark` | `"#0a7"` | `#rgb` or `#rrggbb` |
 | `favicon` | `favicon.png` | shown beside the sidebar title: a key relative to the site root (upload with `gitsocial remote put`) or an absolute `https://` URL, up to 500 characters |
 | `image` | `og-card.png` | `og:image` for every page: a key relative to the site root (upload with `gitsocial remote put`) or an absolute `https://` URL, up to 500 characters |
+| `forkPullRequests` | `true` | `true` or `false`, default false; see [Fork pull requests](#fork-pull-requests) |
 | `url` | `https://example.com/` | absolute `https://` base (`http://` for localhost only), no query or fragment, up to 500 characters |
 | `publish`, `pages` | `true` | `true` or `false`, both default false |
 | `filesInclude`, `filesExclude` | `"internal/**"` | comma-separated repo-relative globs; `**` spans segments; a leading `/` or a `..` segment is dropped |
@@ -87,6 +88,14 @@ What a page shows:
 - Every `<title>` is unique, and every description is prose with the markdown stripped.
 
 On a large repository, several pushes can be necessary to write every page; `GITSOCIAL_SITE_PAGES_BUDGET` limits the item pages that one push writes ([S3.md](S3.md#environment-variables)). Setting `pages false` or removing `url` deletes the pages on the next push.
+
+## Fork pull requests
+
+```bash
+gitsocial config site set forkPullRequests true
+```
+
+With `publish` and `forkPullRequests` set, each push writes the open pull requests of [registered forks](REVIEW.md#forks) whose base is this repository under `.gitsocial/forks/`: one pack per head that `gitsocial fetch` brought, and a manifest. The app lists each one with a fork chip and the fork URL, and reads its pack when a reader opens it. A head not fetched yet, or one whose pack is over 32 MB, shows the pull request with a notice in place of the diff. Setting the key to `false` deletes the area on the next push. A `lock` key in the area, put with `gitsocial remote put .gitsocial/forks/lock <file>`, freezes it: the push writes and deletes nothing there and prints one note.
 
 ## Design
 
@@ -132,6 +141,9 @@ The pages are at the prefix root, next to the shell; the cache classes are in [S
 | `sitemap.xml`, `sitemap-head.xml`, `sitemap-<n>.xml` | the sitemap, an index over parts when it is large | head no-cache, parts immutable |
 | `robots.txt` | `Allow: /` and the sitemap location | no-cache |
 | `feed.xml`, `<dir>/feed.xml` | Atom feeds | no-cache |
+| `.gitsocial/forks/manifest.json` | the open fork pull requests: the entries of each one, the pack of its head and the bytes of the area; written last, version 1 | no-cache |
+| `.gitsocial/forks/pack/pack-<hash>.{pack,idx}` | the objects reachable from one fork head and from no bucket ref, plus the review commits of its pull request; non-thin, offset deltas, 32 MB at most | immutable |
+| `.gitsocial/forks/lock` | the owner's marker: while it exists the push writes and deletes nothing under `.gitsocial/forks/` | no-cache |
 
 Item pages and full list pages are rewritten only when `sitePagesVersion` in `site_pages.go` changes; the commit that bumps it says why. Everything else is rewritten on every push.
 
@@ -201,5 +213,6 @@ Index maintenance:
 Every ref-moving push to an s3 remote runs the site rebuild as its part of push maintenance ([S3.md](S3.md#push-maintenance)), through the `site.PostPushMaintenance` hook that the CLI gives the remote helper.
 
 - `.gitsocial/site/push-state` records the last full pass: the shell version, a digest over the ref listing and the page layer's state. A matching marker skips the pass.
+- The [fork pull request area](#fork-pull-requests) follows the fork heads, which no bucket ref names, so every pass maintains it and the marker does not gate it.
 - The marker is written only at the end of a full pass, and not while a bootstrap or the page layer has work left.
 - The site walks read commits from the local object database of the pusher, and from the bucket when an object is not there.

@@ -60,6 +60,13 @@ func TestValidateSiteCustomization(t *testing.T) {
 		}
 	})
 
+	t.Run("forkPullRequests is a guard", func(t *testing.T) {
+		c, ok := validateSiteCustomization(map[string]interface{}{"forkPullRequests": true, "pages": "maybe"})
+		if !ok || c.ForkPullRequests != "true" || c.Pages != "" {
+			t.Fatalf("guard validation = %+v ok=%v", c, ok)
+		}
+	})
+
 	t.Run("long title truncated", func(t *testing.T) {
 		c, ok := validateSiteCustomization(map[string]interface{}{"title": strings.Repeat("x", siteConfigMaxTitle+50)})
 		if !ok || len(c.Title) != siteConfigMaxTitle {

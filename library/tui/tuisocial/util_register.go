@@ -469,6 +469,8 @@ func formatPushRemoteResult(res client.Result) (string, bool) {
 	switch {
 	case res.Site.Err != nil:
 		return head + " · site failed: " + res.Site.Err.Error(), true
+	case res.Site.Published && res.Site.ForkPulls != nil:
+		return head + fmt.Sprintf(" · site published, %d fork pull requests", res.Site.ForkPulls.Count), false
 	case res.Site.Published:
 		return head + " · site published", false
 	case res.Site.Skipped != "":

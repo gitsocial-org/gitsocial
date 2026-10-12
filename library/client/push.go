@@ -44,6 +44,8 @@ type SiteOutcome struct {
 	Skipped  string `json:"skipped,omitempty"`
 	Error    string `json:"error,omitempty"`
 	Err      error  `json:"-"`
+	// ForkPulls is the fork pull request area the site step maintains, nil when the forkPullRequests key is off.
+	ForkPulls *site.ForkPullArea `json:"forkPullRequests,omitempty"`
 }
 
 // Result combines the data-push result with the site outcome and whether the
@@ -214,14 +216,14 @@ func rebuildSiteOnly(workdir, remote string, opts Options, progress objstore.Pro
 	if !strings.HasPrefix(remoteURL, "s3://") {
 		return nil, fmt.Errorf("remote %q is %s, not an s3 remote", remote, remoteURL)
 	}
-	published, complete, _, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress, forkPullSource(workdir, opts.CacheDir))
+	published, complete, area, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress, forkPullSource(workdir, opts.CacheDir))
 	if err != nil {
 		return nil, fmt.Errorf("rebuild site at %s: %w", remoteURL, err)
 	}
 	if !published {
 		return nil, errors.New("site publishing is disabled: enable it with gitsocial config site set publish true")
 	}
-	res.Site = SiteOutcome{Published: true, Complete: complete}
+	res.Site = SiteOutcome{Published: true, Complete: complete, ForkPulls: area}
 	return res, nil
 }
 
@@ -243,7 +245,7 @@ func rebuildSite(workdir, remote, remoteURL string, opts Options, progress objst
 	if opts.DryRun {
 		return SiteOutcome{Skipped: "dry-run"}
 	}
-	published, complete, _, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress, forkPullSource(workdir, opts.CacheDir))
+	published, complete, area, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress, forkPullSource(workdir, opts.CacheDir))
 	if errors.Is(err, objstore.ErrThinBucket) {
 		// A thin fork bucket has no site by design; that is a skip, not a failure
 		// (an explicit `--site-only` still errors, see rebuildSiteOnly).
@@ -255,7 +257,7 @@ func rebuildSite(workdir, remote, remoteURL string, opts Options, progress objst
 	if !published {
 		return SiteOutcome{Skipped: "site.publish not enabled"}
 	}
-	return SiteOutcome{Published: true, Complete: complete}
+	return SiteOutcome{Published: true, Complete: complete, ForkPulls: area}
 }
 
 // PublishSite uploads the browser static site to an s3 bucket and refreshes the

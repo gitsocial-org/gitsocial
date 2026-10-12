@@ -60,7 +60,7 @@ func PostPushMaintenance(out objstore.PushOutcome, forks ForkPullSource) {
 	}
 	updatePushedSiteItems(out, src)
 	out.Progress.Call("maintenance: fork pull requests", 0, 0)
-	maintainSiteForks(client, prefix, out.Refs, forks, func(msg string) { fmt.Fprintf(os.Stderr, "gitsocial s3: %s\n", msg) })
+	maintainSiteForks(client, prefix, out.Refs, cfg, forks, func(msg string) { fmt.Fprintf(os.Stderr, "gitsocial s3: %s\n", msg) })
 	// A shell upload overwrites the dual-owned index.html, so reclaim the front page in the one case the marker below would still be stamped.
 	reclaimOK := true
 	if shellUploaded {

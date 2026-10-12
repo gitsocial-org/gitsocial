@@ -169,6 +169,21 @@ func printRemoteHint(out io.Writer, workdir string, remotes []string, resolution
 	}
 }
 
+// siteLine renders the site step of a push: published, with the bootstrap state and the fork pull request area in parentheses.
+func siteLine(s client.SiteOutcome) string {
+	var details []string
+	if !s.Complete {
+		details = append(details, "incomplete: a bootstrap is still in progress, push again to finish")
+	}
+	if s.ForkPulls != nil {
+		details = append(details, fmt.Sprintf("fork pull requests: %d, %.1f MB", s.ForkPulls.Count, float64(s.ForkPulls.Bytes)/(1<<20)))
+	}
+	if len(details) == 0 {
+		return "Site: published"
+	}
+	return "Site: published (" + strings.Join(details, "; ") + ")"
+}
+
 // printPushResult renders the push and site result for humans.
 func printPushResult(out io.Writer, result *client.Result, dryRun bool) {
 	p := result.Push
@@ -205,10 +220,8 @@ func printPushResult(out io.Writer, result *client.Result, dryRun bool) {
 	}
 
 	switch {
-	case result.Site.Published && !result.Site.Complete:
-		fmt.Fprintln(out, "Site: published (incomplete: a bootstrap is still in progress, push again to finish)")
 	case result.Site.Published:
-		fmt.Fprintln(out, "Site: published")
+		fmt.Fprintln(out, siteLine(result.Site))
 	case result.Site.Err != nil:
 		fmt.Fprintf(out, "Site: failed: %v\n", result.Site.Err)
 	case result.Site.Skipped != "":
