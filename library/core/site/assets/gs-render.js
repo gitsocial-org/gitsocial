@@ -2655,10 +2655,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
           return await prDiffSection(ctx, item.commit.short, versions[i].header, final, file);
         } catch (e) { return prDiffNotice(item.fork ? FORK_DIFF_NOTICE.unreadable : "The changes could not be loaded from this bucket."); }
       };
+      // The changes slot holds a spinner while the trees and blobs load, and again while a selected version loads.
+      const pendingChanges = () => el("div", { class: "changes-pending" }, [spinner()]);
       let changes = slot(), gen = 0;
+      changes.replaceWith(changes = pendingChanges());
       // showChanges replaces the section with the selected version's; a selection that a later one superseded paints nothing.
       const showChanges = (i) => {
         const g = ++gen;
+        if (!changes.classList.contains("changes-pending")) changes.replaceWith(changes = pendingChanges());
         enrichDetail(root, () => changesFor(i), (node) => {
           if (!node || g !== gen) return;
           changes.replaceWith(node);

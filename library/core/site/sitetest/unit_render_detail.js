@@ -269,10 +269,12 @@ async function main() {
   const ppr = (await GS.itemDetail(packCtx, sha("1c"), "gitmsg/review"))[0];
   for (let i = 0; i < 50 && !findClass(ppr, "thread").length; i++) await tick(20);
   ok(findClass(ppr, "thread").length === 1 && findClass(ppr, "diff-section").length === 0, "the thread lands before the changes resolve");
+  ok(findClass(ppr, "changes-pending").length === 1 && findClass(findClass(ppr, "changes-pending")[0], "spinner").length === 1, "a spinner holds the Files changed slot while it loads");
   await tick(300);
   global.fetch = miss;
   const pSec = findClass(ppr, "diff-section")[0];
   ok(!!pSec && findClass(pSec, "notice").length === 0, "a merge head in a pack and on no branch resolves", pSec && text(pSec));
+  ok(findClass(ppr, "changes-pending").length === 0, "the spinner goes when the section paints");
   eq(findClass(pSec, "diff-path").map(textOf), ["notes.txt"], "the squashed range lists its changed file");
   const order = ppr._children.map((c) => (c._cls && c._cls.has("diff-section")) ? "changes" : (c._cls && c._cls.has("thread")) ? "comments" : "").filter(Boolean);
   eq(order, ["changes", "comments"], "Files changed stays above Comments when the thread resolves first");
@@ -295,6 +297,7 @@ async function main() {
   ok(vSections().length === 1 && signs(vSections()[0]).indexOf("+again") !== -1, "the first paint shows the latest version's range", signs(vSections()[0] || GS.el("div")).join(" | "));
   const vRows = findClass(vpr, "version-row");
   fire(vRows[1], "click");
+  ok(findClass(vpr, "changes-pending").length === 1 && vSections().length === 0, "a selected version shows the spinner while its range loads");
   await tick(80);
   ok(vSections().length === 1, "selecting a version replaces the section, it does not add one", vSections().length);
   ok(signs(vSections()[0]).indexOf("+world") !== -1 && signs(vSections()[0]).indexOf("+again") === -1, "the original shows its own range", signs(vSections()[0]).join(" | "));
