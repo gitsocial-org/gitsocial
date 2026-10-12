@@ -67,6 +67,8 @@ Implementations SHOULD include `base-tip` and `head-tip` when creating or editin
 
 When transitioning to `state="merged"`, implementations MUST include `merge-base` with the common ancestor commit hash (12 characters) and `merge-head` with the head branch tip commit hash (12 characters), both computed before the merge. These two fields are the only durable record of the merged commit range — `head-tip` and `base-tip` describe the live branches at edit time, but the head branch may be deleted afterward, leaving `merge-base..merge-head` as the sole reconstruction path for the diff. Implementations MUST refuse to record a `state="merged"` edit when either field cannot be computed (e.g., the head branch is missing or the merge-base is unreachable).
 
+When recording a `state="merged"` edit, implementations SHOULD keep the `merge-head` commit reachable at `refs/gitmsg/review/merged/<hash>`, where `<hash>` is the 12-character hash of the pull request commit. The head branch may be deleted afterward; the ref keeps the merged range reconstructable in every clone.
+
 When resolving a cross-repository pull request (a pull request of a registered fork) by merge or close, implementations SHOULD first adopt it (GITMSG.md Section 1.5): a copy on the review branch of the base repository carrying `adopts="<fork-pr-ref>"` and a `GitMsg-Ref:` trailer preserving the original author's identity. The resolving edit then edits the local copy, ensuring the base repository has a self-contained record that survives fork deletion.
 
 Feedback messages MAY be edited or retracted using core versioning.

@@ -321,6 +321,7 @@ State refs under `refs/gitmsg/`:
 - `refs/gitmsg/<ext>/config`: per-extension JSON config
 - `refs/gitmsg/core/forks/<urlHash>`: one ref per registered fork
 - `refs/gitmsg/core/declines/<hash>`: one ref per declined proposal, subject is the proposal ref
+- `refs/gitmsg/review/merged/<hash>`: the merge head of a merged pull request, keyed by the 12-character hash of the pull request; `pr merge` writes it
 - `refs/gitmsg/<ext>/lists/<name>/_meta` and `.../items/<refHash>`: list metadata and one ref per member
 
 Each element has its own ref, so concurrent adds from several clones do not collide. Metadata is at `_meta`. Git refuses a child ref under a parent ref that has the same name.

@@ -181,6 +181,7 @@ GitSocial does not dismiss feedback automatically.
 - `review config set require-review true` makes approval a merge condition, so `pr merge` fails with `REVIEW_REQUIRED` until the latest feedback of each reviewer is `approved`.
 - `pr list` shows the pull requests of this repository, and the pull requests of [registered forks](CLI.md#gitsocial-fork) whose base is this repository.
 - Fork registrations are at `refs/gitmsg/core/forks/<urlHash>` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)).
+- `pr merge` keeps the merged head at `refs/gitmsg/review/merged/<hash>`, where `<hash>` is the 12-character hash of the pull request. The push sends it with the state refs, so the merged range resolves in every clone after the head branch is deleted.
 - The diff of an imported pull request uses its stored tips; if no repository has one of these commits, the diff names the commit and the fetch that gets it.
 - Branch tips come from the remote: `refs/remotes/origin/<branch>` for this repository, and `git ls-remote` for a fork with no tracking ref. If a branch is not on its remote, GitSocial creates a `head-deleted` or `base-deleted` notification.
 - New fork pull requests, feedback, approvals and change requests create [notifications](NOTIFICATIONS.md#types), and so does a branch tip of an open pull request that moves or is deleted.
