@@ -309,6 +309,34 @@ async function main() {
   await tick(80);
   ok(findClass(aSections()[0], "notice").length === 0 && signs(aSections()[0]).indexOf("+again") !== -1, "the other version still resolves", text(aSections()[0]));
 
+  console.log("=== merged range resolves through the merged head ref ===");
+  // A squash merge of a fork head: 2c is the squash commit on main, 2d the head commit that only the merged head ref reaches.
+  codeCommit("2c", "ab", "tb", 1750000300, "Add world (squash)");
+  codeCommit("2d", "ab", "tb", 1750000260, "head of the fork branch");
+  commit("2e", "2b", 1750001900, "Squash merged from a fork", { ext: "review", type: "pull-request", state: "merged", base: "#branch:main", "merge-base": short("ab"), "merge-head": short("2d") });
+  const refCtx = (extra) => Object.assign({}, prCtx, { walks: {}, refMisses: new Set(), manifest: Promise.resolve(Object.assign({
+    "refs/heads/gitmsg/review": sha("2e"), "refs/heads/main": sha("2c"),
+  }, extra)) });
+  const rpr = (await GS.itemDetail(refCtx({ ["refs/gitmsg/review/merged/" + short("2e")]: sha("2d") }), sha("2e"), "gitmsg/review"))[0];
+  await tick(80);
+  const rSec = findClass(rpr, "diff-section")[0];
+  ok(!!rSec && findClass(rSec, "notice").length === 0, "a merge head that only the merged head ref reaches resolves", rSec && text(rSec));
+  eq(findClass(rSec, "diff-path").map(textOf), ["notes.txt"], "the squashed fork range lists its changed file");
+  const spr = (await GS.itemDetail(refCtx({ ["refs/gitmsg/review/merged/" + short("2e")]: sha("2c") }), sha("2e"), "gitmsg/review"))[0];
+  await tick(80);
+  ok(text(findClass(spr, "diff-section")[0]).indexOf("recorded merge range does not resolve") !== -1, "a ref whose sha is not the recorded merge head does not stand in for it", text(findClass(spr, "diff-section")[0]));
+
+  console.log("=== merged range without the ref ===");
+  // A merge commit keeps the head as its second parent, so the walk of main finds it without the ref.
+  ctx.objects.set(sha("2f"), { type: "commit", body: enc.encode("tree " + sha("tb") + "\nparent " + sha("ab") + "\nparent " + sha("2d") + "\nauthor Ada <ada@example.com> 1750000300 +0000\n\nMerge the fork branch\n") });
+  const wpr = (await GS.itemDetail(refCtx({ "refs/heads/main": sha("2f") }), sha("2e"), "gitmsg/review"))[0];
+  await tick(80);
+  const wSec = findClass(wpr, "diff-section")[0];
+  ok(!!wSec && findClass(wSec, "notice").length === 0 && findClass(wSec, "diff-path").map(textOf).join() === "notes.txt", "a merged PR with no ref resolves through the walk as before", wSec && text(wSec));
+  const npr = (await GS.itemDetail(refCtx({}), sha("2e"), "gitmsg/review"))[0];
+  await tick(80);
+  ok(text(findClass(npr, "diff-section")[0]).indexOf("recorded merge range does not resolve") !== -1, "a squash merge with no ref keeps the notice", text(findClass(npr, "diff-section")[0]));
+
   console.log("=== the loading spinner ===");
   const sp = GS.spinner();
   ok(sp._cls.has("spinner") && sp.getAttribute("role") === "status" && sp.getAttribute("aria-label") === "Loading", "the spinner names itself to screen readers");

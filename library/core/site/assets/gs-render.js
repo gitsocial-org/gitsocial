@@ -2291,8 +2291,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return sha ? { status: "ok", sha, exact: true } : { status: "ok", sha: live, exact: false };
   }
 
-  // resolveMergedRefs resolves a merged PR's merge-base and merge-head shorts to full shas, or null.
-  async function resolveMergedRefs(ctx, baseField, baseShort, headShort) {
+  // MERGED_HEAD_PREFIX is the ref namespace pr merge keeps each merge head under, by the pull request's 12-character hash (GITREVIEW.md 1.5).
+  const MERGED_HEAD_PREFIX = "refs/gitmsg/review/merged/";
+
+  // resolveMergedRefs resolves a merged PR's merge-base and merge-head shorts to full shas, or null; the merged head ref answers for the head before the resolver.
+  async function resolveMergedRefs(ctx, prShort, baseField, baseShort, headShort) {
     const { url, name } = parseBranchField(baseField);
     if (url || !name) return null;
     const live = await refTip(ctx, "refs/heads/" + name);
@@ -2300,7 +2303,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     let commits = null;
     const walk = async () => (commits || (commits = await walkHistory(ctx, live, DETAIL_WALK_CAP)));
     const find = (short) => (live.startsWith(short) ? live : resolveShortSha(ctx, short, walk));
-    const baseSha = await find(baseShort), headSha = await find(headShort);
+    const manifest = await manifestFor(ctx);
+    const keptHead = (manifest && manifest[MERGED_HEAD_PREFIX + prShort]) || "";
+    const baseSha = await find(baseShort);
+    const headSha = /^[0-9a-f]{40}$/.test(keptHead) && keptHead.startsWith(headShort) ? keptHead : await find(headShort);
     return baseSha && headSha ? { baseSha, headSha } : null;
   }
 
@@ -2313,12 +2319,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
   // prDiffSection builds the Files changed section of one PR version: the merge range of a merged final version, else its recorded tips; a range that does not resolve gets the notice.
-  async function prDiffSection(ctx, header, final, fileFeedback) {
+  async function prDiffSection(ctx, prShort, header, final, fileFeedback) {
     if (!header) return null;
     // The merge range comes first: it stays on the base branch after the head is deleted.
     const hasMergeRange = final && (header.state || "") === "merged" && header["merge-base"] && header["merge-head"];
     if (hasMergeRange) {
-      const m = await resolveMergedRefs(ctx, header.base, header["merge-base"], header["merge-head"]);
+      const m = await resolveMergedRefs(ctx, prShort, header.base, header["merge-base"], header["merge-head"]);
       if (m) {
         const baseTree = await commitTree(ctx, m.baseSha);
         const headTree = await commitTree(ctx, m.headSha);
@@ -2594,7 +2600,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const changesFor = async (i) => {
         try {
           await hydrateItems(ctx, file);
-          return await prDiffSection(ctx, versions[i].header, i === versions.length - 1, file);
+          return await prDiffSection(ctx, item.commit.short, versions[i].header, i === versions.length - 1, file);
         } catch (e) { return prDiffNotice("The changes could not be loaded from this bucket."); }
       };
       let changes = null, gen = 0;

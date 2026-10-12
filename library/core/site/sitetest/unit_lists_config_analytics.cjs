@@ -96,5 +96,11 @@ eq("top-authors", GS.topItemAuthors([{author:"Ann",email:"ann@x"},{author:"Ann",
   [{name:"Ann",email:"ann@x",count:2},{name:"Bob",email:"bob@x",count:1}]);
 eq("top-authors-limit", GS.topItemAuthors([{author:"Ann",email:"ann@x"},{author:"Bob",email:"bob@x"}], 1).length, 1);
 
-console.log(`\n${pass} passed, ${fail} failed`);
-process.exit(fail?1:0);
+// listBranches
+(async () => {
+  const refs = Object.assign({ "refs/heads/feature": "f", "refs/tags/v1": "t", "refs/gitmsg/review/merged/abcdef123456": "m", "refs/gitmsg/core/forks/0123": "k" }, man);
+  const { branches } = await GS.listBranches({ head: Promise.resolve({ branch: "refs/heads/main", sha: "x" }), manifest: Promise.resolve(refs) });
+  eq("branch list skips state refs", branches.map((b) => b.name), ["feature", "main"]);
+  console.log(`\n${pass} passed, ${fail} failed`);
+  process.exit(fail?1:0);
+})();
