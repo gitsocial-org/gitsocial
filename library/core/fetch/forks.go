@@ -22,9 +22,9 @@ const ForkDataRefPrefix = "refs/forks/"
 // ForkCodeRefPrefix is where the code branches a cross-fork diff borrows land, under <prefix><urlHash>/<branch>.
 const ForkCodeRefPrefix = "refs/fork/"
 
-// FetchForks fetches all gitmsg branches from registered forks concurrently,
+// FetchForks fetches all gitmsg branches from registered forks concurrently, and the code branches that heads names per fork,
 // processing commits through all registered extension processors.
-func FetchForks(workdir, cacheDir string, processors []CommitProcessor) Stats {
+func FetchForks(workdir, cacheDir string, processors []CommitProcessor, heads map[string][]string) Stats {
 	addresses := gitmsg.ForkAddresses(workdir)
 	if len(addresses) == 0 {
 		return Stats{}
@@ -35,7 +35,7 @@ func FetchForks(workdir, cacheDir string, processors []CommitProcessor) Stats {
 	if err != nil {
 		return Stats{Repositories: len(forks), Errors: []Error{{Repository: wsURL, Error: err.Error()}}}
 	}
-	stats, missingObject := fetchForksInto(forkDir, forks, addresses, processors)
+	stats, missingObject := fetchForksInto(workdir, forkDir, forks, addresses, processors, heads)
 	if !missingObject {
 		return stats
 	}
@@ -47,15 +47,21 @@ func FetchForks(workdir, cacheDir string, processors []CommitProcessor) Stats {
 		log.Debug("fork repo repair failed", "dir", forkDir, "error", repairErr)
 		return stats
 	}
-	stats, _ = fetchForksInto(repaired, forks, addresses, processors)
+	stats, _ = fetchForksInto(workdir, repaired, forks, addresses, processors, heads)
 	return stats
 }
 
 // fetchForksInto fetches every fork into one bare repo, reporting whether any
 // failure named a missing or bad object.
-func fetchForksInto(forkDir string, forks []string, addresses map[string]string, processors []CommitProcessor) (Stats, bool) {
+func fetchForksInto(workdir, forkDir string, forks []string, addresses map[string]string, processors []CommitProcessor, heads map[string][]string) (Stats, bool) {
 	stats := Stats{Repositories: len(forks)}
 	missingObject := false
+	// A head fetch negotiates against the borrowed workspace objects, so it brings only the commits the workspace lacks.
+	if len(heads) > 0 {
+		if err := storage.SetAlternate(forkDir, workdir); err != nil {
+			log.Debug("fork repo alternate failed", "dir", forkDir, "error", err)
+		}
+	}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 4)
@@ -65,7 +71,7 @@ func fetchForksInto(forkDir string, forks []string, addresses map[string]string,
 		go func(url string) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			count, fetchErr := fetchFork(forkDir, url, ForkAddress(addresses, url), processors)
+			count, fetchErr := fetchFork(forkDir, url, ForkAddress(addresses, url), processors, heads[url])
 			mu.Lock()
 			if fetchErr != nil {
 				log.Debug("fork fetch failed", "fork", url, "error", fetchErr)
@@ -90,9 +96,9 @@ func ForkAddress(addresses map[string]string, identity string) string {
 }
 
 // fetchFork adds a remote for a fork in the shared bare repo and fetches all
-// gitmsg data. The remote name hashes the identity, so it is stable across
-// spellings; the remote URL is the address.
-func fetchFork(forkDir, forkURL, address string, processors []CommitProcessor) (int, error) {
+// gitmsg data and the named code branches in one fetch. The remote name hashes
+// the identity, so it is stable across spellings; the remote URL is the address.
+func fetchFork(forkDir, forkURL, address string, processors []CommitProcessor, branches []string) (int, error) {
 	hash := URLHash(forkURL)
 	remoteName := "remote-" + hash
 	if err := git.EnsureRemote(forkDir, remoteName, address); err != nil {
@@ -103,8 +109,16 @@ func fetchFork(forkDir, forkURL, address string, processors []CommitProcessor) (
 	// cross-repo proposals the fork (as owner) has declined. Acceptance needs no
 	// marker: it rides the fork's mirror edit on the gitmsg/* branches above.
 	declineRefspec := "+" + gitmsg.DeclinesRefPrefix + "*:" + ForkDataRefPrefix + hash + "/declines/*"
-	if _, err := git.ExecGit(forkDir, []string{"fetch", remoteName, refspec, declineRefspec, "--no-tags"}); err != nil {
-		return 0, fmt.Errorf("fetch fork: %w", err)
+	args := []string{"fetch", remoteName, refspec, declineRefspec, "--no-tags"}
+	if _, err := git.ExecGit(forkDir, append(args, forkCodeRefspecs(hash, branches)...)); err != nil {
+		// A head branch gone from the fork fails the command, so the data is fetched alone.
+		if len(branches) == 0 {
+			return 0, fmt.Errorf("fetch fork: %w", err)
+		}
+		log.Debug("fork head fetch failed", "fork", forkURL, "branches", branches, "error", err)
+		if _, err := git.ExecGit(forkDir, args); err != nil {
+			return 0, fmt.Errorf("fetch fork: %w", err)
+		}
 	}
 	syncForkDeclines(forkDir, hash)
 	// List all fetched gitmsg branches for this fork
@@ -151,6 +165,32 @@ func fetchFork(forkDir, forkURL, address string, processors []CommitProcessor) (
 		log.Debug("update last fetch failed", "url", forkURL, "error", err)
 	}
 	return totalCount, nil
+}
+
+// FetchForkBranches fetches the named code branches of a registered fork into refs/fork/<urlHash>/<branch>, in one fetch.
+func FetchForkBranches(forkDir, forkURL, address string, branches []string) error {
+	if len(branches) == 0 {
+		return nil
+	}
+	hash := URLHash(forkURL)
+	remoteName := "remote-" + hash
+	if err := git.EnsureRemote(forkDir, remoteName, address); err != nil {
+		return fmt.Errorf("fork remote: %w", err)
+	}
+	args := append([]string{"fetch", remoteName}, forkCodeRefspecs(hash, branches)...)
+	if _, err := git.ExecGit(forkDir, append(args, "--no-tags")); err != nil {
+		return fmt.Errorf("fetch fork branches: %w", err)
+	}
+	return nil
+}
+
+// forkCodeRefspecs maps each branch of a fork to its ref under ForkCodeRefPrefix.
+func forkCodeRefspecs(hash string, branches []string) []string {
+	refspecs := make([]string, 0, len(branches))
+	for _, branch := range branches {
+		refspecs = append(refspecs, "+refs/heads/"+branch+":"+ForkCodeRefPrefix+hash+"/"+branch)
+	}
+	return refspecs
 }
 
 // syncForkDeclines records the fork's published decline markers (fetched into

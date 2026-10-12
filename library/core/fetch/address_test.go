@@ -122,7 +122,7 @@ func TestFetchForks_byAddress(t *testing.T) {
 	if err := gitmsg.AddFork(wsDir, identity); err != nil {
 		t.Fatalf("AddFork() by identity error = %v", err)
 	}
-	if stats := FetchForks(wsDir, cacheDir, nil); len(stats.Errors) == 0 {
+	if stats := FetchForks(wsDir, cacheDir, nil, nil); len(stats.Errors) == 0 {
 		t.Fatalf("FetchForks() by identity succeeded, want the fetch to fail at %q", identity)
 	}
 	if err := gitmsg.RemoveFork(wsDir, identity); err != nil {
@@ -135,7 +135,7 @@ func TestFetchForks_byAddress(t *testing.T) {
 		t.Fatalf("GetForks() = %v, want [%s]", forks, identity)
 	}
 
-	stats := FetchForks(wsDir, cacheDir, nil)
+	stats := FetchForks(wsDir, cacheDir, nil, nil)
 	if len(stats.Errors) > 0 {
 		t.Fatalf("FetchForks() errors = %+v, want none", stats.Errors)
 	}

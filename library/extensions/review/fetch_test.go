@@ -85,7 +85,7 @@ func TestFetchForks(t *testing.T) {
 	dir := initTestRepo(t)
 
 	t.Run("noForks", func(t *testing.T) {
-		stats := fetch.FetchForks(dir, t.TempDir(), Processors())
+		stats := fetch.FetchForks(dir, t.TempDir(), Processors(), nil)
 		if stats.Repositories != 0 {
 			t.Errorf("Repositories = %d, want 0", stats.Repositories)
 		}
@@ -113,7 +113,7 @@ func TestFetchForks(t *testing.T) {
 			cache.Open(testCacheDir)
 		})
 
-		stats := fetch.FetchForks(dir, cacheDir, Processors())
+		stats := fetch.FetchForks(dir, cacheDir, Processors(), nil)
 		if stats.Repositories != 1 {
 			t.Errorf("Repositories = %d, want 1", stats.Repositories)
 		}
@@ -139,7 +139,7 @@ func TestFetchForks(t *testing.T) {
 			cache.Open(testCacheDir)
 		})
 
-		stats := fetch.FetchForks(errDir, cacheDir, Processors())
+		stats := fetch.FetchForks(errDir, cacheDir, Processors(), nil)
 		if stats.Repositories != 1 {
 			t.Errorf("Repositories = %d, want 1", stats.Repositories)
 		}

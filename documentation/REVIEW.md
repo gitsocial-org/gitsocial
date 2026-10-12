@@ -111,6 +111,7 @@ To name a bucket as the base, use its `s3://` URL or a local reference such as `
       │                                         ●  pr create, base=#branch:main
       ●  gitsocial fetch                        │
       │  fetches the fork's gitmsg/* branches   │
+      │  and the heads of its open pull requests│
       ●  pr list shows the fork's pull request  │
       ●  notification: fork-pr                  │
       ●  review, merge                          │
@@ -181,6 +182,7 @@ GitSocial does not dismiss feedback automatically.
 - `review config set require-review true` makes approval a merge condition, so `pr merge` fails with `REVIEW_REQUIRED` until the latest feedback of each reviewer is `approved`.
 - `pr list` shows the pull requests of this repository, and the pull requests of [registered forks](CLI.md#gitsocial-fork) whose base is this repository.
 - Fork registrations are at `refs/gitmsg/core/forks/<urlHash>` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)).
+- `gitsocial fetch` brings the head branch of each open fork pull request into the fork repository under the cache, at `refs/fork/<urlHash>/<branch>`, in the same fetch as the fork's `gitmsg/*` branches. A pull request first seen in a fetch gets its head in a second fetch of that fork.
 - `pr merge` keeps the merged head at `refs/gitmsg/review/merged/<hash>`, where `<hash>` is the 12-character hash of the pull request. The push sends it with the state refs, so the merged range resolves in every clone after the head branch is deleted.
 - The diff of an imported pull request uses its stored tips; if no repository has one of these commits, the diff names the commit and the fetch that gets it.
 - Branch tips come from the remote: `refs/remotes/origin/<branch>` for this repository, and `git ls-remote` for a fork with no tracking ref. If a branch is not on its remote, GitSocial creates a `head-deleted` or `base-deleted` notification.

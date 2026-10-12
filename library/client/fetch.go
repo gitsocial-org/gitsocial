@@ -63,10 +63,12 @@ func FetchRepositoryRange(cacheDir, repoURL, branch, since, before, workspaceURL
 // never be written.
 func FetchForks(workdir, cacheDir string) fetch.Stats {
 	procs := processors()
-	stats := fetch.FetchForks(workdir, cacheDir, procs)
+	stats := fetch.FetchForks(workdir, cacheDir, procs, review.OpenForkHeads(workdir))
 	fetch.BackfillExtensionItems(backfillRepos(workdir), backfillSpecs(), procs)
 	// Link any just-fetched fork edits to their canonicals so proposals attach.
 	_, _ = cache.ReconcileVersions()
+	// A pull request first seen in this pass gets its head now, so the next push can publish it.
+	review.FetchMissingForkHeads(workdir, cacheDir)
 	return stats
 }
 
