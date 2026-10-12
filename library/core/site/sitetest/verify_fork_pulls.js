@@ -124,6 +124,12 @@ async function main() {
   ok("the base reads from the bucket, not the fork area", reads.some((u) => /\/objects\/[0-9a-f]{2}\/[0-9a-f]{38}$/.test(u)) && !reads.some((u) => u.indexOf("objects/pack/" + fx.packName) !== -1), reads.join(" | "));
   const metaChips = findClass(findClass(viewNode, "detail-meta")[0] || viewNode, "chip").map(textOf);
   ok("the detail meta carries the fork chip", metaChips.indexOf("fork") !== -1, metaChips.join(" | "));
+  // A branchless route to the fork pull request resolves through the fork area.
+  ctx = GS.newContext(base);
+  setHash("#commit:" + fx.pr);
+  await GS.route(ctx);
+  await settle(() => findClass(viewNode, "detail-meta").length > 0 || findClass(viewNode, "err").length > 0);
+  ok("a branchless route opens the fork pull request as its detail", text(viewNode).indexOf("One more line for the notes.") !== -1 && findClass(viewNode, "err").length === 0, text(viewNode).slice(0, 200));
 
   // ---- a bucket with no fork area lists its own pull requests, no more ----
   ctx = GS.newContext(ORIGIN + "/thread-demo/");

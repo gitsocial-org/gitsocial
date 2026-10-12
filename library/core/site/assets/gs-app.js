@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadForkPulls, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadForkPulls, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -198,7 +198,10 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
           (items, box) => box.replaceChildren(...renderList(relsOf(items), releaseCard, LIST_EMPTY.releases)),
           () => loadExtItemsWindow(ctx, "release", true))]);
       } else if (r.type === "commit") {
-        setView(COMMIT_VIEW[r.branch] ? await itemDetail(ctx, r.hash, r.branch, setView, (tab) => { if (myGen === routeGen) highlightNav(tab); }) : await commitDetail(ctx, r.hash, r.branch));
+        // A branchless route resolves by hash through the item indexes and the fork area first, so an item opens as an item and a code commit as its page.
+        const found = r.branch ? null : (await findRefItem(ctx, "#commit:" + r.hash, "")) || (await findForkPull(ctx, r.hash) ? { branch: "gitmsg/review" } : null);
+        const branch = found ? found.branch : r.branch;
+        setView(COMMIT_VIEW[branch] ? await itemDetail(ctx, r.hash, branch, setView, (tab) => { if (myGen === routeGen) highlightNav(tab); }) : await commitDetail(ctx, r.hash, r.branch));
       } else if (r.type === "home") {
         setView(await homeView(ctx));
         if (r.anchor) scrollToAnchor(r.anchor, 10);

@@ -4664,7 +4664,7 @@
   const core = {
     deriveBase, repoTitle, fetchBytes, fetchText, fetchRange, inflate, parseLooseObject, objectKey,
     getObject, getContentObject, getStateObject, getPackedObject, packNames, bucketIsPacked, packMapShard, packKey, registerForkPack, packIdxOpen, packIdxLookup, packIdxFind, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
-    walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, anyRefHash, parseBranchField, resolveItems, adoptedOf,
+    walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, anyRefHash, findRefItem, parseBranchField, resolveItems, adoptedOf,
     buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail, authorLabel,
     feedbackLine, feedbackAnchorKey, feedbackVerdict, feedbackAnchorLabel, hunkLineKeys, anchorFeedback, prFeedback,
     reviewSummary, suggestionBody,

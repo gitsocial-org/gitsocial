@@ -246,6 +246,13 @@ async function item8() {
   const origDd = findTag(viewNode, "dd").find((dd) => /other-demo#commit:/.test(textOf(dd)));
   ok("cross-repo original stays plain text (no link)", !!origDd && findTag(origDd, "a").length === 0, origDd ? "links=" + findTag(origDd, "a").length : "no dd");
   ok("cross-repo quote keeps embedded block, no reply-context head", /from s3:\/\/fake\.example\.com\/other-demo/.test(textOf(viewNode)) && !/In reply to/.test(textOf(viewNode)), textOf(viewNode).slice(0, 120));
+  // A branchless commit route resolves by hash: an item opens as its detail, a code commit as the raw commit page.
+  await render(TD, "#commit:" + quote.commit.short);
+  ok("a branchless route to an item opens the item detail", findClass(viewNode, "detail-topbar").length === 1 && findClass(viewNode, "subject-commit").length === 0, textOf(viewNode).slice(0, 80));
+  const tipCtx = await render(TD, "#/");
+  const mainTip = await GS.refTip(tipCtx, "refs/heads/main");
+  await render(TD, "#commit:" + (mainTip || "").slice(0, 12));
+  ok("a branchless route to a code commit opens the raw commit page", !!mainTip && findClass(viewNode, "subject-commit").length === 1, textOf(viewNode).slice(0, 80));
 }
 
 async function item9() {
