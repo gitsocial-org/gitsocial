@@ -65,8 +65,8 @@ function gitSha(obj) {
   return crypto.createHash("sha1").update(Buffer.concat([head, Buffer.from(obj.body)])).digest("hex");
 }
 
-// writeSyntheticIdx writes a v2 pack index of count random shas, or the given ones, at offsets 12 + 100 * rank, and returns its name and sorted shas.
-function writeSyntheticIdx(root, count, given) {
+// writeSyntheticIdx writes a v2 pack index of count random shas, or the given ones, at offsets 12 + 100 * rank under dir (objects/pack by default), and returns its name and sorted shas.
+function writeSyntheticIdx(root, count, given, dir) {
   const shas = (given || Array.from({ length: count }, () => crypto.randomBytes(20).toString("hex"))).slice().sort();
   const n = shas.length;
   const buf = Buffer.alloc(8 + 1024 + n * 28 + 40);
@@ -81,9 +81,37 @@ function writeSyntheticIdx(root, count, given) {
     buf.writeUInt32BE(12 + i * 100, 1032 + n * 24 + i * 4);
   });
   const name = "pack-" + crypto.randomBytes(20).toString("hex");
-  fs.mkdirSync(path.join(root, "objects", "pack"), { recursive: true });
-  fs.writeFileSync(path.join(root, "objects", "pack", name + ".idx"), buf);
+  fs.mkdirSync(path.join(root, dir || "objects/pack"), { recursive: true });
+  fs.writeFileSync(path.join(root, dir || "objects/pack", name + ".idx"), buf);
   return { name, shas };
+}
+
+// blobSha returns the git sha of a blob with this content.
+function blobSha(content) {
+  return crypto.createHash("sha1").update(Buffer.concat([Buffer.from("blob " + content.length + "\0"), Buffer.from(content)])).digest("hex");
+}
+
+// writeOnePack writes a pack of one entry at offset 12, indexed under sha in dir: a whole object of type, or a REF_DELTA (type 7) against baseSha; returns the pack name.
+function writeOnePack(root, dir, type, data, sha, baseSha) {
+  const head = [];
+  let size = data.length, b = (type << 4) | (size & 15);
+  size >>= 4;
+  while (size) { head.push(b | 0x80); b = size & 0x7f; size >>= 7; }
+  head.push(b);
+  const parts = [Buffer.from("PACK"), Buffer.from([0, 0, 0, 2, 0, 0, 0, 1]), Buffer.from(head)];
+  if (baseSha) parts.push(Buffer.from(baseSha, "hex"));
+  parts.push(require("zlib").deflateSync(Buffer.from(data)));
+  const body = Buffer.concat(parts);
+  const { name } = writeSyntheticIdx(root, 0, [sha], dir);
+  fs.writeFileSync(path.join(root, dir, name + ".pack"), Buffer.concat([body, crypto.createHash("sha1").update(body).digest()]));
+  return name;
+}
+
+// deltaAppend encodes a git delta that copies the base and appends tail.
+function deltaAppend(baseLen, tail) {
+  const varint = (n) => { const out = []; do { out.push((n & 0x7f) | (n >= 128 ? 0x80 : 0)); n >>= 7; } while (n); return out; };
+  const copy = [0x80 | 0x10 | 0x20 | 0x40, baseLen & 0xff, (baseLen >> 8) & 0xff, (baseLen >> 16) & 0xff];
+  return Buffer.concat([Buffer.from(varint(baseLen)), Buffer.from(varint(baseLen + tail.length)), Buffer.from(copy), Buffer.from([tail.length]), Buffer.from(tail)]);
 }
 
 // readsBack asserts that a sha read through getObject reconstructs to that same
@@ -102,7 +130,7 @@ async function packEntryType(ctx, sha) {
   for (const name of await GS.packNames(ctx)) {
     const found = await GS.packIdxLookup(ctx, name, sha);
     if (!found) continue;
-    const got = await GS.fetchRange(ctx.base, "objects/pack/" + name + ".pack", found.offset, found.offset + 1);
+    const got = await GS.fetchRange(ctx.base, GS.packKey(ctx, name, ".pack"), found.offset, found.offset + 1);
     return got ? (got.bytes[0] >> 4) & 7 : -1;
   }
   return -1;
@@ -373,7 +401,8 @@ async function main() {
   ok("short sha from the pack index: a short that names one object in each of two packs resolves to null",
     (await GS.resolveShortSha(packOnly([pName, oneName]), target.slice(0, 12))) === null);
   const indexed = packOnly([pName]);
-  const other = target.slice(0, 12) + "0".repeat(28);
+  // The thirteenth character differs from the indexed sha's, so the pack never answers the longer short.
+  const other = target.slice(0, 12) + (target[12] === "0" ? "1" : "0") + "0".repeat(27);
   indexed.walks.codeIndex = { items: [{ hash: other }], older: [], complete: true };
   ok("short sha from the pack index: the code index answers first when it holds the sha",
     (await GS.resolveShortSha(indexed, target.slice(0, 12))) === other);
@@ -381,6 +410,46 @@ async function main() {
     (await GS.resolveShortSha(packOnly([pName]), other.slice(0, 13), async () => [{ hash: other }])) === other);
   idxServer.close();
   fs.rmSync(idxRoot, { recursive: true, force: true });
+
+  // ---- a fork pack under another base ----
+  // The bucket packs are copied to a root of their own, and the fork packs sit under .gitsocial/forks/pack/ beside them.
+  const forkRoot = fs.mkdtempSync(path.join(os.tmpdir(), "gs-forkpack-"));
+  fs.mkdirSync(path.join(forkRoot, "objects", "info"), { recursive: true });
+  fs.mkdirSync(path.join(forkRoot, "objects", "pack"), { recursive: true });
+  fs.writeFileSync(path.join(forkRoot, "objects", "info", "packs"), packs + "\n");
+  for (const name of names) for (const ext of [".pack", ".idx"]) fs.writeFileSync(path.join(forkRoot, "objects", "pack", name + ext), await GS.fetchBytes(BASE, "objects/pack/" + name + ext));
+  const forkServer = createServer(forkRoot);
+  await new Promise((r) => forkServer.listen(0, "127.0.0.1", r));
+  const FORK_DIR = ".gitsocial/forks/pack";
+  const only = Buffer.from("a blob only the fork pack holds\n");
+  const onlySha = blobSha(only);
+  const onlyPack = writeOnePack(forkRoot, FORK_DIR, 3, only, onlySha);
+  const fctx = GS.newContext("http://127.0.0.1:" + forkServer.address().port + "/");
+  await GS.registerForkPack(fctx, onlyPack);
+  at = mark();
+  await readsBack(fctx, onlySha, "a pack under another base: an object only the fork pack holds");
+  const forkReads = since(at);
+  ok("a pack under another base: the fork pack reads under " + FORK_DIR,
+    forkReads.some((r) => r.url.indexOf("/" + FORK_DIR + "/" + onlyPack) !== -1) && !forkReads.some((r) => r.url.indexOf("objects/pack/" + onlyPack) !== -1),
+    forkReads.map((r) => r.url).join(" | "));
+  ok("a pack under another base: the fork pack is in the probe list and first in the hit order",
+    fctx.packs.hits[0] === onlyPack && (await GS.packNames(fctx)).includes(onlyPack));
+  at = mark();
+  await readsBack(fctx, notes.sha, "the bucket packs still read at objects/pack: a bucket blob through the same context");
+  ok("the bucket packs still read at objects/pack",
+    since(at).some((r) => /\/objects\/pack\/pack-[0-9a-f]+\.(idx|pack)$/.test(r.url)) && GS.packKey(fctx, names[0], ".idx") === "objects/pack/" + names[0] + ".idx",
+    since(at).map((r) => r.url).join(" | "));
+  const tail = "appended by the fork\n";
+  const grown = Buffer.concat([Buffer.from(blob.body), Buffer.from(tail)]);
+  const grownSha = blobSha(grown);
+  const deltaPack = writeOnePack(forkRoot, FORK_DIR, 7, deltaAppend(blob.body.length, tail), grownSha, notes.sha);
+  await GS.registerForkPack(fctx, deltaPack);
+  ok("a delta base from another pack: the fork entry really is a REF_DELTA", (await packEntryType(fctx, grownSha)) === 7);
+  const grownObj = await readsBack(fctx, grownSha, "a delta base from another pack: the REF_DELTA against a bucket blob resolves through the context");
+  ok("a delta base from another pack: the reconstructed blob is the bucket blob plus the fork's tail",
+    !!grownObj && new TextDecoder().decode(grownObj.body) === new TextDecoder().decode(blob.body) + tail);
+  forkServer.close();
+  fs.rmSync(forkRoot, { recursive: true, force: true });
 
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);

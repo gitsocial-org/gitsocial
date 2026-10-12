@@ -20,7 +20,7 @@ const enc = new TextEncoder();
 const sha = (s) => (s + "0".repeat(40)).slice(0, 40);
 const short = (s) => sha(s).slice(0, 12);
 const ref = (s, branch) => "#commit:" + short(s) + "@gitmsg/" + branch;
-const ctx = { base: "http://seeded/", objects: new Map(), refMisses: new Set(), treeExpanded: new Set(), walks: {}, packs: { names: [], packed: null, maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), hits: [] } };
+const ctx = { base: "http://seeded/", objects: new Map(), refMisses: new Set(), treeExpanded: new Set(), walks: {}, packs: { names: [], packed: null, bases: new Map(), maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), hits: [] } };
 // commit seeds one gitmsg commit: a message, its GitMsg header fields and a parent.
 function commit(id, parent, when, message, fields) {
   const header = "GitMsg: v=\"0.1.0\" " + Object.keys(fields).map((k) => k + "=\"" + fields[k] + "\"").join(" ");
@@ -256,7 +256,7 @@ async function main() {
   codeCommit("1a", "ab", "tb", 1750000200, "Add world (squash)");
   codeCommit("1b", "ab", "tb", 1750000150, "head of the squashed branch");
   commit("1c", "ad", 1750001400, "Squash merged", { ext: "review", type: "pull-request", state: "merged", base: "#branch:main", "merge-base": short("ab"), "merge-head": short("1b") });
-  const freshPacks = (names) => ({ names, packed: null, maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), hits: [] });
+  const freshPacks = (names) => ({ names, packed: null, bases: new Map(), maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), hits: [] });
   const packCtx = Object.assign({}, prCtx, { walks: {}, refMisses: new Set(), packs: freshPacks(["pack-1"]), manifest: Promise.resolve({
     "refs/heads/gitmsg/review": sha("1c"), "refs/heads/main": sha("1a"),
   }) });

@@ -172,6 +172,22 @@
     return { bytes: body.subarray(start, end === null ? body.length : end), total: body.length };
   }
 
+  // packKey returns a pack file's key: under the prefix its name is registered with, else the bucket's objects/pack.
+  function packKey(ctx, name, ext) {
+    return (ctx.packs.bases.get(name) || "objects/pack/") + name + ext;
+  }
+
+  // FORK_PACK_DIR is the key prefix of the fork area's packs.
+  const FORK_PACK_DIR = ".gitsocial/forks/pack/";
+
+  // registerForkPack adds a fork pack to the context's probe list under the fork area, first in the hit order.
+  async function registerForkPack(ctx, name) {
+    const names = await packNames(ctx);
+    if (!names.includes(name)) names.push(name);
+    ctx.packs.bases.set(name, FORK_PACK_DIR);
+    notePackHit(ctx, name);
+  }
+
   // packNames lists the bucket's packs from objects/info/packs, cached per context.
   async function packNames(ctx) {
     if (ctx.packs.names) return ctx.packs.names;
@@ -246,13 +262,13 @@
   async function packIdxOpen(ctx, name) {
     if (ctx.packs.idx.has(name)) return ctx.packs.idx.get(name);
     const promise = (async () => {
-      const got = await fetchRange(ctx.base, "objects/pack/" + name + ".idx", 0, IDX_HEAD_BYTES);
+      const got = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), 0, IDX_HEAD_BYTES);
       if (got === null) return null;
       const idx = parsePackIdxHead(got.bytes, got.total || got.bytes.length);
       let bytes = got.bytes;
       if (bytes.length < idx.total && idx.total <= IDX_WHOLE_BYTES) {
         // A failed rest read leaves the index to slice reads, as a head-only open does.
-        const rest = await fetchRange(ctx.base, "objects/pack/" + name + ".idx", bytes.length, idx.total).catch(() => null);
+        const rest = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), bytes.length, idx.total).catch(() => null);
         if (rest !== null) {
           bytes = new Uint8Array(got.bytes.length + rest.bytes.length);
           bytes.set(got.bytes);
@@ -273,7 +289,7 @@
   function packIdxOfsSlice(ctx, idx, name, first, lo, hi) {
     if (idx.ofsSlices.has(first)) return idx.ofsSlices.get(first);
     const promise = (async () => {
-      const got = await fetchRange(ctx.base, "objects/pack/" + name + ".idx", idx.ofsStart + lo * 4, idx.ofsStart + hi * 4);
+      const got = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), idx.ofsStart + lo * 4, idx.ofsStart + hi * 4);
       return got === null ? null : got.bytes;
     })();
     idx.ofsSlices.set(first, promise);
@@ -287,7 +303,7 @@
     const raw = dv.getUint32(at * 4);
     if (!(raw & 0x80000000)) return raw;
     const bigAt = idx.ofsStart + idx.count * 4 + (raw & 0x7fffffff) * 8;
-    const got = await fetchRange(ctx.base, "objects/pack/" + name + ".idx", bigAt, bigAt + 8);
+    const got = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), bigAt, bigAt + 8);
     if (got === null || got.bytes.length < 8) return null;
     const bdv = new DataView(got.bytes.buffer, got.bytes.byteOffset, got.bytes.byteLength);
     return Number(bdv.getBigUint64(0));
@@ -298,7 +314,7 @@
     if (idx.shas) return idx.shas.subarray(lo * 20, hi * 20);
     if (idx.slices.has(first)) return idx.slices.get(first);
     const promise = (async () => {
-      const got = await fetchRange(ctx.base, "objects/pack/" + name + ".idx", IDX_SHA_START + lo * 20, IDX_SHA_START + hi * 20);
+      const got = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), IDX_SHA_START + lo * 20, IDX_SHA_START + hi * 20);
       return got === null ? null : got.bytes;
     })();
     idx.slices.set(first, promise);
@@ -372,7 +388,7 @@
     const promise = (async () => {
       const known = ctx.packs.size.get(name) || 0;
       if (known && winStart >= known) return null;
-      const got = await fetchRange(ctx.base, "objects/pack/" + name + ".pack", winStart, winStart + PACK_WINDOW_BYTES);
+      const got = await fetchRange(ctx.base, packKey(ctx, name, ".pack"), winStart, winStart + PACK_WINDOW_BYTES);
       if (got && got.total) ctx.packs.size.set(name, got.total);
       return got;
     })();
@@ -383,7 +399,7 @@
 
   // packRange reads [start, end) through the window cache and returns { bytes, total }; null when the pack is absent.
   async function packRange(ctx, name, start, end) {
-    if (end - start > PACK_SPAN_MAX) return fetchRange(ctx.base, "objects/pack/" + name + ".pack", start, end);
+    if (end - start > PACK_SPAN_MAX) return fetchRange(ctx.base, packKey(ctx, name, ".pack"), start, end);
     const first = Math.floor(start / PACK_WINDOW_BYTES) * PACK_WINDOW_BYTES;
     const starts = [];
     for (let ws = first; ws < end; ws += PACK_WINDOW_BYTES) starts.push(ws);
@@ -506,7 +522,7 @@
     const known = ctx.packs.size.get(name) || 0;
     if (end === null && known) end = known - 20;
     const got = end === null
-      ? await fetchRange(ctx.base, "objects/pack/" + name + ".pack", offset, null)
+      ? await fetchRange(ctx.base, packKey(ctx, name, ".pack"), offset, null)
       : await packRange(ctx, name, offset, end);
     if (got === null) return null;
     if (got.total) ctx.packs.size.set(name, got.total);
@@ -1759,7 +1775,7 @@
 
   function newContext(base) {
     // newContext builds the per-session read context: the object cache, ref misses, tree expansion, walk states and the packfile reader state.
-    return { base, objects: new Map(), refMisses: new Set(), treeExpanded: new Set(), walks: {}, packs: { names: null, packed: null, maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), hits: [] } };
+    return { base, objects: new Map(), refMisses: new Set(), treeExpanded: new Set(), walks: {}, packs: { names: null, packed: null, bases: new Map(), maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), hits: [] } };
   }
 
   // ---- Trees, paths, branches (DOM-free, testable) ----
@@ -4589,7 +4605,7 @@
 
   const core = {
     deriveBase, repoTitle, fetchBytes, fetchText, fetchRange, inflate, parseLooseObject, objectKey,
-    getObject, getContentObject, getStateObject, getPackedObject, packNames, bucketIsPacked, packMapShard, packIdxOpen, packIdxLookup, packIdxFind, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
+    getObject, getContentObject, getStateObject, getPackedObject, packNames, bucketIsPacked, packMapShard, packKey, registerForkPack, packIdxOpen, packIdxLookup, packIdxFind, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
     walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, parseBranchField, resolveItems, adoptedOf,
     buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail, authorLabel,
     feedbackLine, feedbackAnchorKey, feedbackVerdict, feedbackAnchorLabel, hunkLineKeys, anchorFeedback, prFeedback,
