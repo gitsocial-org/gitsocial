@@ -209,7 +209,11 @@ async function main() {
   eq(findClass(detail, "diff-path").map(textOf), ["main.go"], "the one changed file is listed");
   eq(findClass(detail, "diff-status").map(textOf), ["M"], "a modified file is marked M");
   ok(textOf(findClass(detail, "diff-head")[0]).indexOf("Changes (1)") !== -1, "the section counts the changed files");
-  eq(findClass(detail, "cnt-add").map(textOf), ["+2"], "the added line count shows");
+  eq(textOf(findClass(detail, "expand-toggle")[0]), "⊞ Expand all", "every file starts collapsed");
+  eq(findClass(detail, "diff-line").length, 0, "a collapsed file carries no rows yet");
+  fire(findClass(detail, "diff-file-head")[0], "click");
+  await tick(30);
+  eq(findClass(detail, "cnt-add").map(textOf), ["+2"], "the added line count shows once the file opens");
   eq(findClass(detail, "cnt-del").map(textOf), ["-2"], "the deleted line count shows");
   const signs = findClass(detail, "diff-line").map((r) => textOf(findClass(r, "dl-sign")[0]) + textOf(findClass(r, "dl-text")[0]));
   ok(signs.indexOf("-package old") !== -1 && signs.indexOf("+package new") !== -1, "the changed first line shows on both sides", signs.slice(0, 6).join(" | "));
@@ -252,7 +256,7 @@ async function main() {
 
   console.log("=== expand and collapse all ===");
   const expandBtn = findClass(detail, "expand-toggle")[0];
-  eq(textOf(expandBtn), "⊟ Collapse all", "a small diff opens expanded");
+  eq(textOf(expandBtn), "⊟ Collapse all", "an opened file offers Collapse all");
   fire(expandBtn, "click");
   await tick(10);
   eq(textOf(expandBtn), "⊞ Expand all", "collapsing every file flips the control");

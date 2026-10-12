@@ -205,8 +205,12 @@ async function main() {
   ok(!!prDiff, "a PR whose tips resolve in the bucket gains a Changes section");
   eq(findClass(prDiff, "subject").map(textOf), ["Files changed (1)"], "the section counts the changed files");
   eq(findClass(prDiff, "diff-path").map(textOf), ["notes.txt"], "the changed file is listed by path");
+  eq(findClass(prDiff, "diff-line").length, 0, "every file row starts collapsed");
+  eq(textOf(findClass(prDiff, "expand-toggle")[0]), "⊞ Expand all", "the control offers to expand all");
+  fire(findClass(prDiff, "diff-file-head")[0], "click");
+  await tick(40);
   const prLines = findClass(prDiff, "diff-line").map((l) => textOf(findClass(l, "dl-sign")[0]) + textOf(findClass(l, "dl-text")[0]));
-  ok(prLines.indexOf("+world") !== -1, "the diff body shows the added line", prLines.join(" | "));
+  ok(prLines.indexOf("+world") !== -1, "an opened row shows the added line", prLines.join(" | "));
   eq(findClass(prDiff, "caveat").map(textOf), [], "exact tips with a merge base carry no caveat chips");
   eq(findClass(prDiff, "notice").length, 0, "a resolved diff shows no notice");
 
@@ -290,20 +294,25 @@ async function main() {
   const vCtx = Object.assign({}, prCtx, { walks: {}, refMisses: new Set(), manifest: Promise.resolve({
     "refs/heads/gitmsg/review": sha("2b"), "refs/heads/main": sha("ab"), "refs/heads/feature": sha("1d"),
   }) });
-  const signs = (sec) => findClass(sec, "diff-line").map((l) => textOf(findClass(l, "dl-sign")[0]) + textOf(findClass(l, "dl-text")[0]));
+  // openRows opens every collapsed file row of a section and returns its diff lines.
+  const openRows = async (sec) => {
+    for (const h of findClass(sec, "diff-file-head")) if (!h._cls.has("open")) fire(h, "click");
+    await tick(40);
+    return findClass(sec, "diff-line").map((l) => textOf(findClass(l, "dl-sign")[0]) + textOf(findClass(l, "dl-text")[0]));
+  };
   const vpr = (await GS.itemDetail(vCtx, sha("1e"), "gitmsg/review"))[0];
   await tick(80);
   const vSections = () => findClass(vpr, "diff-section");
-  ok(vSections().length === 1 && signs(vSections()[0]).indexOf("+again") !== -1, "the first paint shows the latest version's range", signs(vSections()[0] || GS.el("div")).join(" | "));
+  ok(vSections().length === 1 && (await openRows(vSections()[0])).indexOf("+again") !== -1, "the first paint shows the latest version's range", (await openRows(vSections()[0] || GS.el("div"))).join(" | "));
   const vRows = findClass(vpr, "version-row");
   fire(vRows[1], "click");
   ok(findClass(vpr, "changes-pending").length === 1 && vSections().length === 0, "a selected version shows the spinner while its range loads");
   await tick(80);
   ok(vSections().length === 1, "selecting a version replaces the section, it does not add one", vSections().length);
-  ok(signs(vSections()[0]).indexOf("+world") !== -1 && signs(vSections()[0]).indexOf("+again") === -1, "the original shows its own range", signs(vSections()[0]).join(" | "));
+  ok((await openRows(vSections()[0])).indexOf("+world") !== -1 && (await openRows(vSections()[0])).indexOf("+again") === -1, "the original shows its own range", (await openRows(vSections()[0])).join(" | "));
   fire(vRows[0], "click");
   await tick(80);
-  ok(signs(vSections()[0]).indexOf("+again") !== -1, "selecting the current version brings its range back", signs(vSections()[0]).join(" | "));
+  ok((await openRows(vSections()[0])).indexOf("+again") !== -1, "selecting the current version brings its range back", (await openRows(vSections()[0])).join(" | "));
 
   console.log("=== absent version tips keep the notice ===");
   const apr = (await GS.itemDetail(vCtx, sha("2a"), "gitmsg/review"))[0];
@@ -317,7 +326,7 @@ async function main() {
   eq(findClass(aSections()[0], "diff-file").length, 0, "no file rows render under the notice");
   fire(aRows[0], "click");
   await tick(80);
-  ok(findClass(aSections()[0], "notice").length === 0 && signs(aSections()[0]).indexOf("+again") !== -1, "the other version still resolves", text(aSections()[0]));
+  ok(findClass(aSections()[0], "notice").length === 0 && (await openRows(aSections()[0])).indexOf("+again") !== -1, "the other version still resolves", text(aSections()[0]));
 
   console.log("=== merged range resolves through the merged head ref ===");
   // A squash merge of a fork head: 2c is the squash commit on main, 2d the head commit that only the merged head ref reaches.

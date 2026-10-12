@@ -2165,7 +2165,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return box;
   }
 
-  // diffSection renders a capped, collapsible changed-file list with a unified|split toggle; diffs load on first expand.
+  // diffSection renders a capped changed-file list with a unified|split toggle; every row starts collapsed, and a diff loads on its first expand.
   function diffSection(ctx, entries, title, caveats, fileFeedback) {
     fileFeedback = fileFeedback || [];
     const shown = entries.slice(0, DIFF_FILE_CAP);
@@ -2218,7 +2218,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       else for (const f of files) f.collapse();
     });
     fsBtn.addEventListener("click", (ev) => { ev.preventDefault(); openFullscreen(wrap, { live: true }); });
-    const autoExpand = shown.length <= 5;
     for (const entry of shown) {
       const counts = el("span", { class: "diff-counts mono" }, []);
       const body = el("div", { class: "diff-file-body" }, []);
@@ -2279,7 +2278,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       fhead.addEventListener("click", () => { f.expanded ? f.collapse() : f.expand(); });
       files.push(f);
       wrap.append(el("div", { class: "diff-file" }, [fhead, body]));
-      if (autoExpand) f.expand();
     }
     apply();
     refreshExpandBtn();

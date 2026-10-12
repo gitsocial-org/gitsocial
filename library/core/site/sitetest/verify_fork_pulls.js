@@ -17,6 +17,7 @@ const ok = (n, c, e) => { (c ? pass++ : fail++); console.log((c ? "PASS " : "FAI
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 function findClass(node, cls, out) { out = out || []; for (const c of (node && node._children) || []) { if (c && c.nodeType === 1) { if (c._cls && c._cls.has(cls)) out.push(c); findClass(c, cls, out); } } return out; }
 const text = (node) => textOf(node).replace(/\s+/g, " ").trim();
+function fire(node, ev) { for (const fn of (node && node._handlers && node._handlers[ev]) || []) fn({ preventDefault() {}, stopPropagation() {}, key: "", target: { closest() { return null; } } }); }
 
 // Every bucket fetch is recorded, so a read can be traced to the fork area or the bucket.
 const realFetch = global.fetch;
@@ -107,9 +108,12 @@ async function main() {
   setHash(GS.commitRef(fx.pr, "gitmsg/review"));
   const before = log.length;
   await GS.route(ctx);
-  await settle(() => findClass(viewNode, "diff-line").length > 0 || findClass(viewNode, "notice").length > 0);
+  await settle(() => findClass(viewNode, "diff-file-head").length > 0 || findClass(viewNode, "notice").length > 0);
   ok("the detail renders the pull request body from the fork pack", text(viewNode).indexOf("One more line for the notes.") !== -1, text(viewNode).slice(0, 200));
   const section = findClass(viewNode, "diff-section")[0];
+  ok("the file row starts collapsed", findClass(section || viewNode, "diff-line").length === 0);
+  fire(findClass(section || viewNode, "diff-file-head")[0], "click");
+  await settle(() => findClass(viewNode, "diff-line").length > 0);
   ok("the detail carries a Files changed section with no notice", !!section && findClass(section, "notice").length === 0, section ? text(section) : text(viewNode).slice(0, 200));
   ok("the Files changed section lists notes.txt", findClass(section || viewNode, "diff-path").map(textOf).join() === "notes.txt");
   const lines = findClass(section || viewNode, "diff-line").map((l) => textOf(findClass(l, "dl-sign")[0]) + textOf(findClass(l, "dl-text")[0]));
