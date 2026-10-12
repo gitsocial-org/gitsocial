@@ -2310,6 +2310,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return baseSha && headSha ? { baseSha, headSha } : null;
   }
 
+  // PR_DIFF_NOTICE words the Files changed notices; the page layer carries the same sentences (site_pages_diff.go).
+  const PR_DIFF_NOTICE = {
+    noTips: "This pull request records no base or head tip, so no diff can be shown here.",
+    mergeUnresolved: "The recorded merge range does not resolve in this bucket, so no diff can be shown here.",
+    tipsUnresolved: "The base or head tips are not present in this bucket (a foreign fork, an unfetched branch or a version rebased away), so no diff can be shown here.",
+  };
+
   // prDiffNotice builds the Files changed section with a one-line notice in place of the diff (design rule 5).
   function prDiffNotice(text) {
     return el("div", { class: "diff-section" }, [
@@ -2336,15 +2343,15 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
     if (!header["head-tip"] || !header["base-tip"]) {
       // A merged PR with a recorded range that did not resolve is unresolvable here, not unrecorded.
-      if (hasMergeRange) return prDiffNotice("The recorded merge range does not resolve in this bucket, so no diff can be shown here.");
-      return prDiffNotice("This pull request records no base or head tip, so no diff can be shown here.");
+      if (hasMergeRange) return prDiffNotice(PR_DIFF_NOTICE.mergeUnresolved);
+      return prDiffNotice(PR_DIFF_NOTICE.noTips);
     }
     const headR = await resolveTipCommit(ctx, header.head, header["head-tip"]);
     const baseR = await resolveTipCommit(ctx, header.base, header["base-tip"]);
     // Only the final version may stand in a live tip for a recorded one; an older version shows its own tips or the notice.
     const resolved = headR.status === "ok" && baseR.status === "ok" && (final || (headR.exact && baseR.exact));
     if (!resolved) {
-      return prDiffNotice("The base or head tips are not present in this bucket (a foreign fork, an unfetched branch or a version rebased away), so no diff can be shown here.");
+      return prDiffNotice(PR_DIFF_NOTICE.tipsUnresolved);
     }
     const headTree = await commitTree(ctx, headR.sha);
     const baseTree = await commitTree(ctx, baseR.sha);
@@ -4314,6 +4321,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, DIFF_FILE_CAP, PR_DIFF_NOTICE, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

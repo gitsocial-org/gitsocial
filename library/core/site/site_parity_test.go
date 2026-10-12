@@ -11,12 +11,14 @@
 package site
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -241,8 +243,24 @@ type parityTagOrderCase struct {
 	Expect []string `json:"expect"`
 }
 
+// parityPRDiff pins the Files changed section both renderers build: its head, the file cap, the shared slots of a file row, the status letters, the hunk head form, the notice variant's parts and the notice wording.
+type parityPRDiff struct {
+	Head          string            `json:"head"`
+	FileCap       int               `json:"fileCap"`
+	RowSlots      []string          `json:"rowSlots"`
+	StatusLetters map[string]string `json:"statusLetters"`
+	HunkHeads     []struct {
+		Name   string `json:"name"`
+		Line   string `json:"line"`
+		Expect string `json:"expect"`
+	} `json:"hunkHeads"`
+	NoticeParts []string          `json:"noticeParts"`
+	Notices     map[string]string `json:"notices"`
+}
+
 // parityFixtures is the shared fixture file shape.
 type parityFixtures struct {
+	PRDiff         parityPRDiff              `json:"prDiff"`
 	MessageCases   []parityMessageCase       `json:"messageCases"`
 	RawObjectCases []parityRawObjectCase     `json:"rawObjectCases"`
 	FeedbackCards  []parityFeedbackCase      `json:"feedbackCards"`
@@ -925,7 +943,7 @@ func TestParityRowHead(t *testing.T) {
 func TestParityDetailHeadMarkup(t *testing.T) {
 	fields := map[string]string{"type": "pull-request", "state": "merged"}
 	msg := &sitePageMsg{Ext: "review", SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: "Expand notes with more lines", Header: &protocol.Header{Ext: "review", Fields: fields}}
-	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[1], sitePageSite{URL: "https://example.com/"}, "Expand notes with more lines")
+	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[1], sitePageSite{URL: "https://example.com/"}, "Expand notes with more lines", nil, nil)
 	page, err := renderSitePage("item", d)
 	if err != nil {
 		t.Fatalf("render item page: %v", err)
@@ -948,7 +966,7 @@ func TestParityReleasePageMarkup(t *testing.T) {
 	}
 	body := "Ship the rewrite\n\nabc1234 Fix the walk\ndef5678 Add a retry budget"
 	msg := &sitePageMsg{Ext: "release", SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: body, Header: &protocol.Header{Ext: "release", Fields: fields}}
-	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[3], sitePageSite{URL: "https://example.com/"}, "v1.2.0")
+	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[3], sitePageSite{URL: "https://example.com/"}, "v1.2.0", nil, nil)
 	page, err := renderSitePage("item", d)
 	if err != nil {
 		t.Fatalf("render item page: %v", err)
@@ -996,5 +1014,71 @@ func TestParityRawObjectSplit(t *testing.T) {
 				t.Errorf("extractHeaderLine(parsed message) = %q, want %q", got, c.ExpectHeader)
 			}
 		})
+	}
+}
+
+// parityClassSlots names the shared slot each class attribute in markup carries, in order, skipping the attributes that carry none.
+func parityClassSlots(markup string, shared []string) []string {
+	var out []string
+	for _, m := range regexp.MustCompile(`class="([^"]+)"`).FindAllStringSubmatch(markup, -1) {
+		for _, token := range strings.Fields(m[1]) {
+			if slices.Contains(shared, token) {
+				out = append(out, token)
+			}
+		}
+	}
+	return out
+}
+
+// TestParityPRDiff asserts the page layer's Files changed section against the fixture unit_parity.js asserts on the app's own diffSection and prDiffNotice.
+func TestParityPRDiff(t *testing.T) {
+	f := loadParityFixtures(t).PRDiff
+	if f.Head == "" || len(f.Notices) == 0 || len(f.HunkHeads) == 0 {
+		t.Fatal("no pull request diff fixture")
+	}
+	if sitePRDiffHead != f.Head || sitePRDiffFileCap != f.FileCap {
+		t.Errorf("head %q and file cap %d, fixture %q and %d", sitePRDiffHead, sitePRDiffFileCap, f.Head, f.FileCap)
+	}
+	for _, c := range f.HunkHeads {
+		if head, _, _, ok := siteHunkHead(c.Line); !ok || head != c.Expect {
+			t.Errorf("%s: hunk head = %q, want %q", c.Name, head, c.Expect)
+		}
+	}
+	notices := map[string]string{"noTips": sitePRDiffNoticeNoTips, "mergeUnresolved": sitePRDiffNoticeMergeUnresolved, "tipsUnresolved": sitePRDiffNoticeTipsUnresolved}
+	if !maps.Equal(notices, f.Notices) {
+		t.Errorf("notices = %v, fixture %v", notices, f.Notices)
+	}
+	var raw strings.Builder
+	for status, letter := range map[string]string{"added": "A", "deleted": "D", "modified": "M"} {
+		raw.WriteString(":100644 100644 0000000 1111111 " + letter + "\x00" + status + ".txt\x00")
+	}
+	d, complete := parseSitePRDiff(bufio.NewReader(strings.NewReader(raw.String() + "\x00")))
+	if !complete || len(d.Files) != 3 {
+		t.Fatalf("parsed %d files, complete %v", len(d.Files), complete)
+	}
+	for _, file := range d.Files {
+		if want := f.StatusLetters[file.Status]; file.Letter != want || file.Path != file.Status+".txt" {
+			t.Errorf("%s: letter %q, path %q, want %q", file.Status, file.Letter, file.Path, want)
+		}
+	}
+	notice, err := renderSitePage("diff", &sitePageDiff{Notice: f.Notices["noTips"]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `<div class="diff-section"><div class="` + f.NoticeParts[0] + `"><span class="subject">` + f.Head + `</span></div>` + "\n" + `<div class="` + f.NoticeParts[1] + `">` + f.Notices["noTips"] + `</div>` + "\n</div>\n"
+	if string(notice) != want {
+		t.Errorf("notice variant:\n%s\nwant\n%s", notice, want)
+	}
+	row, err := renderSitePage("diff", &sitePageDiff{Count: 1, Files: []sitePageDiffFile{{Status: "added", Letter: "A", Path: "f0.txt", Adds: "1", Dels: "0"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	head := string(row)[strings.Index(string(row), `<div class="diff-file-head">`):]
+	head = head[:strings.Index(head, "</div>")]
+	if got := parityClassSlots(head, f.RowSlots); strings.Join(got, ",") != strings.Join(f.RowSlots, ",") {
+		t.Errorf("file row slots = %v, want %v", got, f.RowSlots)
+	}
+	if !strings.Contains(head, `<span class="diff-status s-added">A</span>`) || !strings.Contains(string(row), `<span class="subject">`+f.Head+` (1)</span>`) {
+		t.Errorf("file row markup:\n%s", row)
 	}
 }

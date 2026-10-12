@@ -230,6 +230,27 @@ for (const c of FIX.admonitions) {
   eq(root.textContent.includes(c.expectBodyHas), true, c.name + ": the body text stays visible");
 }
 
+console.log("=== parity invariant: the Files changed section of a pull request ===");
+{
+  const P = FIX.prDiff;
+  eq(GS.DIFF_FILE_CAP, P.fileCap, "the file cap is the fixture's");
+  for (const [status, letter] of Object.entries(P.statusLetters)) eq(GS.diffStatusLabel(status), letter, status + ": status letter");
+  for (const c of P.hunkHeads) eq(GS.hunkHeadText(c), c.expect, c.name + ": hunk head");
+  eq(JSON.stringify(GS.PR_DIFF_NOTICE), JSON.stringify(P.notices), "the notice wording is the fixture's");
+  const notice = GS.prDiffNotice(P.notices.noTips);
+  eq(notice.className, "diff-section", "the notice variant is a diff section");
+  eq(notice._children.map((c) => c.className).join(","), P.noticeParts.join(","), "the notice variant's parts");
+  eq(findCls(notice, "subject").map((n) => n.textContent).join(","), P.head, "the notice variant keeps the head");
+  // Six entries keep the section from expanding its files, which would fetch.
+  const entries = Array.from({ length: 6 }, (_, i) => ({ path: "f" + i + ".txt", status: i ? "modified" : "added" }));
+  const section = GS.diffSection(null, entries, P.head, []);
+  eq(findCls(section, "subject").map((n) => n.textContent).join(","), P.head + " (6)", "the head counts the files");
+  const row = findCls(section, "diff-file-head")[0];
+  const shared = (row._children || []).map((c) => String(c.className || "").split(/\s+/).find((t) => P.rowSlots.includes(t))).filter(Boolean);
+  eq(shared.join(","), P.rowSlots.join(","), "a file row carries the shared slots in order");
+  eq(findCls(row, "diff-status")[0].className + "|" + findCls(row, "diff-status")[0].textContent, "diff-status s-added|A", "the status slot carries its class and letter");
+}
+
 console.log("=== parity invariant: the name an unconfigured site takes ===");
 for (const c of FIX.defaultTitles) {
   eq(GS.repoTitle(c.base), c.expectTitle, c.name + ": default title");

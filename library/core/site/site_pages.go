@@ -29,7 +29,7 @@ const (
 	sitePagesManifestKey = ".gitsocial/site/pages.json"
 	// sitePagesVersion is the page layer's schema version; bump it when a page
 	// head or its sealed markup changes.
-	sitePagesVersion = 35
+	sitePagesVersion = 36
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -276,9 +276,9 @@ func rebuildSitePages(client *objstore.Client, prefix string, refs map[string]st
 		// Nothing a page derives from moved, but this push's shell upload may have written over index.html, so reclaim it.
 		err = writeSiteFrontPage(client, prefix, site, home)
 	case manifest != nil && manifest.Cursor == nil:
-		pending, err = incrementalSitePages(client, prefix, site, manifest, manifests, tips, defaultBranch, home, files, progress)
+		pending, err = incrementalSitePages(client, prefix, site, manifest, manifests, tips, defaultBranch, home, files, src, refs, progress)
 	default:
-		pending, err = generateSitePages(client, prefix, site, manifest, manifests, tips, defaultBranch, home, files, progress)
+		pending, err = generateSitePages(client, prefix, site, manifest, manifests, tips, defaultBranch, home, files, src, refs, progress)
 	}
 	if err != nil || pending {
 		return pending, "", err
@@ -499,7 +499,7 @@ func buildSiteFrontFiles(entries []siteTreeEntry, site sitePageSite, branch stri
 }
 
 // generateSitePages runs one budgeted full-regen pass, writing in the pinned order with the manifest last.
-func generateSitePages(client *objstore.Client, prefix string, site sitePageSite, prior *sitePagesManifest, manifests map[string]*siteShardManifest, tips map[string]string, defaultBranch string, home *siteFrontHome, files siteFilePass, progress objstore.Progress) (bool, error) {
+func generateSitePages(client *objstore.Client, prefix string, site sitePageSite, prior *sitePagesManifest, manifests map[string]*siteShardManifest, tips map[string]string, defaultBranch string, home *siteFrontHome, files siteFilePass, src *objstore.LocalCommitSource, refs map[string]string, progress objstore.Progress) (bool, error) {
 	msgs := map[string][]sitePageMsg{}
 	for ext, m := range manifests {
 		entries, err := readSitePagesCorpus(client, prefix, ext, m)
@@ -510,7 +510,7 @@ func generateSitePages(client *objstore.Client, prefix string, site sitePageSite
 	}
 	roots := buildSitePageThreads(msgs)
 	titles := siteItemPageTitles(roots, siteFileTitleSet(sitePagesFilesState(prior)))
-	done, complete, budget, err := writeSiteItemPages(client, prefix, roots, tips, site, prior, titles, progress)
+	done, complete, budget, err := writeSiteItemPages(client, prefix, roots, tips, site, prior, titles, src, refs, progress)
 	if err != nil {
 		return false, err
 	}
@@ -565,7 +565,7 @@ func maintainSiteCommitPages(client *objstore.Client, prefix string, site sitePa
 }
 
 // incrementalSitePages regenerates only the threads and lists one push's delta touched; a vanished consumed tip falls back to the full regen.
-func incrementalSitePages(client *objstore.Client, prefix string, site sitePageSite, prior *sitePagesManifest, manifests map[string]*siteShardManifest, tips map[string]string, defaultBranch string, home *siteFrontHome, files siteFilePass, progress objstore.Progress) (bool, error) {
+func incrementalSitePages(client *objstore.Client, prefix string, site sitePageSite, prior *sitePagesManifest, manifests map[string]*siteShardManifest, tips map[string]string, defaultBranch string, home *siteFrontHome, files siteFilePass, src *objstore.LocalCommitSource, refs map[string]string, progress objstore.Progress) (bool, error) {
 	metas := map[string][]sitePageMsg{}
 	delta := map[string]bool{}
 	for ext, m := range manifests {
@@ -579,7 +579,7 @@ func incrementalSitePages(client *objstore.Client, prefix string, site sitePageS
 		}
 		newer, found := sitePageEntriesSince(entries, prior.Ext[ext])
 		if !found {
-			return generateSitePages(client, prefix, site, nil, manifests, tips, defaultBranch, home, files, progress)
+			return generateSitePages(client, prefix, site, nil, manifests, tips, defaultBranch, home, files, src, refs, progress)
 		}
 		for i := range newer {
 			delta[newer[i].Short] = true
@@ -602,7 +602,7 @@ func incrementalSitePages(client *objstore.Client, prefix string, site sitePageS
 	uploads := make([]sitePageUpload, 0, len(affected))
 	titles := siteItemPageTitles(roots, siteFileTitleSet(prior.Files))
 	for _, r := range affected {
-		page, err := renderSitePage("item", buildSiteItemPage(r, listByExt[r.Msg.Ext], site, titles[r.Msg.Short]))
+		page, err := renderSitePage("item", buildSiteItemPage(r, listByExt[r.Msg.Ext], site, titles[r.Msg.Short], src, refs))
 		if err != nil {
 			return false, err
 		}
@@ -800,7 +800,7 @@ func deleteSitePages(client *objstore.Client, prefix string) (bool, error) {
 }
 
 // writeSiteItemPages writes item pages newest-first per extension under the per-push budget and returns what is left of it; a moved tip resets that extension.
-func writeSiteItemPages(client *objstore.Client, prefix string, roots map[string][]*sitePageItem, tips map[string]string, site sitePageSite, prior *sitePagesManifest, titles map[string]string, progress objstore.Progress) (map[string]int, bool, int, error) {
+func writeSiteItemPages(client *objstore.Client, prefix string, roots map[string][]*sitePageItem, tips map[string]string, site sitePageSite, prior *sitePagesManifest, titles map[string]string, src *objstore.LocalCommitSource, refs map[string]string, progress objstore.Progress) (map[string]int, bool, int, error) {
 	done := map[string]int{}
 	if prior != nil && prior.Cursor != nil {
 		for _, list := range sitePageLists {
@@ -822,7 +822,7 @@ func writeSiteItemPages(client *objstore.Client, prefix string, roots map[string
 			batch := min(chunk, len(rs)-done[list.Ext], budget)
 			uploads := make([]sitePageUpload, 0, batch)
 			for _, it := range rs[done[list.Ext] : done[list.Ext]+batch] {
-				page, err := renderSitePage("item", buildSiteItemPage(it, list, site, titles[it.Msg.Short]))
+				page, err := renderSitePage("item", buildSiteItemPage(it, list, site, titles[it.Msg.Short], src, refs))
 				if err != nil {
 					return nil, false, 0, err
 				}

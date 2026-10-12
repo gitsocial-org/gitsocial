@@ -128,6 +128,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("PR page renders feedback as the app's card variant", !!pr && /<div class="card feedback verdict-approved">/.test(pr) && /<div class="card feedback verdict-changes-requested">/.test(pr));
   ok("PR page carries the verdict and the anchor as chips", !!pr && /class="chip verdict-approved">approved/.test(pr) && /class="chip verdict-changes-requested">changes requested/.test(pr) && /class="chip">notes\.txt:2/.test(pr));
   ok("PR page shows head → base", !!pr && pr.includes("feature/notes-expand → main"));
+  ok("PR page carries the Files changed section with its file row", !!pr && /<div class="diff-section"><div class="diff-head"><span class="subject">Files changed \(\d+\)<\/span><\/div>/.test(pr) && /<span class="diff-status s-modified">M<\/span><span class="mono diff-path">notes\.txt<\/span><span class="diff-counts mono"><span class="cnt-add">\+\d+<\/span><span class="cnt-del">-\d+<\/span><\/span>/.test(pr) && /<div class="diff-line add">/.test(pr), pr && pr.slice(pr.indexOf('class="diff-section"'), pr.indexOf('class="diff-section"') + 400));
   const issue = pages.find((p) => p.includes("Static site: thread view needs live fixture"));
   ok("issue page inlines cross-extension social comments", !!issue && issue.includes("I can build the fixture this week.") && issue.includes("Great, assign it to me."));
   const quote = pages.find((p) => p.includes("Great point from upstream"));

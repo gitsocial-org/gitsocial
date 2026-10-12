@@ -168,6 +168,16 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{if .Extra}}<div class="asset-list">{{range .Extra}}{{template "assetrow" .}}{{end}}</div>
 {{end}}{{if .SignedBy}}<div class="asset-signed"><span class="meta">signed-by </span><span class="mono selectable">{{.SignedBy}}</span></div>
 {{end}}</div>
+{{end}}{{define "diff"}}<div class="diff-section"><div class="diff-head"><span class="subject">Files changed{{if not .Notice}} ({{.Count}}){{end}}</span></div>
+{{if .Notice}}<div class="notice">{{.Notice}}</div>
+{{end}}{{range .Files}}<div class="diff-file"><div class="diff-file-head"><span class="diff-status s-{{.Status}}">{{.Letter}}</span><span class="mono diff-path">{{.Path}}</span><span class="diff-counts mono">{{if .Binary}}binary{{else}}<span class="cnt-add">+{{.Adds}}</span><span class="cnt-del">-{{.Dels}}</span>{{end}}</span></div>
+{{if .Hunks}}<div class="diff-file-body"><div class="diff-body unified">{{range .Hunks}}<div class="diff-hunk-head mono">{{.Head}}</div>
+{{range .Lines}}<div class="diff-line {{.Op}}"><span class="dl-num mono">{{.OldN}}</span><span class="dl-num mono">{{.NewN}}</span><span class="dl-sign mono">{{.Sign}}</span><span class="dl-text mono">{{.Text}}</span></div>
+{{end}}{{end}}</div></div>
+{{end}}</div>
+{{end}}{{if .Omitted}}<div class="notice">{{.Omitted}} more not shown.</div>
+{{end}}{{if .More}}<div class="notice">The page shows the first {{lineCap}} changed lines. <a href="{{.AppHref}}">The app shows the rest.</a></div>
+{{end}}</div>
 {{end}}{{define "glyph"}}{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{end}}{{define "hometoggle"}}<summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></summary>
 {{end}}{{define "filerow"}}<a class="home-row" href="{{.Href}}"><span class="home-row-subject">{{.Name}}</span></a>
 {{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}>{{if .BodyOnly}}<span class="meta meta-lead">{{template "glyph" .}}{{if .Chip}}{{template "chip" .Chip}} {{end}}{{template "bits" .Meta}}</span>
@@ -179,7 +189,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{if .Heading}}{{template "detailhead" .}}
 {{end}}<div class="detail-meta"><span class="meta">{{template "bits" .Meta}}</span></div>
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
-{{else}}{{template "body" .Body}}{{end}}{{with .Assets}}{{template "assets" .}}{{end}}{{if .Replies}}<div class="thread"><div class="thread-head">Comments ({{len .Replies}})</div>
+{{else}}{{template "body" .Body}}{{end}}{{with .Assets}}{{template "assets" .}}{{end}}{{with .Diff}}{{template "diff" .}}{{end}}{{if .Replies}}<div class="thread"><div class="thread-head">Comments ({{len .Replies}})</div>
 {{range .Replies}}{{if .Depth}}<div class="comment-row"><div class="thread-rail">{{range $i := .Rail}}<span class="rail-guide"></span>{{end}}</div>{{end}}<div class="card {{.Variant}}">
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
 {{else}}<p class="meta meta-lead">{{template "glyph" .}}{{range .Chips}}{{template "chip" .}} {{end}}{{template "bits" .Meta}}</p>
@@ -232,6 +242,7 @@ var sitePagesShellScript = template.HTML(`<script>window.GS_SHELL="` + sitePages
 var sitePageTemplates = template.Must(template.New("pages").Funcs(template.FuncMap{
 	"shellDir": func() string { return sitePagesShellDir },
 	"shellTag": func() template.HTML { return sitePagesShellScript },
+	"lineCap":  func() int { return sitePRDiffLineCap },
 }).Parse(
 	strings.NewReplacer("@CORE@", sitePagesCoreCSS, "@BOOT@", sitePagesBootScript).Replace(sitePageTemplateText)))
 
@@ -346,6 +357,7 @@ type siteItemPageData struct {
 	Body    []sitePageBodyBlock
 	Tomb    string
 	Assets  *sitePageAssets // a release's asset block, nil on every other type
+	Diff    *sitePageDiff   // a pull request's Files changed section, nil on every other type
 	Replies []sitePageReply
 	Omitted int
 }
@@ -1010,8 +1022,8 @@ func siteItemPageDatedTitle(it *sitePageItem, subject string) string {
 	return subject + " · " + date
 }
 
-// buildSiteItemPage assembles one root's item-page data: chrome, meta line, body or tombstone, release extras and the capped thread.
-func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, title string) siteItemPageData {
+// buildSiteItemPage assembles one root's item-page data: chrome, meta line, body or tombstone, release extras, a pull request's diff and the capped thread.
+func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, title string, src *objstore.LocalCommitSource, refs map[string]string) siteItemPageData {
 	route := "commit:" + it.Msg.Short + "@gitmsg/" + list.Ext
 	subject, body := protocol.SplitSubjectBody(pageItemBody(it))
 	bodyOnly := sitePageBodyOnly(pageItemType(it))
@@ -1060,6 +1072,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 	if pageItemType(it) == "release" {
 		d.Assets = buildSiteReleaseAssets(it)
 	}
+	d.Diff = buildSitePRDiff(it, site, src, refs)
 	threadBytes := 0
 	for i, r := range it.Replies {
 		if i >= sitePageMaxReplies || threadBytes > sitePageMaxThreadBytes {

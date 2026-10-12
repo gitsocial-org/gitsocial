@@ -82,6 +82,7 @@ What a page shows:
 
 - Item bodies render as escaped plain text. Only the README and file pages, the bucket owner's own content, render as markdown, with raw HTML rebuilt against an allowlist.
 - A repository-relative image in the README shows as its alt text.
+- A pull request page carries a Files changed section: each changed file with its status letter, path and line counts, then the unified hunks up to a cap. Past the cap, a notice links the app for the rest. A range that does not resolve in the object database of the pusher shows a one-line notice in its place.
 - The pages of retracted items and very short file pages carry `noindex,follow`.
 - Every `<title>` is unique, and every description is prose with the markdown stripped.
 
@@ -170,6 +171,7 @@ The shell and the pages:
 - The tag page reads its commits and files from the range document when the `tags.json` entry flags one for the commit of the previous row, and walks objects otherwise. A push writes the range documents before `tags.json`, and flags only the documents that it wrote or found flagged for the same pair. A shallow clone writes none.
 - The version order of tags has one definition in two places, `compareSiteTagsDesc` and `compareTagsDesc`, and a hash suffix (`v<version>.<hash>`) is not part of the version. Tags that differ only by that suffix are in date order.
 - When the code index does not hold both tips of a compare, a tag page or a pull request diff, the app walks commit objects as `git rev-list base..head` does, newest committer time first. The number of reads follows the range, not the history. A range longer than 2,000 reads shows as truncated, with no commit from under the base. A 12-character tip of a pull request expands through the code index, then the pack indexes, then a bounded walk of its branch; a short that names two objects does not expand. The merge head of a merged pull request comes from `refs/gitmsg/review/merged/<hash>` in `refs.json` first, so a squash or rebase merge whose head branch is gone still shows its files.
+- The pull request page and the app render the Files changed section from the same classes and wording: the head, the file row with its status letter and counts, the unified rows and the notices, pinned in `parity_fixtures.json`. The page reads the range from the local object database of the pusher, the merged head ref first for a merged pull request, and lists up to 100 files and 500 rows; the app shows the rest.
 - Only the app shows sidebar counts: branches and tags come from `refs.json`, and commits and the item counts from `pages.json`, which carries the item counts only after a complete pass.
 - An item count is the open work, the rows that its list shows first: Issues, Pull Requests, Milestones and Sprints show their Open filter first. The sidebar of a generated page carries no count.
 
