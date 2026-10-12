@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, peelTag, tagsByCommit, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortShaFromIndex, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, peelTag, tagsByCommit, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortSha, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -1075,18 +1075,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return [wrap];
   }
 
-  // resolveCommitRouteSha expands a short route sha through the index, then a bounded walk; getObject needs full shas.
+  // resolveCommitRouteSha expands a short route sha through the index, the pack indexes, then a bounded walk of the branch; getObject needs full shas.
   async function resolveCommitRouteSha(ctx, hash, branch) {
     if (/^[0-9a-f]{40}$/.test(hash)) return hash;
-    const indexed = await resolveShortShaFromIndex(ctx, hash);
-    if (indexed) return indexed;
     const name = branch || headBranchName(await headFor(ctx));
-    if (!name) return null;
-    const live = await refTip(ctx, "refs/heads/" + name);
-    if (!live) return null;
-    if (live.startsWith(hash)) return live;
-    const commits = await walkHistory(ctx, live, DETAIL_WALK_CAP);
-    return (commits.find((c) => c.hash.startsWith(hash)) || {}).hash || null;
+    const live = name ? await refTip(ctx, "refs/heads/" + name) : null;
+    if (live && live.startsWith(hash)) return live;
+    return resolveShortSha(ctx, hash, live ? () => walkHistory(ctx, live, DETAIL_WALK_CAP) : null);
   }
 
   // commitDetail paints a raw commit's detail page, then appends its changes in the background.
@@ -2291,15 +2286,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const live = await refTip(ctx, "refs/heads/" + name);
     if (!live) return { status: "absent" };
     if (short && live.startsWith(short)) return { status: "ok", sha: live, exact: true };
-    if (short) {
-      // The index answers first; the bounded walk covers shas the index lacks.
-      const indexed = await resolveShortShaFromIndex(ctx, short);
-      if (indexed) return { status: "ok", sha: indexed, exact: true };
-      const commits = await walkHistory(ctx, live, DETAIL_WALK_CAP);
-      const hit = commits.find((c) => c.hash.startsWith(short));
-      if (hit) return { status: "ok", sha: hit.hash, exact: true };
-    }
-    return { status: "ok", sha: live, exact: false };
+    const sha = short ? await resolveShortSha(ctx, short, () => walkHistory(ctx, live, DETAIL_WALK_CAP)) : null;
+    return sha ? { status: "ok", sha, exact: true } : { status: "ok", sha: live, exact: false };
   }
 
   // resolveMergedRefs resolves a merged PR's merge-base and merge-head shorts to full shas, or null.
@@ -2310,12 +2298,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (!live) return null;
     let commits = null;
     const walk = async () => (commits || (commits = await walkHistory(ctx, live, DETAIL_WALK_CAP)));
-    const find = async (short) => {
-      if (live.startsWith(short)) return live;
-      const indexed = await resolveShortShaFromIndex(ctx, short);
-      if (indexed) return indexed;
-      return ((await walk()).find((c) => c.hash.startsWith(short)) || {}).hash || null;
-    };
+    const find = (short) => (live.startsWith(short) ? live : resolveShortSha(ctx, short, walk));
     const baseSha = await find(baseShort), headSha = await find(headShort);
     return baseSha && headSha ? { baseSha, headSha } : null;
   }

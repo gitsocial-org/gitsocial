@@ -590,18 +590,76 @@
     return name ? readPackEntry(ctx, name, at[1], at[1] + at[2]) : null;
   }
 
-  // probePacks finds an object through each pack's index; packs are probed most recently hit first, since a diff reads from the packs of both of its sides.
-  async function probePacks(ctx, sha) {
+  // orderedPacks lists the bucket's packs, the most recently hit first, since a diff reads from the packs of both of its sides.
+  async function orderedPacks(ctx) {
     const names = await packNames(ctx);
     const hits = ctx.packs.hits;
-    const ordered = hits.concat(names.filter((n) => !hits.includes(n)));
-    for (const name of ordered) {
+    return hits.concat(names.filter((n) => !hits.includes(n)));
+  }
+
+  // notePackHit moves a pack to the front of the hit order.
+  function notePackHit(ctx, name) {
+    if (ctx.packs.hits[0] !== name) ctx.packs.hits = [name].concat(ctx.packs.hits.filter((n) => n !== name));
+  }
+
+  // probePacks finds an object through each pack's index, in hit order.
+  async function probePacks(ctx, sha) {
+    for (const name of await orderedPacks(ctx)) {
       const found = await packIdxLookup(ctx, name, sha);
       if (found === null) continue;
-      if (hits[0] !== name) ctx.packs.hits = [name].concat(hits.filter((n) => n !== name));
+      notePackHit(ctx, name);
       return readPackEntry(ctx, name, found.offset, found.end);
     }
     return null;
+  }
+
+  // packIdxShaAt returns the hex sha at one position of a sha table slice.
+  function packIdxShaAt(shas, at) {
+    let hex = "";
+    for (let i = 0; i < 20; i++) hex += shas[at * 20 + i].toString(16).padStart(2, "0");
+    return hex;
+  }
+
+  // packIdxPrefix returns the shas of one pack that start with a short, at most two, from the fanout slice of the short's first byte.
+  async function packIdxPrefix(ctx, name, short) {
+    const opened = await packIdxOpen(ctx, name);
+    if (!opened) return [];
+    const first = parseInt(short.slice(0, 2), 16);
+    const lo = first === 0 ? 0 : opened.fanout[first - 1];
+    const hi = opened.fanout[first];
+    if (lo >= hi) return [];
+    const shas = await packIdxSlice(ctx, opened, name, first, lo, hi);
+    if (shas === null) return [];
+    let a = 0, b = hi - lo;
+    while (a < b) {
+      const mid = (a + b) >> 1;
+      if (packIdxShaAt(shas, mid) < short) a = mid + 1; else b = mid;
+    }
+    const out = [];
+    for (let i = a; i < hi - lo && out.length < 2; i++) {
+      const hex = packIdxShaAt(shas, i);
+      if (!hex.startsWith(short)) break;
+      out.push(hex);
+    }
+    return out;
+  }
+
+  // resolveShortSha expands a short sha through the code index, then the pack indexes, then the caller's walk; a short that names two objects resolves to null.
+  async function resolveShortSha(ctx, short, walk) {
+    if (!/^[0-9a-f]{7,40}$/.test(short || "")) return null;
+    if (short.length === 40) return short;
+    const indexed = await resolveShortShaFromIndex(ctx, short);
+    if (indexed) return indexed;
+    const found = new Set();
+    for (const name of await orderedPacks(ctx)) {
+      const hits = await packIdxPrefix(ctx, name, short);
+      if (hits.length) notePackHit(ctx, name);
+      for (const h of hits) found.add(h);
+      if (found.size > 1) return null;
+    }
+    if (found.size === 1) return [...found][0];
+    if (!walk) return null;
+    return ((await walk()).find((c) => c.hash.startsWith(short)) || {}).hash || null;
   }
 
   // parseCommit turns a commit object into structured fields plus its clean content and parsed gitmsg header.
@@ -4538,7 +4596,7 @@
     reviewSummary, suggestionBody,
     loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadBranchLogIndexed, loadCompareCommitsWindow, loadGraphWindow, orderGraphWindow, assignGraphLanes, GRAPH_WINDOW,
     loadItemsIndex, loadOlderItemShards, olderItemBytes, loadBodyIndex, extWalkState, indexCommit, metaCommit, hydrateItem, hydrateItems,
-    loadTimelineItems, loadTimelineWindow, headerAction, itemActions, dropMergeCloses, HOME_ROWS, compactCount, loadNavCounts, resolveCodeItems, resolveShortShaFromIndex, readRefMode, newContext,
+    loadTimelineItems, loadTimelineWindow, headerAction, itemActions, dropMergeCloses, HOME_ROWS, compactCount, loadNavCounts, resolveCodeItems, resolveShortShaFromIndex, resolveShortSha, readRefMode, newContext,
     loadCommitsPage, loadCommitsLayout, COMMITS_PAGE_SIZE,
     manifestFor, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
     parseTree, getTree, resolvePath, listBranches, listTags, orderTagTies, orderedTags, tagsByCommit, loadSiteTags, loadTagRange, tagRangeWindow, tagRangeFiles, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,

@@ -65,19 +65,20 @@ function gitSha(obj) {
   return crypto.createHash("sha1").update(Buffer.concat([head, Buffer.from(obj.body)])).digest("hex");
 }
 
-// writeSyntheticIdx writes a v2 pack index of count random shas at offsets 12 + 100 * rank, and returns its name and sorted shas.
-function writeSyntheticIdx(root, count) {
-  const shas = Array.from({ length: count }, () => crypto.randomBytes(20).toString("hex")).sort();
-  const buf = Buffer.alloc(8 + 1024 + count * 28 + 40);
+// writeSyntheticIdx writes a v2 pack index of count random shas, or the given ones, at offsets 12 + 100 * rank, and returns its name and sorted shas.
+function writeSyntheticIdx(root, count, given) {
+  const shas = (given || Array.from({ length: count }, () => crypto.randomBytes(20).toString("hex"))).slice().sort();
+  const n = shas.length;
+  const buf = Buffer.alloc(8 + 1024 + n * 28 + 40);
   buf.writeUInt32BE(0xff744f63, 0);
   buf.writeUInt32BE(2, 4);
   for (let b = 0, i = 0; b < 256; b++) {
-    while (i < count && parseInt(shas[i].slice(0, 2), 16) <= b) i++;
+    while (i < n && parseInt(shas[i].slice(0, 2), 16) <= b) i++;
     buf.writeUInt32BE(i, 8 + b * 4);
   }
   shas.forEach((sha, i) => {
     Buffer.from(sha, "hex").copy(buf, 1032 + i * 20);
-    buf.writeUInt32BE(12 + i * 100, 1032 + count * 24 + i * 4);
+    buf.writeUInt32BE(12 + i * 100, 1032 + n * 24 + i * 4);
   });
   const name = "pack-" + crypto.randomBytes(20).toString("hex");
   fs.mkdirSync(path.join(root, "objects", "pack"), { recursive: true });
@@ -351,6 +352,33 @@ async function main() {
     if (whole) ok(label + " costs two reads, the head and the rest", reads.length === 2, reads.map((r) => r.range).join(" | "));
     else ok(label + " is range-read, not downloaded", reads.length > 2 && reads.every((r) => r.bytes <= 4096), reads.map((r) => r.range + " " + r.bytes).join(" | "));
   }
+  // ---- short sha from the pack index ----
+  // A commit that a rebase or squash merge left on no ref is in no code index and on no branch; its pack index still names it.
+  const { name: pName, shas: pShas } = writeSyntheticIdx(idxRoot, 2900);
+  const target = pShas[Math.floor(pShas.length / 2)];
+  const packOnly = (names) => { const c = GS.newContext(idxBase); c.packs.names = names; return c; };
+  at = mark();
+  ok("short sha from the pack index: a short on no branch resolves to its full sha",
+    (await GS.resolveShortSha(packOnly([pName]), target.slice(0, 12))) === target);
+  const shortReads = since(at).filter((r) => r.url.endsWith(pName + ".idx"));
+  ok("short sha from the pack index: the search reads the index head and one fanout slice",
+    shortReads.length === 2 && shortReads.every((r) => r.bytes <= 4096), shortReads.map((r) => r.range + " " + r.bytes).join(" | "));
+  const twins = [target.slice(0, 12) + "e".repeat(28), target.slice(0, 12) + "f".repeat(28)];
+  const { name: twinName } = writeSyntheticIdx(idxRoot, 0, twins);
+  ok("short sha from the pack index: a short that names two objects in one pack resolves to null",
+    (await GS.resolveShortSha(packOnly([twinName]), target.slice(0, 12))) === null);
+  ok("short sha from the pack index: a longer short tells them apart",
+    (await GS.resolveShortSha(packOnly([twinName]), twins[1].slice(0, 13))) === twins[1]);
+  const { name: oneName } = writeSyntheticIdx(idxRoot, 0, [twins[0]]);
+  ok("short sha from the pack index: a short that names one object in each of two packs resolves to null",
+    (await GS.resolveShortSha(packOnly([pName, oneName]), target.slice(0, 12))) === null);
+  const indexed = packOnly([pName]);
+  const other = target.slice(0, 12) + "0".repeat(28);
+  indexed.walks.codeIndex = { items: [{ hash: other }], older: [], complete: true };
+  ok("short sha from the pack index: the code index answers first when it holds the sha",
+    (await GS.resolveShortSha(indexed, target.slice(0, 12))) === other);
+  ok("short sha from the pack index: the caller's walk answers last",
+    (await GS.resolveShortSha(packOnly([pName]), other.slice(0, 13), async () => [{ hash: other }])) === other);
   idxServer.close();
   fs.rmSync(idxRoot, { recursive: true, force: true });
 

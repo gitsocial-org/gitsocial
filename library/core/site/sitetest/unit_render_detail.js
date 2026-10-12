@@ -233,6 +233,42 @@ async function main() {
   ok(!!mSec && text(mSec).indexOf("recorded merge range does not resolve") !== -1,
     "a merged PR with an unresolvable range says so, not that nothing was recorded", text(mSec));
 
+  console.log("=== merged range resolves from the packs ===");
+  // packIdx builds a v2 pack index over full shas, each at a fake offset.
+  function packIdx(shas) {
+    const sorted = shas.slice().sort(), n = sorted.length;
+    const buf = new Uint8Array(8 + 1024 + n * 28 + 40);
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(0, 0xff744f63); dv.setUint32(4, 2);
+    for (let b = 0, i = 0; b < 256; b++) { while (i < n && parseInt(sorted[i].slice(0, 2), 16) <= b) i++; dv.setUint32(8 + b * 4, i); }
+    sorted.forEach((s, i) => { buf.set(hexBytes(s), 1032 + i * 20); dv.setUint32(1032 + n * 24 + i * 4, 12 + i * 100); });
+    return buf;
+  }
+  // idxFetch serves one pack index by Range and hands every other key to miss.
+  const idxFetch = (name, buf, miss) => async (url, opts) => {
+    if (!String(url).endsWith("objects/pack/" + name + ".idx")) return miss(url, opts);
+    const m = /bytes=(\d+)-(\d*)/.exec((opts && opts.headers && opts.headers.Range) || "");
+    const start = m ? Number(m[1]) : 0, end = m && m[2] ? Math.min(Number(m[2]) + 1, buf.length) : buf.length;
+    const body = buf.slice(start, end);
+    return { ok: true, status: 206, headers: { get: (h) => (h === "Content-Range" ? "bytes " + start + "-" + (end - 1) + "/" + buf.length : null) }, arrayBuffer: async () => body.buffer };
+  };
+  // A squash merge: 1a is the squash commit on main, 1b the head commit that survives in a pack and on no branch.
+  codeCommit("1a", "ab", "tb", 1750000200, "Add world (squash)");
+  codeCommit("1b", "ab", "tb", 1750000150, "head of the squashed branch");
+  commit("1c", "ad", 1750001400, "Squash merged", { ext: "review", type: "pull-request", state: "merged", base: "#branch:main", "merge-base": short("ab"), "merge-head": short("1b") });
+  const freshPacks = (names) => ({ names, packed: null, maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), hits: [] });
+  const packCtx = Object.assign({}, prCtx, { walks: {}, refMisses: new Set(), packs: freshPacks(["pack-1"]), manifest: Promise.resolve({
+    "refs/heads/gitmsg/review": sha("1c"), "refs/heads/main": sha("1a"),
+  }) });
+  const miss = global.fetch;
+  global.fetch = idxFetch("pack-1", packIdx([sha("1b")]), miss);
+  const ppr = (await GS.itemDetail(packCtx, sha("1c"), "gitmsg/review"))[0];
+  await tick(80);
+  global.fetch = miss;
+  const pSec = findClass(ppr, "diff-section")[0];
+  ok(!!pSec && findClass(pSec, "notice").length === 0, "a merge head in a pack and on no branch resolves", pSec && text(pSec));
+  eq(findClass(pSec, "diff-path").map(textOf), ["notes.txt"], "the squashed range lists its changed file");
+
   console.log("=== the loading spinner ===");
   const sp = GS.spinner();
   ok(sp._cls.has("spinner") && sp.getAttribute("role") === "status" && sp.getAttribute("aria-label") === "Loading", "the spinner names itself to screen readers");
