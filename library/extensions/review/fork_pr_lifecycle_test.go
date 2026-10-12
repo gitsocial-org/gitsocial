@@ -355,3 +355,32 @@ func TestRebaseStack_forkDependentRefused(t *testing.T) {
 		t.Errorf("the error should name the dependent, got %q", res.Error.Message)
 	}
 }
+
+// TestMergePR_mergedHeadRef_forkPR keys the merged ref by the adopted copy and points it at the fork's head tip.
+func TestMergePR_mergedHeadRef_forkPR(t *testing.T) {
+	setupTestDB(t)
+	alice, bob, upstreamURL, _ := forkPRFixture(t)
+	forkTip := fullRef(t, bob, "refs/heads/feature")
+
+	created := CreatePR(bob, "Fix the bug", "", CreatePROptions{Base: upstreamURL + "#branch:main", Head: "feature"})
+	if !created.Success {
+		t.Fatalf("CreatePR: %s", created.Error.Message)
+	}
+	merged := MergePR(alice, created.Data.ID, MergeStrategySquash)
+	if !merged.Success {
+		t.Fatalf("MergePR: %s", merged.Error.Message)
+	}
+	if merged.Data.Repository != upstreamURL {
+		t.Fatalf("merge record repository = %q, want the adopted copy on %s", merged.Data.Repository, upstreamURL)
+	}
+	copyHash := extractRefHash(merged.Data.ID)
+	if copyHash == extractRefHash(created.Data.ID) {
+		t.Error("the merged ref is keyed by the fork's hash, want the adopted copy")
+	}
+	if got := fullRef(t, alice, MergedHeadRefPrefix+copyHash); got != forkTip {
+		t.Errorf("merged ref = %s, want the fork's head tip %s", got, forkTip)
+	}
+	if _, err := git.ExecGit(bob, []string{"rev-parse", "--verify", "--quiet", MergedHeadRefPrefix + copyHash}); err == nil {
+		t.Error("the fork got a merged ref; only the merging repository writes one")
+	}
+}

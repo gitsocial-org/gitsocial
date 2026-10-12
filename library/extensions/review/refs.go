@@ -1,4 +1,4 @@
-// refs.go - Branch-tip resolution for the workspace and for fork URLs
+// refs.go - The merged head ref and branch-tip resolution for the workspace and for fork URLs
 package review
 
 import (
@@ -10,6 +10,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
+
+// MergedHeadRefPrefix is the namespace of the refs that keep each merged pull request's merge head reachable, keyed by its 12-character hash (GITREVIEW.md 1.5).
+const MergedHeadRefPrefix = "refs/gitmsg/review/merged/"
 
 // resolveBranchTip returns branch's remote tip in repoURL; a branch gone from the remote is an error. addresses is gitmsg.ForkAddresses, read once by the caller.
 func resolveBranchTip(workdir, repoURL, branch string, addresses map[string]string) (string, error) {

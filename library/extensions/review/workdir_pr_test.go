@@ -206,3 +206,92 @@ func TestMergePR_RejectsMissingHead(t *testing.T) {
 		t.Error("PR state was flipped to merged despite missing head branch")
 	}
 }
+
+// fullRef reads the full hash a ref names, or fails the test.
+func fullRef(t *testing.T, dir, ref string) string {
+	t.Helper()
+	out, err := git.ExecGit(dir, []string{"rev-parse", "--verify", ref})
+	if err != nil {
+		t.Fatalf("rev-parse %s: %v", ref, err)
+	}
+	return strings.TrimSpace(out.Stdout)
+}
+
+// TestMergePR_writesMergedHeadRef keeps the full merge head at the merged ref for each strategy, after the head branches are gone and gc has run.
+func TestMergePR_writesMergedHeadRef(t *testing.T) {
+	t.Parallel()
+	for _, strategy := range []MergeStrategy{MergeStrategyFF, MergeStrategySquash, MergeStrategyRebase, MergeStrategyMerge} {
+		t.Run(string(strategy), func(t *testing.T) {
+			dir := initTestRepo(t)
+			head := "head-" + string(strategy)
+			if _, err := git.ExecGit(dir, []string{"branch", head, "main"}); err != nil {
+				t.Fatalf("branch %s: %v", head, err)
+			}
+			if _, err := git.CreateCommitOnBranch(dir, head, "work on "+head); err != nil {
+				t.Fatalf("commit on %s: %v", head, err)
+			}
+			headFull := fullRef(t, dir, "refs/heads/"+head)
+			created := CreatePR(dir, "Subj", "", CreatePROptions{Base: "main", Head: head})
+			if !created.Success {
+				t.Fatalf("CreatePR: %s", created.Error.Message)
+			}
+			merged := MergePR(dir, created.Data.ID, strategy)
+			if !merged.Success {
+				t.Fatalf("MergePR(%s): %s", strategy, merged.Error.Message)
+			}
+			if _, err := git.ExecGit(dir, []string{"rev-parse", "--verify", "--quiet", "refs/heads/_gitmsg-merge-tmp"}); err == nil {
+				t.Error("the temporary head branch remains after the merge")
+			}
+			ref := MergedHeadRefPrefix + extractRefHash(merged.Data.ID)
+			if got := fullRef(t, dir, ref); got != headFull {
+				t.Errorf("%s = %s, want the full merge head %s", ref, got, headFull)
+			}
+			if err := git.DeleteRef(dir, "refs/heads/"+head); err != nil {
+				t.Fatalf("delete %s: %v", head, err)
+			}
+			for _, args := range [][]string{{"reflog", "expire", "--expire-unreachable=now", "--all"}, {"gc", "--prune=now", "--quiet"}} {
+				if _, err := git.ExecGit(dir, args); err != nil {
+					t.Fatalf("git %v: %v", args, err)
+				}
+			}
+			if _, err := git.ExecGit(dir, []string{"cat-file", "-e", headFull}); err != nil {
+				t.Errorf("gc pruned the merge head %s: %v", headFull, err)
+			}
+		})
+	}
+}
+
+// TestMergePR_mergedHeadRef_crossRepo writes the merged ref for a head that another repository serves by URL.
+func TestMergePR_mergedHeadRef_crossRepo(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+	if _, err := git.ExecGit(dir, []string{"branch", "remote-head", "main"}); err != nil {
+		t.Fatalf("branch: %v", err)
+	}
+	if _, err := git.CreateCommitOnBranch(dir, "remote-head", "remote work"); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	headFull := fullRef(t, dir, "refs/heads/remote-head")
+	bareDir := t.TempDir()
+	if _, err := git.ExecGit(bareDir, []string{"init", "--bare"}); err != nil {
+		t.Fatalf("init bare: %v", err)
+	}
+	if _, err := git.ExecGit(dir, []string{"push", bareDir, "remote-head"}); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	if err := git.DeleteRef(dir, "refs/heads/remote-head"); err != nil {
+		t.Fatalf("delete the local branch: %v", err)
+	}
+	created := CreatePR(dir, "Remote head", "", CreatePROptions{Base: "#branch:main", Head: bareDir + "#branch:remote-head"})
+	if !created.Success {
+		t.Fatalf("CreatePR: %s", created.Error.Message)
+	}
+	merged := MergePR(dir, created.Data.ID, MergeStrategySquash)
+	if !merged.Success {
+		t.Fatalf("MergePR: %s", merged.Error.Message)
+	}
+	ref := MergedHeadRefPrefix + extractRefHash(merged.Data.ID)
+	if got := fullRef(t, dir, ref); got != headFull {
+		t.Errorf("%s = %s, want the full merge head %s", ref, got, headFull)
+	}
+}

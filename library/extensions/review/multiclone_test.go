@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
@@ -199,3 +201,72 @@ func hasNotifType(ns []notifications.Notification, typeName string) bool {
 
 // notifTypes comes from observe_test.go in this package.
 var _ = protocol.ParseRef
+
+// mergeInClone merges a same-repository pull request in a fresh clone of a new origin; it returns the origin, the clone, the merged ref and the full merge head.
+func mergeInClone(t *testing.T) (origin, clone, ref, head string) {
+	t.Helper()
+	origin = initBareOrigin(t)
+	clone = cloneAs(t, origin, "alice", "alice@test.com")
+	pushBranch(t, clone, "feature")
+	if _, err := git.ExecGit(clone, []string{"checkout", "main"}); err != nil {
+		t.Fatalf("checkout main: %v", err)
+	}
+	head = fullRef(t, clone, "refs/heads/feature")
+	created := CreatePR(clone, "Fix the bug", "", CreatePROptions{Base: "#branch:main", Head: "feature"})
+	if !created.Success {
+		t.Fatalf("CreatePR: %s", created.Error.Message)
+	}
+	merged := MergePR(clone, created.Data.ID, MergeStrategySquash)
+	if !merged.Success {
+		t.Fatalf("MergePR: %s", merged.Error.Message)
+	}
+	return origin, clone, MergedHeadRefPrefix + extractRefHash(merged.Data.ID), head
+}
+
+// TestPush_mergedHeadRef counts the merged ref as a state ref, sends it with the push and mirrors it into the tracking namespace.
+func TestPush_mergedHeadRef(t *testing.T) {
+	setupTestDB(t)
+	origin, alice, ref, head := mergeInClone(t)
+
+	preview, err := gitmsg.GetPushPreview(alice, nil, "origin", false)
+	if err != nil {
+		t.Fatalf("GetPushPreview: %v", err)
+	}
+	if preview.Refs != 1 {
+		t.Errorf("preview counts %d state refs before the push, want 1, the merged ref", preview.Refs)
+	}
+	if _, err := gitmsg.Push(alice, false, nil, "origin", false); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+	if got := fullRef(t, origin, ref); got != head {
+		t.Errorf("origin %s = %s, want the merge head %s", ref, got, head)
+	}
+	if got := fullRef(t, alice, gitmsg.TrackingRef("origin", ref)); got != head {
+		t.Errorf("tracking mirror of %s = %s, want %s", ref, got, head)
+	}
+	preview, err = gitmsg.GetPushPreview(alice, nil, "origin", false)
+	if err != nil {
+		t.Fatalf("GetPushPreview after the push: %v", err)
+	}
+	if preview.Refs != 0 {
+		t.Errorf("preview counts %d state refs after the push, want 0", preview.Refs)
+	}
+}
+
+// TestFetch_mergedHeadRef brings the merged ref and its commit to another clone through the origin sync.
+func TestFetch_mergedHeadRef(t *testing.T) {
+	setupTestDB(t)
+	origin, alice, ref, head := mergeInClone(t)
+	if _, err := gitmsg.Push(alice, false, nil, "origin", false); err != nil {
+		t.Fatalf("Push: %v", err)
+	}
+
+	bob := cloneAs(t, origin, "bob", "bob@test.com")
+	fetch.SyncWorkspaceOrigin(bob, nil, nil)
+	if got := fullRef(t, bob, ref); got != head {
+		t.Errorf("bob %s = %s, want the merge head %s", ref, got, head)
+	}
+	if _, err := git.ExecGit(bob, []string{"cat-file", "-e", head}); err != nil {
+		t.Errorf("bob lacks the merge head %s: %v", head, err)
+	}
+}

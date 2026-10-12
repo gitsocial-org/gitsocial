@@ -655,7 +655,7 @@ func TestWorkspaceSync_skipsStateRefs(t *testing.T) {
 	dir := initWorkspace(t)
 	repoURL := gitmsg.ResolveRepoURL(dir)
 	tree := mustGit(t, dir, "rev-parse", "HEAD^{tree}")
-	stateRefs := []string{"refs/gitmsg/social/config", "refs/gitsocial/tracking/origin/gitmsg/social/config", "refs/tags/v1"}
+	stateRefs := []string{"refs/gitmsg/social/config", "refs/gitmsg/review/merged/0123456789ab", "refs/gitsocial/tracking/origin/gitmsg/social/config", "refs/tags/v1"}
 	hidden := make([]string, 0, len(stateRefs))
 	for _, ref := range stateRefs {
 		hash := mustGit(t, dir, "commit-tree", "-m", "state of "+ref, tree)

@@ -45,3 +45,10 @@ func TestParseGenKey(t *testing.T) {
 		}
 	}
 }
+
+// TestThinPush_mergedHeadRef: the merged head ref is a gitmsg ref, so a thin push leaves it whole.
+func TestThinPush_mergedHeadRef(t *testing.T) {
+	if !isGitmsgRef("refs/gitmsg/review/merged/0123456789ab") {
+		t.Error("isGitmsgRef(refs/gitmsg/review/merged/...) = false, want true")
+	}
+}

@@ -503,6 +503,10 @@ func MergePR(workdir, prRef string, strategy MergeStrategy) Result[PullRequest] 
 	if !res.Success {
 		return res
 	}
+	// The ref outlives the temporary branch, so the merged range stays reconstructable (GITREVIEW.md 1.5).
+	if err := git.WriteRef(workdir, MergedHeadRefPrefix+extractRefHash(res.Data.ID), mergeHeadFull); err != nil {
+		log.Warn("write merged head ref failed", "pr", res.Data.ID, "error", err)
+	}
 
 	// The caller's workspace sync keeps the pm rows this reads current.
 	if len(res.Data.Closes) > 0 {
