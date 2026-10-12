@@ -3380,10 +3380,11 @@
 
   // loadNavCounts returns the sidebar counts by nav key, each from a source the route already pays for or one manifest read; a key without a source is absent.
   async function loadNavCounts(ctx) {
-    const [{ branches }, tags, doc] = await Promise.all([listBranches(ctx), listTags(ctx), loadPagesDoc(ctx)]);
+    const [{ branches }, tags, doc, forks] = await Promise.all([listBranches(ctx), listTags(ctx), loadPagesDoc(ctx), loadForkPulls(ctx)]);
     const counts = { branches: branches.length, tags: tags.length };
     if (doc && doc.commits) counts.commits = Math.max(0, doc.commits.total | 0);
     for (const [key, n] of Object.entries((doc && doc.items) || {})) counts[key] = Math.max(0, n | 0);
+    if (counts.prs !== undefined) counts.prs += forks.filter((it) => ((it.header && it.header.state) || "open") === "open").length;
     return counts;
   }
 
@@ -4012,7 +4013,7 @@
     let laneDone = 0;
     // note reports one lane's completion; perExt grows in place, so the caller can render lanes as they resolve.
     const note = () => { laneDone++; if (onLane) { try { onLane(perExt, laneDone, laneTotal); } catch (_) { /* render-side */ } } };
-    const extLane = async (ext) => {
+    const walkLane = async (ext) => {
       if (full) {
         const bodies = await loadBodyIndex(ctx, ext);
         if (bodies) { perExt[ext] = resolveItems(bodies.items.map(indexCommit)); return; }
@@ -4033,6 +4034,11 @@
       perExt[ext] = r.items;
       if (r.items.some((it) => it.commit.hollow)) light = true;
       if (r.more) truncated = true;
+    };
+    // The review lane adds the fork pull requests as resident metadata, matched by subject alone.
+    const extLane = async (ext) => {
+      await walkLane(ext);
+      if (ext === "review") perExt.review = (perExt.review || []).concat(await loadForkPulls(ctx));
     };
     // Plain code commits join at subject level from the code index; the code corpus carries no bodies, so the full tier leaves them as they are.
     const codeLane = async () => {
@@ -4335,6 +4341,47 @@
     return out;
   }
 
+  // ---- Fork pull requests (.gitsocial/forks/, the open pull requests of registered forks) ----
+
+  // FORK_MANIFEST_KEY is the fork area's manifest: one entry per commit of each listed pull request.
+  const FORK_MANIFEST_KEY = ".gitsocial/forks/manifest.json";
+
+  // forkPullItems turns a version 1 fork manifest into resolved items, the fork fields of the canonical entry under fork; another version gives none.
+  function forkPullItems(doc) {
+    if (!doc || doc.version !== 1 || !Array.isArray(doc.items)) return [];
+    const entries = new Map(doc.items.filter((e) => e && /^[0-9a-f]{40}$/.test(e.sha || "")).map((e) => [e.sha, e]));
+    const items = resolveItems(Array.from(entries.values(), metaCommit).sort((a, b) => b.authorTime - a.authorTime));
+    for (const it of items) {
+      const e = entries.get(it.commit.hash);
+      it.fork = { repo: String(e.repo || ""), head: String(e.head || ""), pack: String(e.pack || ""), packBytes: e.packBytes || 0, pending: !!e.pending, tooLarge: !!e.tooLarge };
+    }
+    return items;
+  }
+
+  // loadForkPulls reads the fork manifest once per context; an absent, forbidden or unreadable manifest reads as no fork pull requests.
+  function loadForkPulls(ctx) {
+    const key = "forkPulls";
+    if (ctx.walks[key] === undefined) {
+      ctx.walks[key] = fetchText(ctx.base, FORK_MANIFEST_KEY).then((text) => forkPullItems(text ? JSON.parse(text) : null)).catch(() => []);
+    }
+    return ctx.walks[key];
+  }
+
+  // findForkPull returns the fork pull request whose canonical commit matches a route hash, or null.
+  async function findForkPull(ctx, hash) {
+    return (await loadForkPulls(ctx)).find((it) => it.commit.hash.startsWith(hash)) || null;
+  }
+
+  // hydrateForkPull reads a fork pull request's commits from its pack; a version the pack does not give keeps its manifest subject.
+  async function hydrateForkPull(ctx, item) {
+    if (item.fork.pack) {
+      await registerForkPack(ctx, item.fork.pack);
+      try { await hydrateItem(ctx, item); } catch (_) { /* the manifest subject stands in */ }
+    }
+    for (const v of item.versions) if (!v.content) v.content = v.commit.subject || "";
+    if (!item.content) item.content = itemSubject(item);
+  }
+
   // ---- Analytics aggregation (DOM-free, testable) ----
 
   // commitsByMonth buckets a walked commit set into contiguous calendar months, with the peak count.
@@ -4629,7 +4676,7 @@
     SEARCH_GROUPS, hashEq,
     parseListRef, enumerateLists, listMemberRef, jsonCommitMessage,
     loadListsSummary, loadListDetail, loadExtConfig,
-    forkRefNames, loadForks,
+    forkRefNames, loadForks, forkPullItems, loadForkPulls, findForkPull, hydrateForkPull,
     commitsByMonth, extensionStats, latestReleaseVersion,
     loadExtItemsAll, loadSiteStats, loadAnalyticsData, activityBuckets, topItemAuthors,
   };

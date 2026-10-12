@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, peelTag, tagsByCommit, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortSha, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, findForkPull, hydrateForkPull, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, peelTag, tagsByCommit, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortSha, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -459,7 +459,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
     if (item.edited) row.append(" · ", editedBit(item.editorName, item.editedTime || when));
     if (h.adopts) row.append(" · ", adoptedBit(h.adopts));
+    if (item.fork) row.append(" · ", ...forkBits(item.fork.repo));
     return row;
+  }
+
+  // forkBits marks a row of a fork pull request: the fork chip, then the fork URL, linked when browsable.
+  function forkBits(repo) {
+    const url = /^https:\/\//.test(repo) ? el("a", { href: repo }, [repo]) : el("span", {}, [repo]);
+    return [el("span", { class: "chip" }, ["fork"]), " ", url];
   }
 
   // adoptedBit names the repository an adopted copy came from, linked when browsable (sitePageAdoptedBit).
@@ -1066,7 +1073,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       }
       const cb = commitBody(bodyOnly ? v.content : body, v.rawMessage, ext === "release");
       actions.replaceChildren(cb.modes, share);
-      metaSlot.replaceChildren(versionMetaRow(v, kind.branch));
+      const meta = versionMetaRow(v, kind.branch);
+      if (item.fork) meta.append(" · ", ...forkBits(item.fork.repo));
+      metaSlot.replaceChildren(meta);
       bodyPane.replaceChildren(cb.pane);
       trailerList(dl, v.header, skip);
     }
@@ -2367,6 +2376,33 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return diffSection(ctx, entries, "Files changed", caveats, fileFeedback);
   }
 
+  // FORK_DIFF_NOTICE words the Files changed notices of a fork pull request; the page layer carries no fork rows.
+  const FORK_DIFF_NOTICE = {
+    pending: "This head is not in the site yet; the next push brings it.",
+    tooLarge: "This head is too large for the site; open it in a clone.",
+    unreadable: "The fork pack could not be loaded from this bucket.",
+  };
+
+  // forkDiffSection builds the Files changed section of a fork pull request version: the manifest head, read from the fork pack, against the base branch of this repository.
+  async function forkDiffSection(ctx, fork, header, final, fileFeedback) {
+    if (fork.pending) return prDiffNotice(FORK_DIFF_NOTICE.pending);
+    if (fork.tooLarge) return prDiffNotice(FORK_DIFF_NOTICE.tooLarge);
+    // The manifest head is the final version's head; an older version shows its own recorded head or the notice.
+    const tip = final ? "" : (header["head-tip"] || "");
+    if (!/^[0-9a-f]{40}$/.test(fork.head) || !fork.head.startsWith(tip)) return prDiffNotice(PR_DIFF_NOTICE.tipsUnresolved);
+    const base = parseBranchField(header.base).name;
+    const baseSha = base ? await refTip(ctx, "refs/heads/" + base) : null;
+    if (!baseSha) return prDiffNotice(PR_DIFF_NOTICE.tipsUnresolved);
+    const headTree = await commitTree(ctx, fork.head);
+    if (!headTree) return prDiffNotice(FORK_DIFF_NOTICE.unreadable);
+    const baseTree = await commitTree(ctx, baseSha);
+    if (!baseTree) return prDiffNotice("Tip commit objects are missing from this bucket.");
+    const mb = await resolveMergeBase(ctx, fork.head, baseSha, DETAIL_WALK_CAP);
+    const leftTree = (mb && await commitTree(ctx, mb)) || baseTree;
+    const entries = await diffTrees(ctx, leftTree, headTree);
+    return diffSection(ctx, entries, "Files changed", mb ? [] : ["raw two-tip diff"], fileFeedback);
+  }
+
   // reviewSummarySection renders the review counts, status chip, reviewer chips and verdict feedback, or null.
   function reviewSummarySection(summary, verdictFeedback) {
     const hasAny = summary.reviewers.length || summary.approved || summary.changesRequested || summary.pending;
@@ -2573,8 +2609,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const cv = COMMIT_VIEW[branch];
     const show = paint || setView;
     const onProgress = (visited) => show([el("div", { class: "loading" }, [spinner(), " " + visited + " commits scanned"])]);
-    const { item, items } = await findItemDeep(ctx, cv.ext, hash, onProgress);
+    const { item: own, items } = await findItemDeep(ctx, cv.ext, hash, onProgress);
+    // A pull request of a registered fork is in the fork area, not on the review branch.
+    const forkPull = !own && cv.ext === "review" ? await findForkPull(ctx, hash) : null;
+    const item = own || forkPull;
     if (!item) return [el("div", { class: "err" }, [cv.label + " not found."])];
+    if (forkPull) await hydrateForkPull(ctx, forkPull);
     const tab = detailTab(cv, item);
     if (onTab) onTab(tab);
     const skip = cv.ext === "release" ? RELEASE_DETAIL_SKIP : [];
@@ -2605,10 +2645,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const file = prFeedback(items, item.commit.short).file;
       // changesFor builds one version's Changes section; a throw resolves to the notice, so the section never goes blank.
       const changesFor = async (i) => {
+        const final = i === versions.length - 1;
         try {
           await hydrateItems(ctx, file);
-          return await prDiffSection(ctx, item.commit.short, versions[i].header, i === versions.length - 1, file);
-        } catch (e) { return prDiffNotice("The changes could not be loaded from this bucket."); }
+          if (item.fork) return await forkDiffSection(ctx, item.fork, versions[i].header, final, file);
+          return await prDiffSection(ctx, item.commit.short, versions[i].header, final, file);
+        } catch (e) { return prDiffNotice(item.fork ? FORK_DIFF_NOTICE.unreadable : "The changes could not be loaded from this bucket."); }
       };
       let changes = null, gen = 0;
       // showChanges replaces the section with the selected version's; a selection that a later one superseded paints nothing.
@@ -3163,9 +3205,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
     const HYDRATE_MATCHES = 25;
     let hydrateToken = 0;
-    // hydrateMatches back-fills the top hollow results' bodies and redraws once; a superseded completion is dropped.
+    // hydrateMatches back-fills the top hollow results' bodies and redraws once; a superseded completion is dropped, and a fork pull request has no body here.
     function hydrateMatches(res) {
-      const targets = (res.flat || []).slice(0, HYDRATE_MATCHES).map((f) => f.item).filter((it) => it.commit && it.commit.hollow);
+      const targets = (res.flat || []).slice(0, HYDRATE_MATCHES).map((f) => f.item).filter((it) => it.commit && it.commit.hollow && !it.fork);
       if (!targets.length) return;
       const token = ++hydrateToken;
       hydrateItems(ctx, targets).then(() => { if (token === hydrateToken) draw(); }).catch(() => {});
@@ -4321,6 +4363,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, DIFF_FILE_CAP, PR_DIFF_NOTICE, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, DIFF_FILE_CAP, PR_DIFF_NOTICE, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

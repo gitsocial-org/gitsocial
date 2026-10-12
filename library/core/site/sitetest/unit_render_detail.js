@@ -337,6 +337,51 @@ async function main() {
   await tick(80);
   ok(text(findClass(npr, "diff-section")[0]).indexOf("recorded merge range does not resolve") !== -1, "a squash merge with no ref keeps the notice", text(findClass(npr, "diff-section")[0]));
 
+  console.log("=== fork area absent ===");
+  const noForks = Object.assign({}, prCtx, { walks: {}, refMisses: new Set() });
+  eq((await GS.loadForkPulls(noForks)).length, 0, "no manifest reads as no fork pull requests");
+  ok(text((await GS.itemDetail(noForks, sha("aa"), "gitmsg/review"))[0]).indexOf("Add world") !== -1, "the repository's own pull request still renders");
+  ok(text((await GS.itemDetail(noForks, sha("99"), "gitmsg/review"))[0]).indexOf("Pull request not found.") !== -1, "an unknown hash says not found, with no error");
+
+  console.log("=== fork head not in the area ===");
+  // forkFetch serves one fork manifest and hands every other key to miss.
+  const forkFetch = (doc, miss) => async (url, opts) => {
+    if (!String(url).endsWith(".gitsocial/forks/manifest.json")) return miss(url, opts);
+    const body = enc.encode(JSON.stringify(doc));
+    return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(doc), arrayBuffer: async () => body.buffer };
+  };
+  const forkHeader = 'GitMsg: v="0.1.0" ext="review" type="pull-request" state="open" base="https://example.com/upstream#branch:main" base-tip="' + short("ab") + '" head="#branch:feature" head-tip="' + short("ac") + '"';
+  const forkEntry = (id, subject, extra) => Object.assign({ sha: sha(id), author: "Eve", email: "eve@example.com", ts: 1750002000, header: forkHeader, subject, repo: "https://example.com/fork" }, extra);
+  const forkDoc = { version: 1, bytes: 0, items: [
+    forkEntry("f5", "Pending head", { pending: true }),
+    forkEntry("f6", "Too large head", { tooLarge: true }),
+    forkEntry("f7", "Unreadable pack", { head: sha("f8"), pack: "pack-nope", packBytes: 1 }),
+  ] };
+  const forkCtx = () => Object.assign({}, prCtx, { walks: {}, refMisses: new Set(), packs: freshPacks([]) });
+  // forkDetail renders one fork pull request's detail with the manifest served, and returns its text and Changes section.
+  const forkDetail = async (id) => {
+    const held = global.fetch;
+    global.fetch = forkFetch(forkDoc, held);
+    const node = (await GS.itemDetail(forkCtx(), sha(id), "gitmsg/review"))[0];
+    await tick(80);
+    global.fetch = held;
+    return { node, text: text(node), section: findClass(node, "diff-section")[0] };
+  };
+  const pending = await forkDetail("f5");
+  ok(pending.text.indexOf("Pending head") !== -1, "a pending entry shows the pull request from the manifest", pending.text.slice(0, 120));
+  ok(findClass(pending.node, "detail-meta")[0] && findClass(findClass(pending.node, "detail-meta")[0], "chip").map(textOf).indexOf("fork") !== -1, "the detail meta carries the fork chip");
+  ok(pending.text.indexOf("https://example.com/fork") !== -1, "and names the fork URL");
+  ok(!!pending.section && text(pending.section).indexOf(GS.FORK_DIFF_NOTICE.pending) !== -1, "a pending head gets its notice in place of the diff", pending.section && text(pending.section));
+  const large = await forkDetail("f6");
+  ok(!!large.section && text(large.section).indexOf(GS.FORK_DIFF_NOTICE.tooLarge) !== -1, "a too large head gets its notice in place of the diff", large.section && text(large.section));
+  eq(findClass(large.section || GS.el("div"), "diff-file").length, 0, "no file rows render under the notice");
+
+  console.log("=== fork pack unreadable ===");
+  const unreadable = await forkDetail("f7");
+  ok(unreadable.text.indexOf("Unreadable pack") !== -1, "the detail paints its subject", unreadable.text.slice(0, 120));
+  ok(findClass(unreadable.node, "detail-meta").length === 1 && findClass(unreadable.node, "share-link").length === 1, "the meta row and the actions paint with it");
+  ok(!!unreadable.section && text(unreadable.section).indexOf(GS.FORK_DIFF_NOTICE.unreadable) !== -1, "a pack that is not served gets the notice", unreadable.section && text(unreadable.section));
+
   console.log("=== the loading spinner ===");
   const sp = GS.spinner();
   ok(sp._cls.has("spinner") && sp.getAttribute("role") === "status" && sp.getAttribute("aria-label") === "Loading", "the spinner names itself to screen readers");

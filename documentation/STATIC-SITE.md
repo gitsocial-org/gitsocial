@@ -164,6 +164,7 @@ The app reads the artifacts under `.gitsocial/site/`, and the bucket's ref list 
 | `tags.json` | each tag's commit, date, author, previous tag and its commit, the commit count since it, and whether its range document is written, in display order, from the local object database |
 | `ranges/v1/<prev>..<commit>.json` | one range document for each pair of adjacent tag commits: the merge base, the commits since the previous tag (up to 2,000) and the files changed (up to 1,000); immutable |
 | `push-state` | skip digest for push-time maintenance |
+| `.gitsocial/forks/` | the fork area: `manifest.json` lists the open pull requests of registered forks, each entry with the fields of a shard entry, the fork URL, the head and its pack; `pack/pack-<hash>.{pack,idx}` holds the objects of one head that no bucket ref reaches; `lock` freezes the area for the push |
 
 ### Invariants
 
@@ -184,6 +185,7 @@ The shell and the pages:
 - The version order of tags has one definition in two places, `compareSiteTagsDesc` and `compareTagsDesc`, and a hash suffix (`v<version>.<hash>`) is not part of the version. Tags that differ only by that suffix are in date order.
 - When the code index does not hold both tips of a compare, a tag page or a pull request diff, the app walks commit objects as `git rev-list base..head` does, newest committer time first. The number of reads follows the range, not the history. A range longer than 2,000 reads shows as truncated, with no commit from under the base. A 12-character tip of a pull request expands through the code index, then the pack indexes, then a bounded walk of its branch; a short that names two objects does not expand. The merge head of a merged pull request comes from `refs/gitmsg/review/merged/<hash>` in `refs.json` first, so a squash or rebase merge whose head branch is gone still shows its files.
 - The pull request page and the app render the Files changed section from the same classes and wording: the head, the file row with its status letter and counts, the unified rows and the notices, pinned in `parity_fixtures.json`. The page reads the range from the local object database of the pusher, the merged head ref first for a merged pull request, and lists up to 100 files and 500 rows; the app shows the rest.
+- A fork pull request reads from the fork area only: its pack first, then the bucket packs for the base and the shared objects; the manifest alone paints the list.
 - Only the app shows sidebar counts: branches and tags come from `refs.json`, and commits and the item counts from `pages.json`, which carries the item counts only after a complete pass.
 - An item count is the open work, the rows that its list shows first: Issues, Pull Requests, Milestones and Sprints show their Open filter first. The sidebar of a generated page carries no count.
 

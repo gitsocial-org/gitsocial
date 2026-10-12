@@ -225,6 +225,27 @@ function rest() {
   ok(GS.icon("main.go", null, "tree-icon")._cls.has("tree-icon"), "an extra class rides the icon span");
   eq(GS.focusSearchInput(), false, "focusSearchInput reports false with no search box mounted");
   eq(GS.focusTreeSearch(), false, "focusTreeSearch reports false with no tree mounted");
+
+  console.log("=== fork pull request row ===");
+  // The row paints from the manifest alone: no fetch is stubbed here, so an object read would throw.
+  const forkHeader = 'GitMsg: v="0.1.0" ext="review" type="pull-request" state="open" base="https://example.com/upstream#branch:main" head="#branch:feature" head-tip="' + H("7") + '"';
+  const forkDoc = { version: 1, bytes: 10, items: [
+    { sha: sha40("5"), author: "Eve", email: "eve@example.com", ts: 1750000000, header: forkHeader, subject: "From the fork", repo: "https://example.com/fork", head: sha40("7"), pack: "pack-abc", packBytes: 10 },
+    { sha: sha40("6"), author: "Eve", email: "eve@example.com", ts: 1750000100, header: 'GitMsg: v="0.1.0" ext="review" edits="#commit:' + H("5") + '@gitmsg/review" state="open"', subject: "From the fork", repo: "https://example.com/fork" },
+  ] };
+  const forkItems = GS.forkPullItems(forkDoc);
+  eq(forkItems.length, 1, "a manifest gives one item per canonical, its edits folded in");
+  eq(forkItems[0].versions.length, 2, "the canonical and its edit build the versions");
+  eq(forkItems[0].fork, { repo: "https://example.com/fork", head: sha40("7"), pack: "pack-abc", packBytes: 10, pending: false, tooLarge: false }, "the canonical entry's fork fields ride the item");
+  const forkRow = GS.prCard(forkItems[0]);
+  ok(chipText(forkRow).indexOf("fork") !== -1, "a fork pull request row carries the fork chip", chipText(forkRow).join(" | "));
+  const forkMeta = findClass(forkRow, "meta")[0];
+  ok(textOf(forkMeta).indexOf("https://example.com/fork") !== -1, "the row meta names the fork URL", textOf(forkMeta));
+  ok(findTag(forkMeta, "a").some((a) => a.getAttribute("href") === "https://example.com/fork"), "the fork URL links to the fork");
+  eq(textOf(findClass(forkRow, "subject")[0]), "From the fork", "the subject comes from the manifest");
+  eq(chipText(GS.prCard(item("p", { type: "pull-request", state: "open" }, "Local"))).indexOf("fork"), -1, "a local pull request row carries no fork chip");
+  eq(GS.forkPullItems({ version: 2, items: forkDoc.items }).length, 0, "a manifest at another version reads as no fork pull requests");
+  eq(GS.forkPullItems(null).length, 0, "no manifest reads as no fork pull requests");
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);
 }

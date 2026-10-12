@@ -42,6 +42,7 @@ const DEFAULT = [
   "verify_range_walk.js",
   "verify_route_supersede.js",
   "verify_packfiles.js",
+  "verify_fork_pulls.js",
   "verify_absent_keys.js",
   "verify_prism_deadline.js",
   "verify_request_budget.js",

@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadForkPulls, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -179,8 +179,10 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
       } else if (r.type === "index" && r.tab === "sprints") {
         setView([listHeading("sprints"), ...sprintsBody(await loadExtItemsAll(ctx, "pm"))]);
       } else if (r.type === "index" && r.tab === "prs") {
-        const [all, counts] = await Promise.all([loadExtItemsAll(ctx, "review"), loadInteractionCounts(ctx)]);
-        setView([listHeading("prs"), ...filteredListView(all.filter((i) => (i.header.type || "") === "pull-request"), (it) => prCard(it, countsFor(counts, it.commit.short)), "prs", PR_STATES, LIST_EMPTY.prs)]);
+        // The fork area's pull requests join the repository's own, newest first.
+        const [all, forks, counts] = await Promise.all([loadExtItemsAll(ctx, "review"), loadForkPulls(ctx), loadInteractionCounts(ctx)]);
+        const pulls = all.filter((i) => (i.header.type || "") === "pull-request").concat(forks).sort((a, b) => b.effectiveTime - a.effectiveTime);
+        setView([listHeading("prs"), ...filteredListView(pulls, (it) => prCard(it, countsFor(counts, it.commit.short)), "prs", PR_STATES, LIST_EMPTY.prs)]);
       } else if (r.type === "index" && r.tab === "releases") {
         const relsOf = (items) => items.filter((i) => (i.header.type || "") === "release");
         const first = await loadExtItemsWindow(ctx, "release", false);
