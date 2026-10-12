@@ -67,6 +67,13 @@ func packTestRepo(t *testing.T, n int) string {
 // pushPackedBucket pushes the named refs of dir through the remote helper with packing forced, and returns a client on the resulting bucket.
 func pushPackedBucket(t *testing.T, dir string, refs ...string) *objstore.Client {
 	t.Helper()
+	client, _ := pushPackedBucketWith(t, dir, refs...)
+	return client
+}
+
+// pushPackedBucketWith is pushPackedBucket with the bucket behind the client, for a test that fails or counts its writes.
+func pushPackedBucketWith(t *testing.T, dir string, refs ...string) (*objstore.Client, *membucket.Bucket) {
+	t.Helper()
 	bucket := membucket.New()
 	srv := httptest.NewServer(bucket)
 	t.Cleanup(srv.Close)
@@ -92,5 +99,5 @@ func pushPackedBucket(t *testing.T, dir string, refs ...string) *objstore.Client
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
-	return client
+	return client, bucket
 }

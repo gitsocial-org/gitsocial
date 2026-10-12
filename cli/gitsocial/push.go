@@ -114,6 +114,7 @@ Examples:
 				SiteOnly:    siteOnly,
 				AllBranches: allBranches,
 				Full:        full,
+				CacheDir:    cfg.CacheDir,
 			}
 			results, err := client.PushAll(cfg.WorkDir, remotes, opts, onRemote, onBranch, siteProgress)
 			siteDone()

@@ -2,11 +2,14 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
-
 	"github.com/gitsocial-org/gitsocial/library/core/site"
+	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 )
 
 // newGitRemoteS3Cmd creates the hidden command git execs as `git-remote-s3`
@@ -31,7 +34,24 @@ a command to run by hand.`,
 				name, url = args[0], args[1]
 			}
 			// The hook is the only path from a plain git push to the site.
-			return objstore.RunHelper(name, url, objstore.HelperEnvFromOS(), cmd.InOrStdin(), cmd.OutOrStdout(), site.PostPushMaintenance)
+			cfg := GetConfig(cmd)
+			hook := func(out objstore.PushOutcome) {
+				workdir := cfg.WorkDir
+				if filepath.Base(out.GitDir) == ".git" {
+					workdir = filepath.Dir(out.GitDir)
+				}
+				site.PostPushMaintenance(out, func() ([]site.ForkPull, error) { return openForkPulls(workdir, cfg.CacheDir) })
+			}
+			return objstore.RunHelper(name, url, objstore.HelperEnvFromOS(), cmd.InOrStdin(), cmd.OutOrStdout(), hook)
 		},
 	}
+}
+
+// openForkPulls reads the fork pull requests without the GIT_DIR git exports to the helper, which would point every git command of the review extension at the pushed repository.
+func openForkPulls(workdir, cacheDir string) ([]site.ForkPull, error) {
+	if gitDir, ok := os.LookupEnv("GIT_DIR"); ok {
+		os.Unsetenv("GIT_DIR")
+		defer os.Setenv("GIT_DIR", gitDir)
+	}
+	return review.OpenForkPulls(workdir, cacheDir)
 }

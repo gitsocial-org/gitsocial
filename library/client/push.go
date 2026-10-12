@@ -20,13 +20,14 @@ import (
 // Options configures a push. Zero value = default behavior (reason-based
 // data push + site for s3 remotes).
 type Options struct {
-	DryRun      bool // preview only, touch nothing
-	NoCode      bool // skip code branches (default branch + open-PR heads)
-	NoSite      bool // skip the site step (overrides config)
-	SiteOnly    bool // rebuild only the site, no data push; any failure is an error
-	AllBranches bool // send every local branch (refs/heads/*), not just reasoned
-	Full        bool // detach a thin fork relationship: upload everything the bucket lacks
-	Force       bool // force each transfer of the data push, for a remote that is a copy of the workspace
+	DryRun      bool   // preview only, touch nothing
+	NoCode      bool   // skip code branches (default branch + open-PR heads)
+	NoSite      bool   // skip the site step (overrides config)
+	SiteOnly    bool   // rebuild only the site, no data push; any failure is an error
+	AllBranches bool   // send every local branch (refs/heads/*), not just reasoned
+	Full        bool   // detach a thin fork relationship: upload everything the bucket lacks
+	Force       bool   // force each transfer of the data push, for a remote that is a copy of the workspace
+	CacheDir    string // the cache directory of the fork repositories; "" publishes no fork pull request
 }
 
 // SiteOutcome is the site step's result in a push. Published is true
@@ -213,7 +214,7 @@ func rebuildSiteOnly(workdir, remote string, opts Options, progress objstore.Pro
 	if !strings.HasPrefix(remoteURL, "s3://") {
 		return nil, fmt.Errorf("remote %q is %s, not an s3 remote", remote, remoteURL)
 	}
-	published, complete, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress)
+	published, complete, _, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress, forkPullSource(workdir, opts.CacheDir))
 	if err != nil {
 		return nil, fmt.Errorf("rebuild site at %s: %w", remoteURL, err)
 	}
@@ -242,7 +243,7 @@ func rebuildSite(workdir, remote, remoteURL string, opts Options, progress objst
 	if opts.DryRun {
 		return SiteOutcome{Skipped: "dry-run"}
 	}
-	published, complete, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress)
+	published, complete, _, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress, forkPullSource(workdir, opts.CacheDir))
 	if errors.Is(err, objstore.ErrThinBucket) {
 		// A thin fork bucket has no site by design; that is a skip, not a failure
 		// (an explicit `--site-only` still errors, see rebuildSiteOnly).
@@ -265,10 +266,10 @@ func rebuildSite(workdir, remote, remoteURL string, opts Options, progress objst
 // published is false (no error) when the workspace's site.publish guard is not
 // enabled, the only enabler for the static site. HEAD and stats are
 // best-effort: a failure there does not fail the rebuild.
-func PublishSite(workdir, remoteURL string, override objstore.SiteOverride, progress objstore.Progress) (published, complete bool, err error) {
-	published, complete, err = site.Rebuild(remoteURL, objstore.HelperEnvFromOS(), workdir, override, progress)
+func PublishSite(workdir, remoteURL string, override objstore.SiteOverride, progress objstore.Progress, forks site.ForkPullSource) (published, complete bool, area *site.ForkPullArea, err error) {
+	published, complete, area, err = site.Rebuild(remoteURL, objstore.HelperEnvFromOS(), workdir, override, progress, forks)
 	if err != nil || !published {
-		return published, complete, err
+		return published, complete, area, err
 	}
 	// Point the bucket HEAD at the repo's real default branch (not an assumed
 	// "main"), and publish push-time stats (the default branch's commit count +
@@ -276,12 +277,20 @@ func PublishSite(workdir, remoteURL string, override objstore.SiteOverride, prog
 	branch, times, err := defaultBranchStats(workdir)
 	if err != nil {
 		log.Debug("site head and stats skipped", "error", err)
-		return true, complete, nil
+		return true, complete, area, nil
 	}
 	_ = site.SetRemoteHead(remoteURL, objstore.HelperEnvFromOS(), branch)
 	stats := map[string]any{"branch": branch, "commits": len(times), "commitTimes": times}
 	_ = site.WriteSiteStats(remoteURL, objstore.HelperEnvFromOS(), stats)
-	return true, complete, nil
+	return true, complete, area, nil
+}
+
+// forkPullSource returns the open fork pull requests of the workspace for the site, nil without a cache directory.
+func forkPullSource(workdir, cacheDir string) site.ForkPullSource {
+	if cacheDir == "" {
+		return nil
+	}
+	return func() ([]site.ForkPull, error) { return review.OpenForkPulls(workdir, cacheDir) }
 }
 
 // defaultBranchStats returns the default branch and every regular commit's

@@ -9,10 +9,20 @@ import (
 
 // siteCacheControl returns the cache class a site key is written with, "" for the key's default.
 func siteCacheControl(key string) string {
-	if isSealedShardKey(key) || isSealedListPageKey(key) || isSealedSitemapPartKey(key) {
+	if isSealedShardKey(key) || isSealedListPageKey(key) || isSealedSitemapPartKey(key) || isForkPackKey(key) {
 		return objstore.CacheControlImmutable
 	}
 	return ""
+}
+
+// isForkPackKey reports whether a key is a pack or index of the fork pull request area (`.gitsocial/forks/pack/pack-<hash>.{pack,idx}`), which its name seals.
+func isForkPackKey(key string) bool {
+	i := strings.Index(key, siteForksPackPrefix)
+	if i < 0 || (i > 0 && key[i-1] != '/') {
+		return false
+	}
+	name := key[i+len(siteForksPackPrefix):]
+	return strings.HasPrefix(name, "pack-") && (strings.HasSuffix(name, ".pack") || strings.HasSuffix(name, ".idx")) && !strings.Contains(name, "/")
 }
 
 // isDigitString reports whether s is non-empty and all decimal digits.

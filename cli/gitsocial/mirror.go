@@ -788,6 +788,7 @@ func runMirrorPush(cmd *cobra.Command, cfg *Config, targets []mirrorTarget, f *m
 			NoCode:      f.noCode,
 			NoSite:      f.noSite,
 			AllBranches: !f.defaultBranchOnly,
+			CacheDir:    cfg.CacheDir,
 		}
 		if !cfg.JSONOutput {
 			fmt.Fprintf(cmd.OutOrStdout(), "Pushing to %s (%s) ...\n", t.name, t.url)
@@ -827,7 +828,7 @@ func runMirrorPush(cmd *cobra.Command, cfg *Config, targets []mirrorTarget, f *m
 // state is the one the run actually left behind.
 func drainMirrorSitePages(cfg *Config, remote string, progress objstore.Progress) (bool, error) {
 	for pass := 0; pass < mirrorSitePassCap; pass++ {
-		result, err := client.Push(cfg.WorkDir, remote, client.Options{SiteOnly: true}, nil, progress)
+		result, err := client.Push(cfg.WorkDir, remote, client.Options{SiteOnly: true, CacheDir: cfg.CacheDir}, nil, progress)
 		if err != nil {
 			return false, err
 		}

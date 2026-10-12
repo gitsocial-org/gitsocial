@@ -25,14 +25,14 @@ func TestPostPushMaintenance_FailedManifestWithholdsMarker(t *testing.T) {
 		Override: objstore.SiteOverride{Publish: "true"},
 	}
 
-	PostPushMaintenance(out)
+	PostPushMaintenance(out, nil)
 	if _, ok := readSitePushState(client, ""); ok {
 		t.Fatal("a pass whose manifest write failed must not stamp the skip marker")
 	}
 
 	// The retry, against the same refs, with the manifest written this time.
 	out.ManifestOK = true
-	PostPushMaintenance(out)
+	PostPushMaintenance(out, nil)
 	if _, ok := readSitePushState(client, ""); !ok {
 		t.Error("a complete pass must stamp the marker it withheld over the failure")
 	}

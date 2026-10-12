@@ -374,6 +374,7 @@ func corePush(s *Server) HandlerFunc {
 			SiteOnly:    p.SiteOnly,
 			AllBranches: p.AllBranches,
 			Full:        p.Full,
+			CacheDir:    s.session.CacheDir,
 		}
 		var remotes []string
 		if p.AllRemotes {

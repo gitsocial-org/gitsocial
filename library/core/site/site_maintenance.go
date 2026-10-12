@@ -9,8 +9,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
 )
 
-// PostPushMaintenance maintains the site after a push: the shell, the config and tags artifacts, the item indexes, the front page and the skip marker.
-func PostPushMaintenance(out objstore.PushOutcome) {
+// PostPushMaintenance maintains the site after a push: the shell, the config and tags artifacts, the item indexes, the fork pull request area, the front page and the skip marker.
+func PostPushMaintenance(out objstore.PushOutcome, forks ForkPullSource) {
 	client, prefix := out.Client, out.Prefix
 	// A thin bucket publishes no site, since the site reads a history it does not carry.
 	if out.Thin {
@@ -59,6 +59,8 @@ func PostPushMaintenance(out objstore.PushOutcome) {
 		}
 	}
 	updatePushedSiteItems(out, src)
+	out.Progress.Call("maintenance: fork pull requests", 0, 0)
+	maintainSiteForks(client, prefix, out.Refs, forks, func(msg string) { fmt.Fprintf(os.Stderr, "gitsocial s3: %s\n", msg) })
 	// A shell upload overwrites the dual-owned index.html, so reclaim the front page in the one case the marker below would still be stamped.
 	reclaimOK := true
 	if shellUploaded {

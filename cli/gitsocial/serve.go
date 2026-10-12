@@ -94,7 +94,7 @@ func runServe(ctx context.Context, cfg *Config, addr string, out, errOut io.Writ
 	if err := applyServeEnv(host, "s3://"+host+"/"+path); err != nil {
 		return err
 	}
-	push := func() { servePush(ctx, root, errOut) }
+	push := func() { servePush(ctx, root, cfg.CacheDir, errOut) }
 	last := refsSnapshot(root)
 	push()
 	fmt.Fprint(out, serveBanner("http://"+host+"/"+path+"/", out == io.Writer(os.Stdout) && isatty.IsTerminal(os.Stdout.Fd()), os.Getenv("NO_COLOR") == ""))
@@ -192,12 +192,12 @@ func applyServeEnv(host, remoteURL string) error {
 const serveSitePassCap = 16
 
 // servePush pushes the workspace to the serve remote until the site is complete and reports a failure; the served build stays, and a stopped serve reports nothing.
-func servePush(ctx context.Context, root string, errOut io.Writer) {
+func servePush(ctx context.Context, root, cacheDir string, errOut io.Writer) {
 	progress, step, finish := objstore.WriterProgress(errOut)
 	defer finish()
 	onBranch := func(branch string, done, total int) { step(serveRemote+" "+branch, done, total) }
 	for pass := 0; pass < serveSitePassCap; pass++ {
-		res, err := client.Push(root, serveRemote, client.Options{Force: true}, onBranch, progress)
+		res, err := client.Push(root, serveRemote, client.Options{Force: true, CacheDir: cacheDir}, onBranch, progress)
 		switch {
 		case ctx.Err() != nil:
 			return

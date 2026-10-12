@@ -344,15 +344,15 @@ func WriteSiteStats(remoteURL string, env objstore.HelperEnv, stats map[string]a
 	return nil
 }
 
-// Rebuild uploads the shell, seeds the refs manifest and runs the item-artifact state machine over every data branch. It sends no refs, and the workspace's site.publish guard is the only enabler.
-func Rebuild(remoteURL string, env objstore.HelperEnv, workdir string, ov objstore.SiteOverride, progress objstore.Progress) (published, complete bool, err error) {
+// Rebuild uploads the shell, seeds the refs manifest, runs the item-artifact state machine over every data branch and maintains the fork pull request area. It sends no refs, and the workspace's site.publish guard is the only enabler.
+func Rebuild(remoteURL string, env objstore.HelperEnv, workdir string, ov objstore.SiteOverride, progress objstore.Progress, forks ForkPullSource) (published, complete bool, area *ForkPullArea, err error) {
 	client, prefix, err := objstore.ClientForRemote(remoteURL, env)
 	if err != nil {
-		return false, false, err
+		return false, false, nil, err
 	}
 	// The thin marker is read from the bucket, not per-clone config, so the refusal holds from any clone.
 	if upstream, thinErr := objstore.ThinUpstreamURL(client, prefix); thinErr == nil && upstream != "" {
-		return false, false, fmt.Errorf("upstream %s: %w", upstream, objstore.ErrThinBucket)
+		return false, false, nil, fmt.Errorf("upstream %s: %w", upstream, objstore.ErrThinBucket)
 	}
 	// The per-remote override wins over the workspace value, so one remote can carry data with no site.
 	cfg, cfgErr := ReadWorkspaceSiteCustomization(workdir)
@@ -361,12 +361,21 @@ func Rebuild(remoteURL string, env objstore.HelperEnv, workdir string, ov objsto
 		if enabled, _, probeErr := siteEnabled(client, prefix); probeErr == nil && enabled {
 			progress.Call("bucket has a site; set `gitsocial config site set publish true` to keep maintaining it", 1, 1)
 		}
-		return false, false, nil
+		return false, false, nil, nil
 	}
 	src := objstore.NewLocalCommitSource(env.GitDir, workdir)
 	defer src.Close()
-	complete, err = rebuildSite(client, prefix, src, ov, progress)
-	return true, complete, err
+	if complete, err = rebuildSite(client, prefix, src, ov, progress); err != nil {
+		return true, complete, nil, err
+	}
+	// The area follows the fork heads, which no bucket ref names, so the skip marker does not gate it.
+	note := func(msg string) { progress.Call(msg, 0, 0) }
+	refs, err := objstore.ReadRemoteRefs(client, prefix)
+	if err != nil {
+		note("fork pull requests: " + err.Error())
+		return true, complete, nil, nil
+	}
+	return true, complete, maintainSiteForks(client, prefix, refs, forks, note), nil
 }
 
 // rebuildSite is Rebuild over a resolved client and prefix; complete is false when a bootstrap still owes work a later pass must finish.

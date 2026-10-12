@@ -1392,7 +1392,7 @@ func (m *Model) startPush(remotes []string) tea.Cmd {
 		siteProgress := func(phase string, done, total int) {
 			send(pushProgressMsg{branch: "site: " + phase, done: done, total: total})
 		}
-		results, err := client.PushAll(workdir, remotes, client.Options{}, onRemote, onBranch, siteProgress)
+		results, err := client.PushAll(workdir, remotes, client.Options{CacheDir: m.cacheDir}, onRemote, onBranch, siteProgress)
 		ch <- tuisocial.PushCompletedMsg{Results: results, Err: err}
 		close(ch)
 	}()

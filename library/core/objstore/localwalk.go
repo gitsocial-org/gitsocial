@@ -98,6 +98,11 @@ func (s *LocalCommitSource) typed(name string) (objType string, body []byte, ok 
 	return objType, body, ok
 }
 
+// Resolve returns the object id and type that the odb resolves name to; ok is false on a miss.
+func (s *LocalCommitSource) Resolve(name string) (sha, objType string, ok bool) {
+	return s.resolve(name)
+}
+
 // resolve returns one name's object id and type, for a caller that needs neither the body nor a git process per name.
 func (s *LocalCommitSource) resolve(name string) (sha, objType string, ok bool) {
 	sha, objType, _, ok = s.read(name)

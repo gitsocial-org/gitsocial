@@ -1273,7 +1273,7 @@ func TestPostPushMaintenance_PublishGuard(t *testing.T) {
 	// no artifacts) even though refs moved.
 	client, _ := testClient(t)
 	shas := seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "helper post"}})
-	PostPushMaintenance(guardOutcome(t, client, shas[0]))
+	PostPushMaintenance(guardOutcome(t, client, shas[0]), nil)
 	for _, key := range []string{siteVersionKey, "index.html", siteItemsManifestKey("social")} {
 		if keyExists(client, key) {
 			t.Errorf("guard off: the hook must not write %s", key)
@@ -1285,7 +1285,7 @@ func TestPostPushMaintenance_PublishGuard(t *testing.T) {
 	client2, _ := testClient(t)
 	shas2 := seedSocialMessages(t, client2, "", []pageMsgSpec{{msg: "helper post"}})
 	seedPagesConfig(t, client2, map[string]any{"publish": "true"})
-	PostPushMaintenance(guardOutcome(t, client2, shas2[0]))
+	PostPushMaintenance(guardOutcome(t, client2, shas2[0]), nil)
 	for _, key := range []string{siteVersionKey, "index.html", siteItemsManifestKey("social")} {
 		if !keyExists(client2, key) {
 			t.Errorf("guard on: the hook must write %s", key)
