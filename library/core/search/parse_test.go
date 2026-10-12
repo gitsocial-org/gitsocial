@@ -136,8 +136,7 @@ func TestParseSearchQuery_unknownKeyStaysInText(t *testing.T) {
 		want  string
 	}{
 		{name: "state", input: "state:open", want: "state:open"},
-		{name: "label", input: "label:bug", want: "label:bug"},
-		{name: "assignee", input: "assignee:dev@example.com", want: "assignee:dev@example.com"},
+		{name: "priority", input: "priority:high", want: "priority:high"},
 		{name: "prose colon", input: "error: timeout", want: "error: timeout"},
 		{name: "bare url", input: "https://github.com/user/repo", want: "https://github.com/user/repo"},
 		{name: "beside a known prefix", input: "author:alice state:open", want: "state:open"},
@@ -154,7 +153,7 @@ func TestParseSearchQuery_unknownKeyStaysInText(t *testing.T) {
 
 // TestParseSearchQuery_knownPrefixesFillTheirFields checks every prefix the parser lists fills its own field.
 func TestParseSearchQuery_knownPrefixesFillTheirFields(t *testing.T) {
-	fieldOf := map[string]string{"repository": "repo", "commit": "hash"}
+	fieldOf := map[string]string{"repository": "repo", "commit": "hash", "labels": "label"}
 	for _, prefix := range filterPrefixes {
 		t.Run(prefix, func(t *testing.T) {
 			// One value serves every prefix: it reads as a date and as plain text.
@@ -235,10 +234,10 @@ func TestSearch_unknownKeySearchesAsText(t *testing.T) {
 	workdir := t.TempDir()
 	repoURL := gitmsg.ResolveRepoURL(workdir)
 	const carriesTokens = "aaaaaaaaaaaa1111"
-	seedTextCommit(t, repoURL, carriesTokens, "Filters state:open and label:bug read as text")
+	seedTextCommit(t, repoURL, carriesTokens, "Filters state:open and priority:high read as text")
 	seedTextCommit(t, repoURL, "bbbbbbbbbbbb2222", "Nothing to filter here")
 
-	for _, query := range []string{"state:open", "label:bug"} {
+	for _, query := range []string{"state:open", "priority:high"} {
 		result, err := Search(workdir, Params{Query: query})
 		if err != nil {
 			t.Fatalf("Search(%q): %v", query, err)

@@ -28,6 +28,10 @@ CREATE TABLE IF NOT EXISTS pm_items (
     root_repo_url TEXT, root_hash TEXT, root_branch TEXT, labels TEXT,
     PRIMARY KEY (repo_url, hash, branch)
 );
+CREATE TABLE IF NOT EXISTS pm_assignees (
+    repo_url TEXT NOT NULL, hash TEXT NOT NULL, branch TEXT NOT NULL, email TEXT NOT NULL,
+    PRIMARY KEY (repo_url, hash, branch, email)
+);
 `
 
 const reviewSchemaForSearchTest = `
@@ -41,6 +45,10 @@ CREATE TABLE IF NOT EXISTS review_items (
     old_line INTEGER, new_line INTEGER, old_line_end INTEGER, new_line_end INTEGER,
     review_state TEXT, suggestion INTEGER DEFAULT 0,
     PRIMARY KEY (repo_url, hash, branch)
+);
+CREATE TABLE IF NOT EXISTS review_reviewers (
+    repo_url TEXT NOT NULL, hash TEXT NOT NULL, branch TEXT NOT NULL, email TEXT NOT NULL,
+    PRIMARY KEY (repo_url, hash, branch, email)
 );
 `
 
@@ -124,16 +132,19 @@ func seedCorpus(t *testing.T) {
 		milestone_repo_url, milestone_hash, milestone_branch)
 		VALUES (?, ?, 'main', 'issue', 'open', 'alice@test.com,bob@test.com', 'bug,ui', ?, ?, 'main')`,
 		testRepoURL, hashIssueOpen, testRepoURL, hashMilestone)
+	seedLinkRows(t, "pm_assignees", hashIssueOpen, "alice@test.com", "bob@test.com")
 
 	seedCommit(t, hashIssueClosed, "Bob", "bob@test.com", "Slow startup", "pm",
 		map[string]string{"type": "issue", "state": "closed", "labels": "bug"}, 2)
 	execTestSQL(t, `INSERT INTO pm_items (repo_url, hash, branch, type, state, assignees, labels)
 		VALUES (?, ?, 'main', 'issue', 'closed', 'bob@test.com', 'bug')`, testRepoURL, hashIssueClosed)
+	seedLinkRows(t, "pm_assignees", hashIssueClosed, "bob@test.com")
 
 	seedCommit(t, hashPullRequest, "Alice", "alice@test.com", "Add the parser", "review",
 		map[string]string{"type": "pull-request", "state": "open", "base": "main", "labels": "ui"}, 3)
 	execTestSQL(t, `INSERT INTO review_items (repo_url, hash, branch, type, state, reviewers, base, head)
 		VALUES (?, ?, 'main', 'pull-request', 'open', 'carol@test.com', 'main', 'feature')`, testRepoURL, hashPullRequest)
+	seedLinkRows(t, "review_reviewers", hashPullRequest, "carol@test.com")
 
 	seedCommit(t, hashRelease, "Bob", "bob@test.com", "Cut v1.0.0", "release",
 		map[string]string{"tag": "v1.0.0", "labels": "ui"}, 4)
@@ -144,6 +155,14 @@ func seedCorpus(t *testing.T) {
 		map[string]string{"type": "post", "labels": "bug"}, 5)
 	execTestSQL(t, `INSERT INTO social_items (repo_url, hash, branch, type) VALUES (?, ?, 'main', 'post')`,
 		testRepoURL, hashPost)
+}
+
+// seedLinkRows writes the email rows of one item into a linking table, as the extension does beside its CSV column.
+func seedLinkRows(t *testing.T, table, hash string, emails ...string) {
+	t.Helper()
+	for _, email := range emails {
+		execTestSQL(t, `INSERT INTO `+table+` (repo_url, hash, branch, email) VALUES (?, ?, 'main', ?)`, testRepoURL, hash, email)
+	}
 }
 
 // corpusGroups runs the seeded corpus through the search query and groups it.

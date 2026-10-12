@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"charm.land/glamour/v2"
@@ -648,25 +649,19 @@ func colorizeEmails(text string) string {
 	})
 }
 
-// ExtractSearchTerms extracts the actual search terms from a query, removing scope prefixes.
-// E.g., "repository:url hello world" -> "hello world"
+// searchFilterKeys lists the inline prefixes of core/search, which ExtractSearchTerms drops from a query.
+var searchFilterKeys = map[string]bool{"repository": true, "repo": true, "list": true, "author": true, "type": true, "hash": true, "commit": true, "after": true, "before": true, "assignee": true, "reviewer": true, "labels": true, "label": true}
+
+// ExtractSearchTerms returns the free text of a query, without the filter tokens: "repository:url hello world" gives "hello world".
 func ExtractSearchTerms(query string) string {
-	prefixes := []string{"repository:", "repo:", "list:", "author:", "type:", "hash:", "commit:", "after:", "before:"}
-	result := query
-	for _, prefix := range prefixes {
-		for {
-			idx := strings.Index(strings.ToLower(result), prefix)
-			if idx == -1 {
-				break
-			}
-			end := idx + len(prefix)
-			for end < len(result) && result[end] != ' ' {
-				end++
-			}
-			result = result[:idx] + result[end:]
+	var terms []string
+	for _, token := range strings.FieldsFunc(query, unicode.IsSpace) {
+		if key, _, found := strings.Cut(token, ":"); found && searchFilterKeys[strings.ToLower(key)] {
+			continue
 		}
+		terms = append(terms, token)
 	}
-	return strings.TrimSpace(result)
+	return strings.Join(terms, " ")
 }
 
 // CompileSearchPattern compiles a case-insensitive search pattern, caching the last one.

@@ -12,17 +12,20 @@ import (
 var hashPattern = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
 
 // filterPrefixes lists every inline prefix the parser reads, in the order it reads them.
-var filterPrefixes = []string{"author", "repo", "repository", "type", "hash", "commit", "list", "after", "before"}
+var filterPrefixes = []string{"author", "repo", "repository", "type", "hash", "commit", "list", "after", "before", "assignee", "reviewer", "label", "labels"}
 
 type parsedQuery struct {
-	Terms  string
-	Author string
-	Repo   string
-	Type   string
-	Hash   string
-	List   string
-	After  *time.Time
-	Before *time.Time
+	Terms    string
+	Author   string
+	Repo     string
+	Type     string
+	Hash     string
+	List     string
+	After    *time.Time
+	Before   *time.Time
+	Assignee string
+	Reviewer string
+	Labels   string
 }
 
 // parseSearchQuery extracts filters and terms from a search query string.
@@ -66,6 +69,12 @@ func applyFilter(q *parsedQuery, key, value string) bool {
 		if t := parseFilterDate(value); t != nil {
 			q.Before = t
 		}
+	case "assignee":
+		q.Assignee = value
+	case "reviewer":
+		q.Reviewer = value
+	case "label", "labels":
+		q.Labels = value
 	}
 	return true
 }

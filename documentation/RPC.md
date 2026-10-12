@@ -1041,7 +1041,7 @@ Result: `true`
 Searches all extensions: posts, issues, pull requests, releases and feedback.
 
 Params:
-- `query` (string): Free-text query
+- `query` (string): Free-text query, with the inline prefixes of [`gitsocial search`](CLI.md#gitsocial-search)
 - `author` (string): Filter by author email
 - `repo` (string): Filter by repository URL
 - `type` (string): Filter by type: `post`, `comment`, `repost`, `quote`, `issue`, `milestone`, `sprint`, `pr`, `feedback`, `release`

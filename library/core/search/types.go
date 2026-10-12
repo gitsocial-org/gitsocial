@@ -23,9 +23,9 @@ type Params struct {
 
 	// Extension-specific filters
 	State      string // "open", "closed", "merged", "canceled" (pm/review)
-	Labels     string // comma-separated labels to match (pm/review)
-	Assignee   string // filter by assignee email (pm)
-	Reviewer   string // filter by reviewer email (review)
+	Labels     string // comma-separated labels, any match (pm/review)
+	Assignee   string // filter by assignee email substring (pm)
+	Reviewer   string // filter by reviewer email substring (review)
 	Milestone  string // filter by milestone name (pm)
 	Sprint     string // filter by sprint name (pm)
 	Draft      bool   // filter draft PRs only (review)

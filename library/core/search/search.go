@@ -45,6 +45,15 @@ func Search(workdir string, params Params) (Result, error) {
 	if params.Before == nil {
 		params.Before = parsed.Before
 	}
+	if params.Assignee == "" {
+		params.Assignee = parsed.Assignee
+	}
+	if params.Reviewer == "" {
+		params.Reviewer = parsed.Reviewer
+	}
+	if params.Labels == "" {
+		params.Labels = parsed.Labels
+	}
 
 	gitRoot, err := git.GetRootDir(workdir)
 	if err != nil {

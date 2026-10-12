@@ -33,9 +33,9 @@ type searchQuery struct {
 
 	// Extension-specific SQL filters
 	State      string // pm_items.state or review_items.state
-	Labels     string // comma-separated labels to match (pm/review)
-	Assignee   string // assignee email (pm)
-	Reviewer   string // reviewer email (review)
+	Labels     string // comma-separated labels, any match, case-insensitive
+	Assignee   string // assignee email substring (pm)
+	Reviewer   string // reviewer email substring (review)
 	Draft      bool   // review_items.draft = 1
 	Prerelease bool   // release_items.prerelease = 1
 	Tag        string // release_items.tag
@@ -472,22 +472,21 @@ func buildWhere(q searchQuery, db *sql.DB, tables []extTable) (string, []interfa
 		labelList := text.SplitCSV(q.Labels)
 		labelClauses := make([]string, 0, len(labelList))
 		for _, label := range labelList {
-			// core_labels is the linking-table normalization of
-			// core_commits.labels — indexed by label so OR-of-labels filters
-			// fan out to indexed equality lookups instead of substring scans.
+			// The site matches a label facet without case; core_labels does the same here.
 			labelClauses = append(labelClauses,
-				"EXISTS (SELECT 1 FROM core_labels cl WHERE cl.repo_url = r.repo_url AND cl.hash = r.hash AND cl.branch = r.branch AND cl.label = ?)")
+				"EXISTS (SELECT 1 FROM core_labels cl WHERE cl.repo_url = r.repo_url AND cl.hash = r.hash AND cl.branch = r.branch AND cl.label = ? COLLATE NOCASE)")
 			args = append(args, label)
 		}
 		where = append(where, "("+strings.Join(labelClauses, " OR ")+")")
 	}
+	// An email facet matches a part of the email, without case.
 	if q.Assignee != "" {
-		where = append(where, "EXISTS (SELECT 1 FROM pm_assignees pa WHERE pa.repo_url = r.repo_url AND pa.hash = r.hash AND pa.branch = r.branch AND pa.email = ?)")
-		args = append(args, q.Assignee)
+		where = append(where, `EXISTS (SELECT 1 FROM pm_assignees pa WHERE pa.repo_url = r.repo_url AND pa.hash = r.hash AND pa.branch = r.branch AND pa.email LIKE '%' || ? || '%' ESCAPE '\' COLLATE NOCASE)`)
+		args = append(args, cache.EscapeLike(q.Assignee))
 	}
 	if q.Reviewer != "" {
-		where = append(where, "EXISTS (SELECT 1 FROM review_reviewers rr WHERE rr.repo_url = r.repo_url AND rr.hash = r.hash AND rr.branch = r.branch AND rr.email = ?)")
-		args = append(args, q.Reviewer)
+		where = append(where, `EXISTS (SELECT 1 FROM review_reviewers rr WHERE rr.repo_url = r.repo_url AND rr.hash = r.hash AND rr.branch = r.branch AND rr.email LIKE '%' || ? || '%' ESCAPE '\' COLLATE NOCASE)`)
+		args = append(args, cache.EscapeLike(q.Reviewer))
 	}
 
 	// Standard exclusions

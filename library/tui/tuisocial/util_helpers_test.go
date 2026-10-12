@@ -47,6 +47,11 @@ func TestExtractSearchTerms(t *testing.T) {
 		{"empty", "", ""},
 		{"hash filter", "hash:abc123 search term", "search term"},
 		{"after filter", "after:2025-01-01 hello", "hello"},
+		{"assignee filter", "assignee:alice hello", "hello"},
+		{"reviewer filter", "reviewer:bob hello", "hello"},
+		{"label filter", "label:bug hello", "hello"},
+		{"labels filter", "labels:bug,ui hello", "hello"},
+		{"prefix inside a word", "relabel:tokens hello", "relabel:tokens hello"},
 	}
 
 	for _, tt := range tests {

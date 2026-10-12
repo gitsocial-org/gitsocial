@@ -213,6 +213,10 @@ Inline prefixes, in the order the parser reads them:
 | `list:<name>` | list name or ID |
 | `after:<YYYY-MM-DD>` | items after the date |
 | `before:<YYYY-MM-DD>` | items before the date |
+| `assignee:<email>` | assignee email, or a part of it; implies `type:issue` |
+| `reviewer:<email>` | reviewer email, or a part of it; implies `type:pr` |
+| `label:<name>` | a label, without case; a comma-separated list matches any |
+| `labels:<name>` | the same as `label:`, the name of the flag |
 
 A token with any other prefix is text, not a filter: `state:open` searches for "state:open". Any space character ends a value.
 

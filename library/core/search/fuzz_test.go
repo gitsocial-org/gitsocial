@@ -9,17 +9,20 @@ import (
 )
 
 // canonicalKeys lists the filter fields in the order a re-joined query spells them.
-var canonicalKeys = []string{"author", "repo", "type", "hash", "list", "after", "before"}
+var canonicalKeys = []string{"author", "repo", "type", "hash", "list", "after", "before", "assignee", "reviewer", "label"}
 
 // filterAliases maps each filter field to every prefix that fills it.
 var filterAliases = map[string][]string{
-	"author": {"author"},
-	"repo":   {"repo", "repository"},
-	"type":   {"type"},
-	"hash":   {"hash", "commit"},
-	"list":   {"list"},
-	"after":  {"after"},
-	"before": {"before"},
+	"author":   {"author"},
+	"repo":     {"repo", "repository"},
+	"type":     {"type"},
+	"hash":     {"hash", "commit"},
+	"list":     {"list"},
+	"after":    {"after"},
+	"before":   {"before"},
+	"assignee": {"assignee"},
+	"reviewer": {"reviewer"},
+	"label":    {"label", "labels"},
 }
 
 // filterValue returns the parsed value of one filter field.
@@ -39,6 +42,12 @@ func filterValue(field string, q parsedQuery) string {
 		return formatFilterDate(q.After)
 	case "before":
 		return formatFilterDate(q.Before)
+	case "assignee":
+		return q.Assignee
+	case "reviewer":
+		return q.Reviewer
+	case "label":
+		return q.Labels
 	}
 	return ""
 }
@@ -139,6 +148,7 @@ func FuzzParseSearchQuery(f *testing.F) {
 		"before:2025-12-31",
 		"author:alice type:pr after:2025-01-01 before:2025-12-31 release notes",
 		"state:open label:bug assignee:dev@example.com",
+		"labels:bug,ui reviewer:carol",
 		`"quoted phrase"`,
 		`author:"alice smith" quoted value`,
 		`unterminated "quote in the text`,

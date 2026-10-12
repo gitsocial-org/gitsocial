@@ -58,6 +58,9 @@ Inline filters:
   list:<name>         list name or ID
   after:YYYY-MM-DD    items after the date
   before:YYYY-MM-DD   items before the date
+  assignee:<email>    assignee email or a part of it
+  reviewer:<email>    reviewer email or a part of it
+  label:<name>        a label, or a comma-separated list, any match
 
 Any other prefix is text: state:open searches for state:open.
 
@@ -201,8 +204,8 @@ Examples:
 	cmd.Flags().StringVar(&sortBy, "sort", "", "Sort by score or date")
 	cmd.Flags().StringVar(&state, "state", "", "Filter by state: open, closed, merged, canceled")
 	cmd.Flags().StringVar(&labels, "labels", "", "Filter by comma-separated labels, any match")
-	cmd.Flags().StringVar(&assignee, "assignee", "", "Filter by assignee email")
-	cmd.Flags().StringVar(&reviewer, "reviewer", "", "Filter by reviewer email")
+	cmd.Flags().StringVar(&assignee, "assignee", "", "Filter by assignee email or a part of it")
+	cmd.Flags().StringVar(&reviewer, "reviewer", "", "Filter by reviewer email or a part of it")
 	cmd.Flags().StringVar(&milestone, "milestone", "", "Filter by milestone name")
 	cmd.Flags().StringVar(&sprint, "sprint", "", "Filter by sprint name")
 	cmd.Flags().BoolVar(&draft, "draft", false, "Filter draft PRs only")
