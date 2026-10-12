@@ -37,12 +37,14 @@ func newRootCmd() *cobra.Command {
 				cfg.WorkDir = wd
 			}
 
-			if cfg.CacheDir == "" {
-				home, err := os.UserHomeDir()
-				if err != nil {
-					return err
-				}
-				cfg.CacheDir = filepath.Join(home, ".cache", "gitsocial")
+			cacheDir, err := resolveCacheDir(cfg.CacheDir)
+			if err != nil {
+				return err
+			}
+			cfg.CacheDir = cacheDir
+			// The git that a push runs execs the remote helper with this environment, so the hook reads the same cache.
+			if err := os.Setenv(cacheDirEnv, cfg.CacheDir); err != nil {
+				return err
 			}
 
 			initLogging(cmd.ErrOrStderr(), cfg.JSONOutput)
@@ -66,6 +68,24 @@ func newRootCmd() *cobra.Command {
 	cmd.CompletionOptions.HiddenDefaultCmd = true
 
 	return cmd
+}
+
+// cacheDirEnv carries --cache-dir to the remote helper that git execs; the flag has priority over it.
+const cacheDirEnv = "GITSOCIAL_CACHE_DIR"
+
+// resolveCacheDir returns the cache directory: the flag, then the environment, then the default under the home directory.
+func resolveCacheDir(flag string) (string, error) {
+	if flag != "" {
+		return flag, nil
+	}
+	if env := os.Getenv(cacheDirEnv); env != "" {
+		return env, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".cache", "gitsocial"), nil
 }
 
 // initLogging initializes the logger based on settings and output format.
