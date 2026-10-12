@@ -2627,12 +2627,15 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
     enrichDetail(root, () => replyContextSection(ctx, item, branch),
       (node) => { if (node) root.insertBefore(node, root.children[1] || null); });
+    // Each section fills a slot reserved in the page's order, so the order does not depend on which producer finishes first.
+    const slot = () => { const s = el("div", {}, []); root.append(s); return s; };
+    const fill = (s) => (node) => { if (node) s.replaceWith(node); else s.remove(); };
     if (cv.ext === "pm") {
       enrichDetail(root, async () => {
         const wrap = el("div", {}, []);
         for (const extra of await pmDetailExtras(ctx, item, items)) wrap.append(extra);
         return wrap.childNodes.length ? wrap : null;
-      });
+      }, fill(slot()));
     }
     if (branch === "gitmsg/review" && (item.header.type || "") === "pull-request") {
       enrichDetail(root, async () => {
@@ -2640,7 +2643,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         await hydrateItems(ctx, fb.all);
         const summary = reviewSummary(fb.all, item.header.reviewers || "");
         return reviewSummarySection(summary, fb.nonFile);
-      });
+      }, fill(slot()));
       const versions = item.versions && item.versions.length ? item.versions : [{ header: item.header }];
       const file = prFeedback(items, item.commit.short).file;
       // changesFor builds one version's Changes section; a throw resolves to the notice, so the section never goes blank.
@@ -2652,21 +2655,21 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
           return await prDiffSection(ctx, item.commit.short, versions[i].header, final, file);
         } catch (e) { return prDiffNotice(item.fork ? FORK_DIFF_NOTICE.unreadable : "The changes could not be loaded from this bucket."); }
       };
-      let changes = null, gen = 0;
+      let changes = slot(), gen = 0;
       // showChanges replaces the section with the selected version's; a selection that a later one superseded paints nothing.
       const showChanges = (i) => {
         const g = ++gen;
         enrichDetail(root, () => changesFor(i), (node) => {
           if (!node || g !== gen) return;
-          if (changes) changes.replaceWith(node); else root.append(node);
+          changes.replaceWith(node);
           changes = node;
         });
       };
       showChanges(versions.length - 1);
       root.__onVersion = showChanges;
     }
-    // The social walk can be large, so the thread enriches last.
-    enrichDetail(root, () => itemThreadSection(ctx, item));
+    // The social walk can be large, so the thread enriches last, into the last slot.
+    enrichDetail(root, () => itemThreadSection(ctx, item), fill(slot()));
     return nodes;
   }
 

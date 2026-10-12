@@ -260,15 +260,22 @@ async function main() {
   const packCtx = Object.assign({}, prCtx, { walks: {}, refMisses: new Set(), packs: freshPacks(["pack-1"]), manifest: Promise.resolve({
     "refs/heads/gitmsg/review": sha("1c"), "refs/heads/main": sha("1a"),
   }) });
+  commit("3a", "f1", 1750001450, "A comment on the squash", { ext: "social", type: "comment", original: ref("1c", "review") });
+  packCtx.manifest = Promise.resolve({ "refs/heads/gitmsg/review": sha("1c"), "refs/heads/main": sha("1a"), "refs/heads/gitmsg/social": sha("3a") });
   const miss = global.fetch;
-  global.fetch = idxFetch("pack-1", packIdx([sha("1b")]), miss);
+  // The pack reads are slow, so the thread resolves before the changes.
+  const idx = idxFetch("pack-1", packIdx([sha("1b")]), miss);
+  global.fetch = async (...args) => { await tick(60); return idx(...args); };
   const ppr = (await GS.itemDetail(packCtx, sha("1c"), "gitmsg/review"))[0];
-  await tick(80);
+  for (let i = 0; i < 50 && !findClass(ppr, "thread").length; i++) await tick(20);
+  ok(findClass(ppr, "thread").length === 1 && findClass(ppr, "diff-section").length === 0, "the thread lands before the changes resolve");
+  await tick(300);
   global.fetch = miss;
   const pSec = findClass(ppr, "diff-section")[0];
   ok(!!pSec && findClass(pSec, "notice").length === 0, "a merge head in a pack and on no branch resolves", pSec && text(pSec));
   eq(findClass(pSec, "diff-path").map(textOf), ["notes.txt"], "the squashed range lists its changed file");
-
+  const order = ppr._children.map((c) => (c._cls && c._cls.has("diff-section")) ? "changes" : (c._cls && c._cls.has("thread")) ? "comments" : "").filter(Boolean);
+  eq(order, ["changes", "comments"], "Files changed stays above Comments when the thread resolves first");
   console.log("=== changes follow the version picker ===");
   // The head branch grows by one commit between the versions: ab, ac (+world), then 1d (+again).
   blob("fc", "hello\nworld\nagain\n");
