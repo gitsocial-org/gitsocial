@@ -384,3 +384,24 @@ func TestMergePR_mergedHeadRef_forkPR(t *testing.T) {
 		t.Error("the fork got a merged ref; only the merging repository writes one")
 	}
 }
+
+// TestForkPRClose_openFilterCollapsesAdopted keeps a fork original out of the open list after its adopted copy closed.
+func TestForkPRClose_openFilterCollapsesAdopted(t *testing.T) {
+	setupTestDB(t)
+	alice, bob, upstreamURL, forkURL := forkPRFixture(t)
+	created := CreatePR(bob, "Fix the bug", "", CreatePROptions{Base: upstreamURL + "#branch:main", Head: "feature"})
+	if !created.Success {
+		t.Fatalf("CreatePR: %s", created.Error.Message)
+	}
+	if res := ClosePR(alice, created.Data.ID); !res.Success {
+		t.Fatalf("ClosePR: %s", res.Error.Message)
+	}
+	branch := gitmsg.GetExtBranch(alice, "review")
+	open := GetPullRequestsWithForks(upstreamURL, branch, []string{forkURL}, []string{"open"}, "", 0)
+	if !open.Success {
+		t.Fatalf("GetPullRequestsWithForks: %s", open.Error.Message)
+	}
+	if len(open.Data) != 0 {
+		t.Errorf("open list = %+v, want none: the adopted copy is closed and the original collapses into it", open.Data)
+	}
+}

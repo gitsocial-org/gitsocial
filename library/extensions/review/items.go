@@ -407,16 +407,14 @@ func GetPullRequestsWithForks(workspaceURL, workspaceBranch string, forkURLs, st
 	if err != nil {
 		return result.Err[[]PullRequest]("QUERY_FAILED", err.Error())
 	}
-	// A homed copy carries the terminal state, so its fork original collapses into it.
-	adopted := make(map[string]bool)
-	for _, item := range items {
-		if item.RepoURL != workspaceURL || item.Adopts == "" {
-			continue
-		}
-		if parsed := protocol.ParseRef(item.Adopts); parsed.Type == protocol.RefTypeCommit && parsed.Value != "" {
-			adopted[parsed.Repository+"#"+parsed.Value] = true
+	// A homed copy carries the terminal state, so its fork original collapses into it whatever state the list asks for.
+	homed := items
+	if len(states) > 0 {
+		if homed, err = getReviewItems(reviewQuery{Types: []string{string(ItemTypePullRequest)}, RepoURL: workspaceURL}); err != nil {
+			return result.Err[[]PullRequest]("QUERY_FAILED", err.Error())
 		}
 	}
+	adopted := adoptedOriginals(homed, workspaceURL)
 	// Deduplicate by hash: a mirror clone carries the same commit under two URLs.
 	seen := make(map[string]bool, len(items))
 	prs := make([]PullRequest, 0, len(items))
@@ -434,6 +432,20 @@ func GetPullRequestsWithForks(workspaceURL, workspaceBranch string, forkURLs, st
 		prs = append(prs, ReviewItemToPullRequest(item))
 	}
 	return result.Ok(prs)
+}
+
+// adoptedOriginals keys the fork originals that a workspace copy adopts, by repository and hash.
+func adoptedOriginals(items []ReviewItem, workspaceURL string) map[string]bool {
+	adopted := make(map[string]bool)
+	for _, item := range items {
+		if item.RepoURL != workspaceURL || item.Adopts == "" {
+			continue
+		}
+		if parsed := protocol.ParseRef(item.Adopts); parsed.Type == protocol.RefTypeCommit && parsed.Value != "" {
+			adopted[parsed.Repository+"#"+parsed.Value] = true
+		}
+	}
+	return adopted
 }
 
 // forkPRTargetsWorkspace reports whether a fork pull request's base names the workspace.
