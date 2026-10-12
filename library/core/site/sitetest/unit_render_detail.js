@@ -269,6 +269,46 @@ async function main() {
   ok(!!pSec && findClass(pSec, "notice").length === 0, "a merge head in a pack and on no branch resolves", pSec && text(pSec));
   eq(findClass(pSec, "diff-path").map(textOf), ["notes.txt"], "the squashed range lists its changed file");
 
+  console.log("=== changes follow the version picker ===");
+  // The head branch grows by one commit between the versions: ab, ac (+world), then 1d (+again).
+  blob("fc", "hello\nworld\nagain\n");
+  tree("tc", [["100644", "notes.txt", "fc"]]);
+  codeCommit("1d", "ac", "tc", 1750000250, "again");
+  commit("1e", "1c", 1750001500, "Add world and again", { ext: "review", type: "pull-request", state: "open", base: "#branch:main", "base-tip": short("ab"), head: "#branch:feature", "head-tip": short("ac") });
+  commit("1f", "1e", 1750001600, "Add world and again", { ext: "review", "head-tip": short("1d"), edits: ref("1e", "review") });
+  commit("2a", "1f", 1750001700, "Rebased since", { ext: "review", type: "pull-request", state: "open", base: "#branch:main", "base-tip": short("ab"), head: "#branch:feature", "head-tip": "0000abc" });
+  commit("2b", "2a", 1750001800, "Rebased since", { ext: "review", "head-tip": short("1d"), edits: ref("2a", "review") });
+  const vCtx = Object.assign({}, prCtx, { walks: {}, refMisses: new Set(), manifest: Promise.resolve({
+    "refs/heads/gitmsg/review": sha("2b"), "refs/heads/main": sha("ab"), "refs/heads/feature": sha("1d"),
+  }) });
+  const signs = (sec) => findClass(sec, "diff-line").map((l) => textOf(findClass(l, "dl-sign")[0]) + textOf(findClass(l, "dl-text")[0]));
+  const vpr = (await GS.itemDetail(vCtx, sha("1e"), "gitmsg/review"))[0];
+  await tick(80);
+  const vSections = () => findClass(vpr, "diff-section");
+  ok(vSections().length === 1 && signs(vSections()[0]).indexOf("+again") !== -1, "the first paint shows the latest version's range", signs(vSections()[0] || GS.el("div")).join(" | "));
+  const vRows = findClass(vpr, "version-row");
+  fire(vRows[1], "click");
+  await tick(80);
+  ok(vSections().length === 1, "selecting a version replaces the section, it does not add one", vSections().length);
+  ok(signs(vSections()[0]).indexOf("+world") !== -1 && signs(vSections()[0]).indexOf("+again") === -1, "the original shows its own range", signs(vSections()[0]).join(" | "));
+  fire(vRows[0], "click");
+  await tick(80);
+  ok(signs(vSections()[0]).indexOf("+again") !== -1, "selecting the current version brings its range back", signs(vSections()[0]).join(" | "));
+
+  console.log("=== absent version tips keep the notice ===");
+  const apr = (await GS.itemDetail(vCtx, sha("2a"), "gitmsg/review"))[0];
+  await tick(80);
+  const aSections = () => findClass(apr, "diff-section");
+  ok(aSections().length === 1 && findClass(aSections()[0], "notice").length === 0, "the latest version resolves", text(aSections()[0] || GS.el("div")));
+  const aRows = findClass(apr, "version-row");
+  fire(aRows[1], "click");
+  await tick(80);
+  ok(aSections().length === 1 && text(aSections()[0]).indexOf("not present in this bucket") !== -1, "a version whose head tip is in no branch, index or pack shows the notice", text(aSections()[0]));
+  eq(findClass(aSections()[0], "diff-file").length, 0, "no file rows render under the notice");
+  fire(aRows[0], "click");
+  await tick(80);
+  ok(findClass(aSections()[0], "notice").length === 0 && signs(aSections()[0]).indexOf("+again") !== -1, "the other version still resolves", text(aSections()[0]));
+
   console.log("=== the loading spinner ===");
   const sp = GS.spinner();
   ok(sp._cls.has("spinner") && sp.getAttribute("role") === "status" && sp.getAttribute("aria-label") === "Loading", "the spinner names itself to screen readers");

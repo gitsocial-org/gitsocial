@@ -1070,7 +1070,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       bodyPane.replaceChildren(cb.pane);
       trailerList(dl, v.header, skip);
     }
-    if (versions.length > 1) wrap.append(versionHistorySection(versions, (i) => { sel.idx = i; paint(); }));
+    // A section that follows the selected version hooks wrap.__onVersion.
+    if (versions.length > 1) wrap.append(versionHistorySection(versions, (i) => { sel.idx = i; paint(); if (wrap.__onVersion) wrap.__onVersion(i); }));
     paint();
     return [wrap];
   }
@@ -2311,11 +2312,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     ]);
   }
 
-  // prDiffSection builds a PR's Files changed section from the merge range, else the resolved tips; a range that does not resolve gets the notice.
-  async function prDiffSection(ctx, header, fileFeedback) {
+  // prDiffSection builds the Files changed section of one PR version: the merge range of a merged final version, else its recorded tips; a range that does not resolve gets the notice.
+  async function prDiffSection(ctx, header, final, fileFeedback) {
     if (!header) return null;
     // The merge range comes first: it stays on the base branch after the head is deleted.
-    const hasMergeRange = (header.state || "") === "merged" && header["merge-base"] && header["merge-head"];
+    const hasMergeRange = final && (header.state || "") === "merged" && header["merge-base"] && header["merge-head"];
     if (hasMergeRange) {
       const m = await resolveMergedRefs(ctx, header.base, header["merge-base"], header["merge-head"]);
       if (m) {
@@ -2334,8 +2335,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
     const headR = await resolveTipCommit(ctx, header.head, header["head-tip"]);
     const baseR = await resolveTipCommit(ctx, header.base, header["base-tip"]);
-    if (headR.status !== "ok" || baseR.status !== "ok") {
-      return prDiffNotice("The base or head tips are not present in this bucket (a foreign fork or an unfetched branch), so no diff can be shown here.");
+    // Only the final version may stand in a live tip for a recorded one; an older version shows its own tips or the notice.
+    const resolved = headR.status === "ok" && baseR.status === "ok" && (final || (headR.exact && baseR.exact));
+    if (!resolved) {
+      return prDiffNotice("The base or head tips are not present in this bucket (a foreign fork, an unfetched branch or a version rebased away), so no diff can be shown here.");
     }
     const headTree = await commitTree(ctx, headR.sha);
     const baseTree = await commitTree(ctx, baseR.sha);
@@ -2585,14 +2588,27 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         const summary = reviewSummary(fb.all, item.header.reviewers || "");
         return reviewSummarySection(summary, fb.nonFile);
       });
-      // A throw inside this producer would leave no section at all, so it resolves to the notice instead.
-      enrichDetail(root, async () => {
+      const versions = item.versions && item.versions.length ? item.versions : [{ header: item.header }];
+      const file = prFeedback(items, item.commit.short).file;
+      // changesFor builds one version's Changes section; a throw resolves to the notice, so the section never goes blank.
+      const changesFor = async (i) => {
         try {
-          const file = prFeedback(items, item.commit.short).file;
           await hydrateItems(ctx, file);
-          return await prDiffSection(ctx, item.header, file);
+          return await prDiffSection(ctx, versions[i].header, i === versions.length - 1, file);
         } catch (e) { return prDiffNotice("The changes could not be loaded from this bucket."); }
-      });
+      };
+      let changes = null, gen = 0;
+      // showChanges replaces the section with the selected version's; a selection that a later one superseded paints nothing.
+      const showChanges = (i) => {
+        const g = ++gen;
+        enrichDetail(root, () => changesFor(i), (node) => {
+          if (!node || g !== gen) return;
+          if (changes) changes.replaceWith(node); else root.append(node);
+          changes = node;
+        });
+      };
+      showChanges(versions.length - 1);
+      root.__onVersion = showChanges;
     }
     // The social walk can be large, so the thread enriches last.
     enrichDetail(root, () => itemThreadSection(ctx, item));
