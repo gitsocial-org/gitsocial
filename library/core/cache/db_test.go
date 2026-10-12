@@ -202,6 +202,38 @@ func TestOpen_invalidExtensionSchema(t *testing.T) {
 	schemaMu.Unlock()
 }
 
+// TestApplySchema_concurrentOpeners runs a drop-and-create schema from two connection pools at once, as two processes opening one cache do.
+func TestApplySchema_concurrentOpeners(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cache.db")
+	pools := make([]*sql.DB, 2)
+	for i := range pools {
+		d, err := sql.Open("sqlite", path+"?_txlock=immediate&_pragma=journal_mode(WAL)&_pragma=busy_timeout(30000)")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer d.Close()
+		pools[i] = d
+	}
+	const schema = "DROP VIEW IF EXISTS race_view;\nCREATE VIEW race_view AS SELECT 1 AS one;"
+	errs := make(chan error, 2)
+	for _, d := range pools {
+		go func(d *sql.DB) {
+			for i := 0; i < 50; i++ {
+				if err := applySchema(d, schema); err != nil {
+					errs <- err
+					return
+				}
+			}
+			errs <- nil
+		}(d)
+	}
+	for range pools {
+		if err := <-errs; err != nil {
+			t.Fatalf("applySchema from two openers: %v", err)
+		}
+	}
+}
+
 func TestOpen_corruptDbFile(t *testing.T) {
 	Reset()
 	dir := t.TempDir()

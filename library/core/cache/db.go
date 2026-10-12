@@ -353,7 +353,7 @@ func Open(cacheDir string) error {
 	d.SetMaxOpenConns(16)
 	d.SetMaxIdleConns(16) // matches MaxOpenConns so reusable connections don't get torn down idle
 
-	if _, err := d.Exec(coreSchema); err != nil {
+	if err := applySchema(d, coreSchema); err != nil {
 		log.Error("cache core schema init failed", "error", err)
 		_ = d.Close()
 		initErr = err
@@ -367,7 +367,7 @@ func Open(cacheDir string) error {
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		if _, err := d.Exec(extensionSchemas[name]); err != nil {
+		if err := applySchema(d, extensionSchemas[name]); err != nil {
 			log.Error("cache extension schema init failed", "extension", name, "error", err)
 			schemaMu.Unlock()
 			_ = d.Close()
@@ -388,6 +388,19 @@ func Open(cacheDir string) error {
 	initErr = nil
 	log.Debug("cache opened", "path", dbPath, "duration_ms", time.Since(start).Milliseconds())
 	return nil
+}
+
+// applySchema runs one schema in a transaction, so two processes that open the cache together do not interleave the drop and the create of a view.
+func applySchema(d *sql.DB, schema string) error {
+	tx, err := d.Begin()
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(schema); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 // readMarkersFromFile reads the rows of core_notification_reads from a cache file before its reseed; a file without the table gives none.
