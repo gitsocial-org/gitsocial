@@ -2490,7 +2490,7 @@
 
   // ---- Diff engine (DOM-free, testable) ----
 
-  const MAX_DIFF_LINES = 5000;
+  const MAX_DIFF_LINES = 20000;
   const DIFF_BLOB_CAP = 1048576;
   // DIFF_TREE_SCAN_CAP bounds diffTrees' recursion, with enough margin over the display cap to report that more files changed.
   const DIFF_TREE_SCAN_CAP = 120;
