@@ -3835,9 +3835,18 @@
     return Math.floor(ms / 1000) + (end ? 86399 : 0);
   }
 
+  // EMAIL_FACETS are the typed filters that match a part of an email in a header field, without case, as core/search does.
+  const EMAIL_FACETS = { assignee: "assignees", reviewer: "reviewers" };
+
+  // matchesEmailFacets reports whether an item carries a typed assignee or reviewer as a part of its field; an empty selection matches all.
+  function matchesEmailFacets(item, typed) {
+    const h = item.header || {};
+    return Object.keys(EMAIL_FACETS).every((facet) => !typed[facet].length || typed[facet].some((v) => (h[EMAIL_FACETS[facet]] || "").toLowerCase().indexOf(v) !== -1));
+  }
+
   // parseSearchFilters splits a raw query into free text, typed facet selections, hash prefixes and date bounds.
   function parseSearchFilters(query) {
-    const typed = { type: [], state: [], author: [], label: [] };
+    const typed = { type: [], state: [], author: [], label: [], assignee: [], reviewer: [] };
     const hashes = [];
     let dateFrom = null, dateTo = null;
     let terms = String(query || "").replace(/(\w+):(\S+)/g, (m, key, val) => {
@@ -3846,6 +3855,7 @@
       if (k === "state") { typed.state.push(v); return " "; }
       if (k === "author") { typed.author.push(v); return " "; }
       if (k === "label" || k === "labels") { typed.label.push(v); return " "; }
+      if (EMAIL_FACETS[k]) { typed[k].push(v); return " "; }
       if (k === "hash" || k === "commit") { if (COMMIT_HASH_RE.test(val)) { hashes.push(v); return " "; } return m; }
       if (k === "after") { const b = dateBound(val, false); if (!isNaN(b)) { dateFrom = b; return " "; } return m; }
       if (k === "before") { const b = dateBound(val, true); if (!isNaN(b)) { dateTo = b; return " "; } return m; }
@@ -3903,15 +3913,16 @@
     const f = filters || {};
     const chip = { type: f.type || new Set(), state: f.state || new Set(), author: f.author || new Set(), label: f.label || new Set() };
     const { terms, typed, hashes, dateFrom, dateTo } = parseSearchFilters(query);
-    const active = !!terms || hashes.length > 0 || dateFrom !== null || dateTo !== null || FACET_FIELDS.some((k) => typed[k].length || chip[k].size);
+    const active = !!terms || hashes.length > 0 || dateFrom !== null || dateTo !== null || FACET_FIELDS.some((k) => typed[k].length || chip[k].size) || Object.keys(EMAIL_FACETS).some((k) => typed[k].length);
     if (!active) return { query: "", terms: "", total: 0, groups: [], facets: {} };
-    // Flatten the corpus once, pre-filtered by the terms, hash prefixes, date bounds and the group's own type guard.
+    // Flatten the corpus once, pre-filtered by the terms, hash prefixes, date bounds, email facets and the group's own type guard.
     const pool = [];
     for (const spec of SEARCH_GROUPS) {
       for (const it of (perExt[spec.ext] || [])) {
         if (spec.type && ((it.header && it.header.type) || "") !== spec.type) continue;
         if (terms && searchableText(it).indexOf(terms) === -1) continue;
         if (hashes.length && !itemMatchesHash(it, hashes)) continue;
+        if (!matchesEmailFacets(it, typed)) continue;
         if (dateFrom !== null || dateTo !== null) {
           const t = it.effectiveTime || (it.commit && it.commit.authorTime) || 0;
           if (dateFrom !== null && t < dateFrom) continue;

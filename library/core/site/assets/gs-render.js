@@ -3112,7 +3112,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function searchHelp(corpus) {
     const box = el("div", { class: "search-help empty" }, []);
     box.append(el("div", {}, ["Search loaded issues, pull requests, posts, releases, memos, and code commits by subject, content, author, or labels."]));
-    box.append(el("div", { class: "search-help-scope" }, ["Filter with type:issue, state:open, author:alice, label:bug, or @alice — then refine with the facet chips."]));
+    box.append(el("div", { class: "search-help-scope" }, ["Filter with type:issue, state:open, author:alice, assignee:alice, reviewer:bob, label:bug, or @alice — then refine with the facet chips."]));
     box.append(el("div", { class: "search-help-scope" }, ["Find by commit with hash:abc1234 (or a bare 7-40 hex hash), and narrow by date with after:2026-01-01 or before:2026-12-31."]));
     let scope = "All history is loaded; search covers every item in this bucket (code commits match by subject and author).";
     if (corpus.truncated || corpus.light || corpus.hasOlder) scope = "Recent items are searched by subject, author, and labels; use Load full search index to cover all history and match message bodies (code commits stay subject-level).";

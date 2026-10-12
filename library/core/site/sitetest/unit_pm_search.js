@@ -130,6 +130,16 @@ eq(GS.searchItemsFaceted("author:uma@example.com", importedExt, null).total, 1, 
 eq(GS.searchItemsFaceted("author:Uma", importedExt, null).total, 1, "author:<origin-name substring> matches too");
 eq(GS.searchItemsFaceted("author:importer@localhost", importedExt, null).total, 1, "author:<git-commit-email> still matches (committer identity kept in the blob)");
 eq(GS.searchItemsFaceted("author:nobody@example.com", importedExt, null).total, 0, "author: with an unrelated email matches nothing");
+// assignee: and reviewer: match a part of an email in the header field, without case, as core/search does.
+const assignedExt = {
+  pm: [mk(H("1"), 1, { type: "issue", state: "open", assignees: "Ada@example.com, bob@example.com" }, "Assigned"), mk(H("2"), 2, { type: "issue", state: "open" }, "Unassigned")],
+  review: [mk(H("3"), 3, { type: "pull-request", state: "open", reviewers: "carol@example.com" }, "Reviewed")], social: [], release: [], memo: [],
+};
+eq(GS.searchItemsFaceted("assignee:ada@example.com", assignedExt, null).total, 1, "assignee:<email> finds the issue it is assigned to, without case");
+eq(GS.searchItemsFaceted("assignee:bob", assignedExt, null).total, 1, "assignee:<part> matches a part of the email");
+eq(GS.searchItemsFaceted("assignee:carol", assignedExt, null).total, 0, "a reviewer is not an assignee");
+eq(GS.searchItemsFaceted("reviewer:carol", assignedExt, null).total, 1, "reviewer:<part> finds the pull request");
+eq(GS.searchItemsFaceted("reviewer:carol type:issue", assignedExt, null).total, 0, "an email facet narrows with the other facets");
 
 console.log("=== route parsing (board / search / tags) ===");
 eq(GS.parseRoute("#/board"), { type: "board" }, "#/board route");
