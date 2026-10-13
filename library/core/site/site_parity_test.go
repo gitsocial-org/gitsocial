@@ -276,9 +276,18 @@ type parityRefTokenCase struct {
 	ExpectMentions []string `json:"expectMentions"`
 }
 
+// parityPageBodyCase pins the ref and URL anchors one body carries on the page and in the app.
+type parityPageBodyCase struct {
+	Name       string   `json:"name"`
+	Text       string   `json:"text"`
+	ExpectRefs []string `json:"expectRefs"`
+	ExpectURLs []string `json:"expectURLs"`
+}
+
 // parityFixtures is the shared fixture file shape.
 type parityFixtures struct {
 	RefTokens      []parityRefTokenCase      `json:"refTokens"`
+	PageBodyRefs   []parityPageBodyCase      `json:"pageBodyRefs"`
 	PRDiff         parityPRDiff              `json:"prDiff"`
 	MessageCases   []parityMessageCase       `json:"messageCases"`
 	RawObjectCases []parityRawObjectCase     `json:"rawObjectCases"`
@@ -696,12 +705,12 @@ func TestParityReleaseNotes(t *testing.T) {
 	}
 	for _, c := range f.ReleaseNotes {
 		t.Run(c.Name, func(t *testing.T) {
-			blocks := sitePageBodyBlocks(c.Body, true)
+			blocks := sitePageBodyBlocks(c.Body, true, parityRefAsHref)
 			if len(blocks) != len(c.Expect) {
 				t.Fatalf("%d blocks, want %d", len(blocks), len(c.Expect))
 			}
 			for i, want := range c.Expect {
-				if got := strings.Join(blocks[i].Lines, "\n"); got != strings.Join(want.Lines, "\n") {
+				if got := strings.Join(parityLineTexts(blocks[i].Lines), "\n"); got != strings.Join(want.Lines, "\n") {
 					t.Errorf("block %d lines = %q, want %q", i, got, strings.Join(want.Lines, "\n"))
 				}
 				if len(blocks[i].Notes) != len(want.Notes) {
@@ -884,7 +893,7 @@ func TestParityFeedbackFileRef(t *testing.T) {
 func TestParityFeedbackCardVariant(t *testing.T) {
 	fields := map[string]string{"type": "feedback", "review-state": "changes-requested", "file": "notes.txt", "new-line": "2"}
 	msg := &sitePageMsg{Ext: "review", Header: &protocol.Header{Ext: "review", Fields: fields}}
-	reply := buildSiteReply(&sitePageItem{Msg: msg, Resolved: msg}, nil)
+	reply := buildSiteReply(&sitePageItem{Msg: msg, Resolved: msg}, nil, parityRefAsHref)
 	if reply.Variant != "feedback verdict-changes-requested" {
 		t.Errorf("variant = %q, want %q", reply.Variant, "feedback verdict-changes-requested")
 	}
@@ -1002,7 +1011,7 @@ func TestParityRowHead(t *testing.T) {
 func TestParityDetailHeadMarkup(t *testing.T) {
 	fields := map[string]string{"type": "pull-request", "state": "merged"}
 	msg := &sitePageMsg{Ext: "review", SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: "Expand notes with more lines", Header: &protocol.Header{Ext: "review", Fields: fields}}
-	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[1], sitePageSite{URL: "https://example.com/"}, "Expand notes with more lines", nil, nil)
+	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[1], sitePageSite{URL: "https://example.com/"}, map[string]string{msg.Short: "Expand notes with more lines"}, nil, nil)
 	page, err := renderSitePage("item", d)
 	if err != nil {
 		t.Fatalf("render item page: %v", err)
@@ -1025,7 +1034,7 @@ func TestParityReleasePageMarkup(t *testing.T) {
 	}
 	body := "Ship the rewrite\n\nabc1234 Fix the walk\ndef5678 Add a retry budget"
 	msg := &sitePageMsg{Ext: "release", SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: body, Header: &protocol.Header{Ext: "release", Fields: fields}}
-	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[3], sitePageSite{URL: "https://example.com/"}, "v1.2.0", nil, nil)
+	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[3], sitePageSite{URL: "https://example.com/"}, map[string]string{msg.Short: "v1.2.0"}, nil, nil)
 	page, err := renderSitePage("item", d)
 	if err != nil {
 		t.Fatalf("render item page: %v", err)
@@ -1171,6 +1180,74 @@ func TestParityRefTokens(t *testing.T) {
 			}
 			if !slices.Equal(mentions, c.ExpectMentions) {
 				t.Errorf("FindMentions = %q, want %q", mentions, c.ExpectMentions)
+			}
+		})
+	}
+}
+
+// parityRefAsHref links a body ref to itself, the href the app gives it.
+func parityRefAsHref(ref string) string { return ref }
+
+// parityLineTexts joins the bits of each line back into its text.
+func parityLineTexts(lines [][]sitePageBit) []string {
+	out := make([]string, 0, len(lines))
+	for _, bits := range lines {
+		var b strings.Builder
+		for _, bit := range bits {
+			b.WriteString(bit.Text)
+		}
+		out = append(out, b.String())
+	}
+	return out
+}
+
+// TestParityPageBodyRefs asserts a page body carries the ref anchors the app's own renderMarkdown builds, as a.hash with the ref as its href and text, and its bare URLs as links; the JS half is in unit_parity.js.
+func TestParityPageBodyRefs(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.PageBodyRefs) == 0 {
+		t.Fatal("no page body cases in parity fixtures")
+	}
+	for _, c := range f.PageBodyRefs {
+		t.Run(c.Name, func(t *testing.T) {
+			var refs, urls []string
+			site := sitePageSite{URL: "https://example.com/"}
+			paras := sitePageParas(c.Text, sitePageRefHref(site, nil))
+			for _, lines := range paras {
+				for _, bits := range lines {
+					for _, bit := range bits {
+						switch {
+						case bit.Href == "":
+						case bit.Class == "hash":
+							ref := strings.TrimPrefix(bit.Href, site.URL+"index.html")
+							if bit.Text != ref || bit.Rel != "" {
+								t.Errorf("ref anchor = %+v, want the ref as its text and no rel", bit)
+							}
+							refs = append(refs, ref)
+						default:
+							if bit.Text != bit.Href || bit.Rel != "nofollow ugc" {
+								t.Errorf("url anchor = %+v, want the url as its text with rel nofollow ugc", bit)
+							}
+							urls = append(urls, bit.Href)
+						}
+					}
+				}
+			}
+			if !slices.Equal(refs, c.ExpectRefs) {
+				t.Errorf("page refs = %q, want %q", refs, c.ExpectRefs)
+			}
+			if !slices.Equal(urls, c.ExpectURLs) {
+				t.Errorf("page urls = %q, want %q", urls, c.ExpectURLs)
+			}
+			page, err := renderSitePage("paras", paras)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var rendered []string
+			for _, m := range parityHashHrefRe.FindAllStringSubmatch(string(page), -1) {
+				rendered = append(rendered, strings.TrimPrefix(m[1], site.URL+"index.html"))
+			}
+			if !slices.Equal(rendered, c.ExpectRefs) {
+				t.Errorf("rendered anchors = %q, want %q", rendered, c.ExpectRefs)
 			}
 		})
 	}

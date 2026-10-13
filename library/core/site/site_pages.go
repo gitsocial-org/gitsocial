@@ -29,7 +29,7 @@ const (
 	sitePagesManifestKey = ".gitsocial/site/pages.json"
 	// sitePagesVersion is the page layer's schema version; bump it when a page
 	// head or its sealed markup changes.
-	sitePagesVersion = 36
+	sitePagesVersion = 37
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -602,7 +602,7 @@ func incrementalSitePages(client *objstore.Client, prefix string, site sitePageS
 	uploads := make([]sitePageUpload, 0, len(affected))
 	titles := siteItemPageTitles(roots, siteFileTitleSet(prior.Files))
 	for _, r := range affected {
-		page, err := renderSitePage("item", buildSiteItemPage(r, listByExt[r.Msg.Ext], site, titles[r.Msg.Short], src, refs))
+		page, err := renderSitePage("item", buildSiteItemPage(r, listByExt[r.Msg.Ext], site, titles, src, refs))
 		if err != nil {
 			return false, err
 		}
@@ -822,7 +822,7 @@ func writeSiteItemPages(client *objstore.Client, prefix string, roots map[string
 			batch := min(chunk, len(rs)-done[list.Ext], budget)
 			uploads := make([]sitePageUpload, 0, batch)
 			for _, it := range rs[done[list.Ext] : done[list.Ext]+batch] {
-				page, err := renderSitePage("item", buildSiteItemPage(it, list, site, titles[it.Msg.Short], src, refs))
+				page, err := renderSitePage("item", buildSiteItemPage(it, list, site, titles, src, refs))
 				if err != nil {
 					return nil, false, 0, err
 				}

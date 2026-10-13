@@ -12,7 +12,7 @@ var (
 	reTextMDLink  = regexp.MustCompile(`\[[^\]]*\]\([^)]*\)`)
 )
 
-// RefSpan is a ref found in free text, at its byte offsets.
+// RefSpan is a ref or a URL found in free text, at its byte offsets.
 type RefSpan struct {
 	Start int
 	End   int
@@ -35,6 +35,16 @@ func FindRefs(text string) []RefSpan {
 			continue
 		}
 		spans = append(spans, RefSpan{Start: m[2], End: m[3], Ref: text[m[2]:m[3]]})
+	}
+	return spans
+}
+
+// FindURLs returns each bare http or https URL in text, the span FindRefs keeps a ref out of.
+func FindURLs(text string) []RefSpan {
+	matches := reTextURL.FindAllStringIndex(text, -1)
+	spans := make([]RefSpan, 0, len(matches))
+	for _, m := range matches {
+		spans = append(spans, RefSpan{Start: m[0], End: m[1], Ref: text[m[0]:m[1]]})
 	}
 	return spans
 }

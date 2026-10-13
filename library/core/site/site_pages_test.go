@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 // makePageCommit builds a loose commit with a controllable author identity (the
@@ -1580,5 +1581,98 @@ func TestSitePages_CrawlHygiene(t *testing.T) {
 	}
 	if pages < 12 {
 		t.Fatalf("only %d generated pages were checked for title collisions", pages)
+	}
+}
+
+// pagesTestRoot builds one root item of ext from its message and header fields, its sha the digit repeated.
+func pagesTestRoot(ext, digit, message string, fields map[string]string) *sitePageItem {
+	sha := strings.Repeat(digit, 40)
+	msg := &sitePageMsg{Ext: ext, SHA: sha, Short: sha[:12], Author: "Ada", Email: "ada@example.com", TS: 1700000000, Message: message, Header: &protocol.Header{Ext: ext, Fields: fields}}
+	return &sitePageItem{Msg: msg, Resolved: msg}
+}
+
+// pagesTestRender renders one root's item page; titles names the roots that have a page.
+func pagesTestRender(t *testing.T, it *sitePageItem, list sitePageList, titles map[string]string) string {
+	t.Helper()
+	page, err := renderSitePage("item", buildSiteItemPage(it, list, sitePageSite{URL: "https://example.com/"}, titles, nil, nil))
+	if err != nil {
+		t.Fatalf("render item page: %v", err)
+	}
+	return string(page)
+}
+
+// TestSitePages_bodyStaysEscaped asserts no markup from a body reaches the page: a script tag and an anchor render as text, and a ref beside them still links.
+func TestSitePages_bodyStaysEscaped(t *testing.T) {
+	other := strings.Repeat("b", 12)
+	body := "Subject\n\n<script>alert(1)</script> and <a>a link</a> near #commit:" + other + "@gitmsg/pm"
+	it := pagesTestRoot("pm", "a", body, map[string]string{"type": "issue"})
+	page := pagesTestRender(t, it, sitePageLists[0], map[string]string{it.Msg.Short: "Subject", other: "Other"})
+	page = strings.Replace(strings.Replace(page, sitePagesBootScript, "", 1), string(sitePagesShellScript), "", 1)
+	if strings.Contains(page, "<script>") || strings.Contains(page, "<a>a link</a>") {
+		t.Errorf("markup from the body reached the page:\n%s", page)
+	}
+	if !strings.Contains(page, "&lt;script&gt;alert(1)&lt;/script&gt; and &lt;a&gt;a link&lt;/a&gt; near ") {
+		t.Errorf("the body must render as escaped text:\n%s", page)
+	}
+	if want := `<a class="hash" href="../i/` + other + `.html">#commit:` + other + `@gitmsg/pm</a>`; !strings.Contains(page, want) {
+		t.Errorf("the ref beside the markup must link:\nwant %s\ngot %s", want, page)
+	}
+}
+
+// TestSitePages_refHrefTargets asserts a ref to a root item with a page links its page, on the item and in a reply, and any other ref links the route of the app.
+func TestSitePages_refHrefTargets(t *testing.T) {
+	other, reply := strings.Repeat("b", 12), strings.Repeat("c", 12)
+	body := "Subject\n\nSee #commit:" + other + "@gitmsg/pm, #commit:" + reply + "@gitmsg/social, #commit:1234567 and #branch:main."
+	it := pagesTestRoot("pm", "a", body, map[string]string{"type": "issue"})
+	comment := pagesTestRoot("social", "c", "Also #commit:"+other+"@gitmsg/pm", map[string]string{"type": "comment", "original": "#commit:" + it.Msg.Short + "@gitmsg/pm"})
+	it.Replies = []*sitePageItem{comment}
+	page := pagesTestRender(t, it, sitePageLists[0], map[string]string{it.Msg.Short: "Subject", other: "Other"})
+	for _, want := range []string{
+		`<a class="hash" href="../i/` + other + `.html">#commit:` + other + `@gitmsg/pm</a>`,
+		`<a class="hash" href="https://example.com/index.html#commit:` + reply + `@gitmsg/social">#commit:` + reply + `@gitmsg/social</a>`,
+		`<a class="hash" href="https://example.com/index.html#commit:1234567">#commit:1234567</a>`,
+		`<a class="hash" href="https://example.com/index.html#branch:main">#branch:main</a>`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("ref anchor missing:\nwant %s\ngot %s", want, page)
+		}
+	}
+	if n := strings.Count(page, `href="../i/`+other+`.html"`); n != 2 {
+		t.Errorf("the ref links its page %d times, want once in the body and once in the reply", n)
+	}
+}
+
+// TestSitePages_externalURLNofollow asserts a bare URL in a body carries rel="nofollow ugc" and a ref anchor carries no rel.
+func TestSitePages_externalURLNofollow(t *testing.T) {
+	it := pagesTestRoot("social", "a", "Subject\n\nRead https://example.com/docs. and #tag:v1.0", map[string]string{"type": "post"})
+	page := pagesTestRender(t, it, sitePageLists[2], map[string]string{it.Msg.Short: "Subject"})
+	for _, want := range []string{
+		`<a href="https://example.com/docs" rel="nofollow ugc">https://example.com/docs</a>. and `,
+		`<a class="hash" href="https://example.com/index.html#tag:v1.0">#tag:v1.0</a>`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("body link missing:\nwant %s\ngot %s", want, page)
+		}
+	}
+	if strings.Count(page, "nofollow") != 1 {
+		t.Errorf("nofollow appears %d times, want once on the URL alone", strings.Count(page, "nofollow"))
+	}
+}
+
+// TestSitePages_branchPairLinks asserts the head and base bits of a pull request page link the branch log of this repository, a browsable fork head its URL, and any other head stays text.
+func TestSitePages_branchPairLinks(t *testing.T) {
+	for _, c := range []struct{ name, head, want string }{
+		{"a branch of this repository", "#branch:feature/x", `pull request · <a href="../index.html#branch:feature/x">feature/x</a> → <a href="../index.html#branch:main">main</a>`},
+		{"a browsable fork head", "https://example.com/fork#branch:feature", `<a href="https://example.com/fork#branch:feature" rel="noopener">https://example.com/fork#feature</a> → <a href="../index.html#branch:main">main</a>`},
+		{"a fork head that is no URL", "s3://fake.example.com/other-demo#branch:feature", `s3://fake.example.com/other-demo#feature → <a href="../index.html#branch:main">main</a>`},
+		{"no head", "", `pull request · ? → <a href="../index.html#branch:main">main</a>`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			it := pagesTestRoot("review", "a", "Rework the walk", map[string]string{"type": "pull-request", "base": "#branch:main", "head": c.head})
+			page := pagesTestRender(t, it, sitePageLists[1], map[string]string{it.Msg.Short: "Rework the walk"})
+			if !strings.Contains(page, c.want) {
+				t.Errorf("branch pair missing:\nwant %s\ngot %s", c.want, page[strings.Index(page, `<div class="detail-meta">`):][:400])
+			}
+		})
 	}
 }

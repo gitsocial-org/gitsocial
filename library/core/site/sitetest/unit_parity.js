@@ -286,6 +286,19 @@ for (const c of FIX.refTokens) {
   eq(JSON.stringify(mentions), JSON.stringify(c.expectMentions), c.name + ": mentions");
 }
 
+console.log("=== parity invariant: the ref and URL anchors of a page body ===");
+// anchors lists the A nodes under node in document order.
+function anchors(node, out) { out = out || []; for (const c of (node && node._children) || []) if (c && c.nodeType === 1) { if (c.tagName === "A") out.push(c); anchors(c, out); } return out; }
+for (const c of FIX.pageBodyRefs) {
+  const all = anchors(GS.renderMarkdown(c.text));
+  const refs = all.filter((a) => a._cls && a._cls.has("hash"));
+  eq(JSON.stringify(refs.map((a) => a.getAttribute("href"))), JSON.stringify(c.expectRefs), c.name + ": refs");
+  eq(refs.every((a) => a.textContent === a.getAttribute("href")), true, c.name + ": a ref anchor reads as its ref");
+  const urls = all.filter((a) => !(a._cls && a._cls.has("hash")));
+  eq(JSON.stringify(urls.map((a) => a.getAttribute("href"))), JSON.stringify(c.expectURLs), c.name + ": urls");
+  eq(urls.every((a) => a.textContent === a.getAttribute("href")), true, c.name + ": a url anchor reads as its url");
+}
+
 console.log("=== parity invariant: tag display order ===");
 (async () => {
   for (const c of FIX.tagOrder) {
