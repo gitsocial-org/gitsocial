@@ -2058,11 +2058,21 @@ func buildImportConfirmPrompt(repoURL string, found, mapped importpkg.ItemCounts
 	return "Import " + strings.Join(parts, ", ") + " from " + repoURL + "?"
 }
 
-// resolveRefLocation maps a commit or tag ref to its item's view through the cache, else to the raw commit diff; a branch ref opens the Repository view on that branch, and a file ref the Code view at its path and lines.
+// resolveRefLocation maps a commit or tag ref to its item's view through the cache, else to the raw commit diff; a branch ref opens the Repository view on that branch, a file ref the Code view at its path and lines, and a list ref that list. A ref of a repository the cache does not hold opens outside, at the ref when it is a URL, else at the repository.
 func resolveRefLocation(ref, workspaceURL string) tuicore.Location {
 	parsed := protocol.ParseRef(ref)
+	foreign := parsed.Repository != "" && parsed.Repository != workspaceURL
+	if foreign && !repositoryCached(parsed.Repository) {
+		return tuicore.Location{Path: externalRefURL(parsed, ref)}
+	}
 	if parsed.Type == protocol.RefTypeBranch && parsed.Value != "" {
 		return tuicore.LocRepository(parsed.Repository, parsed.Value)
+	}
+	if parsed.Type == protocol.RefTypeList && parsed.Value != "" {
+		if foreign {
+			return tuicore.LocExternalList(parsed.Repository, parsed.Value)
+		}
+		return tuicore.LocList(parsed.Value)
 	}
 	if parsed.Type == protocol.RefTypeFile && parsed.FilePath != "" {
 		// A ref after the branch, a commit or a tag, is what the view reads; the branch is only the context.
@@ -2114,6 +2124,31 @@ func resolveRefLocation(ref, workspaceURL string) tuicore.Location {
 		return tuicore.LocDetail(protocol.CreateRef(protocol.RefTypeCommit, commit.Hash, commit.RepoURL, commit.Branch))
 	}
 	return tuicore.LocCommitDiff(parsed.Value)
+}
+
+// externalRefURL is the browser address of a ref whose repository the cache does not hold: the forge page of a commit or branch on a known host, else the ref itself when it is a url, which a site serves as its route, else the repository.
+func externalRefURL(parsed protocol.ParsedRef, ref string) string {
+	if protocol.DetectHost(parsed.Repository) != protocol.HostUnknown {
+		switch parsed.Type {
+		case protocol.RefTypeCommit:
+			return protocol.CommitURL(parsed.Repository, parsed.Value)
+		case protocol.RefTypeBranch:
+			return protocol.BranchURL(parsed.Repository, parsed.Value)
+		}
+	}
+	if strings.HasPrefix(ref, "http://") || strings.HasPrefix(ref, "https://") {
+		return ref
+	}
+	return parsed.Repository
+}
+
+// repositoryCached reports whether the cache holds a repository: a tracked row, or a branch of fetched commits.
+func repositoryCached(repoURL string) bool {
+	if _, err := cache.GetRepository(repoURL); err == nil {
+		return true
+	}
+	branches, err := cache.GetRepositoryBranches(repoURL)
+	return err == nil && len(branches) > 0
 }
 
 // hitsOfRepoFirst puts the hits of one repository first, each group in the order DetectExtension gave.

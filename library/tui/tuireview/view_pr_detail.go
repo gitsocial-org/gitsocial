@@ -418,6 +418,11 @@ func (v *prDetailView) navigateStack(offset int) tea.Cmd {
 	}
 }
 
+// SectionList returns the section list the view renders, for the anchor order test.
+func (v *prDetailView) SectionList() *tuicore.SectionList {
+	return v.sectionList
+}
+
 // IsInputActive returns true when confirmation or search input is active.
 func (v *prDetailView) IsInputActive() bool {
 	return v.confirm.IsActive() || v.choice.IsActive() || v.sectionList.IsInputActive()
@@ -621,22 +626,20 @@ func (v *prDetailView) buildSections() {
 				return lines
 			},
 			SearchText: func() string { return pr.Subject + " " + pr.Body },
+			// Links lists the anchors of renderPRCard in the order they are marked.
 			Links: func() []tuicore.CardLink {
 				var links []tuicore.CardLink
 				if pr.Origin != nil && pr.Origin.URL != "" {
 					links = append(links, tuicore.CardLink{Label: "Source", Location: tuicore.Location{Path: pr.Origin.URL}})
+				}
+				if pr.Adopts != "" {
+					links = append(links, tuicore.CardLink{Label: "Adopted from", Location: tuicore.LocReviewPRDetail(pr.Adopts)})
 				}
 				if loc := branchRefLocation(pr.Base, v.workspaceURL); loc != nil {
 					links = append(links, tuicore.CardLink{Label: shortenBranchRef(pr.Base), Location: *loc})
 				}
 				if loc := branchRefLocation(pr.Head, v.workspaceURL); loc != nil {
 					links = append(links, tuicore.CardLink{Label: shortenBranchRef(pr.Head), Location: *loc})
-				}
-				if pr.Head != "" {
-					parsed := protocol.ParseRef(pr.Head)
-					if parsed.Repository != "" && parsed.Repository != v.workspaceURL {
-						links = append(links, tuicore.CardLink{Label: "Fork", Location: tuicore.Location{Path: parsed.Repository}})
-					}
 				}
 				for _, ref := range pr.Closes {
 					fullRef := protocol.NormalizeRefWithContext(ref, v.workspaceURL, "")

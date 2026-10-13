@@ -178,9 +178,28 @@ func TestResolveRefLocation(t *testing.T) {
 	if branch.Path != wantBranch.Path || branch.Param("url") != "" || branch.Param("branch") != "feature/x" {
 		t.Errorf("branch ref = %+v, want the workspace Repository view on the branch %+v", branch, wantBranch)
 	}
+	if err := cache.InsertRepository(cache.Repository{URL: "https://example.com/other", Branch: "main"}); err != nil {
+		t.Fatalf("InsertRepository: %v", err)
+	}
 	remote := resolveRefLocation("https://example.com/other#branch:main", "https://example.com/r")
 	if remote.Param("url") != "https://example.com/other" || remote.Param("branch") != "main" {
 		t.Errorf("remote branch ref = %+v, want the Repository view of that repository on main", remote)
+	}
+	uncached := resolveRefLocation("https://example.com/nowhere#branch:main", "https://example.com/r")
+	if uncached.Path != "https://example.com/nowhere#branch:main" {
+		t.Errorf("ref of an uncached repository = %+v, want the url as an external link", uncached)
+	}
+	forge := resolveRefLocation("https://github.com/nobody/repo#commit:0123456789ab", "https://example.com/r")
+	if forge.Path != "https://github.com/nobody/repo/commit/0123456789ab" {
+		t.Errorf("commit ref of an uncached forge repository = %+v, want the forge commit page", forge)
+	}
+	list := resolveRefLocation("#list:reading", "https://example.com/r")
+	if list.Path != "/social/list" || list.Param("listID") != "reading" || list.Param("owner") != "" {
+		t.Errorf("list ref = %+v, want the workspace list", list)
+	}
+	ownedList := resolveRefLocation("https://example.com/other#list:reading", "https://example.com/r")
+	if ownedList.Path != "/social/list" || ownedList.Param("listID") != "reading" || ownedList.Param("owner") != "https://example.com/other" {
+		t.Errorf("list ref of another repository = %+v, want that repository's list", ownedList)
 	}
 	file := resolveRefLocation("#file:src/auth.go@main:L42-50", "https://example.com/r")
 	if file.Path != "/social/repository/code" || file.Param("url") != "" || file.Param("branch") != "main" || file.Param("path") != "src/auth.go" || file.Param("line") != "42" || file.Param("lineEnd") != "50" {

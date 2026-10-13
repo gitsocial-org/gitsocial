@@ -30,6 +30,7 @@ type tagsView struct {
 	repoDir      string
 	tags         []tagRow
 	releases     map[string]string
+	selectName   string
 	cursor       int
 	lastClickIdx int
 	loading      bool
@@ -57,7 +58,9 @@ func newTagsView() *tagsView {
 func (v *tagsView) Activate(state *tuicore.State) tea.Cmd {
 	v.loading, v.err, v.tags, v.cursor, v.lastClickIdx = true, nil, nil, 0, -1
 	var isWorkspace bool
-	v.url, v.name, v.repoDir, isWorkspace = localRepo(state, state.Router.Location().Param("url"))
+	loc := state.Router.Location()
+	v.selectName = loc.Param("tag")
+	v.url, v.name, v.repoDir, isWorkspace = localRepo(state, loc.Param("url"))
 	repoDir, repoURL := v.repoDir, v.url
 	if isWorkspace {
 		repoURL = gitmsg.ResolveRepoURL(state.Workdir)
@@ -107,8 +110,19 @@ func (v *tagsView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			return nil
 		}
 		v.tags, v.releases = msg.Tags, msg.Releases
+		v.cursor = tagIndex(v.tags, v.selectName)
 	}
 	return nil
+}
+
+// tagIndex returns the row of the named tag, or the first row.
+func tagIndex(tags []tagRow, name string) int {
+	for i, tag := range tags {
+		if name != "" && tag.Name == name {
+			return i
+		}
+	}
+	return 0
 }
 
 // moveCursor moves the cursor by delta and keeps it on a row.

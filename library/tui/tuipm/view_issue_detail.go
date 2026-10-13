@@ -340,10 +340,14 @@ func (v *issueDetailView) buildSections() {
 				return lines
 			},
 			SearchText: func() string { return issue.Subject + " " + issue.Body },
+			// Links lists the anchors of renderIssueCard in the order they are marked.
 			Links: func() []tuicore.CardLink {
 				var links []tuicore.CardLink
 				if issue.Origin != nil && issue.Origin.URL != "" {
 					links = append(links, tuicore.CardLink{Label: "Source", Location: tuicore.Location{Path: issue.Origin.URL}})
+				}
+				if issue.Adopts != "" {
+					links = append(links, tuicore.CardLink{Label: "Adopted from", Location: tuicore.LocPMIssueDetail(issue.Adopts)})
 				}
 				if parent != nil {
 					links = append(links, tuicore.CardLink{Label: "parent", Location: tuicore.LocPMIssueDetail(parent.ID)})
@@ -512,6 +516,11 @@ func (v *issueDetailView) navigateSource(state *tuicore.State, offset int) tea.C
 	return func() tea.Msg {
 		return tuicore.SourceNavigateMsg{Offset: offset, MakeLocation: tuicore.LocPMIssueDetail}
 	}
+}
+
+// SectionList returns the section list the view renders, for the anchor order test.
+func (v *issueDetailView) SectionList() *tuicore.SectionList {
+	return v.sectionList
 }
 
 // IsInputActive returns true when confirmation or search input is active.

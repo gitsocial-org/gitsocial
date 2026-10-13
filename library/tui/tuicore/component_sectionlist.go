@@ -122,6 +122,17 @@ func (sl *SectionList) selectedLinks() []CardLink {
 	return item.Links()
 }
 
+// ItemAnchors renders the item at flatIdx once and returns the zones it marked beside its links; the n-th zone must carry the location of the n-th link.
+func (sl *SectionList) ItemAnchors(flatIdx, width int) ([]CardLinkZone, []CardLink) {
+	item := sl.getItem(flatIdx)
+	if item == nil || item.Links == nil {
+		return nil, nil
+	}
+	anchors := NewAnchorCollector(sl.zonePrefix+"_probe", -1)
+	item.Render(width, false, "", anchors)
+	return anchors.Zones(), item.Links()
+}
+
 // FocusedLinkLocation returns the Location of the focused link, if any.
 func (sl *SectionList) FocusedLinkLocation() *Location {
 	return focusedLinkLocation(sl.selectedLinks(), sl.focusedLink)

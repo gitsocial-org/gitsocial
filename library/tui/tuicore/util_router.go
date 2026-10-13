@@ -124,6 +124,13 @@ func LocRepoTags(url string) Location {
 	return Location{Path: "/social/repository/tags", Params: params}
 }
 
+// LocTag creates a location for the tag list of a repository with one tag selected; an empty url is the workspace.
+func LocTag(url, name string) Location {
+	loc := LocRepoTags(url)
+	loc.Params["tag"] = name
+	return loc
+}
+
 // LocRepoCode creates a location for the code view of a repository at a path; an empty url is the workspace, an empty branch its default branch, and a line range of 0 none.
 func LocRepoCode(url, branch, path string, line, lineEnd int) Location {
 	params := map[string]string{}
