@@ -45,6 +45,7 @@ type prDetailView struct {
 	behindCount    int
 	versionReviews []review.VersionAwareReview
 	observation    *review.PRObservation
+	trailerRefs    []cache.TrailerRef
 	confirm        tuicore.ConfirmDialog
 	choice         tuicore.ChoiceDialog
 	sectionList    *tuicore.SectionList
@@ -195,7 +196,8 @@ func (v *prDetailView) Activate(state *tuicore.State) tea.Cmd {
 		// row exists yet, we render no marker and the user picks up the
 		// state on their next `gitsocial fetch`.
 		observation := review.PRObservationFromCache(v.workspaceURL, pr)
-		return prDetailLoadedMsg{pr: &pr, reviews: reviews, reviewComments: reviewComments, comments: prComments, stack: stack, observation: observation}
+		trailerRefs, _ := cache.GetTrailerRefsTo(pr.Repository, hash) // no rows on a read error, as before the links
+		return prDetailLoadedMsg{pr: &pr, reviews: reviews, reviewComments: reviewComments, comments: prComments, stack: stack, observation: observation, trailerRefs: trailerRefs}
 	}
 }
 
@@ -225,6 +227,7 @@ func (v *prDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 		v.comments = msg.comments
 		v.stack = msg.stack
 		v.observation = msg.observation
+		v.trailerRefs = msg.trailerRefs
 		prevSelected := v.sectionList.Selected()
 		v.buildSections()
 		if preserveCursor {
@@ -595,6 +598,7 @@ func (v *prDetailView) buildSections() {
 					userEmail:      v.userEmail,
 					workspaceURL:   v.workspaceURL,
 					behindCount:    v.behindCount,
+					trailerRefs:    v.trailerRefs,
 					tipStaleMarker: v.tipStaleMarker,
 					filesRow: func() string {
 						styles := tuicore.RowStylesWithWidths(14, 0)
@@ -628,18 +632,34 @@ func (v *prDetailView) buildSections() {
 			SearchText: func() string { return pr.Subject + " " + pr.Body },
 			// Links lists the anchors of renderPRCard in the order they are marked.
 			Links: func() []tuicore.CardLink {
-				var links []tuicore.CardLink
+				links := tuicore.MentionLinks(pr.Subject)
 				if pr.Origin != nil && pr.Origin.URL != "" {
 					links = append(links, tuicore.CardLink{Label: "Source", Location: tuicore.Location{Path: pr.Origin.URL}})
 				}
 				if pr.Adopts != "" {
 					links = append(links, tuicore.CardLink{Label: "Adopted from", Location: tuicore.LocReviewPRDetail(pr.Adopts)})
 				}
+				links = append(links, authorLinks(pr)...)
 				if loc := branchRefLocation(pr.Base, v.workspaceURL); loc != nil {
 					links = append(links, tuicore.CardLink{Label: shortenBranchRef(pr.Base), Location: *loc})
 				}
+				if pr.Base != "" && pr.BaseTip != "" {
+					links = append(links, tuicore.CardLink{Label: "#" + pr.BaseTip, Location: tipLocation(pr.Base, pr.BaseTip, v.workspaceURL)})
+				}
 				if loc := branchRefLocation(pr.Head, v.workspaceURL); loc != nil {
 					links = append(links, tuicore.CardLink{Label: shortenBranchRef(pr.Head), Location: *loc})
+				}
+				if pr.Head != "" && pr.HeadTip != "" {
+					links = append(links, tuicore.CardLink{Label: "#" + pr.HeadTip, Location: tipLocation(pr.Head, pr.HeadTip, v.workspaceURL)})
+				}
+				for _, ref := range pr.DependsOn {
+					links = append(links, tuicore.CardLink{Label: protocol.FormatShortRef(ref, v.workspaceURL), Location: dependencyLocation(ref, pr.Repository)})
+				}
+				for _, r := range pr.Reviewers {
+					links = append(links, tuicore.CardLink{Label: r, Location: tuicore.LocFacet("reviewer", r)})
+				}
+				for _, l := range pr.Labels {
+					links = append(links, tuicore.CardLink{Label: l, Location: tuicore.LocFacet("label", l)})
 				}
 				for _, ref := range pr.Closes {
 					fullRef := protocol.NormalizeRefWithContext(ref, v.workspaceURL, "")
@@ -648,6 +668,7 @@ func (v *prDetailView) buildSections() {
 						Location: tuicore.LocPMIssueDetail(fullRef),
 					})
 				}
+				links = append(links, tuicore.TrailerRefLinks(v.trailerRefs)...)
 				links = append(links, tuicore.ExtractContentLinks(pr.Body, pr.Repository, "")...)
 				return links
 			},
@@ -660,10 +681,13 @@ func (v *prDetailView) buildSections() {
 		for _, entry := range v.stack {
 			entry := entry
 			items = append(items, tuicore.SectionItem{
-				Render: func(width int, selected bool, searchQuery string, _ *tuicore.AnchorCollector) []string {
-					return v.renderStackRow(entry, width, selected, searchQuery)
+				Render: func(width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
+					return v.renderStackRow(entry, width, selected, searchQuery, anchors)
 				},
 				SearchText: func() string { return entry.PullRequest.Subject },
+				Links: func() []tuicore.CardLink {
+					return branchPairLinks(entry.PullRequest.Base, entry.PullRequest.Head, v.workspaceURL)
+				},
 				OnActivate: func() tea.Cmd {
 					targetID := entry.PullRequest.ID
 					if pr != nil && targetID == pr.ID {
@@ -738,7 +762,7 @@ func (v *prDetailView) buildSections() {
 				SearchText: func() string { return r.Content },
 				Links: func() []tuicore.CardLink {
 					isWorkspace := r.Repository == v.workspaceURL
-					card := feedbackToCard(r, v.userEmail, isWorkspace, v.showEmail)
+					card := feedbackToCard(r, v.userEmail, isWorkspace, v.showEmail, feedbackCodeLocation(r, v.pr, v.workspaceURL))
 					return card.AllLinks()
 				},
 				OnActivate: func() tea.Cmd {
@@ -1165,6 +1189,7 @@ type prCardOptions struct {
 	userEmail      string
 	workspaceURL   string
 	behindCount    int
+	trailerRefs    []cache.TrailerRef // the commits that cite the pull request; none in version mode
 	tipStaleMarker func(side, storedTip string) string
 	filesRow       func() string
 	version        bool      // render as a historical version (banner + version rules)
@@ -1184,11 +1209,8 @@ func renderPRCard(pr *review.PullRequest, width int, selected bool, searchQuery 
 	if opts.version {
 		lines = append(lines, tuicore.RenderVersionBanner(selectionBar, opts.versionAuthor, opts.versionTime, pr.IsRetracted)...)
 	}
-	title := pr.Subject
-	if searchQuery != "" {
-		title = tuicore.HighlightInText(title, searchQuery)
-	}
-	lines = append(lines, selectionBar+tuicore.Bold.Render(title))
+	title := tuicore.MarkMentions(pr.Subject, tuicore.Bold, searchQuery, anchors)
+	lines = append(lines, selectionBar+title)
 	lines = append(lines, selectionBar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
 	styles := tuicore.RowStylesWithWidths(14, 0)
 	stateStr := string(pr.State)
@@ -1212,48 +1234,13 @@ func renderPRCard(pr *review.PullRequest, width int, selected bool, searchQuery 
 			lines = append(lines, selectionBar+styles.Label.Render("Adopted from")+anchors.MarkLink(adopted.Repository, protocol.CommitURL(adopted.Repository, adopted.Value), tuicore.LocReviewPRDetail(pr.Adopts)))
 		}
 	}
-	displayAuthor := pr.Author
-	displayTime := pr.Timestamp
-	if pr.OriginalAuthor != nil {
-		displayAuthor = *pr.OriginalAuthor
-		if !pr.OriginalTime.IsZero() {
-			displayTime = pr.OriginalTime
-		}
-	}
-	if pr.Origin != nil {
-		if a := tuicore.FormatOriginAuthorDisplay(pr.Origin, opts.showEmail); a != "" {
-			displayAuthor = review.Author{Name: a}
-		}
-		if pr.Origin.Time != "" {
-			if t, err := time.Parse(time.RFC3339, pr.Origin.Time); err == nil {
-				displayTime = t
-			}
-		}
-	}
-	authorName := displayAuthor.Name
-	if opts.showEmail && displayAuthor.Email != "" {
-		authorName += " <" + displayAuthor.Email + ">"
-	}
-	authorStyle := tuicore.AuthorStyle(displayAuthor.Email, opts.userEmail, styles.Value)
-	lines = append(lines, selectionBar+styles.Label.Render("Author")+authorStyle.Render(
-		authorName+" · "+tuicore.FormatTime(displayTime)))
+	displayAuthor, displayTime := prDisplayAuthor(pr, opts.showEmail)
+	lines = append(lines, selectionBar+styles.Label.Render("Author")+authorRow(displayAuthor, displayTime, opts, styles, anchors))
 	if pr.MergedBy != nil {
-		mergedByName := pr.MergedBy.Name
-		if opts.showEmail && pr.MergedBy.Email != "" {
-			mergedByName += " <" + pr.MergedBy.Email + ">"
-		}
-		mergedByStyle := tuicore.AuthorStyle(pr.MergedBy.Email, opts.userEmail, styles.Value)
-		lines = append(lines, selectionBar+styles.Label.Render("Merged by")+mergedByStyle.Render(
-			mergedByName+" · "+tuicore.FormatTime(pr.MergedAt)))
+		lines = append(lines, selectionBar+styles.Label.Render("Merged by")+authorRow(*pr.MergedBy, pr.MergedAt, opts, styles, anchors))
 	}
 	if pr.ClosedBy != nil {
-		closedByName := pr.ClosedBy.Name
-		if opts.showEmail && pr.ClosedBy.Email != "" {
-			closedByName += " <" + pr.ClosedBy.Email + ">"
-		}
-		closedByStyle := tuicore.AuthorStyle(pr.ClosedBy.Email, opts.userEmail, styles.Value)
-		lines = append(lines, selectionBar+styles.Label.Render("Closed by")+closedByStyle.Render(
-			closedByName+" · "+tuicore.FormatTime(pr.ClosedAt)))
+		lines = append(lines, selectionBar+styles.Label.Render("Closed by")+authorRow(*pr.ClosedBy, pr.ClosedAt, opts, styles, anchors))
 	}
 	if pr.Base != "" {
 		display := shortenBranchRef(pr.Base)
@@ -1272,7 +1259,7 @@ func renderPRCard(pr *review.PullRequest, width int, selected bool, searchQuery 
 			baseText = styles.Value.Render(display)
 		}
 		if pr.BaseTip != "" {
-			baseText += tuicore.Dim.Render(" · #" + pr.BaseTip)
+			baseText += tuicore.Dim.Render(" · ") + anchors.Mark(tuicore.Dim.Render("#"+pr.BaseTip), tipLocation(pr.Base, pr.BaseTip, opts.workspaceURL))
 		}
 		if opts.tipStaleMarker != nil {
 			if marker := opts.tipStaleMarker("base", pr.BaseTip); marker != "" {
@@ -1298,7 +1285,7 @@ func renderPRCard(pr *review.PullRequest, width int, selected bool, searchQuery 
 			headText = styles.Value.Render(display)
 		}
 		if pr.HeadTip != "" {
-			headText += tuicore.Dim.Render(" · #" + pr.HeadTip)
+			headText += tuicore.Dim.Render(" · ") + anchors.Mark(tuicore.Dim.Render("#"+pr.HeadTip), tipLocation(pr.Head, pr.HeadTip, opts.workspaceURL))
 		}
 		if opts.tipStaleMarker != nil {
 			if marker := opts.tipStaleMarker("head", pr.HeadTip); marker != "" {
@@ -1312,15 +1299,27 @@ func renderPRCard(pr *review.PullRequest, width int, selected bool, searchQuery 
 		lines = append(lines, selectionBar+styles.Label.Render("Behind")+tuicore.Dim.Render(
 			fmt.Sprintf("%d commits behind %s", opts.behindCount, baseName)))
 	}
+	for i, ref := range pr.DependsOn {
+		rowLabel := "Depends on"
+		if i > 0 {
+			rowLabel = ""
+		}
+		short := protocol.FormatShortRef(ref, opts.workspaceURL)
+		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+anchors.Mark(tuicore.LinkStyle(short), dependencyLocation(ref, pr.Repository)))
+	}
 	if len(pr.Reviewers) > 0 {
-		lines = append(lines, selectionBar+styles.Label.Render("Reviewers")+styles.Value.Render(strings.Join(pr.Reviewers, ", ")))
+		reviewers := make([]string, len(pr.Reviewers))
+		for i, r := range pr.Reviewers {
+			reviewers[i] = tuicore.MarkFacet(anchors, r, "reviewer", r)
+		}
+		lines = append(lines, selectionBar+styles.Label.Render("Reviewers")+strings.Join(reviewers, styles.Value.Render(", ")))
 	}
 	for i, l := range pr.Labels {
 		rowLabel := "Labels"
 		if i > 0 {
 			rowLabel = ""
 		}
-		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(l))
+		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+tuicore.MarkFacet(anchors, l, "label", l))
 	}
 	if len(pr.Closes) > 0 {
 		refs := make([]string, len(pr.Closes))
@@ -1348,20 +1347,7 @@ func renderPRCard(pr *review.PullRequest, width int, selected bool, searchQuery 
 			lines = append(lines, selectionBar+styles.Label.Render("Status")+tuicore.Dim.Render("Changes requested"))
 		}
 	}
-	if !opts.version {
-		prRef := protocol.ParseRef(pr.ID)
-		if trailerRefs, err := cache.GetTrailerRefsTo(prRef.Repository, prRef.Value); err == nil && len(trailerRefs) > 0 {
-			for i, tr := range trailerRefs {
-				rowLabel := "Referenced by"
-				if i > 0 {
-					rowLabel = ""
-				}
-				subject, _ := protocol.SplitSubjectBody(tr.Message)
-				display := subject + tuicore.Dim.Render("  "+tr.Hash[:12]+"  "+tr.TrailerKey)
-				lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(display))
-			}
-		}
-	}
+	lines = append(lines, tuicore.TrailerRefRows(opts.trailerRefs, styles, selectionBar, anchors)...)
 	lines = append(lines, selectionBar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
 	if opts.showRaw {
 		lines = append(lines, tuicore.RenderCommitMessage(pr.ID, selectionBar, width-3)...)
@@ -1378,8 +1364,87 @@ func renderPRCard(pr *review.PullRequest, width int, selected bool, searchQuery 
 	return lines
 }
 
+// prDisplayAuthor is the author and time the card shows: the original author of an adopted copy, or the author on the source platform, who has no email to link.
+func prDisplayAuthor(pr *review.PullRequest, showEmail bool) (review.Author, time.Time) {
+	author, at := pr.Author, pr.Timestamp
+	if pr.OriginalAuthor != nil {
+		author = *pr.OriginalAuthor
+		if !pr.OriginalTime.IsZero() {
+			at = pr.OriginalTime
+		}
+	}
+	if pr.Origin != nil {
+		if a := tuicore.FormatOriginAuthorDisplay(pr.Origin, showEmail); a != "" {
+			author = review.Author{Name: a}
+		}
+		if t, err := time.Parse(time.RFC3339, pr.Origin.Time); err == nil {
+			at = t
+		}
+	}
+	return author, at
+}
+
+// authorRow renders a name and time in the author's style; the name opens the author search when an email is known.
+func authorRow(a review.Author, at time.Time, opts prCardOptions, styles tuicore.RowStyles, anchors *tuicore.AnchorCollector) string {
+	name := a.Name
+	if opts.showEmail && a.Email != "" {
+		name += " <" + a.Email + ">"
+	}
+	style := tuicore.AuthorStyle(a.Email, opts.userEmail, styles.Value)
+	if a.Email == "" {
+		return style.Render(name + " · " + tuicore.FormatTime(at))
+	}
+	return anchors.Mark(style.Render(name), tuicore.LocFacet("author", a.Email)) + style.Render(" · "+tuicore.FormatTime(at))
+}
+
+// authorLinks lists the author rows of a pull request that carry an email, in the order the card marks them.
+func authorLinks(pr *review.PullRequest) []tuicore.CardLink {
+	var links []tuicore.CardLink
+	author, _ := prDisplayAuthor(pr, false)
+	for _, a := range []*review.Author{&author, pr.MergedBy, pr.ClosedBy} {
+		if a != nil && a.Email != "" {
+			links = append(links, tuicore.CardLink{Label: a.Name, Location: tuicore.LocFacet("author", a.Email)})
+		}
+	}
+	return links
+}
+
+// tipLocation is the target of a recorded tip: the commit, in the repository of its branch ref.
+func tipLocation(branchRef, tip, workspaceURL string) tuicore.Location {
+	repoURL := protocol.ParseRef(branchRef).Repository
+	if repoURL == "" {
+		repoURL = workspaceURL
+	}
+	return tuicore.LocRef(protocol.CreateRef(protocol.RefTypeCommit, tip, repoURL, ""))
+}
+
+// dependencyLocation is the target of a depends-on ref, which is relative to the repository of the pull request.
+func dependencyLocation(ref, repoURL string) tuicore.Location {
+	return tuicore.LocRef(protocol.NormalizeRefWithContext(ref, repoURL, ""))
+}
+
+// branchText renders a branch ref dim, as a link to its repository view when the ref resolves.
+func branchText(ref, workspaceURL string, anchors *tuicore.AnchorCollector) string {
+	text := tuicore.Dim.Render(shortenBranchRef(ref))
+	if loc := branchRefLocation(ref, workspaceURL); loc != nil {
+		return anchors.Mark(text, *loc)
+	}
+	return text
+}
+
+// branchPairLinks lists the base and head of a pull request as links, in the order a row marks them.
+func branchPairLinks(base, head, workspaceURL string) []tuicore.CardLink {
+	var links []tuicore.CardLink
+	for _, ref := range []string{base, head} {
+		if loc := branchRefLocation(ref, workspaceURL); loc != nil {
+			links = append(links, tuicore.CardLink{Label: shortenBranchRef(ref), Location: *loc})
+		}
+	}
+	return links
+}
+
 // renderStackRow renders one stack entry as a row of state icon, position, subject and branches.
-func (v *prDetailView) renderStackRow(entry review.StackEntry, _ int, selected bool, searchQuery string) []string {
+func (v *prDetailView) renderStackRow(entry review.StackEntry, _ int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
 	selectionBar := " "
 	if selected {
 		selectionBar = tuicore.Title.Render("▏")
@@ -1407,13 +1472,13 @@ func (v *prDetailView) renderStackRow(entry review.StackEntry, _ int, selected b
 	if searchQuery != "" {
 		subject = tuicore.HighlightInText(subject, searchQuery)
 	}
-	branches := fmt.Sprintf("%s ← %s", shortenBranchRef(pr.Base), shortenBranchRef(pr.Head))
+	branches := branchText(pr.Base, v.workspaceURL, anchors) + tuicore.Dim.Render(" ← ") + branchText(pr.Head, v.workspaceURL, anchors)
 	line := fmt.Sprintf("%s%s%s  %s  %s  %s",
 		currentMarker,
 		stateIcon,
 		tuicore.Dim.Render(position),
 		subject,
-		tuicore.Dim.Render(branches),
+		branches,
 		tuicore.Dim.Render("["+string(pr.State)+"]"),
 	)
 	return []string{selectionBar + line}
@@ -1440,7 +1505,7 @@ func (v *prDetailView) renderCommitRow(c git.Commit, _ int, selected bool, searc
 // renderReviewRow renders one feedback card, its review-age note and, for inline feedback, its code context.
 func (v *prDetailView) renderReviewRow(r review.Feedback, width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector, vr *review.VersionAwareReview) []string {
 	isWorkspace := r.Repository == v.workspaceURL
-	card := feedbackToCard(r, v.userEmail, isWorkspace, v.showEmail)
+	card := feedbackToCard(r, v.userEmail, isWorkspace, v.showEmail, feedbackCodeLocation(r, v.pr, v.workspaceURL))
 	opts := tuicore.CardOptions{
 		MaxLines:      -1,
 		ShowStats:     true,
@@ -1697,6 +1762,7 @@ type prDetailLoadedMsg struct {
 	comments       []social.Post
 	stack          []review.StackEntry
 	observation    *review.PRObservation
+	trailerRefs    []cache.TrailerRef
 }
 
 type prDetailDiffMsg struct {

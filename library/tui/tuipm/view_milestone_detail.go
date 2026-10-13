@@ -256,9 +256,12 @@ func (v *milestoneDetailView) buildSections() {
 			},
 			SearchText: func() string { return ms.Title + " " + ms.Body },
 			Links: func() []tuicore.CardLink {
-				var links []tuicore.CardLink
+				links := tuicore.MentionLinks(ms.Title)
 				if ms.Origin != nil && ms.Origin.URL != "" {
 					links = append(links, tuicore.CardLink{Label: "Source", Location: tuicore.Location{Path: ms.Origin.URL}})
+				}
+				for _, l := range ms.Labels {
+					links = append(links, tuicore.CardLink{Label: l, Location: tuicore.LocFacet("label", l)})
 				}
 				links = append(links, tuicore.ExtractContentLinks(ms.Body, ms.Repository, "")...)
 				return links
@@ -415,11 +418,8 @@ func renderMilestoneCard(ms *pm.Milestone, width int, selected bool, searchQuery
 	if opts.version {
 		lines = append(lines, tuicore.RenderVersionBanner(selectionBar, opts.versionAuthor, opts.versionTime, ms.IsRetracted)...)
 	}
-	title := ms.Title
-	if searchQuery != "" {
-		title = tuicore.HighlightInText(title, searchQuery)
-	}
-	lines = append(lines, selectionBar+tuicore.Bold.Render(title))
+	title := tuicore.MarkMentions(ms.Title, tuicore.Bold, searchQuery, anchors)
+	lines = append(lines, selectionBar+title)
 	lines = append(lines, selectionBar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
 	styles := tuicore.RowStylesWithWidths(14, 0)
 	stateStr := string(ms.State)
@@ -443,7 +443,7 @@ func renderMilestoneCard(ms *pm.Milestone, width int, selected bool, searchQuery
 		if i > 0 {
 			rowLabel = ""
 		}
-		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(l))
+		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+tuicore.MarkFacet(anchors, l, "label", l))
 	}
 	if !opts.version {
 		progressBar := tuicore.RenderProgressBar(ms.ClosedCount, ms.IssueCount, 16)
@@ -554,4 +554,9 @@ func (v *milestoneDetailView) Bindings() []tuicore.Binding {
 		{Key: "right", Label: "next", Contexts: []tuicore.Context{tuicore.PMMilestoneDetail}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.PMMilestoneDetail}, Handler: push},
 	}
+}
+
+// SectionList returns the section list the view renders, for the anchor order test.
+func (v *milestoneDetailView) SectionList() *tuicore.SectionList {
+	return v.sectionList
 }

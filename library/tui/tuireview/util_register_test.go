@@ -198,7 +198,7 @@ func TestFeedbackToCard_approved(t *testing.T) {
 		Author:      review.Author{Name: "Reviewer", Email: "rev@test.com"},
 		Timestamp:   time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC),
 	}
-	card := feedbackToCard(fb, "", true, false)
+	card := feedbackToCard(fb, "", true, false, nil)
 	if card.Header.Icon != "✓" {
 		t.Errorf("Icon = %q, want ✓ for approved", card.Header.Icon)
 	}
@@ -213,7 +213,7 @@ func TestFeedbackToCard_changesRequested(t *testing.T) {
 		ReviewState: review.ReviewStateChangesRequested,
 		Author:      review.Author{Name: "Reviewer"},
 	}
-	card := feedbackToCard(fb, "", true, false)
+	card := feedbackToCard(fb, "", true, false, nil)
 	if card.Header.Icon != "✗" {
 		t.Errorf("Icon = %q, want ✗", card.Header.Icon)
 	}
@@ -228,7 +228,7 @@ func TestFeedbackToCard_suggestion(t *testing.T) {
 		ReviewState: review.ReviewStateApproved,
 		Author:      review.Author{Name: "Dev"},
 	}
-	card := feedbackToCard(fb, "", true, false)
+	card := feedbackToCard(fb, "", true, false, nil)
 	if card.Header.Badge != "approved [suggestion]" {
 		t.Errorf("Badge = %q, want 'approved [suggestion]'", card.Header.Badge)
 	}
@@ -237,7 +237,7 @@ func TestFeedbackToCard_suggestion(t *testing.T) {
 		Suggestion: true,
 		Author:     review.Author{Name: "Dev"},
 	}
-	card2 := feedbackToCard(fb2, "", true, false)
+	card2 := feedbackToCard(fb2, "", true, false, nil)
 	if card2.Header.Badge != "[suggestion]" {
 		t.Errorf("Badge = %q, want '[suggestion]'", card2.Header.Badge)
 	}
@@ -250,7 +250,7 @@ func TestFeedbackToCard_withFileLocation(t *testing.T) {
 		NewLine: 42,
 		Author:  review.Author{Name: "Rev"},
 	}
-	card := feedbackToCard(fb, "", true, false)
+	card := feedbackToCard(fb, "", true, false, nil)
 	found := false
 	for _, p := range card.Header.Subtitle {
 		if p.Text == "main.go:42" {
@@ -270,7 +270,7 @@ func TestFeedbackToCard_withFileRange(t *testing.T) {
 		NewLineEnd: 20,
 		Author:     review.Author{Name: "Rev"},
 	}
-	card := feedbackToCard(fb, "", true, false)
+	card := feedbackToCard(fb, "", true, false, nil)
 	found := false
 	for _, p := range card.Header.Subtitle {
 		if p.Text == "main.go:10-20" {
@@ -286,12 +286,12 @@ func TestFeedbackToCard_isMe(t *testing.T) {
 	fb := review.Feedback{
 		Author: review.Author{Name: "Me", Email: "me@test.com"},
 	}
-	card := feedbackToCard(fb, "me@test.com", true, false)
+	card := feedbackToCard(fb, "me@test.com", true, false, nil)
 	if !card.Header.IsMe {
 		t.Error("IsMe should be true when emails match")
 	}
 
-	card2 := feedbackToCard(fb, "other@test.com", true, false)
+	card2 := feedbackToCard(fb, "other@test.com", true, false, nil)
 	if card2.Header.IsMe {
 		t.Error("IsMe should be false when emails differ")
 	}
@@ -435,5 +435,25 @@ func TestPrCardRenderer_invalidType(t *testing.T) {
 	card := prCardRenderer("not a PR", nil)
 	if card.Header.Title != "Invalid pull request" {
 		t.Errorf("Title = %q, want 'Invalid pull request'", card.Header.Title)
+	}
+}
+
+// TestFeedbackCodeLocation: a new line opens the commit the feedback names in the workspace, else the head branch in its repository; an old line opens the base tip, and feedback without a file has no code link.
+func TestFeedbackCodeLocation(t *testing.T) {
+	pr := &review.PullRequest{Base: "#branch:main", BaseTip: "b45e12345678", Head: "https://forge.example/fork#branch:dark-mode"}
+	reviewed := feedbackCodeLocation(review.Feedback{File: "src/a.go", NewLine: 4, NewLineEnd: 6, Commit: "c0ffee123456"}, pr, "https://forge.example/r")
+	if reviewed == nil || reviewed.Param("url") != "" || reviewed.Param("branch") != "c0ffee123456" || reviewed.Param("path") != "src/a.go" || reviewed.Param("line") != "4" || reviewed.Param("lineEnd") != "6" {
+		t.Errorf("new line with a commit = %+v, want the workspace at that commit, src/a.go lines 4-6", reviewed)
+	}
+	head := feedbackCodeLocation(review.Feedback{File: "src/a.go", NewLine: 4}, pr, "https://forge.example/r")
+	if head == nil || head.Param("url") != "https://forge.example/fork" || head.Param("branch") != "dark-mode" || head.Param("line") != "4" {
+		t.Errorf("new line without a commit or tip = %+v, want the head branch in its repository", head)
+	}
+	base := feedbackCodeLocation(review.Feedback{File: "src/a.go", OldLine: 9}, pr, "https://forge.example/r")
+	if base == nil || base.Param("url") != "" || base.Param("branch") != "b45e12345678" || base.Param("line") != "9" {
+		t.Errorf("old line = %+v, want the workspace at the base tip, line 9", base)
+	}
+	if loc := feedbackCodeLocation(review.Feedback{Content: "LGTM"}, pr, ""); loc != nil {
+		t.Errorf("feedback without a file = %+v, want no code link", loc)
 	}
 }

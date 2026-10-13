@@ -11,6 +11,12 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
+// labelStat is the stat of one label, linked to the label search.
+func labelStat(label string) tuicore.CardStat {
+	loc := tuicore.LocFacet("label", label)
+	return tuicore.CardStat{Text: label, Link: &loc}
+}
+
 // hashFromRef extracts the commit hash from an item's ref-style ID.
 func hashFromRef(id string) string {
 	parsed := protocol.ParseRef(id)
@@ -44,28 +50,21 @@ func issueToCardWithOptions(issue pm.Issue, opts issueToCardOptions) tuicore.Car
 	isAssigned := false
 	var stats []tuicore.CardStat
 	for _, a := range issue.Assignees {
+		label := a
 		if opts.UserEmail != "" && strings.EqualFold(a, opts.UserEmail) {
 			isAssigned = true
-			stats = append(stats, tuicore.CardStat{Text: "☛  me"})
-		} else {
-			label := a
-			if opts.ContributorNames != nil {
-				if name, ok := opts.ContributorNames[a]; ok {
-					label = name
-				}
-			}
-			stats = append(stats, tuicore.CardStat{Text: "☛  " + label})
+			label = "me"
+		} else if name, ok := opts.ContributorNames[a]; ok {
+			label = name
 		}
+		loc := tuicore.LocFacet("assignee", a)
+		stats = append(stats, tuicore.CardStat{Text: "☛  " + label, Link: &loc})
 	}
 	if issue.Due != nil {
 		stats = append(stats, tuicore.CardStat{Text: "due: " + issue.Due.Format("Jan 2")})
 	}
 	for _, l := range issue.Labels {
-		if l.Scope != "" {
-			stats = append(stats, tuicore.CardStat{Text: l.Scope + "/" + l.Value})
-		} else {
-			stats = append(stats, tuicore.CardStat{Text: l.Value})
-		}
+		stats = append(stats, labelStat(issueLabelToString(l)))
 	}
 	if issue.Comments > 0 {
 		loc := tuicore.LocPMIssueDetail(issue.ID)
@@ -100,7 +99,8 @@ func issueToCardWithOptions(issue pm.Issue, opts issueToCardOptions) tuicore.Car
 		if issue.OriginalAuthor != nil && issue.OriginalAuthor.Name != "" {
 			adopted += " · " + issue.OriginalAuthor.Name
 		}
-		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: adopted})
+		original := tuicore.LocPMIssueDetail(issue.Adopts)
+		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: adopted, Link: &original})
 	}
 	if ref := tuicore.BuildRef(issue.ID, issue.Repository, issue.Branch, false); ref != "" {
 		loc := tuicore.LocRepository(issue.Repository, issue.Branch)
@@ -203,7 +203,7 @@ func milestoneToCardWithOptions(milestone pm.Milestone, opts milestoneToCardOpti
 		stats = append(stats, tuicore.CardStat{Text: "due: " + milestone.Due.Format("2006-01-02")})
 	}
 	for _, l := range milestone.Labels {
-		stats = append(stats, tuicore.CardStat{Text: l})
+		stats = append(stats, labelStat(l))
 	}
 	if milestone.IssueCount > 0 {
 		stats = append(stats, tuicore.CardStat{Text: fmt.Sprintf("%d/%d issues", milestone.ClosedCount, milestone.IssueCount)})
@@ -339,7 +339,7 @@ func sprintToCardWithOptions(sprint pm.Sprint, opts sprintToCardOptions) tuicore
 	dateRange := fmt.Sprintf("%s - %s", sprint.Start.Format("Jan 2, 2006"), sprint.End.Format("Jan 2, 2006"))
 	stats = append(stats, tuicore.CardStat{Text: dateRange})
 	for _, l := range sprint.Labels {
-		stats = append(stats, tuicore.CardStat{Text: l})
+		stats = append(stats, labelStat(l))
 	}
 	if sprint.IssueCount > 0 {
 		stats = append(stats, tuicore.CardStat{Text: fmt.Sprintf("%d/%d issues", sprint.ClosedCount, sprint.IssueCount)})

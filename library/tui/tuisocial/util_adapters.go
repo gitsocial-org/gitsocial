@@ -132,9 +132,9 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 		ContentLinks: tuicore.ExtractContentLinks(content, repoForLinks, ""),
 	}
 
-	// Labels render as metadata stats below the content, mirroring PM cards.
 	for _, l := range post.Labels {
-		card.Stats = append(card.Stats, tuicore.CardStat{Text: l})
+		loc := tuicore.LocFacet("label", l)
+		card.Stats = append(card.Stats, tuicore.CardStat{Text: l, Link: &loc})
 	}
 
 	// Handle post type-specific icons and nested content

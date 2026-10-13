@@ -85,10 +85,12 @@ func releaseNotificationCardRenderer(data any, _ tuicore.ItemResolver) tuicore.C
 	var subtitleParts []tuicore.HeaderPart
 	subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: tuicore.FormatTime(rn.Timestamp)})
 	if rn.RepoURL != "" {
-		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: protocol.GetFullDisplayName(rn.RepoURL)})
+		repo := tuicore.LocRepository(rn.RepoURL, "")
+		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: protocol.GetFullDisplayName(rn.RepoURL), Link: &repo})
 	}
 	if rn.Tag != "" {
-		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: rn.Tag})
+		loc := tuicore.LocTag(rn.RepoURL, rn.Tag)
+		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: rn.Tag, Link: &loc})
 	}
 	badge := "new release"
 	if rn.Prerelease {
@@ -142,7 +144,8 @@ func releaseToCardWithOptions(rel release.Release, opts releaseToCardOptions) tu
 		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: tuicore.FormatTime(rel.Timestamp)})
 	}
 	if rel.Tag != "" {
-		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: rel.Tag})
+		loc := tuicore.LocTag(rel.Repository, rel.Tag)
+		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: rel.Tag, Link: &loc})
 	}
 	if rel.Comments > 0 {
 		loc := tuicore.LocReleaseDetail(rel.ID)
@@ -196,9 +199,9 @@ func releaseToCardWithOptions(rel release.Release, opts releaseToCardOptions) tu
 		Content:      tuicore.CardContent{Text: rel.Body},
 		ContentLinks: tuicore.ExtractContentLinks(rel.Body, rel.Repository, ""),
 	}
-	// Labels render as metadata stats below the content, mirroring PM cards.
 	for _, l := range rel.Labels {
-		card.Stats = append(card.Stats, tuicore.CardStat{Text: l})
+		loc := tuicore.LocFacet("label", l)
+		card.Stats = append(card.Stats, tuicore.CardStat{Text: l, Link: &loc})
 	}
 	relEmail := rel.Author.Email
 	if rel.Origin != nil && rel.Origin.AuthorEmail != "" {

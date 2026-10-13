@@ -279,8 +279,13 @@ func (v *memoDetailView) buildSections() {
 				return v.renderMemoCard(m, width, selected, searchQuery, anchors)
 			},
 			SearchText: func() string { return m.Subject + " " + m.Body },
+			// Links lists the anchors of renderMemoCard in the order they are marked.
 			Links: func() []tuicore.CardLink {
-				return tuicore.ExtractContentLinks(m.Body, m.Repository, "")
+				links := tuicore.MentionLinks(m.Subject)
+				for _, l := range m.Labels {
+					links = append(links, tuicore.CardLink{Label: l, Location: tuicore.LocFacet("label", l)})
+				}
+				return append(links, tuicore.ExtractContentLinks(m.Body, m.Repository, "")...)
 			},
 		}},
 	})
@@ -330,14 +335,15 @@ func (v *memoDetailView) renderMemoCard(m *memo.Memo, width int, selected bool, 
 	if selected {
 		bar = tuicore.Title.Render("▏")
 	}
-	title := m.Subject
-	if searchQuery != "" {
-		title = tuicore.HighlightInText(title, searchQuery)
-	}
-	lines = append(lines, bar+tuicore.Bold.Render(title))
+	title := tuicore.MarkMentions(m.Subject, tuicore.Bold, searchQuery, anchors)
+	lines = append(lines, bar+title)
 	lines = append(lines, bar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
 	if len(m.Labels) > 0 {
-		lines = append(lines, bar+tuicore.Dim.Render(strings.Join(m.Labels, " · ")))
+		labels := make([]string, len(m.Labels))
+		for i, l := range m.Labels {
+			labels[i] = tuicore.MarkFacet(anchors, l, "label", l)
+		}
+		lines = append(lines, bar+strings.Join(labels, tuicore.Dim.Render(" · ")))
 	}
 	if m.IsEdited {
 		lines = append(lines, bar+tuicore.Dim.Render("(edited)"))
@@ -460,4 +466,9 @@ type memoPromotedMsg struct {
 	Memo memo.Memo
 	Tier memo.Tier
 	Err  error
+}
+
+// SectionList returns the section list the view renders, for the anchor order test.
+func (v *memoDetailView) SectionList() *tuicore.SectionList {
+	return v.sectionList
 }

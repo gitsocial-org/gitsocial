@@ -31,6 +31,7 @@ type issueDetailView struct {
 	parent           *pm.Issue
 	children         []pm.Issue
 	comments         []social.Post
+	trailerRefs      []cache.TrailerRef
 	loaded           bool
 	userEmail        string
 	showEmail        bool
@@ -131,7 +132,8 @@ func (v *issueDetailView) loadIssue() tea.Cmd {
 			children = res.Data
 		}
 		contributorNames := buildContributorNameMap(workdir)
-		return issueDetailLoadedMsg{Issue: &issue, Comments: comments, Milestone: milestone, Sprint: sprint, Parent: parent, Children: children, ContributorNames: contributorNames}
+		trailerRefs, _ := cache.GetTrailerRefsTo(iref.Repository, iref.Value) // no rows on a read error, as before the links
+		return issueDetailLoadedMsg{Issue: &issue, Comments: comments, Milestone: milestone, Sprint: sprint, Parent: parent, Children: children, ContributorNames: contributorNames, TrailerRefs: trailerRefs}
 	}
 }
 
@@ -144,6 +146,7 @@ type issueDetailLoadedMsg struct {
 	Children         []pm.Issue
 	Comments         []social.Post
 	ContributorNames map[string]string
+	TrailerRefs      []cache.TrailerRef
 	Err              error
 }
 
@@ -192,6 +195,7 @@ func (v *issueDetailView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 			}
 			v.comments = msg.Comments
 			v.contributorNames = msg.ContributorNames
+			v.trailerRefs = msg.TrailerRefs
 			v.buildSections()
 			if v.focusID != "" {
 				for i, c := range v.comments {
@@ -323,10 +327,11 @@ func (v *issueDetailView) buildSections() {
 	sprint := v.sprint
 	parent := v.parent
 	contributorNames := v.contributorNames
+	trailerRefs := v.trailerRefs
 	sections = append(sections, tuicore.Section{
 		Items: []tuicore.SectionItem{{
 			Render: func(width int, selected bool, searchQuery string, anchors *tuicore.AnchorCollector) []string {
-				lines := renderIssueCard(issue, milestone, sprint, parent, contributorNames, width, selected, searchQuery, anchors, issueCardOptions{showRaw: v.showRaw, showEmail: v.showEmail})
+				lines := renderIssueCard(issue, milestone, sprint, parent, contributorNames, width, selected, searchQuery, anchors, issueCardOptions{showRaw: v.showRaw, showEmail: v.showEmail, trailerRefs: trailerRefs})
 				if issue.HasProposedEdits {
 					banner := "✎  Proposed edits from another repo (press h to review)"
 					if issue.Repository != v.workspaceURL {
@@ -342,12 +347,15 @@ func (v *issueDetailView) buildSections() {
 			SearchText: func() string { return issue.Subject + " " + issue.Body },
 			// Links lists the anchors of renderIssueCard in the order they are marked.
 			Links: func() []tuicore.CardLink {
-				var links []tuicore.CardLink
+				links := tuicore.MentionLinks(issue.Subject)
 				if issue.Origin != nil && issue.Origin.URL != "" {
 					links = append(links, tuicore.CardLink{Label: "Source", Location: tuicore.Location{Path: issue.Origin.URL}})
 				}
 				if issue.Adopts != "" {
 					links = append(links, tuicore.CardLink{Label: "Adopted from", Location: tuicore.LocPMIssueDetail(issue.Adopts)})
+				}
+				for _, a := range issue.Assignees {
+					links = append(links, tuicore.CardLink{Label: a, Location: tuicore.LocFacet("assignee", a)})
 				}
 				if parent != nil {
 					links = append(links, tuicore.CardLink{Label: "parent", Location: tuicore.LocPMIssueDetail(parent.ID)})
@@ -370,6 +378,11 @@ func (v *issueDetailView) buildSections() {
 					refID := protocol.CreateRef(protocol.RefTypeCommit, ref.Hash, ref.RepoURL, ref.Branch)
 					links = append(links, tuicore.CardLink{Label: "related", Location: tuicore.LocPMIssueDetail(refID)})
 				}
+				for _, l := range issue.Labels {
+					label := issueLabelToString(l)
+					links = append(links, tuicore.CardLink{Label: label, Location: tuicore.LocFacet("label", label)})
+				}
+				links = append(links, tuicore.TrailerRefLinks(trailerRefs)...)
 				links = append(links, tuicore.ExtractContentLinks(issue.Body, issue.Repository, "")...)
 				return links
 			},
@@ -576,9 +589,10 @@ func (v *issueDetailView) Render(state *tuicore.State) string {
 type issueCardOptions struct {
 	showRaw       bool
 	showEmail     bool
-	version       bool      // render as a historical version (banner + version rules)
-	versionAuthor string    // version banner author display
-	versionTime   time.Time // version banner timestamp
+	trailerRefs   []cache.TrailerRef // the commits that cite the issue; none in version mode
+	version       bool               // render as a historical version (banner + version rules)
+	versionAuthor string             // version banner author display
+	versionTime   time.Time          // version banner timestamp
 }
 
 // renderIssueCard renders the issue hero card shared by the detail view and the
@@ -593,11 +607,8 @@ func renderIssueCard(issue *pm.Issue, milestone *pm.Milestone, sprint *pm.Sprint
 	if opts.version {
 		lines = append(lines, tuicore.RenderVersionBanner(selectionBar, opts.versionAuthor, opts.versionTime, issue.IsRetracted)...)
 	}
-	title := issue.Subject
-	if searchQuery != "" {
-		title = tuicore.HighlightInText(title, searchQuery)
-	}
-	lines = append(lines, selectionBar+tuicore.Bold.Render(title))
+	title := tuicore.MarkMentions(issue.Subject, tuicore.Bold, searchQuery, anchors)
+	lines = append(lines, selectionBar+title)
 	lines = append(lines, selectionBar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
 	styles := tuicore.RowStylesWithWidths(14, 0)
 	stateStr := string(issue.State)
@@ -618,7 +629,7 @@ func renderIssueCard(issue *pm.Issue, milestone *pm.Milestone, sprint *pm.Sprint
 		lines = append(lines, selectionBar+styles.Label.Render("Adopted from")+anchors.MarkLink(adopted.Repository, protocol.CommitURL(adopted.Repository, adopted.Value), tuicore.LocPMIssueDetail(issue.Adopts)))
 	}
 	if len(issue.Assignees) > 0 {
-		lines = append(lines, selectionBar+styles.Label.Render("Assignees")+styles.Value.Render(formatAssignees(issue.Assignees, contributorNames)))
+		lines = append(lines, selectionBar+styles.Label.Render("Assignees")+formatAssignees(issue.Assignees, contributorNames, anchors))
 	}
 	if issue.Due != nil {
 		lines = append(lines, selectionBar+styles.Label.Render("Due")+styles.Value.Render(issue.Due.Format("Jan 2, 2006")))
@@ -656,33 +667,15 @@ func renderIssueCard(issue *pm.Issue, milestone *pm.Milestone, sprint *pm.Sprint
 	lines = append(lines, renderLinkRows("Blocks", issue.Blocks, selectionBar, styles, anchors)...)
 	lines = append(lines, renderLinkRows("Blocked by", issue.BlockedBy, selectionBar, styles, anchors)...)
 	lines = append(lines, renderLinkRows("Related", issue.Related, selectionBar, styles, anchors)...)
-	if len(issue.Labels) > 0 {
-		for i, l := range issue.Labels {
-			label := l.Value
-			if l.Scope != "" {
-				label = l.Scope + "/" + l.Value
-			}
-			rowLabel := "Labels"
-			if i > 0 {
-				rowLabel = ""
-			}
-			lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(label))
+	for i, l := range issue.Labels {
+		label := issueLabelToString(l)
+		rowLabel := "Labels"
+		if i > 0 {
+			rowLabel = ""
 		}
+		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+tuicore.MarkFacet(anchors, label, "label", label))
 	}
-	if !opts.version {
-		ref := protocol.ParseRef(issue.ID)
-		if trailerRefs, err := cache.GetTrailerRefsTo(ref.Repository, ref.Value); err == nil && len(trailerRefs) > 0 {
-			for i, tr := range trailerRefs {
-				rowLabel := "Referenced by"
-				if i > 0 {
-					rowLabel = ""
-				}
-				subject, _ := protocol.SplitSubjectBody(tr.Message)
-				display := subject + tuicore.Dim.Render("  "+tr.Hash[:12]+"  "+tr.TrailerKey)
-				lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(display))
-			}
-		}
-	}
+	lines = append(lines, tuicore.TrailerRefRows(opts.trailerRefs, styles, selectionBar, anchors)...)
 	lines = append(lines, selectionBar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
 	if opts.showRaw {
 		lines = append(lines, tuicore.RenderCommitMessage(issue.ID, selectionBar, width-3)...)
@@ -839,17 +832,15 @@ func buildContributorNameMap(workdir string) map[string]string {
 	return m
 }
 
-// formatAssignees formats assignee emails with names when available.
-func formatAssignees(assignees []string, nameMap map[string]string) string {
+// formatAssignees renders each assignee as a link to the assignee search, by name when the cache knows one, with the email beside it.
+func formatAssignees(assignees []string, nameMap map[string]string, anchors *tuicore.AnchorCollector) string {
 	parts := make([]string, len(assignees))
 	for i, email := range assignees {
-		if nameMap != nil {
-			if name, ok := nameMap[email]; ok {
-				parts[i] = name + "  " + tuicore.Dim.Render(email)
-				continue
-			}
+		if name, ok := nameMap[email]; ok {
+			parts[i] = tuicore.MarkFacet(anchors, name, "assignee", email) + "  " + tuicore.Dim.Render(email)
+			continue
 		}
-		parts[i] = email
+		parts[i] = tuicore.MarkFacet(anchors, email, "assignee", email)
 	}
 	return strings.Join(parts, ", ")
 }

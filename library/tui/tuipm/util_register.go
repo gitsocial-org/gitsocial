@@ -172,7 +172,8 @@ func pmNotificationCardRenderer(data any, _ tuicore.ItemResolver) tuicore.Card {
 	var subtitleParts []tuicore.HeaderPart
 	subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: tuicore.FormatTime(pn.Timestamp)})
 	if pn.RepoURL != "" {
-		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: protocol.GetFullDisplayName(pn.RepoURL)})
+		repo := tuicore.LocRepository(pn.RepoURL, "")
+		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: protocol.GetFullDisplayName(pn.RepoURL), Link: &repo})
 	}
 	if pn.State != "" {
 		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: pn.State})

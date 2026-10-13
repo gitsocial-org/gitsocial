@@ -190,7 +190,8 @@ func memoToCard(d memoItemData) tuicore.Card {
 		subtitle = append(subtitle, tuicore.HeaderPart{Text: "[" + string(m.Tier) + "]"})
 	}
 	for _, l := range m.Labels {
-		subtitle = append(subtitle, tuicore.HeaderPart{Text: l})
+		loc := tuicore.LocFacet("label", l)
+		subtitle = append(subtitle, tuicore.HeaderPart{Text: l, Link: &loc})
 	}
 	isWorkspace := d.WorkspaceURL != "" && m.Repository == d.WorkspaceURL
 	if ref := tuicore.BuildRef(m.ID, m.Repository, m.Branch, isWorkspace); ref != "" {

@@ -158,7 +158,8 @@ func reviewNotificationCardRenderer(data any, resolver tuicore.ItemResolver) tui
 	var subtitleParts []tuicore.HeaderPart
 	subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: tuicore.FormatTime(rn.Timestamp)})
 	if rn.RepoURL != "" {
-		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: protocol.GetFullDisplayName(rn.RepoURL)})
+		repo := tuicore.LocRepository(rn.RepoURL, "")
+		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: protocol.GetFullDisplayName(rn.RepoURL), Link: &repo})
 	}
 	return tuicore.Card{
 		Header: tuicore.CardHeader{
@@ -247,20 +248,16 @@ func prToCardWithOptions(pr review.PullRequest, opts prToCardOptions) tuicore.Ca
 	subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: stateStr})
 
 	if len(pr.DependsOn) > 0 {
-		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: "stacked"})
+		stacked := dependencyLocation(pr.DependsOn[0], pr.Repository)
+		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: "stacked", Link: &stacked})
 	}
 
 	baseShort := shortenBranchRef(pr.Base)
 	headShort := shortenBranchRef(pr.Head)
 	if baseShort != "" && headShort != "" {
-		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: baseShort + " ←"})
-		headPart := tuicore.HeaderPart{Text: headShort}
-		parsed := protocol.ParseRef(pr.Head)
-		if parsed.Repository != "" {
-			loc := tuicore.LocRepository(parsed.Repository, parsed.Value)
-			headPart.Link = &loc
-		}
-		subtitleParts = append(subtitleParts, headPart)
+		subtitleParts = append(subtitleParts,
+			tuicore.HeaderPart{Text: baseShort + " ←", Link: branchRefLocation(pr.Base, opts.WorkspaceURL)},
+			tuicore.HeaderPart{Text: headShort, Link: branchRefLocation(pr.Head, opts.WorkspaceURL)})
 	}
 	if opts.Workdir != "" && review.IsHeadUnpushed(opts.Workdir, pr) {
 		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: "⚠ unpushed head"})
@@ -317,9 +314,9 @@ func prToCardWithOptions(pr review.PullRequest, opts prToCardOptions) tuicore.Ca
 		Content:      tuicore.CardContent{Text: pr.Body},
 		ContentLinks: tuicore.ExtractContentLinks(pr.Body, pr.Repository, ""),
 	}
-	// Labels render as metadata stats below the content, mirroring PM cards.
 	for _, l := range pr.Labels {
-		card.Stats = append(card.Stats, tuicore.CardStat{Text: l})
+		loc := tuicore.LocFacet("label", l)
+		card.Stats = append(card.Stats, tuicore.CardStat{Text: l, Link: &loc})
 	}
 	prEmail := cardAuthor.Email
 	if pr.Origin != nil && pr.Origin.AuthorEmail != "" {
@@ -337,8 +334,36 @@ func prToCardWithOptions(pr review.PullRequest, opts prToCardOptions) tuicore.Ca
 	return card
 }
 
-// feedbackToCard converts a review.Feedback to a Card for display.
-func feedbackToCard(fb review.Feedback, userEmail string, isWorkspace bool, showEmail bool) tuicore.Card {
+// feedbackCodeLocation is the Code view at the lines a feedback anchors to: a new line at the commit the feedback names, else the head tip, and an old line at the base tip. A commit opens in the workspace, whose object database holds the fetched head; a branch opens in its repository.
+func feedbackCodeLocation(fb review.Feedback, pr *review.PullRequest, workspaceURL string) *tuicore.Location {
+	if pr == nil || fb.File == "" {
+		return nil
+	}
+	ref, at, line, end := pr.Head, fb.Commit, fb.NewLine, fb.NewLineEnd
+	if at == "" {
+		at = pr.HeadTip
+	}
+	if line <= 0 {
+		ref, at, line, end = pr.Base, pr.BaseTip, fb.OldLine, fb.OldLineEnd
+	}
+	parsed := protocol.ParseRef(ref)
+	if line <= 0 || parsed.Type != protocol.RefTypeBranch || parsed.Value == "" {
+		return nil
+	}
+	if at != "" {
+		loc := tuicore.LocRepoCode("", at, fb.File, line, end)
+		return &loc
+	}
+	repoURL := parsed.Repository
+	if repoURL == "" {
+		repoURL = workspaceURL
+	}
+	loc := tuicore.LocRepoCode(repoURL, parsed.Value, fb.File, line, end)
+	return &loc
+}
+
+// feedbackToCard converts a review.Feedback to a Card for display; codeLoc, when set, links its file and lines.
+func feedbackToCard(fb review.Feedback, userEmail string, isWorkspace bool, showEmail bool, codeLoc *tuicore.Location) tuicore.Card {
 	icon := "↩"
 	badge := ""
 	switch fb.ReviewState {
@@ -374,7 +399,7 @@ func feedbackToCard(fb review.Feedback, userEmail string, isWorkspace bool, show
 				location += fmt.Sprintf("-%d", fb.OldLineEnd)
 			}
 		}
-		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: location})
+		subtitleParts = append(subtitleParts, tuicore.HeaderPart{Text: location, Link: codeLoc})
 	}
 	if ref := tuicore.BuildRef(fb.ID, fb.Repository, fb.Branch, isWorkspace); ref != "" {
 		var refLink *tuicore.Location

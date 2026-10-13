@@ -23,6 +23,8 @@ var (
 	emailAutolinkRe = regexp.MustCompile(`<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>`)
 	// Matches fenced code blocks (``` or ~~~)
 	codeBlockRe = regexp.MustCompile("(?s)(?:```(\\w*)\\n(.*?)```|~~~(\\w*)\\n(.*?)~~~)")
+	// Matches an inline code span
+	inlineCodeRe = regexp.MustCompile("`[^`\n]+`")
 	// Matches bare URLs (not inside markdown link syntax or HTML attributes)
 	urlRe = regexp.MustCompile(`https?://[^\s)>\]"]+`)
 	// Matches markdown links [text](http-url) with capture groups
@@ -59,6 +61,7 @@ const codePlaceholderPrefix = "\x00CODE"
 const urlPlaceholderPrefix = "\x00URL"
 const mdLinkPlaceholderPrefix = "\x00MDLINK"
 const mdImagePlaceholderPrefix = "\x00MDIMG"
+const mentionPlaceholderPrefix = "\x00MENTION"
 
 type codeBlock struct {
 	language string
@@ -73,6 +76,33 @@ type mdLink struct {
 type mdImage struct {
 	alt string
 	url string
+}
+
+// bodyTokens holds the linkable tokens taken out of a body before glamour, in the order they are restored and marked: images, markdown links, urls and refs, mentions.
+type bodyTokens struct {
+	images   []mdImage
+	links    []mdLink
+	urls     []string
+	mentions []string
+}
+
+// extractBodyTokens replaces the linkable tokens of a body with placeholders; a later pass restores them in the same order.
+func extractBodyTokens(text string) (string, bodyTokens) {
+	var tokens bodyTokens
+	text = convertHTMLImages(strings.TrimSpace(text))
+	text, tokens.images = extractMarkdownImages(text)
+	text, tokens.links = extractMarkdownLinks(text)
+	text, tokens.urls = extractURLs(text)
+	text, tokens.mentions = extractMentions(text)
+	return text, tokens
+}
+
+// restoreBodyTokens puts the tokens back as styled, zone-marked text; the n-th mark is the n-th link of ExtractContentLinks.
+func restoreBodyTokens(text string, tokens bodyTokens, anchors *AnchorCollector, dimmed bool) string {
+	text = restoreMarkdownImages(text, tokens.images, anchors, dimmed)
+	text = restoreMarkdownLinks(text, tokens.links, anchors, dimmed)
+	text = restoreURLs(text, tokens.urls, anchors, dimmed)
+	return restoreMentions(text, tokens.mentions, anchors, dimmed)
 }
 
 // extractCodeBlocks extracts fenced code blocks from content and replaces them with placeholders.
@@ -229,43 +259,86 @@ func restoreURLs(content string, urls []string, anchors *AnchorCollector, dimmed
 		placeholder := fmt.Sprintf("%s%d\x00", urlPlaceholderPrefix, i)
 		var replacement string
 		if strings.HasPrefix(u, "#") {
-			// A ref navigates internally, resolved at activation when the cache can say what it is.
 			replacement = anchors.Mark(LinkStyle(u), LocRef(u))
 		} else {
-			replacement = anchors.MarkLink(u, u, Location{Path: u})
+			replacement = anchors.MarkLink(u, u, urlLocation(u))
 		}
 		content = strings.Replace(content, placeholder, replacement+dimResume(dimmed), 1)
 	}
 	return content
 }
 
-// ExtractContentLinks extracts markdown images, markdown links, and bare URLs from text and returns them as CardLinks.
-// When repoURL and branch are provided, relative paths are resolved to raw file URLs.
-func ExtractContentLinks(text, repoURL, branch string) []CardLink {
-	text = convertHTMLImages(text)
-	imgMatches := mdImageExtractRe.FindAllStringSubmatch(text, -1)
-	links := make([]CardLink, 0, len(imgMatches))
-	for _, match := range imgMatches {
-		label := "IMAGE"
-		if match[1] != "" {
-			label = "IMAGE: " + match[1]
+// urlLocation is the target of a bare url: a url that carries a ref of a repository resolves at navigation time, any other opens outside.
+func urlLocation(u string) Location {
+	if parsed := protocol.ParseRef(u); parsed.Type != protocol.RefTypeUnknown && parsed.Repository != "" && parsed.Value != "" {
+		return LocRef(u)
+	}
+	return Location{Path: u}
+}
+
+// extractMentions replaces each @email mention outside code with a placeholder and returns the emails in text order.
+func extractMentions(content string) (string, []string) {
+	code := append(codeBlockRe.FindAllStringIndex(content, -1), inlineCodeRe.FindAllStringIndex(content, -1)...)
+	var spans []protocol.MentionSpan
+	for _, s := range protocol.FindMentions(content) {
+		if !insideAny(code, s.Start) {
+			spans = append(spans, s)
 		}
-		links = append(links, CardLink{Label: label, Location: Location{Path: resolveContentURL(match[2], repoURL, branch)}})
 	}
-	// Remove images from text so link extraction doesn't double-count
-	textWithoutImages := mdImageExtractRe.ReplaceAllString(text, "")
-	matches := mdLinkExtractRe.FindAllStringSubmatch(textWithoutImages, -1)
-	for _, match := range matches {
-		links = append(links, CardLink{Label: match[1], Location: Location{Path: resolveContentURL(match[2], repoURL, branch)}})
+	if len(spans) == 0 {
+		return content, nil
 	}
-	_, urls := extractURLs(textWithoutImages)
-	for _, u := range urls {
+	mentions := make([]string, len(spans))
+	for i := len(spans) - 1; i >= 0; i-- {
+		mentions[i] = spans[i].Email
+		content = content[:spans[i].Start] + fmt.Sprintf("%s%d\x00", mentionPlaceholderPrefix, i) + content[spans[i].End:]
+	}
+	return content, mentions
+}
+
+// insideAny reports whether offset falls inside one of the spans.
+func insideAny(spans [][]int, offset int) bool {
+	for _, s := range spans {
+		if offset >= s[0] && offset < s[1] {
+			return true
+		}
+	}
+	return false
+}
+
+// restoreMentions replaces mention placeholders with zone-marked links to the author search.
+func restoreMentions(content string, mentions []string, anchors *AnchorCollector, dimmed bool) string {
+	for i, email := range mentions {
+		placeholder := fmt.Sprintf("%s%d\x00", mentionPlaceholderPrefix, i)
+		replacement := anchors.Mark(LinkStyle("@"+email), LocFacet("author", email))
+		content = strings.Replace(content, placeholder, replacement+dimResume(dimmed), 1)
+	}
+	return content
+}
+
+// ExtractContentLinks lists the links of a body in the order its render marks them: images, markdown links, urls and refs, mentions; a relative path resolves against the repository when one is given.
+func ExtractContentLinks(text, repoURL, branch string) []CardLink {
+	_, tokens := extractBodyTokens(text)
+	links := make([]CardLink, 0, len(tokens.images)+len(tokens.links)+len(tokens.urls)+len(tokens.mentions))
+	for _, img := range tokens.images {
+		label := "IMAGE"
+		if img.alt != "" {
+			label = "IMAGE: " + img.alt
+		}
+		links = append(links, CardLink{Label: label, Location: Location{Path: resolveContentURL(img.url, repoURL, branch)}})
+	}
+	for _, link := range tokens.links {
+		links = append(links, CardLink{Label: link.text, Location: Location{Path: resolveContentURL(link.url, repoURL, branch)}})
+	}
+	for _, u := range tokens.urls {
 		if strings.HasPrefix(u, "#") {
-			// A ref resolves at navigation time, like its inline anchor.
 			links = append(links, CardLink{Label: u, Location: LocRef(u)})
 			continue
 		}
-		links = append(links, CardLink{Label: u, Location: Location{Path: u}})
+		links = append(links, CardLink{Label: u, Location: urlLocation(u)})
+	}
+	for _, email := range tokens.mentions {
+		links = append(links, CardLink{Label: "@" + email, Location: LocFacet("author", email)})
 	}
 	return links
 }
@@ -485,8 +558,8 @@ func renderStats(card Card, opts CardOptions) string {
 	return strings.Join(parts, Dim.Render(" · "))
 }
 
-// renderGlamour runs the markdown pipeline: escape, extract code and math, render, restore, wrap.
-func renderGlamour(renderer *glamour.TermRenderer, variant byte, text string, wrapWidth int, dimmedCode bool, images []mdImage, links []mdLink, urls []string, anchors *AnchorCollector) string {
+// renderGlamour runs the markdown pipeline: escape, extract code and math, render, restore the tokens, wrap.
+func renderGlamour(renderer *glamour.TermRenderer, variant byte, text string, wrapWidth int, dimmedCode bool, tokens bodyTokens, anchors *AnchorCollector) string {
 	text = strings.TrimSpace(text)
 	text = escapeEmailAutolinks(text)
 	textWithCodePlaceholders, codeBlocks := extractCodeBlocks(text)
@@ -499,9 +572,7 @@ func renderGlamour(renderer *glamour.TermRenderer, variant byte, text string, wr
 	}
 	text = restoreCodeBlocks(text, codeBlocks, dimmedCode)
 	text = colorizeEmails(text)
-	text = restoreMarkdownImages(text, images, anchors, dimmedCode)
-	text = restoreMarkdownLinks(text, links, anchors, dimmedCode)
-	text = restoreURLs(text, urls, anchors, dimmedCode)
+	text = restoreBodyTokens(text, tokens, anchors, dimmedCode)
 	if wrapWidth > 0 {
 		text = lipgloss.NewStyle().Width(wrapWidth).Render(text)
 	}
@@ -510,17 +581,13 @@ func renderGlamour(renderer *glamour.TermRenderer, variant byte, text string, wr
 
 // RenderMarkdown renders text with markdown formatting, math, email colorization, and word wrapping.
 func RenderMarkdown(text string, wrapWidth int) string {
-	return renderGlamour(currentTheme.markdown, 'n', text, wrapWidth, false, nil, nil, nil, nil)
+	return renderGlamour(currentTheme.markdown, 'n', text, wrapWidth, false, bodyTokens{}, nil)
 }
 
-// RenderMarkdownWithAnchors renders markdown text with link extraction and anchor marking for tab navigation.
-// Use this instead of RenderMarkdown when body content needs clickable/focusable links.
+// RenderMarkdownWithAnchors renders markdown text with its links, refs and mentions zone-marked, in the order of ExtractContentLinks.
 func RenderMarkdownWithAnchors(text string, wrapWidth int, anchors *AnchorCollector) string {
-	text = convertHTMLImages(strings.TrimSpace(text))
-	textNoImages, mdImages := extractMarkdownImages(text)
-	textNoLinks, mdLinks := extractMarkdownLinks(textNoImages)
-	textNoURLs, urls := extractURLs(textNoLinks)
-	return renderGlamour(currentTheme.markdown, 'n', textNoURLs, wrapWidth, false, mdImages, mdLinks, urls, anchors)
+	text, tokens := extractBodyTokens(text)
+	return renderGlamour(currentTheme.markdown, 'n', text, wrapWidth, false, tokens, anchors)
 }
 
 // renderContent renders the card content with optional truncation
@@ -529,15 +596,10 @@ func renderContent(content CardContent, selectionBar string, iconPad string, opt
 
 	text := strings.TrimSpace(content.Text)
 
-	// Extract images, markdown links, and bare URLs before rendering so glamour doesn't mangle them
-	var extractedMdImages []mdImage
-	var extractedMdLinks []mdLink
-	var extractedURLs []string
+	// The tokens come out before glamour, which would mangle them, and go back in as marked links
+	var tokens bodyTokens
 	if !opts.Raw {
-		text = convertHTMLImages(text)
-		text, extractedMdImages = extractMarkdownImages(text)
-		text, extractedMdLinks = extractMarkdownLinks(text)
-		text, extractedURLs = extractURLs(text)
+		text, tokens = extractBodyTokens(text)
 	}
 
 	if !opts.Raw {
@@ -546,12 +608,10 @@ func renderContent(content CardContent, selectionBar string, iconPad string, opt
 			if opts.Dimmed {
 				renderer, variant = currentTheme.mutedMarkdown, 'm'
 			}
-			text = renderGlamour(renderer, variant, text, opts.WrapWidth, opts.Dimmed, extractedMdImages, extractedMdLinks, extractedURLs, opts.Anchors)
+			text = renderGlamour(renderer, variant, text, opts.WrapWidth, opts.Dimmed, tokens, opts.Anchors)
 		} else {
 			text = renderMath(text)
-			text = restoreMarkdownImages(text, extractedMdImages, opts.Anchors, opts.Dimmed)
-			text = restoreMarkdownLinks(text, extractedMdLinks, opts.Anchors, opts.Dimmed)
-			text = restoreURLs(text, extractedURLs, opts.Anchors, opts.Dimmed)
+			text = restoreBodyTokens(text, tokens, opts.Anchors, opts.Dimmed)
 			if opts.WrapWidth > 0 {
 				text = lipgloss.NewStyle().Width(opts.WrapWidth).Render(text)
 			}

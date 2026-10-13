@@ -204,12 +204,12 @@ func (l *CardList) SelectByID(id string) bool {
 	return false
 }
 
-// selectedLinks returns the links of the selected card.
+// selectedLinks returns the links of the selected card, without its stats when the list hides them.
 func (l *CardList) selectedLinks() []CardLink {
 	if l.selected < 0 || l.selected >= len(l.items) {
 		return nil
 	}
-	return l.items[l.selected].ToCard(l.itemResolver).AllLinks()
+	return l.items[l.selected].ToCard(l.itemResolver).Links(l.cardOptions.ShowStats)
 }
 
 // FocusedLinkLocation returns the Location of the currently focused link, if any.

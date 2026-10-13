@@ -42,6 +42,29 @@ The keys of each view are in [TUI-KEYS.md](TUI-KEYS.md); the diagrams do not sho
 ╰─────────────────────────────────────────────────────────────────────────╯
 ```
 
+### Links
+
+`;` and `,` move between the links of the selected card, `enter` follows the focused one, and a click hits a link. The n-th link a render marks is the n-th entry of the card's `Links()`; `anchors_test.go` checks each detail view.
+
+| Text | Target |
+|---|---|
+| `#commit:` ref in a subject or body | the item, else the post of a cached commit, else the commit diff |
+| `#branch:`, `#file:`, `#list:` ref | the Repository view on the branch, the Code view at the path and lines, the list |
+| `#tag:` ref | the release that names the tag, else the diff of the tagged commit |
+| ref of a repository the cache does not hold, or a url that carries one | outside, at the url |
+| `@user@host` in a subject or body | the `author:` search |
+| Author, Merged by, Closed by, Signed by | the `author:` search, when the row carries an email |
+| Assignees, Reviewers, Labels | the `assignee:`, `reviewer:` and `label:` search |
+| Referenced by | the citing commit, resolved as a `#commit:` ref |
+| Base, Head, a stack row, a card's branch pair | the Repository view on the branch |
+| the tip after Base or Head | the commit it records |
+| Depends on, `stacked` on a card | the pull request it builds on |
+| Tag of a release | the Tags view at the tag |
+| `file:line` on feedback | the Code view at the lines: the head for a new line, the base for an old one, at the recorded tip |
+| Adopted from, on the card and the row | the original item |
+| the repository of a notification card | the Repository view |
+| Source URL, artifacts, markdown links and urls | outside |
+
 ## List views
 
 Each list view except [List repositories](#list-repositories) is a `CardList`: one card per item, a `▏` bar on the selected card, and a separator between cards. `MaxLines` is the height of the card body.

@@ -256,9 +256,12 @@ func (v *sprintDetailView) buildSections() {
 			},
 			SearchText: func() string { return sp.Title + " " + sp.Body },
 			Links: func() []tuicore.CardLink {
-				var links []tuicore.CardLink
+				links := tuicore.MentionLinks(sp.Title)
 				if sp.Origin != nil && sp.Origin.URL != "" {
 					links = append(links, tuicore.CardLink{Label: "Source", Location: tuicore.Location{Path: sp.Origin.URL}})
+				}
+				for _, l := range sp.Labels {
+					links = append(links, tuicore.CardLink{Label: l, Location: tuicore.LocFacet("label", l)})
 				}
 				links = append(links, tuicore.ExtractContentLinks(sp.Body, sp.Repository, "")...)
 				return links
@@ -415,11 +418,8 @@ func renderSprintCard(sp *pm.Sprint, width int, selected bool, searchQuery strin
 	if opts.version {
 		lines = append(lines, tuicore.RenderVersionBanner(selectionBar, opts.versionAuthor, opts.versionTime, sp.IsRetracted)...)
 	}
-	title := sp.Title
-	if searchQuery != "" {
-		title = tuicore.HighlightInText(title, searchQuery)
-	}
-	lines = append(lines, selectionBar+tuicore.Bold.Render(title))
+	title := tuicore.MarkMentions(sp.Title, tuicore.Bold, searchQuery, anchors)
+	lines = append(lines, selectionBar+title)
 	lines = append(lines, selectionBar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
 	styles := tuicore.RowStylesWithWidths(14, 0)
 	stateStr := string(sp.State)
@@ -455,7 +455,7 @@ func renderSprintCard(sp *pm.Sprint, width int, selected bool, searchQuery strin
 		if i > 0 {
 			rowLabel = ""
 		}
-		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(l))
+		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+tuicore.MarkFacet(anchors, l, "label", l))
 	}
 	lines = append(lines, selectionBar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
 	if opts.showRaw {
@@ -561,4 +561,9 @@ func (v *sprintDetailView) Bindings() []tuicore.Binding {
 		{Key: "right", Label: "next", Contexts: []tuicore.Context{tuicore.PMSprintDetail}, Handler: noop},
 		{Key: "p", Label: "push", Contexts: []tuicore.Context{tuicore.PMSprintDetail}, Handler: push},
 	}
+}
+
+// SectionList returns the section list the view renders, for the anchor order test.
+func (v *sprintDetailView) SectionList() *tuicore.SectionList {
+	return v.sectionList
 }

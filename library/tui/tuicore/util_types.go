@@ -257,8 +257,13 @@ type Card struct {
 	ContentLinks []CardLink // Links extracted from body text (populated during rendering)
 }
 
-// AllLinks collects all clickable links from the card's header, stats, and body content.
+// AllLinks lists the links of a card with its stats shown, in the order RenderCard marks them.
 func (c Card) AllLinks() []CardLink {
+	return c.Links(true)
+}
+
+// Links lists the links of a card in the order RenderCard marks them: title, subtitle, body, then the stats when they are shown.
+func (c Card) Links(showStats bool) []CardLink {
 	var links []CardLink
 	if c.Header.TitleLink != nil {
 		links = append(links, CardLink{Label: c.Header.Title, Location: *c.Header.TitleLink})
@@ -268,12 +273,15 @@ func (c Card) AllLinks() []CardLink {
 			links = append(links, CardLink{Label: p.Text, Location: *p.Link})
 		}
 	}
+	links = append(links, c.ContentLinks...)
+	if !showStats {
+		return links
+	}
 	for _, s := range c.Stats {
 		if s.Link != nil {
 			links = append(links, CardLink{Label: s.Text, Location: *s.Link})
 		}
 	}
-	links = append(links, c.ContentLinks...)
 	return links
 }
 

@@ -277,11 +277,17 @@ func (v *releaseDetailView) buildSections() {
 				return lines
 			},
 			SearchText: func() string { return rel.Subject + " " + rel.Body },
+			// Links lists the anchors of renderReleaseCard in the order they are marked.
 			Links: func() []tuicore.CardLink {
-				var links []tuicore.CardLink
-				// Order must match anchor registration in renderReleaseCard
+				links := tuicore.MentionLinks(rel.Subject)
+				if rel.Tag != "" {
+					links = append(links, tuicore.CardLink{Label: rel.Tag, Location: tuicore.LocTag(rel.Repository, rel.Tag)})
+				}
 				if rel.Origin != nil && rel.Origin.URL != "" {
 					links = append(links, tuicore.CardLink{Label: "Source", Location: tuicore.Location{Path: rel.Origin.URL}})
+				}
+				for _, l := range rel.Labels {
+					links = append(links, tuicore.CardLink{Label: l, Location: tuicore.LocFacet("label", l)})
 				}
 				if rel.ArtifactURL != "" {
 					base := strings.TrimRight(rel.ArtifactURL, "/")
@@ -314,6 +320,9 @@ func (v *releaseDetailView) buildSections() {
 							Params: map[string]string{"repoURL": rel.Repository, "version": rel.Version, "filename": rel.SBOM},
 						}})
 					}
+				}
+				if strings.Contains(rel.SignedBy, "@") {
+					links = append(links, tuicore.CardLink{Label: rel.SignedBy, Location: tuicore.LocFacet("author", rel.SignedBy)})
 				}
 				links = append(links, tuicore.ExtractContentLinks(rel.Body, rel.Repository, "")...)
 				return links
@@ -425,18 +434,15 @@ func renderReleaseCard(rel *release.Release, width int, selected bool, searchQue
 	if opts.version {
 		lines = append(lines, tuicore.RenderVersionBanner(selectionBar, opts.versionAuthor, opts.versionTime, rel.IsRetracted)...)
 	}
-	title := rel.Subject
-	if searchQuery != "" {
-		title = tuicore.HighlightInText(title, searchQuery)
-	}
-	lines = append(lines, selectionBar+tuicore.Bold.Render(title))
+	title := tuicore.MarkMentions(rel.Subject, tuicore.Bold, searchQuery, anchors)
+	lines = append(lines, selectionBar+title)
 	lines = append(lines, selectionBar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
 	styles := tuicore.RowStylesWithWidths(14, 0)
 	if rel.Version != "" {
 		lines = append(lines, selectionBar+styles.Label.Render("Version")+styles.Value.Render(rel.Version))
 	}
 	if rel.Tag != "" {
-		lines = append(lines, selectionBar+styles.Label.Render("Tag")+styles.Value.Render(rel.Tag))
+		lines = append(lines, selectionBar+styles.Label.Render("Tag")+anchors.Mark(tuicore.LinkStyle(rel.Tag), tuicore.LocTag(rel.Repository, rel.Tag)))
 	}
 	if !opts.version {
 		lines = append(lines, tuicore.RenderOriginRows(rel.Origin, styles, selectionBar, anchors, opts.showEmail)...)
@@ -449,7 +455,7 @@ func renderReleaseCard(rel *release.Release, width int, selected bool, searchQue
 		if i > 0 {
 			rowLabel = ""
 		}
-		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+styles.Value.Render(l))
+		lines = append(lines, selectionBar+styles.Label.Render(rowLabel)+tuicore.MarkFacet(anchors, l, "label", l))
 	}
 	if len(rel.Artifacts) > 0 {
 		for i, a := range rel.Artifacts {
@@ -526,7 +532,11 @@ func renderReleaseCard(rel *release.Release, width int, selected bool, searchQue
 		}
 	}
 	if rel.SignedBy != "" {
-		lines = append(lines, selectionBar+styles.Label.Render("Signed by")+styles.Value.Render(rel.SignedBy))
+		signer := styles.Value.Render(rel.SignedBy)
+		if strings.Contains(rel.SignedBy, "@") {
+			signer = tuicore.MarkFacet(anchors, rel.SignedBy, "author", rel.SignedBy)
+		}
+		lines = append(lines, selectionBar+styles.Label.Render("Signed by")+signer)
 	}
 	lines = append(lines, selectionBar+tuicore.Dim.Render(strings.Repeat("─", width-3)))
 	if opts.showRaw {
@@ -622,4 +632,9 @@ type releaseDetailSBOMMsg struct {
 
 type releaseDetailArtifactInfoMsg struct {
 	infos []release.ArtifactInfo
+}
+
+// SectionList returns the section list the view renders, for the anchor order test.
+func (v *releaseDetailView) SectionList() *tuicore.SectionList {
+	return v.sectionList
 }

@@ -1129,3 +1129,8 @@ func (v *postView) HeaderInfo() (position int, total string) {
 	}
 	return 0, ""
 }
+
+// SelectedAnchors returns the zones the last render marked on the selected post beside its links, for the anchor order test.
+func (v *postView) SelectedAnchors() ([]tuicore.CardLinkZone, []tuicore.CardLink) {
+	return v.linkZones, v.selectedPostLinks()
+}

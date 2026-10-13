@@ -225,3 +225,66 @@ func TestExtractContentLinks_refUsesLocRef(t *testing.T) {
 		t.Errorf("ref link location = %+v, want /ref carrying the ref", links[0].Location)
 	}
 }
+
+// TestExtractContentLinks_mentionsFollowTheRefs: a mention is the last token kind, linked to the author search, and a mention inside a url stays in the url.
+func TestExtractContentLinks_mentionsFollowTheRefs(t *testing.T) {
+	text := "ping @bob@example.com about #commit:abc123def456 at https://forge.example/@x@y.org/repo"
+	links := ExtractContentLinks(text, "", "")
+	if len(links) != 3 {
+		t.Fatalf("links = %+v, want the ref, the url and the mention", links)
+	}
+	if links[2].Label != "@bob@example.com" || links[2].Location.Param("q") != "author:bob@example.com" {
+		t.Errorf("mention link = %+v, want the author search", links[2])
+	}
+	anchors := NewAnchorCollector("t", -1)
+	rendered := RenderMarkdownWithAnchors(text, 0, anchors)
+	zones := anchors.Zones()
+	if len(zones) != len(links) {
+		t.Fatalf("zones = %d, links = %d", len(zones), len(links))
+	}
+	for i := range zones {
+		if zones[i].Location.Path != links[i].Location.Path || zones[i].Location.Param("q") != links[i].Location.Param("q") {
+			t.Errorf("zone %d = %+v, link %d = %+v", i, zones[i].Location, i, links[i].Location)
+		}
+	}
+	if !strings.Contains(rendered, "@bob@example.com") {
+		t.Errorf("rendered text lost the mention: %q", rendered)
+	}
+}
+
+// TestExtractContentLinks_repoRefResolvesInApp: a url that carries a ref of a repository resolves at navigation time, and a plain url opens outside.
+func TestExtractContentLinks_repoRefResolvesInApp(t *testing.T) {
+	links := ExtractContentLinks("see https://forge.example/x#commit:abc123def456 and https://forge.example/x#readme", "", "")
+	if len(links) != 2 {
+		t.Fatalf("links = %+v, want the two urls", links)
+	}
+	if links[0].Location.Path != "/ref" || links[0].Location.Param("ref") != "https://forge.example/x#commit:abc123def456" {
+		t.Errorf("repo ref link = %+v, want /ref carrying the url", links[0].Location)
+	}
+	if links[1].Location.Path != "https://forge.example/x#readme" {
+		t.Errorf("plain url link = %+v, want the external url", links[1].Location)
+	}
+}
+
+// TestExtractContentLinks_mentionInCodeStaysText: a mention inside a code block or an inline code span is not a link.
+func TestExtractContentLinks_mentionInCodeStaysText(t *testing.T) {
+	text := "run `git log --author=@a@example.com` or\n```\ngit shortlog @b@example.com\n```\nthen ask @c@example.com"
+	links := ExtractContentLinks(text, "", "")
+	if len(links) != 1 || links[0].Label != "@c@example.com" {
+		t.Errorf("links = %+v, want the one mention outside code", links)
+	}
+}
+
+// TestMarkMentions_urlStaysWhole: a subject mention inside a url is not a link, and the highlight does not split a mention zone.
+func TestMarkMentions_urlStaysWhole(t *testing.T) {
+	subject := "Ask @bob@example.com, see https://forge.example/@x@y.org/repo"
+	links := MentionLinks(subject)
+	if len(links) != 1 || links[0].Label != "@bob@example.com" {
+		t.Fatalf("links = %+v, want the one mention outside the url", links)
+	}
+	anchors := NewAnchorCollector("t", -1)
+	marked := MarkMentions(subject, Bold, "bob", anchors)
+	if anchors.Count() != 1 || !strings.Contains(marked, "https://forge.example/@x@y.org/repo") {
+		t.Errorf("marked = %q with %d zones, want one zone and the url whole", marked, anchors.Count())
+	}
+}

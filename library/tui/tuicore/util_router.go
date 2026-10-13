@@ -205,6 +205,11 @@ func LocSearchQuery(query string) Location {
 	return Location{Path: "/search", Params: map[string]string{"q": query}}
 }
 
+// LocFacet creates a location for the search on one facet: author, assignee, reviewer or label.
+func LocFacet(key, value string) Location {
+	return LocSearchQuery(key + ":" + value)
+}
+
 // LocHistory creates a location for a post's edit history.
 func LocHistory(postID string) Location {
 	return Location{Path: "/social/history", Params: map[string]string{"postID": postID}}
