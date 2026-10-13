@@ -258,8 +258,17 @@ type parityPRDiff struct {
 	Notices     map[string]string `json:"notices"`
 }
 
+// parityRefTokenCase pins the refs and mentions one free text carries on both renderers.
+type parityRefTokenCase struct {
+	Name           string   `json:"name"`
+	Text           string   `json:"text"`
+	ExpectRefs     []string `json:"expectRefs"`
+	ExpectMentions []string `json:"expectMentions"`
+}
+
 // parityFixtures is the shared fixture file shape.
 type parityFixtures struct {
+	RefTokens      []parityRefTokenCase      `json:"refTokens"`
 	PRDiff         parityPRDiff              `json:"prDiff"`
 	MessageCases   []parityMessageCase       `json:"messageCases"`
 	RawObjectCases []parityRawObjectCase     `json:"rawObjectCases"`
@@ -1080,5 +1089,39 @@ func TestParityPRDiff(t *testing.T) {
 	}
 	if !strings.Contains(head, `<span class="diff-status s-added">A</span>`) || !strings.Contains(string(row), `<span class="subject">`+f.Head+` (1)</span>`) {
 		t.Errorf("file row markup:\n%s", row)
+	}
+}
+
+// parityHashHrefRe matches the href of a rendered body ref anchor.
+var parityHashHrefRe = regexp.MustCompile(`<a class="hash" href="([^"]+)">`)
+
+// TestParityRefTokens asserts protocol.FindRefs, protocol.FindMentions and the page renderer find the refs and mentions unit_parity.js finds through the app's REF_LINK_RE and MENTION_RE.
+func TestParityRefTokens(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.RefTokens) == 0 {
+		t.Fatal("no ref token cases in parity fixtures")
+	}
+	for _, c := range f.RefTokens {
+		t.Run(c.Name, func(t *testing.T) {
+			var refs, mentions, rendered []string
+			for _, r := range protocol.FindRefs(c.Text) {
+				refs = append(refs, r.Ref)
+			}
+			for _, m := range protocol.FindMentions(c.Text) {
+				mentions = append(mentions, m.Email)
+			}
+			for _, m := range parityHashHrefRe.FindAllStringSubmatch(renderSiteMarkdown(c.Text, siteMarkdownContext{}), -1) {
+				rendered = append(rendered, m[1])
+			}
+			if !slices.Equal(refs, c.ExpectRefs) {
+				t.Errorf("FindRefs = %q, want %q", refs, c.ExpectRefs)
+			}
+			if !slices.Equal(rendered, c.ExpectRefs) {
+				t.Errorf("page anchors = %q, want %q", rendered, c.ExpectRefs)
+			}
+			if !slices.Equal(mentions, c.ExpectMentions) {
+				t.Errorf("FindMentions = %q, want %q", mentions, c.ExpectMentions)
+			}
+		})
 	}
 }

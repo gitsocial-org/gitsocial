@@ -1364,18 +1364,17 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // ---- Markdown rendering (browser only; raw HTML via the sanitizer) ----
 
-  // renderInline turns inline spans into DOM nodes; rawhtml spans pass through the sanitizer.
-  // REF_LINK_RE matches a workspace-relative ref at a boundary, the grammar parseRoute reads; the
-  // leading group keeps a cross-repository URL's fragment from reading as a local ref.
-  const REF_LINK_RE = /(^|[\s([{"'<])(#(?:commit:[0-9a-f]{7,40}(?:@[\w./-]+)?|branch:[\w./-]+|tag:[\w./-]+|file:[\w./-]+(?:@[\w./-]*)?(?::L\d+(?:-\d+)?)?))/g;
+  // REF_LINK_RE is the JS copy of the free-text ref grammar of protocol.FindRefs, pinned by unit_parity.js and TestParityRefTokens.
+  const REF_LINK_RE = /(^|[ \t\n\r\f([{"'<])(#(?:commit:[0-9a-f]{7,40}(?:@[\w./-]*[\w/-])?|(?:branch|tag|list):[\w./-]*[\w/-]|file:[\w./-]+@[\w./-]*[\w/-](?::(?:L\d+(?:-\d+)?|[\w./-]*[\w/-]))?))/g;
+  // MENTION_RE is the JS copy of the mention grammar of protocol.FindMentions, pinned the same way.
+  const MENTION_RE = /(^|[^@])@([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
 
   // refLinkNodes splits plain text into text nodes and hash-styled anchors for the refs it carries.
   function refLinkNodes(text) {
     const out = [];
     let last = 0;
     for (const m of text.matchAll(REF_LINK_RE)) {
-      let ref = m[2];
-      while (ref.endsWith(".") || ref.endsWith(",")) ref = ref.slice(0, -1);
+      const ref = m[2];
       const start = m.index + m[1].length;
       if (start > last) out.push(document.createTextNode(text.slice(last, start)));
       out.push(el("a", { class: "hash", href: ref }, [ref]));
@@ -1392,6 +1391,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (nodes) { for (const n of nodes) out.push(n); } else out.push(document.createTextNode(text));
   }
 
+  // renderInline turns inline spans into DOM nodes; rawhtml spans pass through the sanitizer.
   function renderInline(spans, mdctx, inLink) {
     const out = [];
     for (const s of spans) {
@@ -4368,6 +4368,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, DIFF_FILE_CAP, PR_DIFF_NOTICE, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, DIFF_FILE_CAP, PR_DIFF_NOTICE, REF_LINK_RE, MENTION_RE, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

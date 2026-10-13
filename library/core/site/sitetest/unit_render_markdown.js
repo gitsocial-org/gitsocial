@@ -123,9 +123,10 @@ GS.openFullscreen(null);
 eq(overlays().length, 0, "a missing node opens nothing");
 
 // Refs in plain text link to their routes; code spans stay plain; a trailing period stays outside.
-const refs = GS.renderMarkdown("Fixed by #commit:abc123def456@gitmsg/pm.\n\nUse `#commit:abc123def456` and see #tag:v1.2.0 plus #file:docs/A.md@main:L3-9.\n");
+const refs = GS.renderMarkdown("Fixed by #commit:abc123def456@gitmsg/pm.\n\nUse `#commit:abc123def456` and see #tag:v1.2.0 plus #file:docs/A.md@main:L3-9 in #list:reading.\n");
 const refAnchors = findClass(refs, "hash").filter((a) => a.tagName === "A");
-eq(refAnchors.length, 3, "three refs outside code link");
+eq(refAnchors.length, 4, "four refs outside code link");
+eq(refAnchors[3].getAttribute("href"), "#list:reading", "the list ref links");
 eq(refAnchors[0].getAttribute("href"), "#commit:abc123def456@gitmsg/pm", "the commit ref links to its route without the period");
 eq(refAnchors[1].getAttribute("href"), "#tag:v1.2.0", "the tag ref links");
 eq(refAnchors[2].getAttribute("href"), "#file:docs/A.md@main:L3-9", "the file ref links with its line range");

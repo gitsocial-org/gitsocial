@@ -4,7 +4,6 @@ package notifications
 import (
 	"database/sql"
 	"log/slog"
-	"regexp"
 	"strings"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
@@ -12,18 +11,16 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-var mentionPattern = regexp.MustCompile(`(?:^|[^@])@([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})`)
-
 // ExtractMentions returns deduplicated email addresses mentioned in content.
 func ExtractMentions(content string) []string {
-	matches := mentionPattern.FindAllStringSubmatch(content, -1)
+	matches := protocol.FindMentions(content)
 	if len(matches) == 0 {
 		return nil
 	}
 	seen := make(map[string]bool, len(matches))
 	var emails []string
 	for _, m := range matches {
-		email := strings.ToLower(m[1])
+		email := strings.ToLower(m.Email)
 		if !seen[email] {
 			seen[email] = true
 			emails = append(emails, email)

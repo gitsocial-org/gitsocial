@@ -260,6 +260,28 @@ func TestSiteMarkdown_Grammar(t *testing.T) {
 	}
 }
 
+// TestSiteMarkdown_refAnchor: a body ref renders as the hash anchor the app renders, with the ref as its href and text.
+func TestSiteMarkdown_refAnchor(t *testing.T) {
+	out := renderMD(t, "Fixed by #commit:abc123def456@gitmsg/pm.\n")
+	want := `<p>Fixed by <a class="hash" href="#commit:abc123def456@gitmsg/pm">#commit:abc123def456@gitmsg/pm</a>.</p>`
+	if !strings.Contains(out, want) {
+		t.Errorf("want %s in:\n%s", want, out)
+	}
+}
+
+// TestSiteMarkdown_listRef: a list ref is a body ref.
+func TestSiteMarkdown_listRef(t *testing.T) {
+	out := renderMD(t, "Reading in #list:reading, and #list:social/reading.\n")
+	for _, want := range []string{
+		`<a class="hash" href="#list:reading">#list:reading</a>,`,
+		`<a class="hash" href="#list:social/reading">#list:social/reading</a>.`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("want %s in:\n%s", want, out)
+		}
+	}
+}
+
 // TestSiteMarkdown_Hostile pins the sanitizer. The README is the bucket owner's
 // own content, so this is hygiene rather than an adversarial boundary, but the
 // renderer must be correct on its own: the pages carry a strict CSP and it is

@@ -25,8 +25,6 @@ var (
 	codeBlockRe = regexp.MustCompile("(?s)(?:```(\\w*)\\n(.*?)```|~~~(\\w*)\\n(.*?)~~~)")
 	// Matches bare URLs (not inside markdown link syntax or HTML attributes)
 	urlRe = regexp.MustCompile(`https?://[^\s)>\]"]+`)
-	// refRe matches a workspace-relative commit, tag, branch or file ref at a boundary; the grammar is that of GITMSG.md and the site renderers.
-	refRe = regexp.MustCompile(`(^|[\s([{"'<])(#(?:commit:[0-9a-f]{7,40}(?:@[\w./-]+)?|(?:tag|branch):[\w./-]+|file:[\w./-]+@[\w./-]+(?::(?:L\d+(?:-\d+)?|[\w./-]+))?))`)
 	// Matches markdown links [text](http-url) with capture groups
 	mdLinkExtractRe = regexp.MustCompile(`\[([^\]]+)\]\((https?://[^)]+)\)`)
 	// Matches markdown images ![alt](url) with optional {attrs} suffix (GitLab/Kramdown)
@@ -190,27 +188,9 @@ func restoreMarkdownImages(content string, images []mdImage, anchors *AnchorColl
 func extractURLs(content string) (string, []string) {
 	mdSpans := mdLinkExtractRe.FindAllStringIndex(content, -1)
 	urlMatches := urlRe.FindAllStringIndex(content, -1)
-	// Refs ride the same placeholder list, so both paths restore them together.
-	// A ref inside a URL match is that URL's fragment, not a local ref; the
-	// overlap check keeps the replacement offsets whole.
-	inURL := func(start int) bool {
-		for _, u := range urlMatches {
-			if start >= u[0] && start < u[1] {
-				return true
-			}
-		}
-		return false
-	}
-	for _, m := range refRe.FindAllStringSubmatchIndex(content, -1) {
-		start := m[4]
-		if inURL(start) {
-			continue
-		}
-		ref := content[start:m[5]]
-		for strings.HasSuffix(ref, ".") || strings.HasSuffix(ref, ",") {
-			ref = ref[:len(ref)-1]
-		}
-		urlMatches = append(urlMatches, []int{start, start + len(ref)})
+	// Refs ride the same placeholder list, so both paths restore them together; FindRefs skips a URL by the grammar of urlRe, so the spans do not overlap.
+	for _, r := range protocol.FindRefs(content) {
+		urlMatches = append(urlMatches, []int{r.Start, r.End})
 	}
 	sort.Slice(urlMatches, func(i, j int) bool { return urlMatches[i][0] < urlMatches[j][0] })
 	if len(urlMatches) == 0 {

@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 // Block kinds a parsed markdown document is made of.
@@ -1206,23 +1208,14 @@ func writeSiteMDInlineCtx(b *strings.Builder, spans []siteMDSpan, r *siteMDRende
 	}
 }
 
-// siteMDRefRe matches a workspace-relative ref at a boundary, the grammar gs-render's REF_LINK_RE mirrors;
-// the leading group keeps a cross-repository URL's fragment from reading as a local ref.
-var siteMDRefRe = regexp.MustCompile(`(^|[\s([{"'<])(#(?:commit:[0-9a-f]{7,40}(?:@[\w./-]+)?|branch:[\w./-]+|tag:[\w./-]+|file:[\w./-]+(?:@[\w./-]*)?(?::L[0-9]+(?:-[0-9]+)?)?))`)
-
 // writeSiteMDTextWithRefs escapes plain text, linking each embedded ref the way the app renderer does.
 func writeSiteMDTextWithRefs(b *strings.Builder, text string) {
 	last := 0
-	for _, m := range siteMDRefRe.FindAllStringSubmatchIndex(text, -1) {
-		start := m[4]
-		ref := text[start:m[5]]
-		for strings.HasSuffix(ref, ".") || strings.HasSuffix(ref, ",") {
-			ref = ref[:len(ref)-1]
-		}
-		b.WriteString(html.EscapeString(text[last:start]))
-		// The matched charset carries nothing HTML-active, so the ref writes raw.
-		b.WriteString(`<a class="hash" href="` + ref + `">` + ref + `</a>`)
-		last = start + len(ref)
+	for _, r := range protocol.FindRefs(text) {
+		b.WriteString(html.EscapeString(text[last:r.Start]))
+		// The ref charset carries nothing HTML-active, so the ref writes raw.
+		b.WriteString(`<a class="hash" href="` + r.Ref + `">` + r.Ref + `</a>`)
+		last = r.End
 	}
 	b.WriteString(html.EscapeString(text[last:]))
 }

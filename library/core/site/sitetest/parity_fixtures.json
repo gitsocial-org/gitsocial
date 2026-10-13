@@ -536,5 +536,17 @@
     { "name": "a plain version joins its hash-suffixed group", "tags": [{ "name": "v2.0", "time": 10 }, { "name": "v2.0.abcdef1", "time": 20 }], "expect": ["v2.0.abcdef1", "v2.0"] },
     { "name": "equal dates keep name order", "tags": [{ "name": "v4.0.2222222", "time": 5 }, { "name": "v4.0.1111111", "time": 5 }], "expect": ["v4.0.1111111", "v4.0.2222222"] },
     { "name": "versions first, suffix after plain, names by code point", "tags": [{ "name": "alpha", "time": 0 }, { "name": "v1.0-light", "time": 0 }, { "name": "Beta", "time": 0 }, { "name": "v1.2", "time": 0 }, { "name": "zeta", "time": 0 }, { "name": "v1.10", "time": 0 }, { "name": "v1.0", "time": 0 }], "expect": ["v1.10", "v1.2", "v1.0", "v1.0-light", "zeta", "alpha", "Beta"] }
+  ],
+  "refTokens": [
+    { "name": "commit refs with and without a branch", "text": "Fixed by #commit:abc123def456@gitmsg/pm and #commit:1234567 on main.", "expectRefs": ["#commit:abc123def456@gitmsg/pm", "#commit:1234567"], "expectMentions": [] },
+    { "name": "branch, tag and list refs drop a trailing comma or period", "text": "See #branch:feature/x, #tag:v1.2.0 and #list:reading.", "expectRefs": ["#branch:feature/x", "#tag:v1.2.0", "#list:reading"], "expectMentions": [] },
+    { "name": "file refs with a line range, a heading and a tag", "text": "Lines #file:docs/A.md@main:L3-9 then #file:docs/A.md@main:install then #file:docs/A.md@v1.0.", "expectRefs": ["#file:docs/A.md@main:L3-9", "#file:docs/A.md@main:install", "#file:docs/A.md@v1.0"], "expectMentions": [] },
+    { "name": "a URL fragment and a ref with no boundary are text", "text": "See https://other.example/repo#commit:abc123def456 and word#commit:abc123def456 forms.", "expectRefs": [], "expectMentions": [] },
+    { "name": "a ref inside a markdown link is text, one after it links", "text": "[fix #commit:abc123def456](https://example.com) and (#commit:abc123def456).", "expectRefs": ["#commit:abc123def456"], "expectMentions": [] },
+    { "name": "a short hash, an uppercase hash and a file with no branch are text", "text": "Too short #commit:abc123 and #commit:ABC1234 and #file:README.md plain.", "expectRefs": [], "expectMentions": [] },
+    { "name": "mentions at a boundary, as written", "text": "Ping @alice@example.com and @Bob@Example.ORG, not alice@example.com nor @@x@y.io.", "expectRefs": [], "expectMentions": ["alice@example.com", "Bob@Example.ORG"] },
+    { "name": "a mention and a ref on separate lines", "text": "Line 1 @alice@example.com\nLine 2 #commit:abc123def456", "expectRefs": ["#commit:abc123def456"], "expectMentions": ["alice@example.com"] },
+    { "name": "a value of periods alone is no ref", "text": "Not #tag:. nor #branch:.. but #commit:abc123def456@main..", "expectRefs": ["#commit:abc123def456@main"], "expectMentions": [] },
+    { "name": "only an ASCII space is a boundary", "text": "fix\u00a0#tag:v1 and\t#tag:v2", "expectRefs": ["#tag:v2"], "expectMentions": [] }
   ]
 }

@@ -268,6 +268,14 @@ const headings = Object.entries(GS.LIST_HEADINGS).sort().map((e) => e.join("="))
 const fixtureHeadings = Object.entries(FIX.listHeadings).sort().map((e) => e.join("=")).join(",");
 eq(headings, fixtureHeadings, "LIST_HEADINGS matches the page layer's nav labels");
 
+console.log("=== parity invariant: the refs and mentions free text carries ===");
+for (const c of FIX.refTokens) {
+  const refs = findCls(GS.renderMarkdown(c.text), "hash").filter((a) => a.tagName === "A").map((a) => a.getAttribute("href"));
+  eq(JSON.stringify(refs), JSON.stringify(c.expectRefs), c.name + ": refs");
+  const mentions = Array.from(c.text.matchAll(GS.MENTION_RE), (m) => m[2]);
+  eq(JSON.stringify(mentions), JSON.stringify(c.expectMentions), c.name + ": mentions");
+}
+
 console.log("=== parity invariant: tag display order ===");
 (async () => {
   for (const c of FIX.tagOrder) {

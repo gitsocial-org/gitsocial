@@ -43,6 +43,7 @@ library/tui/test/
 ├── history_diff_test.go  # history-diff footers
 ├── stack_test.go         # stacked pull requests
 ├── proposal_test.go      # cross-repo proposals
+├── anchors_test.go       # detail card anchors against its links
 └── testdata/             # fixture-repo.tar.gz, fixture-fork.tar.gz, fixture.json, *.golden
 ```
 
@@ -120,6 +121,7 @@ The cache is filled with `client.SyncWorkspace`, workspace first and fork second
 | `history_diff_test.go` | `TestHistoryDiffFooter`, `PostHistoryDiffRenders` | every history-diff context registers its footer entries without duplicates, and the view renders |
 | `stack_test.go` | `TestStackDisplay/BadgeOnPRList`, `TestStackBindings`, `TestStackNavigationBackend` | the stack badge, the stack keys, and `GetStack` and `getDependents` behind them |
 | `proposal_test.go` | `TestProposalDisplay/{IssueListMarker,IssueDetailBanner,HistoryRow,HistoryFooterOffersAcceptAndDecline}`, `TestProposalAccept`, `TestProposalDecline` | the ✎ marker, the banner, the history row, and `A` and `X` that accept or decline a proposal, on an isolated fixture |
+| `anchors_test.go` | `TestIssueDetail_anchorsMatchLinks`, `TestPRDetail_anchorsMatchLinks` | the n-th anchor a detail card marks has the location of the n-th entry of its `Links()`, on an adopted issue and on a pull request with a foreign head, each with a body ref |
 
 ## Notes
 
