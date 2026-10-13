@@ -32,7 +32,8 @@ bin/gitsocial tui
 - `gitmsg/*` are content branches, not feature branches.
 - A worktree for a parallel branch is at `.local/worktrees/<name>`, the same as a design note is at `.local/design/`.
 - Give each parallel build a different output name, so one build does not overwrite the output of another.
-- Put a review fix into the branch commit that it corrects; a fix for a change that is already on `main` is a separate commit.
+- Put a review fix into the branch commit that it corrects; a fix for a change that is already pushed is a separate commit.
+- Before the fast-forward, squash the branch to one commit per unit that a reader would revert alone: a change under about 30 lines that extends the previous commit folds into it, and the guide row goes into the commit that adds the behavior.
 - If a branch changes the cache schema, run it with its own `--cache-dir`: the first binary that opens the shared `~/.cache/gitsocial/cache.db` reseeds it at the new version and keeps only the read markers, and older binaries then refuse it. To rebuild, delete the cache.
 
 ### Test and lint
@@ -56,6 +57,7 @@ A branch that changes `core/objstore`, `core/site`, `core/gitmsg` or `core/cache
   - who writes and reads each artifact, and under what guard
   - the accepted failure modes and their repair
   - what is out of scope
+  - the status: the last gate that passed and what is open; the branch keeps it current, so a session that resumes reads one paragraph
 - After the quick tier passes: one medium review of the branch against the note. Triage each finding by cause before you fix any of them: fix it, accept it and record it in the commit body, or defer it to an issue. No second full review.
 - On merge, delete the note; each invariant remains as its test, a row in the reference tables of the owning doc, and a one-line comment where the code enforces it.
 
@@ -84,6 +86,7 @@ A change is done when each of these lines is true; a review checks them in order
 One set of rules for every session.
 
 - Read the files a change touches in full before a note, a review or a fix. Do not work from search hits.
+- One agent at a time, and one reader per file: the brief carries the decisions and the facts from the files the author of the note read, and names the files the agent can skip.
 - A change that needs a [design note](#design-notes) gets the note first, then one medium review, findings triaged by cause.
 - A mechanical change merges on a green quick tier and one review; the tiers are in [Test and lint](#test-and-lint).
 - Each commit has a body; [STYLE.md](STYLE.md) has the register and the examples.
