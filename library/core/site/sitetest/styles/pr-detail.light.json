@@ -49,7 +49,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.author > span.reltime > a.hash",
+      "shape": "a.author > span.reltime > a.hash",
       "padding": "0px",
       "margin": "0px",
       "fontSize": "12.8px",
@@ -60,7 +60,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.type-glyph > span.chip.verdict-approved > span.author > span.reltime",
+      "shape": "span.type-glyph > span.chip.verdict-approved > a.author > span.reltime",
       "padding": "0px",
       "margin": "0px",
       "fontSize": "12.8px",
@@ -71,7 +71,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.type-glyph > span.chip.verdict-changes-requested > span.author > span.reltime",
+      "shape": "span.type-glyph > span.chip.verdict-changes-requested > a.author > span.reltime",
       "padding": "0px",
       "margin": "0px",
       "fontSize": "12.8px",

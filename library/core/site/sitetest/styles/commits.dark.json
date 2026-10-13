@@ -38,7 +38,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.author > a.hash",
+      "shape": "a.author > a.hash",
       "padding": "0px",
       "margin": "3.2px 0px 0px 28.8px",
       "fontSize": "12.8px",

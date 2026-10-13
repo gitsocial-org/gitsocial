@@ -74,6 +74,15 @@ type parityDetailHeadCase struct {
 	FirstLine     string            `json:"firstLine"`
 	ExpectSubject string            `json:"expectSubject"`
 	ExpectChips   []parityChip      `json:"expectChips"`
+	ExpectHref    string            `json:"expectHref"`
+}
+
+// parityFeedbackFileCase pins the file route a feedback's chip opens through its pull request.
+type parityFeedbackFileCase struct {
+	Name      string            `json:"name"`
+	Header    map[string]string `json:"header"`
+	PR        map[string]string `json:"pr"`
+	ExpectRef string            `json:"expectRef"`
 }
 
 // parityAuthorCase pins the label and title an author bit yields.
@@ -83,6 +92,7 @@ type parityAuthorCase struct {
 	Email       string `json:"email"`
 	ExpectLabel string `json:"expectLabel"`
 	ExpectTitle string `json:"expectTitle"`
+	ExpectHref  string `json:"expectHref"`
 }
 
 // parityMetaRow pins the meta row skeleton: its bit classes in order, the edited row's, and its author cases.
@@ -273,6 +283,7 @@ type parityFixtures struct {
 	MessageCases   []parityMessageCase       `json:"messageCases"`
 	RawObjectCases []parityRawObjectCase     `json:"rawObjectCases"`
 	FeedbackCards  []parityFeedbackCase      `json:"feedbackCards"`
+	FeedbackFiles  []parityFeedbackFileCase  `json:"feedbackFileRefs"`
 	ReleaseHeads   []parityReleaseHeadCase   `json:"releaseHeads"`
 	DetailHeads    []parityDetailHeadCase    `json:"detailHeads"`
 	RowHeads       []parityDetailHeadCase    `json:"rowHeads"`
@@ -360,8 +371,15 @@ func TestParityMetaRow(t *testing.T) {
 	for _, c := range f.MetaRow.Authors {
 		t.Run(c.Name, func(t *testing.T) {
 			bit := sitePageAuthorBit(&sitePageMsg{Author: c.Author, Email: c.Email})
-			if bit.Class != "author" || bit.Text != c.ExpectLabel || bit.Title != c.ExpectTitle {
-				t.Errorf("author bit = %+v, want class author, text %q, title %q", bit, c.ExpectLabel, c.ExpectTitle)
+			if bit.Class != "author" || bit.Text != c.ExpectLabel || bit.Title != c.ExpectTitle || bit.Href != "" {
+				t.Errorf("author bit = %+v, want class author, text %q, title %q, no href", bit, c.ExpectLabel, c.ExpectTitle)
+			}
+			want := ""
+			if c.ExpectHref != "" {
+				want = "../index.html" + c.ExpectHref
+			}
+			if link := sitePageAuthorLink(&sitePageMsg{Author: c.Author, Email: c.Email}); link.Href != want || link.Text != bit.Text || link.Title != bit.Title {
+				t.Errorf("author link = %+v, want href %q with the bit's text and title", link, want)
 			}
 		})
 	}
@@ -836,12 +854,37 @@ func TestParityFeedbackCard(t *testing.T) {
 	}
 }
 
+// TestParityFeedbackFileRef asserts the file route a feedback's chip opens through its pull request matches the fixture unit_parity.js asserts.
+func TestParityFeedbackFileRef(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.FeedbackFiles) == 0 {
+		t.Fatal("no feedback file cases in parity fixtures")
+	}
+	for _, c := range f.FeedbackFiles {
+		t.Run(c.Name, func(t *testing.T) {
+			msg := &sitePageMsg{Ext: "review", Header: &protocol.Header{Ext: "review", Fields: c.Header}}
+			prFields := map[string]string{"type": "pull-request"}
+			for k, v := range c.PR {
+				prFields[k] = v
+			}
+			prMsg := &sitePageMsg{Ext: "review", Header: &protocol.Header{Ext: "review", Fields: prFields}}
+			want := ""
+			if c.ExpectRef != "" {
+				want = "../index.html" + c.ExpectRef
+			}
+			if got := sitePageFeedbackFileRef(&sitePageItem{Msg: msg, Resolved: msg}, &sitePageItem{Msg: prMsg, Resolved: prMsg}); got != want {
+				t.Errorf("file ref = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 // TestParityFeedbackCardVariant asserts a feedback reply renders as the card
 // variant both renderers build, with the verdict on the card and on a chip.
 func TestParityFeedbackCardVariant(t *testing.T) {
 	fields := map[string]string{"type": "feedback", "review-state": "changes-requested", "file": "notes.txt", "new-line": "2"}
 	msg := &sitePageMsg{Ext: "review", Header: &protocol.Header{Ext: "review", Fields: fields}}
-	reply := buildSiteReply(&sitePageItem{Msg: msg, Resolved: msg})
+	reply := buildSiteReply(&sitePageItem{Msg: msg, Resolved: msg}, nil)
 	if reply.Variant != "feedback verdict-changes-requested" {
 		t.Errorf("variant = %q, want %q", reply.Variant, "feedback verdict-changes-requested")
 	}
@@ -917,6 +960,13 @@ func TestParityDetailHead(t *testing.T) {
 			got := parityChipList(siteHeadChips(it, subject))
 			if strings.Join(got, ",") != strings.Join(want, ",") {
 				t.Errorf("chips = %v, want %v", got, want)
+			}
+			wantHref := ""
+			if c.ExpectHref != "" {
+				wantHref = "../index.html" + c.ExpectHref
+			}
+			if href := siteHeadingHref(it, subject); href != wantHref {
+				t.Errorf("heading href = %q, want %q", href, wantHref)
 			}
 		})
 	}

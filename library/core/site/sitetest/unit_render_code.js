@@ -69,7 +69,7 @@ put("a0", "tree", rootEntries(sha("b1")));
 put("c0", "commit", "tree " + sha("a0") + "\nauthor Ada <ada@example.com> 1750000000 +0000\n\nRoot commit\n");
 put("c1", "commit", "tree " + sha("a1") + "\nparent " + sha("c0") + "\nauthor Ada <ada@example.com> 1750000100 +0000\n\nRewrite the last line\n\nThe body of the commit.\n");
 // d7 is an annotated tag object on c1, so the tag ref sha is not a commit until peeled.
-put("d7", "tag", "object " + sha("c1") + "\ntype commit\ntag v0.2\ntagger Ada <ada@example.com> 1750000200 +0000\n\nSecond cut\n");
+put("d7", "tag", "object " + sha("c1") + "\ntype commit\ntag v0.2\ntagger Ada <ada@example.com> 1750000200 +0000\n\nSecond cut\nAfter #commit:" + sha("c0").slice(0, 12) + " by @ada@example.com, see https://example.com/notes\n");
 ctx.head = Promise.resolve({ branch: "refs/heads/trunk", sha: sha("c1") });
 ctx.manifest = Promise.resolve({
   "refs/heads/trunk": sha("c1"),
@@ -206,6 +206,9 @@ async function main() {
   await tick(30);
   eq(textOf(findClass(detail, "subject")[0]), "Rewrite the last line", "the commit subject heads the page");
   ok(textOf(detail).indexOf("The body of the commit.") !== -1, "the commit body renders");
+  eq(findClass(findClass(detail, "detail-meta")[0], "hash").map((a) => a.tagName + " " + textOf(a) + "@" + a.getAttribute("href")),
+    ["A " + sha("c1") + "@#commit:" + sha("c1") + "@trunk", "A " + sha("c0").slice(0, 12) + "@#commit:" + sha("c0") + "@trunk"],
+    "the hash links its own route on the branch and each parent links its commit");
   eq(findClass(detail, "diff-path").map(textOf), ["main.go"], "the one changed file is listed");
   eq(findClass(detail, "diff-status").map(textOf), ["M"], "a modified file is marked M");
   ok(textOf(findClass(detail, "diff-head")[0]).indexOf("Changes (1)") !== -1, "the section counts the changed files");
@@ -277,6 +280,15 @@ async function main() {
   eq(tagChips(graphRows[0]), ["v0.2@#tag:v0.2"], "an annotated tag decorates the commit it peels to");
   eq(tagChips(graphRows[1]), ["v0.1@#tag:v0.1", "v0.0.3@#tag:v0.0.3", "v0.0.2@#tag:v0.0.2"], "a lightweight tag decorates its commit, capped in version order");
   ok(findClass(graphRows[1], "chip").some((c) => textOf(c) === "+1"), "the chips past the cap fold into one +N chip");
+  eq(findClass(graphRows[0], "branch-tip").map((c) => c.tagName + " " + textOf(c) + "@" + c.getAttribute("href")), ["A trunk@#branch:trunk"], "a branch tip chip opens the branch log");
+
+  const tagPage = (await GS.tagDetail(ctx, "v0.2"))[0];
+  const annotation = findClass(tagPage, "tag-annotation")[0];
+  eq(annotation ? findTag(annotation, "a").map((a) => textOf(a) + "@" + a.getAttribute("href")) : null,
+    ["#commit:" + sha("c0").slice(0, 12) + "@#commit:" + sha("c0").slice(0, 12), "@ada@example.com@#/search/author%3Aada%40example.com", "https://example.com/notes@https://example.com/notes"],
+    "a tag annotation links its refs, mentions and URLs");
+  eq(annotation ? findTag(annotation, "br").length : null, 1, "the annotation keeps its line breaks");
+  eq(annotation ? findTag(annotation, "p").length : null, 0, "and renders no markdown block");
 
   const log = (await GS.branchLogView(ctx, "trunk"))[0];
   const logCards = findClass(log, "card");

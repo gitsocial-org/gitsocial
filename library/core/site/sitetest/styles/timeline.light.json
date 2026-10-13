@@ -115,6 +115,28 @@
   ],
   ".card-chips": [
     {
+      "shape": "a.chip.chip-label > span.chip.chip-count",
+      "padding": "0px",
+      "margin": "6.4px 0px 0px 28.8px",
+      "fontSize": "21px",
+      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "color": "rgb(0, 0, 0)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(0, 0, 0)",
+      "borderRadius": "0px"
+    },
+    {
+      "shape": "a.chip.chip-label",
+      "padding": "0px",
+      "margin": "6.4px 0px 0px 28.8px",
+      "fontSize": "21px",
+      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "color": "rgb(0, 0, 0)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(0, 0, 0)",
+      "borderRadius": "0px"
+    },
+    {
       "shape": "span.chip.chip-count",
       "padding": "0px",
       "margin": "6.4px 0px 0px 28.8px",
@@ -127,28 +149,6 @@
     },
     {
       "shape": "span.chip.chip-due",
-      "padding": "0px",
-      "margin": "6.4px 0px 0px 28.8px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
-      "color": "rgb(0, 0, 0)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(0, 0, 0)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "span.chip.chip-label > span.chip.chip-count",
-      "padding": "0px",
-      "margin": "6.4px 0px 0px 28.8px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
-      "color": "rgb(0, 0, 0)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(0, 0, 0)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "span.chip.chip-label",
       "padding": "0px",
       "margin": "6.4px 0px 0px 28.8px",
       "fontSize": "21px",
@@ -172,7 +172,7 @@
   ],
   ".meta": [
     {
-      "shape": "span.author > a.subject > span.reltime",
+      "shape": "a.author > a.subject > span.reltime",
       "padding": "0px",
       "margin": "0px",
       "fontSize": "12.8px",
@@ -183,7 +183,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.author > span.reltime > a.hash > span.chip",
+      "shape": "a.author > span.reltime > a.hash > a.chip",
       "padding": "0px",
       "margin": "3.2px 0px 0px 28.8px",
       "fontSize": "12.8px",
@@ -194,7 +194,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.author > span.reltime > a.hash > span.edited",
+      "shape": "a.author > span.reltime > a.hash > span.chip",
       "padding": "0px",
       "margin": "3.2px 0px 0px 28.8px",
       "fontSize": "12.8px",
@@ -205,7 +205,18 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.author > span.reltime > a.hash",
+      "shape": "a.author > span.reltime > a.hash > span.edited",
+      "padding": "0px",
+      "margin": "3.2px 0px 0px 28.8px",
+      "fontSize": "12.8px",
+      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
+      "color": "srgb(0.31 0.3 0.27)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "srgb(0.31 0.3 0.27)",
+      "borderRadius": "0px"
+    },
+    {
+      "shape": "a.author > span.reltime > a.hash",
       "padding": "0px",
       "margin": "0px 0px 3.2px",
       "fontSize": "12.8px",
@@ -216,7 +227,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.author > span.reltime > a.hash",
+      "shape": "a.author > span.reltime > a.hash",
       "padding": "0px",
       "margin": "3.2px 0px 0px 28.8px",
       "fontSize": "12.8px",
@@ -227,7 +238,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.author > span.reltime",
+      "shape": "a.author > span.reltime",
       "padding": "0px",
       "margin": "0px 0px 3.2px",
       "fontSize": "12.8px",
@@ -238,7 +249,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.type-glyph > span.author > span.reltime > a.hash",
+      "shape": "span.type-glyph > a.author > span.reltime > a.hash",
       "padding": "0px",
       "margin": "0px",
       "fontSize": "12.8px",
@@ -298,6 +309,17 @@
     },
     {
       "shape": "",
+      "padding": "0.8px 9.6px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
+      "color": "srgb(0.31 0.3 0.27)",
+      "backgroundColor": "srgb(0 0 0 / 0.08)",
+      "borderLeftColor": "srgb(0.31 0.3 0.27)",
+      "borderRadius": "999px"
+    },
+    {
+      "shape": "a > a",
       "padding": "0.8px 9.6px",
       "margin": "0px",
       "fontSize": "12.8px",

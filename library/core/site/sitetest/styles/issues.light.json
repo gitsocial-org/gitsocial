@@ -38,7 +38,7 @@
   ],
   ".card-chips": [
     {
-      "shape": "span.chip.chip-label > span.chip.chip-count",
+      "shape": "a.chip.chip-label > span.chip.chip-count",
       "padding": "0px",
       "margin": "6.4px 0px 0px 28.8px",
       "fontSize": "21px",
@@ -49,7 +49,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.chip.chip-label",
+      "shape": "a.chip.chip-label",
       "padding": "0px",
       "margin": "6.4px 0px 0px 28.8px",
       "fontSize": "21px",
@@ -62,7 +62,7 @@
   ],
   ".meta": [
     {
-      "shape": "span.author > span.reltime > a.hash",
+      "shape": "a.author > span.reltime > a.hash",
       "padding": "0px",
       "margin": "3.2px 0px 0px 28.8px",
       "fontSize": "12.8px",

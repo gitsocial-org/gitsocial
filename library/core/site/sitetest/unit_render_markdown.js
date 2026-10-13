@@ -139,5 +139,14 @@ const outerLinks = [];
 (function walk(n) { for (const c of (n && n._children) || []) { if (c.nodeType === 1 && c.tagName === "A") outerLinks.push(c); walk(c); } })(crossRefs);
 ok(outerLinks.every((a) => findClass(a, "hash").length === 0), "no anchor nests inside an anchor");
 
+// A mention links to the author search; an escaped mention, a bare email and a mention inside a link stay text.
+const mentions = GS.renderMarkdown("Ping @alice@example.com and @@x@y.io, not bob@example.com.\n\nSee #commit:abc123def456 @carol@example.org [@dan@example.org](https://example.com)\n");
+const mentionAnchors = findTag(mentions, "a").filter((a) => !a._cls.has("hash") && !a.getAttribute("href").startsWith("https:"));
+eq(mentionAnchors.map((a) => [textOf(a), href(a)]),
+  [["@alice@example.com", "#/search/author%3Aalice%40example.com"], ["@carol@example.org", "#/search/author%3Acarol%40example.org"]],
+  "each mention links to the author search for its email");
+ok(textOf(mentions).indexOf("@@x@y.io") !== -1 && textOf(mentions).indexOf("not bob@example.com.") !== -1, "an escaped mention and a bare email stay text");
+eq(findClass(mentions, "hash").filter((a) => a.tagName === "A").map(href), ["#commit:abc123def456"], "a ref beside a mention still links");
+
 console.log("\n" + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

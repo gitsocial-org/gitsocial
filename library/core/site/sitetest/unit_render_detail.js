@@ -122,6 +122,9 @@ async function main() {
   console.log("=== a release lists its assets ===");
   const release = (await GS.itemDetail(ctx, sha("e1"), "gitmsg/release"))[0];
   await tick(60);
+  const releaseHead = findTag(findClass(release, "card-head")[0], "h1")[0];
+  eq(findTag(releaseHead, "a").map((a) => textOf(a) + "@" + a.getAttribute("href")), ["v1.2@#tag:v1.2"], "a release head links its tag page");
+  eq(findTag(findClass(issue, "card-head")[0], "a").length, 0, "every other head stays text");
   const assets = findClass(release, "assets")[0];
   ok(!!assets, "a release detail carries an assets section");
   eq(findClass(assets, "asset-row").map((r) => textOf(r)),
@@ -162,6 +165,15 @@ async function main() {
   eq(keys(release), ["origin"], "a release lists one row: its head, chips and assets section carry the rest, the origin fields fold into one");
   eq(findTag(findTag(release, "dd")[0], "a").map((a) => a.getAttribute("href")), ["https://example.com/releases/9"],
     "the origin row links to the imported item");
+
+  console.log("=== the embedded context of a cross-repository reply ===");
+  // f2 answers a post of another repository; its GitMsg-Ref carries the context the detail embeds.
+  ctx.objects.set(sha("f2"), { type: "commit", body: enc.encode("tree " + sha("a1") + "\nparent " + sha("f1") + "\nauthor Ada <ada@example.com> 1750000550 +0000\n\nA reply across repositories\n\nGitMsg: v=\"0.1.0\" ext=\"social\" type=\"comment\" original=\"https://example.com/upstream#commit:" + short("d9") + "@gitmsg/social\"\nGitMsg-Ref: ext=\"social\"; type=\"post\"; author=\"Uma\"; email=\"uma@example.com\"; time=\"2026-01-02T03:04:05Z\"; ref=\"https://example.com/upstream#commit:" + short("d9") + "@gitmsg/social\"; v=\"0.1.0\"\n > the upstream post\n") });
+  const embCtx = Object.assign({}, ctx, { walks: {}, refMisses: new Set(), manifest: Promise.resolve({ "refs/heads/gitmsg/social": sha("f2"), "refs/heads/gitmsg/pm": sha("ca") }) });
+  const across = (await GS.itemDetail(embCtx, sha("f2"), "gitmsg/social"))[0];
+  await tick(60);
+  const from = findClass(across, "embedded-from")[0];
+  eq(from ? findTag(from, "a").map((a) => textOf(a) + "@" + a.getAttribute("href")) : null, ["https://example.com/upstream@https://example.com/upstream"], "the embedded block links the repository it quotes from");
 
   console.log("=== an adopted copy's detail ===");
   const adopted = (await GS.itemDetail(ctx, sha("c9"), "gitmsg/pm"))[0];
@@ -226,6 +238,34 @@ async function main() {
   const dSec = findClass(dpr, "diff-section")[0];
   ok(!!dSec, "a PR with no recorded tips shows the section in place of a blank");
   ok(text(dSec).indexOf("records no base or head tip") !== -1, "the notice says the tips are not recorded", text(dSec));
+
+  console.log("=== the reviewers of a pull request ===");
+  commit("ba", "af", 1750001250, "Looks good", { ext: "review", type: "feedback", "pull-request": ref("aa", "review"), "review-state": "approved", file: "notes.txt", "new-line": "2" });
+  commit("bb", "ba", 1750001260, "Past the hunk", { ext: "review", type: "feedback", "pull-request": ref("aa", "review"), file: "notes.txt", "new-line": "9" });
+  const fbCtx = Object.assign({}, prCtx, { walks: {}, refMisses: new Set(), manifest: Promise.resolve({
+    "refs/heads/gitmsg/review": sha("bb"), "refs/heads/main": sha("ab"), "refs/heads/feature": sha("ac"),
+  }) });
+  const reviewed = (await GS.itemDetail(fbCtx, sha("aa"), "gitmsg/review"))[0];
+  await tick(80);
+  eq(findClass(reviewed, "reviewer-chip").map((c) => c.tagName + " " + textOf(c) + " " + c.getAttribute("href")), ["A ✓ Ada · approved #/search/reviewer%3Aada%40example.com"],
+    "a reviewer chip opens the reviewer search for the email");
+  fire(findClass(findClass(reviewed, "diff-section")[0], "diff-file-head")[0], "click");
+  await tick(40);
+  const offscreen = findClass(reviewed, "diff-offscreen")[0];
+  eq(offscreen ? findClass(offscreen, "chip").map((c) => c.tagName + " " + textOf(c) + "@" + c.getAttribute("href")) : null, ["A notes.txt:9@#file:notes.txt@feature:L9"],
+    "the file chip of a feedback off the visible lines opens its line on the head branch");
+
+  console.log("=== the trailer rows link their refs ===");
+  const ddLinks = (node) => findTag(findTag(node, "dl")[0], "dd").map((dd) => findTag(dd, "a").map((a) => a.getAttribute("href")).join(",") || textOf(dd));
+  eq(ddLinks(pr), ["#branch:main", "#commit:" + short("ab") + "@main", "#branch:feature", "#commit:" + short("ac") + "@feature"], "a pull request's base, head and tips link to the branch and commit routes, each tip on its branch");
+  eq(ddLinks(fpr).slice(2), ["https://example.com/fork#branch:feature", "#commit:" + short("ac") + "@"], "a cross-repository head links to its URL, and its tip takes a branchless route");
+  const dues = findTag(findTag((await GS.itemDetail(ctx, sha("d2"), "gitmsg/pm"))[0], "dl")[0], "dd").map((dd) => findTag(dd, "a").length + ":" + textOf(dd));
+  ok(dues.indexOf("0:2026-09-01") !== -1, "a value that is no ref stays as written", dues.join(" | "));
+  const fbd = (await GS.itemDetail(fbCtx, sha("ba"), "gitmsg/review"))[0];
+  await tick(60);
+  eq(ddLinks(fbd), ["#file:notes.txt@feature:L2", "2", ref("aa", "review"), "approved"], "a feedback's file row opens its lines on the head branch, its pull-request row the pull request");
+  const labelDd = findTag(fresh, "dd").find((dd) => textOf(dd) === "kind/bug");
+  eq(labelDd ? findTag(labelDd, "a").map((a) => a.getAttribute("href")) : null, ["#/search/label%3Akind%2Fbug"], "a labels row links each label to the label search");
 
   commit("ad", "af", 1750001300, "Merged long ago", { ext: "review", type: "pull-request", state: "merged", base: "#branch:main", "merge-base": "0000abc", "merge-head": "0000def" });
   const mCtx = Object.assign({}, prCtx, { walks: {}, refMisses: new Set(), manifest: Promise.resolve({

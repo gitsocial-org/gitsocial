@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, findForkPull, hydrateForkPull, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, peelTag, tagsByCommit, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortSha, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, anyRefHash, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, findForkPull, hydrateForkPull, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemLabels, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, peelTag, tagsByCommit, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseInline, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, releaseAssetLabel, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, headChips, rowHeadChips, chipStateClass, resolveAncestors, resolvePath, resolveShortSha, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // BACK_ROUTES are the route types a detail page's back link may return to; detail routes are excluded.
   const BACK_ROUTES = { index: 1, board: 1, search: 1, home: 1, branches: 1, tags: 1, lists: 1, list: 1, analytics: 1, code: 1 };
@@ -60,12 +60,29 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return el("span", { class: "reltime", title: preciseTime(unixSeconds) }, [relTime(unixSeconds)]);
   }
 
-  // authorEl returns an author span with the email as its title when it differs from the label.
-  function authorEl(name, email) {
-    const label = authorLabel(name, email);
+  // authorAttrs returns an author bit's attributes: the class, and the email as the title when it differs from the label.
+  function authorAttrs(label, email) {
     const attrs = { class: "author" };
     if (email && email !== label) attrs.title = email;
-    return el("span", attrs, [label]);
+    return attrs;
+  }
+
+  // authorSpan returns the plain author span, for a bit inside another link (sitePageAuthorBit).
+  function authorSpan(name, email) {
+    const label = authorLabel(name, email);
+    return el("span", authorAttrs(label, email), [label]);
+  }
+
+  // authorEl returns the author linked to the author search when the email is known, else the plain span (sitePageAuthorLink).
+  function authorEl(name, email) {
+    if (!email) return authorSpan(name, email);
+    const label = authorLabel(name, email);
+    return el("a", Object.assign(authorAttrs(label, email), { href: searchHref("author", email) }), [label]);
+  }
+
+  // searchHref builds a #/search link with one facet prefilled, the token encoded as the route decodes it.
+  function searchHref(facet, value) {
+    return "#/search/" + encodeURIComponent(facet + ":" + value);
   }
 
   // editedBit returns the meta row's edited marker, the edit's precise time in its title.
@@ -518,14 +535,16 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const oc = originChip(h);
     if (oc) chips.push(oc);
     if (h.due) chips.push(el("span", { class: "chip chip-due" }, ["due " + h.due]));
+    // An assignee or label chip opens the search facet that lists the items carrying it.
     const labels = itemLabels(h);
-    for (const l of labels) if (l.scope === "priority") chips.push(el("span", { class: "chip chip-priority prio-" + l.value }, [l.value]));
+    const labelName = (l) => (l.scope ? l.scope + "/" + l.value : l.value);
+    for (const l of labels) if (l.scope === "priority") chips.push(el("a", { class: "chip chip-priority prio-" + l.value, href: searchHref("label", labelName(l)) }, [l.value]));
     for (const a of (h.assignees || "").split(",").map((s) => s.trim()).filter(Boolean)) {
-      chips.push(el("span", { class: "chip chip-assignee" }, ["☛ " + assigneeLabel(a)]));
+      chips.push(el("a", { class: "chip chip-assignee", href: searchHref("assignee", a) }, ["☛ " + assigneeLabel(a)]));
     }
     for (const l of labels) {
       if (l.scope === "priority" || l.scope === "status") continue;
-      chips.push(el("span", { class: "chip chip-label" }, [l.scope ? l.scope + "/" + l.value : l.value]));
+      chips.push(el("a", { class: "chip chip-label", href: searchHref("label", labelName(l)) }, [labelName(l)]));
     }
     if (counts) {
       if (counts.approved || counts.changesRequested) {
@@ -784,15 +803,24 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     });
   }
 
-  // prCard renders a pull request card with its head to base flow.
+  // branchChipPart renders one side of a pull request's branch pair: a branch of this repository linked to its log, a browsable fork branch to its URL, anything else as written.
+  function branchChipPart(field) {
+    const { url, name } = parseBranchField(field);
+    if (!url && name) return el("a", { href: "#branch:" + name }, [name]);
+    if (/^https:\/\//.test(url)) return el("a", { href: field, rel: "noopener" }, [field]);
+    return field || "?";
+  }
+
+  // prCard renders a pull request card with its head to base flow and, for a stacked one, a chip opening the pull request it depends on.
   function prCard(item, counts) {
     const subject = itemSubject(item) || "(untitled)";
     const h = item.header || {};
     const chips = cardHeadChips(h, "review", subject);
     const head = cardHead(typeGlyphEl(item, "review"), commitRef(item.commit.hash, "gitmsg/review"), subject, chips.tail, chips.lead);
     const row = metaRow(item, "gitmsg/review");
-    row.append(el("span", { class: "chip" }, [(h.head || "?") + " → " + (h.base || "?")]));
-    if (h["depends-on"]) row.append(el("span", { class: "chip" }, ["stacked"]));
+    row.append(el("span", { class: "chip" }, [branchChipPart(h.head), " → ", branchChipPart(h.base)]));
+    const under = anyRefHash((h["depends-on"] || "").split(",")[0]);
+    if (h["depends-on"]) row.append(under ? el("a", { class: "chip", href: commitRef(under, "gitmsg/review") }, ["stacked"]) : el("span", { class: "chip" }, ["stacked"]));
     return card({
       parts: [head, row, chipRow(headerChips(h, counts))],
       nav: { hash: item.commit.hash, branch: "gitmsg/review" },
@@ -973,13 +1001,52 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // trailerValue renders one trailer value; a same-repo original or reply-to ref links to its commit.
-  function trailerValue(key, val) {
-    if ((key === "original" || key === "reply-to") && !refRepoUrl(val)) {
-      const h = refHash(val);
-      if (h) return el("a", { href: commitRef(h, refBranch(val)) }, [val]);
+  // TIP_KEYS are the header fields that carry a bare 12-character commit hash (GITREVIEW.md 1.1 and 1.4).
+  const TIP_KEYS = { "base-tip": 1, "head-tip": 1, "merge-base": 1, "merge-head": 1, commit: 1 };
+  // FACET_KEYS maps a header field of emails or labels to the search facet that lists the items carrying one.
+  const FACET_KEYS = { assignees: "assignee", reviewers: "reviewer", labels: "label" };
+
+  // HEADER_REF_RE matches one header ref, of this repository or qualified by one.
+  const HEADER_REF_RE = /^[^#\s]*#(?:commit|branch|tag|file|list):\S+$/;
+
+  // refLink links one header ref: a ref of this repository to its route, a browsable cross-repository ref to its URL; any other value stays text.
+  function refLink(ref) {
+    if (!HEADER_REF_RE.test(ref)) return ref;
+    const repo = refRepoUrl(ref);
+    if (!repo) return el("a", { href: ref }, [ref]);
+    return /^https:\/\//.test(repo) ? el("a", { href: ref, rel: "noopener" }, [ref]) : ref;
+  }
+
+  // listValue renders a comma-separated header value as one node, each entry through link.
+  function listValue(val, link) {
+    const nodes = [];
+    for (const part of val.split(",").map((s) => s.trim()).filter(Boolean)) {
+      if (nodes.length) nodes.push(", ");
+      nodes.push(link(part));
     }
-    return val;
+    return nodes.length === 1 ? nodes[0] : el("span", {}, nodes);
+  }
+
+  // refListValue links each ref of a comma-separated list; a value that is not refs alone stays as written.
+  function refListValue(val) {
+    const parts = val.split(",").map((s) => s.trim());
+    return parts.every((p) => HEADER_REF_RE.test(p)) ? listValue(val, refLink) : val;
+  }
+
+  // tipBranch names the branch of this repository a tip field points into: the head for head-tip, the base for the other tips, the head of the pull request for a feedback's commit; "" when unknown.
+  function tipBranch(key, header, pr) {
+    const field = key === "head-tip" ? header.head : key === "commit" ? pr && pr.head : header.base;
+    const side = parseBranchField(field);
+    return side.url ? "" : side.name;
+  }
+
+  // trailerValue renders one trailer value: a tip to its commit on its branch, an email or label to its search facet, a feedback file to its lines on the branch of the pull request, each ref of a list to its route.
+  function trailerValue(key, val, header, pr) {
+    val = String(val);
+    if (TIP_KEYS[key]) return /^[0-9a-f]{7,40}$/.test(val) ? el("a", { href: commitRef(val, tipBranch(key, header, pr)) }, [val]) : val;
+    if (FACET_KEYS[key]) return listValue(val, (v) => el("a", { href: searchHref(FACET_KEYS[key], v) }, [v]));
+    if (key === "file") { const href = feedbackFileRef(header, pr); return href ? el("a", { href }, [val]) : val; }
+    return refListValue(val);
   }
 
   // TRAILER_SKIP are the header fields another component on a detail page carries: the route, the head's chips and the meta row.
@@ -988,13 +1055,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     "origin-author-name": 1, "origin-author-email": 1, "origin-time": 1, "origin-platform": 1, "origin-url": 1,
   };
 
-  // trailerRows lists a detail's trailer rows in key order, the origin fields folded into one linked row.
-  function trailerRows(header, skip) {
+  // trailerRows lists a detail's trailer rows in key order, the origin fields folded into one linked row; pr is the pull request header a feedback's file row links through.
+  function trailerRows(header, skip, pr) {
     const h = header || {};
     const rows = {};
     for (const key of Object.keys(h)) {
       if (TRAILER_SKIP[key] || (skip || []).indexOf(key) !== -1) continue;
-      rows[key] = trailerValue(key, h[key]);
+      rows[key] = trailerValue(key, h[key], h, pr);
     }
     const platform = h["origin-platform"] || "", url = h["origin-url"] || "";
     if (platform || url) {
@@ -1004,9 +1071,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
   // trailerList fills a definition list with a detail's trailer rows.
-  function trailerList(dl, header, skip) {
+  function trailerList(dl, header, skip, pr) {
     dl.replaceChildren();
-    for (const row of trailerRows(header, skip)) {
+    for (const row of trailerRows(header, skip, pr)) {
       dl.append(el("dt", {}, [row.key]));
       dl.append(el("dd", {}, [row.value]));
     }
@@ -1039,6 +1106,12 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return btn;
   }
 
+  // headTagLink links a release head to its tag page when the head is its tag and the item stands; null for every other head. Mirrors siteHeadingHref in site_pages_html.go.
+  function headTagLink(header, head, retracted) {
+    const h = header || {};
+    return h.tag && head === h.tag && !retracted && h.retracted !== "true" ? el("a", { href: "#tag:" + h.tag }, [head]) : null;
+  }
+
   // detailView renders an item detail page, with a version picker when the item has edits.
   function detailView(item, kind, skipKeys, ctx) {
     const skip = skipKeys || [];
@@ -1068,8 +1141,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const v = versions[sel.idx];
       const [subject, body] = subjectBody(v.content);
       if (headEl) {
-        subjectEl.textContent = headSubject(v.header, ext, subject);
-        headEl.replaceChildren(subjectEl, ...headChips(v.header, ext, subjectEl.textContent).map(chipEl));
+        const head = headSubject(v.header, ext, subject);
+        subjectEl.replaceChildren(headTagLink(v.header, head) || head);
+        headEl.replaceChildren(subjectEl, ...headChips(v.header, ext, head).map(chipEl));
       }
       const cb = commitBody(bodyOnly ? v.content : body, v.rawMessage, ext === "release");
       actions.replaceChildren(cb.modes, share);
@@ -1077,7 +1151,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       if (item.fork) meta.append(" · ", ...forkBits(item.fork.repo));
       metaSlot.replaceChildren(meta);
       bodyPane.replaceChildren(cb.pane);
-      trailerList(dl, v.header, skip);
+      trailerList(dl, v.header, skip, kind.pr);
     }
     // A section that follows the selected version hooks wrap.__onVersion.
     if (versions.length > 1) wrap.append(versionHistorySection(versions, (i) => { sel.idx = i; paint(); if (wrap.__onVersion) wrap.__onVersion(i); }));
@@ -1094,7 +1168,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return resolveShortSha(ctx, hash, live ? () => walkHistory(ctx, live, DETAIL_WALK_CAP) : null);
   }
 
-  // commitDetail paints a raw commit's detail page, then appends its changes in the background.
+  // commitDetail paints a raw commit's detail page, its hash and parents linked to their commit routes, then appends its changes in the background.
   async function commitDetail(ctx, hash, branch) {
     const sha = await resolveCommitRouteSha(ctx, hash, branch);
     const obj = sha ? await getObject(ctx, sha) : null;
@@ -1106,7 +1180,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const meta = el("span", { class: "meta" }, [
       commitAuthorEl(c), " · ", timeEl(c.authorTime), " · ",
     ]);
-    meta.append(el("span", { class: "hash" }, [c.hash]));
+    meta.append(el("a", { class: "hash", href: commitRef(c.hash, branch) }, [c.hash]));
+    for (const p of c.parents) meta.append(" · parent ", el("a", { class: "hash", href: commitRef(p, branch) }, [p.slice(0, 12)]));
     const cbody = subjectBody(c.content)[1];
     const cb = commitBody(cbody, c.rawMessage);
     wrap.append(el("div", { class: "detail-meta" }, [meta, cb.modes]));
@@ -1369,16 +1444,29 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // MENTION_RE is the JS copy of the mention grammar of protocol.FindMentions, pinned the same way.
   const MENTION_RE = /(^|[^@])@([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
 
-  // refLinkNodes splits plain text into text nodes and hash-styled anchors for the refs it carries.
+  // inlineLinkTokens lists the refs and mentions of a text as { start, end, node } in text order: a ref links to its route, a mention to the author search.
+  function inlineLinkTokens(text) {
+    const tokens = [];
+    for (const m of text.matchAll(REF_LINK_RE)) {
+      const start = m.index + m[1].length;
+      tokens.push({ start, end: start + m[2].length, node: el("a", { class: "hash", href: m[2] }, [m[2]]) });
+    }
+    for (const m of text.matchAll(MENTION_RE)) {
+      const start = m.index + m[1].length;
+      tokens.push({ start, end: start + m[2].length + 1, node: el("a", { href: searchHref("author", m[2]) }, ["@" + m[2]]) });
+    }
+    return tokens.sort((a, b) => a.start - b.start);
+  }
+
+  // refLinkNodes splits plain text into text nodes and anchors for the refs and mentions it carries, or null when it carries none.
   function refLinkNodes(text) {
     const out = [];
     let last = 0;
-    for (const m of text.matchAll(REF_LINK_RE)) {
-      const ref = m[2];
-      const start = m.index + m[1].length;
-      if (start > last) out.push(document.createTextNode(text.slice(last, start)));
-      out.push(el("a", { class: "hash", href: ref }, [ref]));
-      last = start + ref.length;
+    for (const t of inlineLinkTokens(text)) {
+      if (t.start < last) continue;
+      if (t.start > last) out.push(document.createTextNode(text.slice(last, t.start)));
+      out.push(t.node);
+      last = t.end;
     }
     if (last === 0) return null;
     if (last < text.length) out.push(document.createTextNode(text.slice(last)));
@@ -1542,6 +1630,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         if (t && t.scrollIntoView) t.scrollIntoView();
       });
     }
+  }
+
+  // inlineText renders plain text as inline nodes with hard breaks: refs, mentions and URLs link, and no block of it becomes markdown.
+  function inlineText(text) {
+    return renderInline(parseInline(text || "", {}), { hardBreaks: true });
   }
 
   // renderCommitBody renders a commit body as markdown with hard breaks and no relative image resolution.
@@ -2136,15 +2229,26 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return box;
   }
 
-  // feedbackCard renders one PR feedback as a card variant; atLine drops the anchor chip where the card already sits on its line.
-  function feedbackCard(fb, atLine) {
+  // feedbackFileRef builds the file route a feedback anchors: its new lines on the head branch of the pull request, its old lines on the base; "" when the branch is not one of this repository. Mirrors sitePageFeedbackFileRef in site_pages_html.go.
+  function feedbackFileRef(h, pr) {
+    if (!h || !h.file || !pr) return "";
+    const onHead = !!h["new-line"] || !h["old-line"];
+    const side = parseBranchField(onHead ? pr.head : pr.base);
+    if (side.url || !side.name) return "";
+    const line = onHead ? h["new-line"] : h["old-line"], end = onHead ? h["new-line-end"] : h["old-line-end"];
+    return fileRef(h.file, side.name, line, end && end !== line ? end : null);
+  }
+
+  // feedbackCard renders one PR feedback as a card variant; atLine drops the anchor chip where the card already sits on its line, and pr is the pull request header the chip links the file through.
+  function feedbackCard(fb, atLine, pr) {
     const h = fb.header || {};
     const verdict = feedbackVerdict(h);
     const anchor = atLine ? "" : feedbackAnchorLabel(h);
     const meta = el("span", { class: "meta" }, []);
     prependGlyph(meta, fb, "review");
     if (verdict) meta.append(el("span", { class: "chip verdict-" + verdict }, [verdict.replace("-", " ")]));
-    if (anchor) meta.append(el("span", { class: "chip" }, [anchor]));
+    const fileHref = anchor ? feedbackFileRef(h, pr) : "";
+    if (anchor) meta.append(fileHref ? el("a", { class: "chip", href: fileHref }, [anchor]) : el("span", { class: "chip" }, [anchor]));
     meta.append(authorEl(fb.author || "unknown", effectiveAuthorEmail(fb.commit, fb.header)), " · ",
       timeEl(fb.effectiveTime || (fb.commit && fb.commit.authorTime)));
     let body;
@@ -2158,15 +2262,15 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function feedbackRow(fb) { return el("div", { class: "diff-feedback" }, [feedbackCard(fb, true)]); }
 
   // offscreenBlock renders feedback whose anchored line is not in the rendered hunks.
-  function offscreenBlock(fbList) {
+  function offscreenBlock(fbList, pr) {
     const box = el("div", { class: "diff-offscreen" }, []);
     box.append(el("div", { class: "diff-offscreen-head" }, ["Comments not on visible lines"]));
-    for (const fb of fbList) box.append(feedbackCard(fb));
+    for (const fb of fbList) box.append(feedbackCard(fb, false, pr));
     return box;
   }
 
-  // diffSection renders a capped changed-file list with a unified|split toggle; every row starts collapsed, and a diff loads on its first expand.
-  function diffSection(ctx, entries, title, caveats, fileFeedback) {
+  // diffSection renders a capped changed-file list with a unified|split toggle; every row starts collapsed, and a diff loads on its first expand; pr is the pull request header its feedback links files through.
+  function diffSection(ctx, entries, title, caveats, fileFeedback, pr) {
     fileFeedback = fileFeedback || [];
     const shown = entries.slice(0, DIFF_FILE_CAP);
     const extra = entries.length - shown.length;
@@ -2252,14 +2356,14 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         }
         if (!f.model.hunks.length) {
           const kids = [el("div", { class: "empty" }, ["No line changes."])];
-          if (entryFb.length) kids.push(offscreenBlock(entryFb));
+          if (entryFb.length) kids.push(offscreenBlock(entryFb, pr));
           body.replaceChildren(...kids);
           return;
         }
         const anchor = entryFb.length ? anchorFeedback(entryFb, f.model.hunks) : { byKey: new Map(), offscreen: [] };
         const diffBody = mode === "split" ? renderHunksSplit(f.model.hunks, lang, { byKey: anchor.byKey }) : renderHunksUnified(f.model.hunks, lang, { byKey: anchor.byKey });
         const kids = [diffBody];
-        if (anchor.offscreen.length) kids.push(offscreenBlock(anchor.offscreen));
+        if (anchor.offscreen.length) kids.push(offscreenBlock(anchor.offscreen, pr));
         body.replaceChildren(...kids);
       };
       f.expand = async () => {
@@ -2344,7 +2448,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         const headTree = await commitTree(ctx, m.headSha);
         if (baseTree && headTree) {
           const entries = await diffTrees(ctx, baseTree, headTree);
-          return diffSection(ctx, entries, "Files changed", [], fileFeedback);
+          return diffSection(ctx, entries, "Files changed", [], fileFeedback, header);
         }
       }
     }
@@ -2371,7 +2475,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (!headR.exact) caveats.push("head branch advanced");
     if (!baseR.exact && !mb) caveats.push("base branch advanced");
     const entries = await diffTrees(ctx, leftTree, headTree);
-    return diffSection(ctx, entries, "Files changed", caveats, fileFeedback);
+    return diffSection(ctx, entries, "Files changed", caveats, fileFeedback, header);
   }
 
   // FORK_DIFF_NOTICE words the Files changed notices of a fork pull request; the page layer carries no fork rows.
@@ -2398,11 +2502,11 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const mb = await resolveMergeBase(ctx, fork.head, baseSha, DETAIL_WALK_CAP);
     const leftTree = (mb && await commitTree(ctx, mb)) || baseTree;
     const entries = await diffTrees(ctx, leftTree, headTree);
-    return diffSection(ctx, entries, "Files changed", mb ? [] : ["raw two-tip diff"], fileFeedback);
+    return diffSection(ctx, entries, "Files changed", mb ? [] : ["raw two-tip diff"], fileFeedback, header);
   }
 
-  // reviewSummarySection renders the review counts, status chip, reviewer chips and verdict feedback, or null.
-  function reviewSummarySection(summary, verdictFeedback) {
+  // reviewSummarySection renders the review counts, status chip, reviewer chips and verdict feedback, or null; pr is the pull request header the feedback links files through.
+  function reviewSummarySection(summary, verdictFeedback, pr) {
     const hasAny = summary.reviewers.length || summary.approved || summary.changesRequested || summary.pending;
     if (!hasAny) return null;
     const wrap = el("div", { class: "review-summary" }, []);
@@ -2417,13 +2521,15 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const chips = el("div", { class: "review-chips" }, []);
       for (const r of summary.reviewers) {
         const icon = r.state === "approved" ? "✓ " : r.state === "changes-requested" ? "✗ " : "↩ ";
-        chips.append(el("span", { class: "chip reviewer-chip verdict-" + r.state }, [icon + r.name + " · " + r.state]));
+        const attrs = { class: "chip reviewer-chip verdict-" + r.state };
+        if (r.email) attrs.href = searchHref("reviewer", r.email);
+        chips.append(el(r.email ? "a" : "span", attrs, [icon + r.name + " · " + r.state]));
       }
       wrap.append(chips);
     }
     for (const fb of verdictFeedback || []) {
       if (!fb.content && !(fb.header && fb.header["review-state"])) continue;
-      wrap.append(feedbackCard(fb));
+      wrap.append(feedbackCard(fb, false, pr));
     }
     return wrap;
   }
@@ -2492,10 +2598,15 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return wrap;
   }
 
-  // embeddedBlock renders the cross-repo context a commit embeds for one reference.
+  // repoUrlNode renders a repository URL as a link when it is browsable, else as text.
+  function repoUrlNode(url) {
+    return /^https:\/\//.test(url) ? el("a", { href: url, rel: "noopener" }, [url]) : url;
+  }
+
+  // embeddedBlock renders the cross-repo context a commit embeds for one reference, its repository linked when browsable.
   function embeddedBlock(e) {
     const box = el("div", { class: "embedded" }, []);
-    box.append(el("div", { class: "embedded-from meta" }, ["from " + e.url]));
+    box.append(el("div", { class: "embedded-from meta" }, ["from ", repoUrlNode(e.url)]));
     if (e.quoted) box.append(el("div", { class: "embedded-quote" }, [e.quoted]));
     const who = el("div", { class: "meta" }, [authorEl(e.author || "unknown", e.email)]);
     if (e.time) who.append(" · " + e.time);
@@ -2616,7 +2727,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const tab = detailTab(cv, item);
     if (onTab) onTab(tab);
     const skip = cv.ext === "release" ? RELEASE_DETAIL_SKIP : [];
-    const nodes = detailView(item, { tab, branch }, skip, ctx);
+    // A feedback's file row links through the branches of its pull request.
+    const pr = (item.header.type || "") === "feedback" ? items.find((i) => hashEq(i.commit.short, anyRefHash(item.header["pull-request"]))) : null;
+    const nodes = detailView(item, { tab, branch, pr: pr ? pr.header : null }, skip, ctx);
     const root = nodes[0];
     for (const e of embeddedRefs(item.commit, item.header)) root.append(embeddedBlock(e));
     if (cv.ext === "release") {
@@ -2640,7 +2753,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         const fb = prFeedback(items, item.commit.short);
         await hydrateItems(ctx, fb.all);
         const summary = reviewSummary(fb.all, item.header.reviewers || "");
-        return reviewSummarySection(summary, fb.nonFile);
+        return reviewSummarySection(summary, fb.nonFile, item.header);
       }, fill(slot()));
       const versions = item.versions && item.versions.length ? item.versions : [{ header: item.header }];
       const file = prFeedback(items, item.commit.short).file;
@@ -3346,8 +3459,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // authorSearchHref builds a #/search link with the author facet prefilled by email, else name.
   function authorSearchHref(a) {
-    const token = a.email || a.name || "";
-    return "#/search/" + encodeURIComponent("author:" + token);
+    return searchHref("author", a.email || a.name || "");
   }
 
   // analyticsAuthors renders the top authors with a live filter and an autoscroll window of PAGE rows.
@@ -3468,7 +3580,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // ---- Lists (#/lists overview + #list:<ext>/<name> detail) ----
 
-  // listMemberRow renders one list member: a link when local, labeled mono text when foreign.
+  // listMemberRow renders one list member: a link to its route when local, a labeled link to its URL with the fragment when it is browsable, else labeled mono text.
   function listMemberRow(member) {
     const m = listMemberRef(member);
     const row = el("div", { class: "tree-row" }, []);
@@ -3477,7 +3589,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       row.append(el("a", { class: "mono", href }, [m.ref]));
     } else {
       row.append(el("span", { class: "chip" }, ["repo"]));
-      row.append(el("span", { class: "mono selectable" }, [m.ref]));
+      row.append(/^https:\/\//.test(m.ref) ? el("a", { class: "mono", href: m.ref, rel: "noopener" }, [m.ref]) : el("span", { class: "mono selectable" }, [m.ref]));
     }
     return row;
   }
@@ -3827,7 +3939,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     meta.append("tagged commit ", cLink);
     if (c) meta.append(" ", el("a", { href: commitRef(peeled.commit, "") }, [subjectBody(c.content)[0] || ""]));
     wrap.append(el("div", { class: "detail-meta" }, [meta]));
-    if (peeled.message) wrap.append(el("div", { class: "tag-annotation" }, [el("div", { class: "body" }, [peeled.message])]));
+    if (peeled.message) wrap.append(el("div", { class: "tag-annotation" }, [el("div", { class: "body" }, inlineText(peeled.message))]));
 
     const idx = tags.findIndex((x) => x.name === name);
     const prev = idx >= 0 ? tags[idx + 1] : undefined;
@@ -3898,7 +4010,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       commitAuthorEl(c), " · ", o.time || timeEl(c.authorTime), " · ",
       el("a", { class: "hash", href: ref }, [c.short]),
     ]);
-    if (o.chip && name) meta.append(el("span", { class: "chip" }, [name]));
+    if (o.chip && name) meta.append(el("a", { class: "chip", href: "#branch:" + name }, [name]));
     for (const chip of tagChipEls(o.tags)) meta.append(chip);
     return card({ id: o.id, parts: [head, meta], nav: { hash: c.hash, branch: name } });
   }
@@ -4095,13 +4207,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // GRAPH_ROW_CHIPS caps a row's decorations; the rest fold into one "+N" chip.
   const GRAPH_ROW_CHIPS = 3;
-  // graphRefChips returns a row's branch tip, tag and merged-PR chips, capped at GRAPH_ROW_CHIPS.
+  // graphRefChips returns a row's branch tip, tag and merged-PR chips, capped at GRAPH_ROW_CHIPS; a tip chip opens its branch log.
   function graphRefChips(hash, decor) {
     if (!decor) return [];
     const chips = [];
     const push = (name, node) => chips.push({ name, node });
     const live = decor.tips[hash] || [];
-    for (const name of live) push(name, el("span", { class: "chip branch-tip" + (name === decor.defaultBranch ? " default" : ""), title: name }, [name]));
+    for (const name of live) push(name, el("a", { class: "chip branch-tip" + (name === decor.defaultBranch ? " default" : ""), href: "#branch:" + name, title: name }, [name]));
     for (const name of decor.tags[hash] || []) push(name, el("a", { class: "chip tag-tip", href: "#tag:" + name, title: name }, [name]));
     for (const m of decor.merged || []) {
       if (!hash.startsWith(m.short) || live.includes(m.name)) continue;
@@ -4270,7 +4382,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   function homeHead(branch, latest) {
     const head = el("div", { class: "home-head" }, [el("a", { class: "chip", href: "#branch:" + branch }, ["⎇ " + branch])]);
     if (latest) {
-      const meta = el("span", { class: "meta" }, [authorEl(authorLabel(latest.authorName, latest.authorEmail), latest.authorEmail), " · ", timeEl(latest.authorTime)]);
+      const meta = el("span", { class: "meta" }, [authorSpan(authorLabel(latest.authorName, latest.authorEmail), latest.authorEmail), " · ", timeEl(latest.authorTime)]);
       head.append(" ", el("a", { class: "home-commit", href: commitRef(latest.hash, branch) }, [el("span", { class: "home-row-subject" }, [subjectBody(latest.content)[0]]), " ", meta]));
     }
     return head;
@@ -4368,6 +4480,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, DIFF_FILE_CAP, PR_DIFF_NOTICE, REF_LINK_RE, MENTION_RE, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, DIFF_FILE_CAP, PR_DIFF_NOTICE, REF_LINK_RE, MENTION_RE, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackFileRef, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

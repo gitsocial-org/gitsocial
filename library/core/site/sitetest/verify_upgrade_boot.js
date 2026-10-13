@@ -770,7 +770,7 @@ async function main() {
     ok("every row carries its c-<sha12> anchor id", rows.every((r) => r.id === "c-" + r.meta.split(" · ").pop()), JSON.stringify(rows.map((r) => r.id)));
     ok("every row's subject links the app's commit view on the default branch", rows.every((r) => /^\.\.\/index\.html#commit:[0-9a-f]{12}@/.test(r.href)), JSON.stringify(rows.map((r) => r.href)));
     ok("every row's meta is author · date · sha", rows.every((r) => /^.+ · \d{4}-\d{2}-\d{2} · [0-9a-f]{12}$/.test(r.meta)), JSON.stringify(rows.map((r) => r.meta)));
-    ok("every row's meta is the author, time and hash skeleton", /<span class="meta"><span class="author"[^>]*>[^<]*<\/span> · <span class="reltime" title="[^"]*">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="[^"]*">[0-9a-f]{12}<\/a><\/span>/.test(page.text), page.text.slice(page.text.indexOf('<span class="meta">'), page.text.indexOf('<span class="meta">') + 220));
+    ok("every row's meta is the author, time and hash skeleton", /<span class="meta"><(a|span) class="author"[^>]*>[^<]*<\/\1> · <span class="reltime" title="[^"]*">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="[^"]*">[0-9a-f]{12}<\/a><\/span>/.test(page.text), page.text.slice(page.text.indexOf('<span class="meta">'), page.text.indexOf('<span class="meta">') + 220));
     // The nav is what makes the list reachable from every other crawlable page —
     // and on the commits list itself the nav marks it current, in the app's own
     // active treatment (the link stays a link, as the app's active item does).

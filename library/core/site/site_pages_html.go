@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"net/url"
 	"os"
 	"regexp"
 	"sort"
@@ -160,7 +161,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <nav class="nav-list">{{range .Nav}}{{if .Section}}<div class="nav-group"><div class="nav-section">{{.Section}}</div>{{end}}{{range .Links}}<a href="{{.Href}}"{{if .Current}} class="active"{{end}}><span class="nav-icon">{{.Glyph}}</span>{{.Label}}</a>{{end}}{{if .Section}}</div>{{end}}{{end}}</nav>
 <div class="nav-footer"><a class="foot-brand" href="https://gitsocial.org"><svg class="logo-small" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" /></svg><span>Built with GitSocial</span></a></div>
 </aside>
-{{end}}{{define "chip"}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{.Heading}}</h1>{{range .Chips}} {{template "chip" .}}{{end}}</div>{{end}}{{define "bits"}}{{range $i, $b := .}}{{if $i}} · {{end}}{{if $b.Href}}<a class="{{$b.Class}}" href="{{$b.Href}}">{{$b.Text}}</a>{{else if $b.Class}}<span class="{{$b.Class}}"{{if $b.Title}} title="{{$b.Title}}"{{end}}>{{$b.Text}}</span>{{else}}{{$b.Text}}{{end}}{{end}}{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
+{{end}}{{define "chip"}}{{if .Href}}<a class="chip{{if .Class}} {{.Class}}{{end}}" href="{{.Href}}">{{.Label}}</a>{{else}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{if .HeadingHref}}<a href="{{.HeadingHref}}">{{.Heading}}</a>{{else}}{{.Heading}}{{end}}</h1>{{range .Chips}} {{template "chip" .}}{{end}}</div>{{end}}{{define "bits"}}{{range $i, $b := .}}{{if $i}} · {{end}}{{if $b.Href}}<a class="{{$b.Class}}" href="{{$b.Href}}"{{if $b.Title}} title="{{$b.Title}}"{{end}}>{{$b.Text}}</a>{{else if $b.Class}}<span class="{{$b.Class}}"{{if $b.Title}} title="{{$b.Title}}"{{end}}>{{$b.Text}}</span>{{else}}{{$b.Text}}{{end}}{{end}}{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
 {{end}}{{end}}{{define "body"}}{{range .}}{{if .Notes}}<dl class="release-notes">{{range .Notes}}<dt><a class="hash" href="{{.Href}}">{{.Hash}}</a></dt><dd>{{.Text}}</dd>{{end}}</dl>
 {{else}}<p>{{range $i, $l := .Lines}}{{if $i}}<br>{{end}}{{$l}}{{end}}</p>
 {{end}}{{end}}{{end}}{{define "assetrow"}}{{if .Href}}<a class="asset-row" href="{{.Href}}" rel="noopener"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</a>{{else}}<div class="asset-row"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</div>{{end}}{{end}}{{define "assets"}}<div class="assets"><div class="assets-head">Assets</div>
@@ -298,14 +299,17 @@ type sitePageChrome struct {
 }
 
 // sitePageChip is one state/type chip.
-type sitePageChip struct{ Class, Label string }
+type sitePageChip struct {
+	Class, Label string
+	Href         string // a feedback's file chip links the app's file route (sitePageFeedbackFileRef)
+}
 
 // sitePageBit is one meta-row bit: plain text, or a classed span carrying a title, or a link.
 type sitePageBit struct {
 	Class string // "" renders the text bare, as the page layer's own further bits do
 	Text  string
-	Title string // title attribute on a classed span
-	Href  string // set on the hash bit, which renders as a link
+	Title string // title attribute on a classed span or link
+	Href  string // set on the hash bit and on a linked author bit, which render as a link
 }
 
 // sitePageNoteRow is one commit a release body names: the short hash, the link to its commit, and the message beside it.
@@ -350,16 +354,17 @@ type siteItemPageData struct {
 	ListDir   string
 	ListLabel string
 	// Subject titles the document; Heading is empty on a body-only type, whose first line is prose.
-	Subject string
-	Heading string
-	Chips   []sitePageChip // the detail head's one chip slot, after the subject (siteHeadChips)
-	Meta    []sitePageBit
-	Body    []sitePageBodyBlock
-	Tomb    string
-	Assets  *sitePageAssets // a release's asset block, nil on every other type
-	Diff    *sitePageDiff   // a pull request's Files changed section, nil on every other type
-	Replies []sitePageReply
-	Omitted int
+	Subject     string
+	Heading     string
+	HeadingHref string         // a release head links its tag page (siteHeadingHref)
+	Chips       []sitePageChip // the detail head's one chip slot, after the subject (siteHeadChips)
+	Meta        []sitePageBit
+	Body        []sitePageBodyBlock
+	Tomb        string
+	Assets      *sitePageAssets // a release's asset block, nil on every other type
+	Diff        *sitePageDiff   // a pull request's Files changed section, nil on every other type
+	Replies     []sitePageReply
+	Omitted     int
 }
 
 // sitePageNavLink is one sidebar entry: the app's nav item, pointed at this
@@ -703,6 +708,15 @@ func sitePageAuthorBit(m *sitePageMsg) sitePageBit {
 	return bit
 }
 
+// sitePageAuthorLink builds the author bit linked to the app's author search when the email is known; every page that carries it is one directory under the shell. Mirrors authorEl in gs-render.js.
+func sitePageAuthorLink(m *sitePageMsg) sitePageBit {
+	bit := sitePageAuthorBit(m)
+	if _, email := pageDisplayAuthor(m); email != "" {
+		bit.Href = "../index.html#/search/" + strings.ReplaceAll(url.QueryEscape("author:"+email), "+", "%20")
+	}
+	return bit
+}
+
 // sitePagePreciseTime formats a unix timestamp as the meta row's title stamp, in UTC since a static page cannot age.
 func sitePagePreciseTime(ts int64) string {
 	if ts <= 0 {
@@ -785,7 +799,7 @@ func sitePageBaseHead(it *sitePageItem) string {
 func siteItemPageMeta(it *sitePageItem) []sitePageBit {
 	t := pageItemType(it)
 	bits := []sitePageBit{
-		sitePageAuthorBit(it.Msg),
+		sitePageAuthorLink(it.Msg),
 		sitePageTimeBit(pageEffectiveTime(it.Msg)),
 		sitePageHashBit(it.Msg.Short, it.Msg.Short+".html"),
 	}
@@ -844,8 +858,32 @@ func sitePageFeedbackAnchor(r *sitePageItem) string {
 	return file + ":" + line
 }
 
-// buildSiteReply renders one thread reply as a comment or feedback card, or a tombstone line when it was retracted.
-func buildSiteReply(r *sitePageItem) sitePageReply {
+// sitePageFeedbackFileRef builds the app route a feedback's file chip opens: its new lines on the head branch of the pull request, its old lines on the base; "" when the branch is not one of this repository. Mirrors feedbackFileRef in gs-render.js.
+func sitePageFeedbackFileRef(r, pr *sitePageItem) string {
+	file := pageItemField(r, "file")
+	if file == "" || pr == nil || pageItemType(pr) != "pull-request" {
+		return ""
+	}
+	side, line, end := "base", "old-line", "old-line-end"
+	if pageItemField(r, "new-line") != "" || pageItemField(r, "old-line") == "" {
+		side, line, end = "head", "new-line", "new-line-end"
+	}
+	p := protocol.ParseRef(pageItemField(pr, side))
+	if p.Repository != "" || p.Type != protocol.RefTypeBranch || p.Value == "" {
+		return ""
+	}
+	ref := "#file:" + file + "@" + p.Value
+	if n := pageItemField(r, line); n != "" {
+		ref += ":L" + n
+		if e := pageItemField(r, end); e != "" && e != n {
+			ref += "-" + e
+		}
+	}
+	return "../index.html" + ref
+}
+
+// buildSiteReply renders one thread reply as a comment or feedback card, or a tombstone line when it was retracted; root is the item the reply is under.
+func buildSiteReply(r, root *sitePageItem) sitePageReply {
 	if r.Retracted {
 		return sitePageReply{Variant: "comment", Depth: r.Depth, Tomb: "a reply from " + sitePageDate(pageEffectiveTime(r.Msg)) + " was retracted by its author"}
 	}
@@ -857,7 +895,7 @@ func buildSiteReply(r *sitePageItem) sitePageReply {
 		Glyph:      glyph,
 		GlyphClass: glyphClass,
 		GlyphTitle: t,
-		Meta:       []sitePageBit{sitePageAuthorBit(r.Msg), sitePageTimeBit(pageEffectiveTime(r.Msg))},
+		Meta:       []sitePageBit{sitePageAuthorLink(r.Msg), sitePageTimeBit(pageEffectiveTime(r.Msg))},
 	}
 	if r.Edited {
 		s.Meta = append(s.Meta, sitePageEditedBit(r))
@@ -869,7 +907,7 @@ func buildSiteReply(r *sitePageItem) sitePageReply {
 			s.Chips = append(s.Chips, sitePageChip{Class: "verdict-" + verdict, Label: strings.ReplaceAll(verdict, "-", " ")})
 		}
 		if anchor := sitePageFeedbackAnchor(r); anchor != "" {
-			s.Chips = append(s.Chips, sitePageChip{Label: anchor})
+			s.Chips = append(s.Chips, sitePageChip{Label: anchor, Href: sitePageFeedbackFileRef(r, root)})
 		}
 		if pageItemField(r, "suggestion") == "true" {
 			s.Meta = append(s.Meta, sitePageTextBit("suggestion"))
@@ -954,6 +992,14 @@ func siteLinkNoteRows(blocks []sitePageBodyBlock, site sitePageSite) {
 			blocks[i].Notes[j].Href = sitePageAppURL(site, "commit:"+blocks[i].Notes[j].Hash+"@")
 		}
 	}
+}
+
+// siteHeadingHref links a release head to the tag page of the app when the head is its tag and the item stands; "" for every other head. Mirrors headTagLink in gs-render.js.
+func siteHeadingHref(it *sitePageItem, heading string) string {
+	if tag := pageItemField(it, "tag"); tag != "" && heading == tag && !it.Retracted {
+		return "../index.html#tag:" + tag
+	}
+	return ""
 }
 
 // sitePageItemSubject returns the subject an item page is titled by: its head subject, or the type and tag when retracted.
@@ -1052,6 +1098,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		siteLinkNoteRows(d.Body, site)
 	}
 	d.Chips = siteHeadChips(it, d.Heading)
+	d.HeadingHref = siteHeadingHref(it, d.Heading)
 	icon, repoIcon := sitePageIcons(site.Favicon, "../")
 	d.Chrome = sitePageChrome{
 		Title:       title + " · " + site.Title,
@@ -1079,7 +1126,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 			d.Omitted = len(it.Replies) - i
 			break
 		}
-		d.Replies = append(d.Replies, buildSiteReply(r))
+		d.Replies = append(d.Replies, buildSiteReply(r, it))
 		threadBytes += len(pageItemBody(r))
 	}
 	return d
@@ -1128,7 +1175,7 @@ func siteReleaseAssetLabel(artifacts string) string {
 
 // siteRowMeta builds a row's meta line: the author, the date, the hash, then the edited marker.
 func siteRowMeta(it *sitePageItem, href string) []sitePageBit {
-	meta := []sitePageBit{sitePageAuthorBit(it.Msg), sitePageTimeBit(pageEffectiveTime(it.Msg))}
+	meta := []sitePageBit{sitePageAuthorLink(it.Msg), sitePageTimeBit(pageEffectiveTime(it.Msg))}
 	// A release is named by its tag, so its row counts assets where another row links its hash.
 	if pageItemType(it) == "release" {
 		if label := siteReleaseAssetLabel(pageItemField(it, "artifacts")); label != "" {

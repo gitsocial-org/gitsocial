@@ -188,6 +188,8 @@
      cards nest inside .detail views, so the card tier is stated after the
      detail tier to win the card size back. */
   .subject { font-weight: 600; }
+  /* A release head links its tag page in the color of the heading. */
+  h1.subject a { color: inherit; }
   /* Card head: glyph + state chip + subject + trailing chips on one baseline row,
      with a small gap so chips never touch (and the chip row aligns to the subject
      column). The leading glyph drops its own inline margin — the flex gap spaces
@@ -943,8 +945,9 @@
   .gran-toggle { display: inline-flex; gap: var(--sp-1); }
   .gran-btn { text-transform: capitalize; }
   .gran-btn.active { color: var(--text); background: var(--chip); border-color: var(--link); }
-  /* Author names carry an email tooltip on hover (title attr). */
-  .author[title] { cursor: help; }
+  /* An author with a known email links to the author search in the color of its row; a plain one carries the email as a tooltip. */
+  a.author { color: inherit; }
+  span.author[title] { cursor: help; }
   /* Configuration page: reader-preference control rows + read-only ext configs. */
   .config-section { margin: var(--sp-5) 0; }
   .config-head { margin-bottom: var(--sp-3); }

@@ -95,9 +95,10 @@ function checkDetailActions(theme, topbar, actions) {
     actions.map((r) => r.shape).join(" | "));
 }
 
-// META_SHAPE is the meta row skeleton the parity fixture names: the author, the
-// time, then the hash link, with the edited marker as the one trailing bit.
-const META_SHAPE = new RegExp("^" + FIX.metaRow.bits.map((c, i) => (i === 2 ? "a." : "span.") + c).join(" > ") + "( > span\\.edited)?$");
+// META_SHAPE is the meta row skeleton the parity fixture names: the author, a
+// link when its email is known, the time, then the hash link, with the edited
+// marker as the one trailing bit.
+const META_SHAPE = new RegExp("^" + FIX.metaRow.bits.map((c, i) => (i === 0 ? "(?:a|span)." : i === 2 ? "a." : "span.") + c).join(" > ") + "( > span\\.edited)?$");
 
 // checkMetaRow asserts every author-led meta row carries that skeleton. metas is
 // a list route's ".meta" record; rows built from other parts are left alone.
@@ -106,7 +107,7 @@ function checkMetaRow(theme, metas) {
     ok("meta row " + theme + ": records captured", false, "no .meta record");
     return;
   }
-  const led = metas.map((r) => r.shape).filter((s) => s.startsWith("span.author"));
+  const led = metas.map((r) => r.shape).filter((s) => /^(?:a|span)\.author/.test(s));
   ok("meta row " + theme + ": the author, the time and the hash in that order", led.length > 0 && led.every((s) => META_SHAPE.test(s)), led.join(" | "));
 }
 

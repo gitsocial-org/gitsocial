@@ -67,6 +67,11 @@ for (const c of FIX.feedbackCards) {
   eq(GS.feedbackAnchorLabel(c.header), c.expectAnchor, c.name + ": anchor label");
 }
 
+console.log("=== parity invariant: the file route a feedback chip opens ===");
+for (const c of FIX.feedbackFileRefs) {
+  eq(GS.feedbackFileRef(c.header, c.pr), c.expectRef, c.name + ": file ref");
+}
+
 console.log("=== parity invariant: release head subject + version chip ===");
 for (const c of FIX.releaseHeads) {
   const subject = GS.headSubject(c.header, "release", c.firstLine);
@@ -80,6 +85,8 @@ for (const c of FIX.detailHeads) {
   const subject = GS.headSubject(c.header, c.ext, c.firstLine);
   eq(subject, c.expectSubject, c.name + ": subject");
   eq(chipList(GS.headChips(c.header, c.ext, subject, c.retracted === true)), chipList(c.expectChips), c.name + ": head chips");
+  const link = GS.headTagLink(c.header, subject, c.retracted === true);
+  eq(link ? link.getAttribute("href") : "", c.expectHref || "", c.name + ": head link");
 }
 
 console.log("=== parity invariant: list and activity row head subject + chips ===");
@@ -259,6 +266,9 @@ for (const c of FIX.defaultTitles) {
 console.log("=== parity invariant: meta row author label ===");
 for (const c of FIX.metaRow.authors) {
   eq(GS.authorLabel(c.author, c.email), c.expectLabel, c.name + ": label");
+  const bit = GS.authorEl(c.author, c.email);
+  eq(bit.tagName + "|" + bit.className + "|" + bit.textContent + "|" + (bit.getAttribute("title") || "") + "|" + (bit.getAttribute("href") || ""),
+    (c.expectHref ? "A" : "SPAN") + "|author|" + c.expectLabel + "|" + c.expectTitle + "|" + c.expectHref, c.name + ": bit");
 }
 
 const empties = Object.entries(GS.LIST_EMPTY).sort().map((e) => e.join("=")).join(",");

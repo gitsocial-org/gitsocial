@@ -34,6 +34,11 @@ ok(richChips.indexOf("status/review") === -1, "a status label stays off the chip
 ok(richChips.indexOf("due 2026-09-01") !== -1, "a due date becomes a chip", richChips.join(" | "));
 ok(richChips.indexOf("feature → trunk") !== -1, "a pull request card names its head and base", richChips.join(" | "));
 eq(findClass(rich, "chip-priority")[0].className.indexOf("prio-high") !== -1, true, "the priority chip carries its level class");
+const chipHref = (cls) => findClass(rich, cls).map((c) => c.tagName + " " + textOf(c) + " " + c.getAttribute("href"));
+eq(chipHref("chip-assignee"), ["A ☛ ada #/search/assignee%3Aada%40example.com", "A ☛ bob #/search/assignee%3Abob"], "an assignee chip opens the assignee search for the full email");
+eq(chipHref("chip-label"), ["A kind/bug #/search/label%3Akind%2Fbug"], "a label chip opens the label search for the scoped label");
+eq(chipHref("chip-priority"), ["A high #/search/label%3Apriority%2Fhigh"], "a priority chip searches its priority label");
+eq(findClass(rich, "chip-due").map((c) => c.tagName), ["SPAN"], "a due chip stays text");
 
 const marked = GS.memoCard(item("b", { type: "memo", retracted: "true", "origin-platform": "github", "origin-url": "https://example.com/1" }, "Memo"));
 const markedChips = chipText(marked);
@@ -50,6 +55,16 @@ const counted = GS.prCard(item("e", { type: "pull-request", state: "open" }, "Co
 const countedText = chipText(counted);
 ok(countedText.indexOf("✓2 ✗1") !== -1, "the review chip tallies approvals and change requests", countedText.join(" | "));
 ok(countedText.indexOf("↩ 4") !== -1 && countedText.indexOf("↻ 3") !== -1 && countedText.indexOf("❞ 1") !== -1, "comment, repost and quote counts each get a chip", countedText.join(" | "));
+
+console.log("=== a pull request card links its branches and its stack ===");
+const anchorsOf = (node) => findTag(node, "a").map((a) => textOf(a) + "@" + a.getAttribute("href"));
+const stacked = GS.prCard(item("f", { type: "pull-request", state: "open", head: "#branch:feature", base: "#branch:trunk", "depends-on": "#commit:" + H("e") + "@gitmsg/review" }, "Stacked"));
+const flow = findClass(stacked, "chip").find((c) => textOf(c).indexOf("→") !== -1);
+eq(textOf(flow), "feature → trunk", "the branch chip names the head and the base");
+eq(anchorsOf(flow), ["feature@#branch:feature", "trunk@#branch:trunk"], "each side links to its branch log");
+eq(findClass(stacked, "chip").filter((c) => textOf(c) === "stacked").map((c) => c.tagName + "@" + c.getAttribute("href")), ["A@#commit:" + H("e") + "@gitmsg/review"], "the stacked chip opens the pull request it depends on");
+const forked = GS.prCard(item("g", { type: "pull-request", state: "open", head: "https://example.com/fork#branch:feature", base: "#branch:trunk" }, "From a fork"));
+eq(anchorsOf(findClass(forked, "chip").find((c) => textOf(c).indexOf("→") !== -1)), ["https://example.com/fork#branch:feature@https://example.com/fork#branch:feature", "trunk@#branch:trunk"], "a fork head links to its URL as written");
 
 console.log("=== a release row counts its assets where another row links its hash ===");
 const metaBits = (node) => textOf(findClass(node, "meta")[0]).split(" · ");
@@ -84,6 +99,7 @@ eq(branchOf(GS.timelineCard(Object.assign(item("4", { type: "post" }, "A post"),
 const codeCard = GS.timelineCard({ _ext: "code", _branch: "trunk", commit: { hash: sha40("9"), short: H("9"), content: "Fix the walk", authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000 } });
 eq(branchOf(codeCard), "trunk", "a code commit routes to its branch");
 ok(chipText(codeCard).indexOf("trunk") !== -1, "a timeline code card carries its branch chip", chipText(codeCard).join(" | "));
+eq(findClass(codeCard, "chip").map((c) => c.tagName + "@" + c.getAttribute("href")), ["A@#branch:trunk"], "the branch chip opens the branch log");
 global.location.hash = "#/";
 fire(codeCard, "click");
 eq(global.location.hash, "#commit:" + sha40("9") + "@trunk", "clicking a card navigates to its detail route");
@@ -110,6 +126,12 @@ fire(quote, "click");
 eq(global.location.hash, "#commit:" + H("1") + "@gitmsg/social", "clicking the excerpt opens what the comment answers");
 const repost = GS.timelineCard(Object.assign(item("g", { type: "repost", original: "#commit:" + H("1") + "@gitmsg/social" }, "", [{ ref: "#commit:" + H("1") + "@gitmsg/social", quoted: "> the original post", author: "Bob" }]), { _ext: "social" }));
 ok(!findClass(repost, "reply-quote")[0]._cls.has("dimmed"), "a repost shows the original undimmed");
+
+console.log("=== a list member ===");
+const memberOf = (ref) => findTag(GS.listMemberRow(ref), "a").map((a) => a.getAttribute("href")).concat(findClass(GS.listMemberRow(ref), "selectable").map(textOf));
+eq(memberOf("#branch:main"), ["#branch:main"], "a local member links to its route");
+eq(memberOf("https://example.com/repo#commit:abc123def456@gitmsg/pm"), ["https://example.com/repo#commit:abc123def456@gitmsg/pm"], "a browsable repository member links to its URL with the fragment");
+eq(memberOf("s3://bucket/repo#branch:main"), ["s3://bucket/repo#branch:main"], "a member that is not browsable stays selectable text");
 
 console.log("=== list wrappers ===");
 eq(GS.renderList([], () => null, "No issues in this repository.").map(textOf), ["No issues in this repository."], "an empty list renders its sentence");
