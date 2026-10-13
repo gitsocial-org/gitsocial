@@ -284,10 +284,32 @@ type parityPageBodyCase struct {
 	ExpectURLs []string `json:"expectURLs"`
 }
 
+// parityRowBit pins one bit of a definition row: its text, and its href and rel when it links.
+type parityRowBit struct {
+	Text string `json:"text"`
+	Href string `json:"href"`
+	Rel  string `json:"rel"`
+}
+
+// parityItemRow pins one definition row of an item page: its key and its bits.
+type parityItemRow struct {
+	Key  string         `json:"key"`
+	Bits []parityRowBit `json:"bits"`
+}
+
+// parityItemPageMetaCase pins the definition rows one item's header yields on the page and in the app.
+type parityItemPageMetaCase struct {
+	Name       string            `json:"name"`
+	Ext        string            `json:"ext"`
+	Header     map[string]string `json:"header"`
+	ExpectRows []parityItemRow   `json:"expectRows"`
+}
+
 // parityFixtures is the shared fixture file shape.
 type parityFixtures struct {
 	RefTokens      []parityRefTokenCase      `json:"refTokens"`
 	PageBodyRefs   []parityPageBodyCase      `json:"pageBodyRefs"`
+	ItemPageMeta   []parityItemPageMetaCase  `json:"itemPageMeta"`
 	PRDiff         parityPRDiff              `json:"prDiff"`
 	MessageCases   []parityMessageCase       `json:"messageCases"`
 	RawObjectCases []parityRawObjectCase     `json:"rawObjectCases"`
@@ -1248,6 +1270,58 @@ func TestParityPageBodyRefs(t *testing.T) {
 			}
 			if !slices.Equal(rendered, c.ExpectRefs) {
 				t.Errorf("rendered anchors = %q, want %q", rendered, c.ExpectRefs)
+			}
+		})
+	}
+}
+
+// parityRowShape names a row the way unit_parity.js compares it: the key, then each bit with its href and rel, the page's path to the shell dropped.
+func parityRowShape(key string, bits []sitePageBit) string {
+	parts := make([]string, 0, len(bits))
+	for _, b := range bits {
+		part := b.Text + "@" + strings.TrimPrefix(b.Href, "../index.html")
+		if b.Rel != "" {
+			part += "[" + b.Rel + "]"
+		}
+		parts = append(parts, part)
+	}
+	return key + "=" + strings.Join(parts, "|")
+}
+
+// TestParityItemPageMeta asserts an item page lists the definition rows the app's trailerRows builds, with the same keys, order, text and link targets; the JS half is in unit_parity.js.
+func TestParityItemPageMeta(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.ItemPageMeta) == 0 {
+		t.Fatal("no item page meta cases in parity fixtures")
+	}
+	for _, c := range f.ItemPageMeta {
+		t.Run(c.Name, func(t *testing.T) {
+			msg := &sitePageMsg{Ext: c.Ext, SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: "Subject", Header: &protocol.Header{Ext: c.Ext, Fields: c.Header}}
+			rows := siteItemPageRows(&sitePageItem{Msg: msg, Resolved: msg})
+			var got, want []string
+			for _, r := range rows {
+				got = append(got, parityRowShape(r.Key, r.Bits))
+			}
+			for _, r := range c.ExpectRows {
+				bits := make([]sitePageBit, 0, len(r.Bits))
+				for _, b := range r.Bits {
+					bits = append(bits, sitePageBit{Text: b.Text, Href: b.Href, Rel: b.Rel})
+				}
+				want = append(want, parityRowShape(r.Key, bits))
+			}
+			if !slices.Equal(got, want) {
+				t.Errorf("rows = %q, want %q", got, want)
+			}
+			page, err := renderSitePage("rows", rows)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var keys []string
+			for _, m := range regexp.MustCompile(`<dt>([^<]*)</dt>`).FindAllStringSubmatch(string(page), -1) {
+				keys = append(keys, m[1])
+			}
+			if len(rows) > 0 && (!strings.HasPrefix(string(page), "<dl><dt>") || len(keys) != len(rows)) {
+				t.Errorf("rows markup is one dl of dt and dd pairs:\n%s", page)
 			}
 		})
 	}

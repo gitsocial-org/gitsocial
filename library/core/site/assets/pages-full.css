@@ -293,12 +293,11 @@
     color: var(--danger); border-color: var(--danger);
     padding: var(--pad-panel); background: var(--danger-t1);
   }
-  /* Definition rows: the trailer list, and a release's commit rows, which take
-     the same treatment on both surfaces (a generated page has no .detail). */
-  .detail dl, dl.release-notes { margin: var(--sp-3) 0 0; display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-1) var(--sp-4); }
-  .detail dt, .release-notes dt { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); letter-spacing: var(--mono-ls); }
+  /* Definition rows: the trailer list of the app, the same rows under the page mount, and a release's commit rows. */
+  .detail dl, dl.release-notes, :where(#gs-page) > dl { margin: var(--sp-3) 0 0; display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-1) var(--sp-4); }
+  .detail dt, .release-notes dt, :where(#gs-page) > dl dt { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); letter-spacing: var(--mono-ls); }
   /* A trailer value and a release's commit row are metadata, so they read in their key's voice. */
-  .detail dd, .release-notes dd { margin: 0; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); word-break: break-word; }
+  .detail dd, .release-notes dd, :where(#gs-page) > dl dd { margin: 0; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); word-break: break-word; }
   .detail .subject { font-size: var(--fs-h1); }
   /* A code commit's subject is chrome, like its rows in the commits list and the graph. */
   .detail .subject.subject-commit { font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-h4); }

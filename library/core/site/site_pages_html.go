@@ -6,9 +6,11 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"maps"
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -164,7 +166,8 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{define "chip"}}{{if .Href}}<a class="chip{{if .Class}} {{.Class}}{{end}}" href="{{.Href}}">{{.Label}}</a>{{else}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{if .HeadingHref}}<a href="{{.HeadingHref}}">{{.Heading}}</a>{{else}}{{.Heading}}{{end}}</h1>{{range .Chips}} {{template "chip" .}}{{end}}</div>{{end}}{{define "link"}}{{if .Href}}<a{{if .Class}} class="{{.Class}}"{{end}} href="{{.Href}}"{{if .Title}} title="{{.Title}}"{{end}}{{if .Rel}} rel="{{.Rel}}"{{end}}>{{.Text}}</a>{{else}}{{.Text}}{{end}}{{end}}{{define "bits"}}{{range $i, $b := .}}{{if $i}}{{if $b.Sep}}{{$b.Sep}}{{else}} · {{end}}{{end}}{{if $b.Href}}{{template "link" $b}}{{else if $b.Class}}<span class="{{$b.Class}}"{{if $b.Title}} title="{{$b.Title}}"{{end}}>{{$b.Text}}</span>{{else}}{{$b.Text}}{{end}}{{end}}{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{range $l}}{{template "link" .}}{{end}}{{end}}</p>
 {{end}}{{end}}{{define "body"}}{{range .}}{{if .Notes}}<dl class="release-notes">{{range .Notes}}<dt><a class="hash" href="{{.Href}}">{{.Hash}}</a></dt><dd>{{.Text}}</dd>{{end}}</dl>
 {{else}}<p>{{range $i, $l := .Lines}}{{if $i}}<br>{{end}}{{range $l}}{{template "link" .}}{{end}}{{end}}</p>
-{{end}}{{end}}{{end}}{{define "assetrow"}}{{if .Href}}<a class="asset-row" href="{{.Href}}" rel="noopener"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</a>{{else}}<div class="asset-row"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</div>{{end}}{{end}}{{define "assets"}}<div class="assets"><div class="assets-head">Assets</div>
+{{end}}{{end}}{{end}}{{define "rows"}}{{if .}}<dl>{{range .}}<dt>{{.Key}}</dt><dd>{{if gt (len .Bits) 1}}<span>{{end}}{{range $i, $b := .Bits}}{{if $i}}, {{end}}{{template "link" $b}}{{end}}{{if gt (len .Bits) 1}}</span>{{end}}</dd>{{end}}</dl>
+{{end}}{{end}}{{define "assetrow"}}{{if .Href}}<a class="asset-row" href="{{.Href}}" rel="noopener"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</a>{{else}}<div class="asset-row"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</div>{{end}}{{end}}{{define "assets"}}<div class="assets"><div class="assets-head">Assets</div>
 {{if .Artifacts}}<div class="asset-list">{{range .Artifacts}}{{template "assetrow" .}}{{end}}</div>
 {{end}}{{if .Extra}}<div class="asset-list">{{range .Extra}}{{template "assetrow" .}}{{end}}</div>
 {{end}}{{if .SignedBy}}<div class="asset-signed"><span class="meta">signed-by </span><span class="mono selectable">{{.SignedBy}}</span></div>
@@ -190,7 +193,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{if .Heading}}{{template "detailhead" .}}
 {{end}}<div class="detail-meta"><span class="meta">{{template "bits" .Meta}}</span></div>
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
-{{else}}{{template "body" .Body}}{{end}}{{with .Assets}}{{template "assets" .}}{{end}}{{with .Diff}}{{template "diff" .}}{{end}}{{if .Replies}}<div class="thread"><div class="thread-head">Comments ({{len .Replies}})</div>
+{{else}}{{template "body" .Body}}{{template "rows" .Rows}}{{end}}{{with .Assets}}{{template "assets" .}}{{end}}{{with .Diff}}{{template "diff" .}}{{end}}{{if .Replies}}<div class="thread"><div class="thread-head">Comments ({{len .Replies}})</div>
 {{range .Replies}}{{if .Depth}}<div class="comment-row"><div class="thread-rail">{{range $i := .Rail}}<span class="rail-guide"></span>{{end}}</div>{{end}}<div class="card {{.Variant}}">
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
 {{else}}<p class="meta meta-lead">{{template "glyph" .}}{{range .Chips}}{{template "chip" .}} {{end}}{{template "bits" .Meta}}</p>
@@ -317,6 +320,12 @@ type sitePageBit struct {
 // sitePageNoteRow is one commit a release body names: the short hash, the link to its commit, and the message beside it.
 type sitePageNoteRow struct{ Hash, Href, Text string }
 
+// sitePageRow is one definition row of an item page: a header key and the bits of its value.
+type sitePageRow struct {
+	Key  string
+	Bits []sitePageBit
+}
+
 // sitePageBodyBlock is one block of an item body: prose lines of bits, or the commit rows a release lists.
 type sitePageBodyBlock struct {
 	Lines [][]sitePageBit
@@ -362,6 +371,7 @@ type siteItemPageData struct {
 	Chips       []sitePageChip // the detail head's one chip slot, after the subject (siteHeadChips)
 	Meta        []sitePageBit
 	Body        []sitePageBodyBlock
+	Rows        []sitePageRow // the header fields no other part of the page carries (siteItemPageRows)
 	Tomb        string
 	Assets      *sitePageAssets // a release's asset block, nil on every other type
 	Diff        *sitePageDiff   // a pull request's Files changed section, nil on every other type
@@ -524,7 +534,7 @@ func sitePageParaLines(text string) [][]string {
 	return paras
 }
 
-// sitePageParas splits an item body into paragraphs of lines of bits, each ref and URL a link; the template escapes every bit, so no markup reaches the page.
+// sitePageParas splits an item body into paragraphs of lines of bits, each ref and URL a link; the template escapes every bit, so no markup reaches the page (TestSitePages_bodyStaysEscaped).
 func sitePageParas(text string, link func(ref string) string) [][][]sitePageBit {
 	blocks := sitePageParaLines(text)
 	paras := make([][][]sitePageBit, 0, len(blocks))
@@ -534,7 +544,7 @@ func sitePageParas(text string, link func(ref string) string) [][][]sitePageBit 
 	return paras
 }
 
-// sitePageLineBits turns each line into bits: text, a ref anchor as the app renders it, and a URL anchor with rel="nofollow ugc".
+// sitePageLineBits turns each line into bits: text, a ref anchor as the app renders it (TestParityPageBodyRefs), and a URL anchor with rel="nofollow ugc" (TestSitePages_externalURLNofollow).
 func sitePageLineBits(lines []string, link func(ref string) string) [][]sitePageBit {
 	out := make([][]sitePageBit, 0, len(lines))
 	for _, line := range lines {
@@ -569,7 +579,7 @@ func sitePageLineBits(lines []string, link func(ref string) string) [][]sitePage
 	return out
 }
 
-// sitePageRefHref resolves a body ref to its href: a commit ref to a root item in titles opens its page, any other ref the route of the app.
+// sitePageRefHref resolves a body ref to its href: a commit ref to a root item in titles opens its page, any other ref the route of the app (TestSitePages_refHrefTargets).
 func sitePageRefHref(site sitePageSite, titles map[string]string) func(ref string) string {
 	return func(ref string) string {
 		if hash := pageLocalCommitHash(ref); strings.HasPrefix(ref, "#commit:") && len(hash) == 12 && titles[hash] != "" {
@@ -765,13 +775,18 @@ func sitePageAuthorBit(m *sitePageMsg) sitePageBit {
 	return bit
 }
 
-// sitePageAuthorLink builds the author bit linked to the app's author search when the email is known; every page that carries it is one directory under the shell. Mirrors authorEl in gs-render.js.
+// sitePageAuthorLink builds the author bit linked to the app's author search when the email is known. Mirrors authorEl in gs-render.js.
 func sitePageAuthorLink(m *sitePageMsg) sitePageBit {
 	bit := sitePageAuthorBit(m)
 	if _, email := pageDisplayAuthor(m); email != "" {
-		bit.Href = "../index.html#/search/" + strings.ReplaceAll(url.QueryEscape("author:"+email), "+", "%20")
+		bit.Href = sitePageSearchHref("author", email)
 	}
 	return bit
+}
+
+// sitePageSearchHref builds the search route of the app with one facet prefilled; every page that carries it is one directory under the shell. Mirrors searchHref in gs-render.js.
+func sitePageSearchHref(facet, value string) string {
+	return "../index.html#/search/" + strings.ReplaceAll(url.QueryEscape(facet+":"+value), "+", "%20")
 }
 
 // sitePagePreciseTime formats a unix timestamp as the meta row's title stamp, in UTC since a static page cannot age.
@@ -888,6 +903,141 @@ func siteItemPageMeta(it *sitePageItem) []sitePageBit {
 		bits = append(bits, sitePageTextBit("signed"))
 	}
 	return bits
+}
+
+// sitePageTrailerSkip are the header fields another part of an item page carries: the route, the chips of the head and the meta row. Mirrors TRAILER_SKIP in gs-render.js.
+var sitePageTrailerSkip = map[string]bool{
+	"v": true, "ext": true, "type": true, "state": true, "draft": true, "retracted": true, "tag": true, "version": true, "prerelease": true, "adopts": true,
+	"origin-author-name": true, "origin-author-email": true, "origin-time": true, "origin-platform": true, "origin-url": true,
+}
+
+// sitePageReleaseSkip are the header fields the asset block of a release carries. Mirrors RELEASE_DETAIL_SKIP in gs-render.js.
+var sitePageReleaseSkip = map[string]bool{"artifacts": true, "artifact-url": true, "checksums": true, "sbom": true, "signed-by": true}
+
+// sitePageTipKeys are the header fields that carry a bare commit hash. Mirrors TIP_KEYS in gs-render.js.
+var sitePageTipKeys = map[string]bool{"base-tip": true, "head-tip": true, "merge-base": true, "merge-head": true, "commit": true}
+
+// sitePageFacetKeys maps a header field of emails or labels to the search facet that lists the items carrying one. Mirrors FACET_KEYS in gs-render.js.
+var sitePageFacetKeys = map[string]string{"assignees": "assignee", "reviewers": "reviewer", "labels": "label"}
+
+// sitePageHeaderRefRe matches one header ref, of this repository or qualified by one. Mirrors HEADER_REF_RE in gs-render.js.
+var sitePageHeaderRefRe = regexp.MustCompile(`^[^#\s]*#(?:commit|branch|tag|file|list):\S+$`)
+
+// sitePageTipRe matches a bare commit hash in a tip field.
+var sitePageTipRe = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+
+// sitePageOriginKeys are the provenance fields fixed at import (GITMSG 1.9), which an edit leaves as the canonical set them.
+var sitePageOriginKeys = []string{"origin-author-name", "origin-author-email", "origin-platform", "origin-time", "origin-url"}
+
+// sitePageItemHeader merges an item's header fields: the canonical's, then the latest version's over them, the origin fields the canonical's alone. Mirrors resolveItems in gs-core.js.
+func sitePageItemHeader(it *sitePageItem) map[string]string {
+	fields := map[string]string{}
+	for _, m := range []*sitePageMsg{it.Msg, it.Resolved} {
+		if m != nil && m.Header != nil {
+			maps.Copy(fields, m.Header.Fields)
+		}
+	}
+	for _, key := range sitePageOriginKeys {
+		if v := pageHeaderField(it.Msg, key); v != "" {
+			fields[key] = v
+		} else {
+			delete(fields, key)
+		}
+	}
+	return fields
+}
+
+// sitePageRefLink links one header ref: a ref of this repository to its route, a browsable cross-repository ref to its URL as written; any other value stays text. Mirrors refLink in gs-render.js.
+func sitePageRefLink(ref string) sitePageBit {
+	if !sitePageHeaderRefRe.MatchString(ref) {
+		return sitePageTextBit(ref)
+	}
+	repo, _, _ := strings.Cut(ref, "#")
+	if repo == "" {
+		return sitePageBit{Text: ref, Href: "../index.html" + ref}
+	}
+	if strings.HasPrefix(repo, "https://") {
+		return sitePageBit{Text: ref, Href: ref, Rel: "noopener"}
+	}
+	return sitePageTextBit(ref)
+}
+
+// sitePageListBits renders a comma-separated header value as bits, each entry through link. Mirrors listValue in gs-render.js.
+func sitePageListBits(val string, link func(string) sitePageBit) []sitePageBit {
+	var bits []sitePageBit
+	for _, part := range strings.Split(val, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			bits = append(bits, link(part))
+		}
+	}
+	return bits
+}
+
+// sitePageRefListBits links each ref of a comma-separated list; a value that is not refs alone stays as written. Mirrors refListValue in gs-render.js.
+func sitePageRefListBits(val string) []sitePageBit {
+	for _, part := range strings.Split(val, ",") {
+		if !sitePageHeaderRefRe.MatchString(strings.TrimSpace(part)) {
+			return []sitePageBit{sitePageTextBit(val)}
+		}
+	}
+	return sitePageListBits(val, sitePageRefLink)
+}
+
+// sitePageTipBranch names the branch of this repository a tip field points into: the head for head-tip, the base for the other tips; "" for a fork branch or a feedback's commit. Mirrors tipBranch in gs-render.js.
+func sitePageTipBranch(key string, h map[string]string) string {
+	if key == "commit" {
+		return ""
+	}
+	field := h["base"]
+	if key == "head-tip" {
+		field = h["head"]
+	}
+	p := protocol.ParseRef(field)
+	if p.Repository != "" || p.Type != protocol.RefTypeBranch {
+		return ""
+	}
+	return p.Value
+}
+
+// sitePageTrailerBits renders one trailer value: a tip to its commit on its branch, an email or label to its search facet, each ref of a list to its route. Mirrors trailerValue in gs-render.js.
+func sitePageTrailerBits(key, val string, h map[string]string) []sitePageBit {
+	if sitePageTipKeys[key] {
+		if sitePageTipRe.MatchString(val) {
+			return []sitePageBit{{Text: val, Href: "../index.html#commit:" + val + "@" + sitePageTipBranch(key, h)}}
+		}
+		return []sitePageBit{sitePageTextBit(val)}
+	}
+	if facet := sitePageFacetKeys[key]; facet != "" {
+		return sitePageListBits(val, func(v string) sitePageBit { return sitePageBit{Text: v, Href: sitePageSearchHref(facet, v)} })
+	}
+	return sitePageRefListBits(val)
+}
+
+// siteItemPageRows lists an item page's definition rows in key order: each header field no other part of the page carries, and the origin fields folded into one linked row. Mirrors trailerRows in gs-render.js, pinned by TestParityItemPageMeta.
+func siteItemPageRows(it *sitePageItem) []sitePageRow {
+	h := sitePageItemHeader(it)
+	values := map[string][]sitePageBit{}
+	for key, val := range h {
+		if sitePageTrailerSkip[key] || (it.Msg.Ext == "release" && sitePageReleaseSkip[key]) {
+			continue
+		}
+		values[key] = sitePageTrailerBits(key, val, h)
+	}
+	if platform, u := h["origin-platform"], h["origin-url"]; platform != "" || u != "" {
+		bit := sitePageTextBit(platform)
+		if platform == "" {
+			bit.Text = u
+		}
+		if lower := strings.ToLower(u); strings.HasPrefix(lower, "http:") || strings.HasPrefix(lower, "https:") {
+			bit.Href, bit.Rel = u, "noopener"
+		}
+		values["origin"] = []sitePageBit{bit}
+	}
+	rows := make([]sitePageRow, 0, len(values))
+	for _, key := range slices.Sorted(maps.Keys(values)) {
+		rows = append(rows, sitePageRow{Key: key, Bits: values[key]})
+	}
+	return rows
 }
 
 // sitePageFeedbackVerdict returns a feedback's review verdict, "" for a plain comment. Mirrors feedbackVerdict in gs-core.js.
@@ -1157,6 +1307,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 	} else {
 		d.Body = sitePageBodyBlocks(body, pageItemType(it) == "release", link)
 		siteLinkNoteRows(d.Body, site)
+		d.Rows = siteItemPageRows(it)
 	}
 	d.Chips = siteHeadChips(it, d.Heading)
 	d.HeadingHref = siteHeadingHref(it, d.Heading)

@@ -299,6 +299,19 @@ for (const c of FIX.pageBodyRefs) {
   eq(urls.every((a) => a.textContent === a.getAttribute("href")), true, c.name + ": a url anchor reads as its url");
 }
 
+console.log("=== parity invariant: the definition rows of an item page ===");
+// rowBits names a trailer value the way site_parity_test.go compares it: each anchor with its href and rel, each text node as text, the separators dropped.
+function rowBits(value) {
+  const nodes = typeof value === "string" ? [{ nodeType: 3, nodeValue: value }] : value.tagName === "A" ? [value] : value._children;
+  return nodes.filter((n) => !(n.nodeType === 3 && n.nodeValue === ", "))
+    .map((n) => (n.nodeType === 3 ? { text: n.nodeValue } : { text: n.textContent, href: n.getAttribute("href") || "", rel: n.getAttribute("rel") || "" }));
+}
+const metaRowShape = (rows) => rows.map((r) => r.key + "=" + r.bits.map((b) => b.text + "@" + (b.href || "") + (b.rel ? "[" + b.rel + "]" : "")).join("|")).join(";");
+for (const c of FIX.itemPageMeta) {
+  const rows = GS.trailerRows(c.header, c.ext === "release" ? GS.RELEASE_DETAIL_SKIP : [], null);
+  eq(metaRowShape(rows.map((r) => ({ key: r.key, bits: rowBits(r.value) }))), metaRowShape(c.expectRows), c.name + ": rows");
+}
+
 console.log("=== parity invariant: tag display order ===");
 (async () => {
   for (const c of FIX.tagOrder) {
