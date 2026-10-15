@@ -214,6 +214,10 @@ func TestApplySchema_concurrentOpeners(t *testing.T) {
 		defer d.Close()
 		pools[i] = d
 	}
+	// The cache exists before the openers meet: two first connections that create the file get BUSY with no busy handler.
+	if err := pools[0].Ping(); err != nil {
+		t.Fatal(err)
+	}
 	const schema = "DROP VIEW IF EXISTS race_view;\nCREATE VIEW race_view AS SELECT 1 AS one;"
 	errs := make(chan error, 2)
 	for _, d := range pools {
