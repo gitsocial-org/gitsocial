@@ -2,7 +2,6 @@
 package main
 
 import (
-	"bytes"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -18,17 +17,11 @@ func TestCLI_errorLine_carriesDetails(t *testing.T) {
 	}
 	missing := "file://" + filepath.Join(t.TempDir(), "missing.git")
 
-	root := buildRootCmd()
-	var out bytes.Buffer
-	root.SetOut(&out)
-	root.SetErr(&out)
-	root.SetArgs([]string{"-C", dir, "--cache-dir", t.TempDir(), "fetch", missing})
-
-	err := root.Execute()
-	if code := exitCode(err); code != ExitError {
+	out, errOut, code := runInProcess(t, dir, t.TempDir(), "fetch", missing)
+	if code != ExitError {
 		t.Fatalf("exit code = %d, want %d", code, ExitError)
 	}
-	line := out.String()
+	line := out + errOut
 	if !strings.Contains(line, "error: fetch repository: ") {
 		t.Fatalf("output = %q, want the details after the message", line)
 	}
