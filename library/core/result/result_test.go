@@ -122,6 +122,14 @@ func TestText_nilError(t *testing.T) {
 	}
 }
 
+func TestText_joinsMultilineDetails(t *testing.T) {
+	r := ErrWithDetails[string]("PUSH_ERROR", "push", errors.New("  rejected main\n\n  hint: fetch first\n\n  failed to push"))
+	want := "push: rejected main; hint: fetch first; failed to push"
+	if got := r.Error.Text(); got != want {
+		t.Errorf("Text() = %q, want %q", got, want)
+	}
+}
+
 func TestErrFrom_keepsTheError(t *testing.T) {
 	e := &Error{Code: "NOT_FOUND", Message: "item not found", Details: "abc123"}
 	r := ErrFrom[int](e)
@@ -133,5 +141,12 @@ func TestErrFrom_keepsTheError(t *testing.T) {
 	}
 	if r.Error.Code != "NOT_FOUND" || r.Error.Message != "item not found" || r.Error.Details != "abc123" {
 		t.Errorf("Error = %+v, want the original fields", *r.Error)
+	}
+}
+
+func TestText_blankDetails(t *testing.T) {
+	r := ErrWithDetails[string]("PUSH_ERROR", "push", errors.New("  \n\n   \n"))
+	if got := r.Error.Text(); got != "push" {
+		t.Errorf("Text() = %q, want %q", got, "push")
 	}
 }

@@ -1,7 +1,10 @@
 // result.go - Generic Result[T] pattern for extension APIs
 package result
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type Result[T any] struct {
 	Success bool
@@ -41,7 +44,7 @@ func ErrFrom[T any](e *Error) Result[T] {
 	return Result[T]{Success: false, Error: e}
 }
 
-// Text renders the error for display, with the details after the message.
+// Text renders the error for display, with the details on one line after the message.
 func (e *Error) Text() string {
 	if e == nil {
 		return ""
@@ -49,5 +52,20 @@ func (e *Error) Text() string {
 	if e.Details == nil {
 		return e.Message
 	}
-	return fmt.Sprintf("%s: %v", e.Message, e.Details)
+	details := oneLine(fmt.Sprint(e.Details))
+	if details == "" {
+		return e.Message
+	}
+	return e.Message + ": " + details
+}
+
+// oneLine joins the non-empty trimmed lines of s with "; ".
+func oneLine(s string) string {
+	var lines []string
+	for _, line := range strings.Split(s, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return strings.Join(lines, "; ")
 }
