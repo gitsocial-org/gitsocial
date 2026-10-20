@@ -190,7 +190,7 @@ After, three commits: `S3: upload bucket writes in parallel with retry`, with a 
 |---|---|
 | `emdash` | em-dashes in any tracked file |
 | `comment-block-go`, `comment-block-js`, `comment-block-css`, `comment-block-html` | comment blocks over 3 lines, outside package docs |
-| `comment-heavy` | a commit in the pushed range, dated 2026-09-16 or later, whose net new comment lines, added minus removed, outnumber its added code lines |
+| `comment-heavy` | a commit in the pushed range, authored 2026-09-16 or later, whose net new comment lines, added minus removed, outnumber its added code lines; both counts read only its code files |
 | `confidence` | a line carrying one of the intensifiers the prose rules ban, in any tracked file but this one |
 | `func-comment` | a function in non-test Go with no comment line above it |
 | `short-long` | a cobra `Short` over 50 characters |

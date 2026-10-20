@@ -7,7 +7,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root" || exit 1
 baseline="scripts/prose-baseline.txt"
 rules="comment-block-css comment-block-go comment-block-html comment-block-js comment-heavy confidence emdash error-shape flag-help func-comment short-long"
-comment_heavy_since=2026-09-16T00:00:00 # commits before the rule are exempt
+comment_heavy_since=2026-09-16 # a commit authored before the rule is exempt
 zero=0000000000000000000000000000000000000000
 
 # the commits a rule over a range reads: the hook's ranges, else the unpushed commits, else none
@@ -69,13 +69,15 @@ error_shapes() {
 		}'
 }
 
-# comment_heavy prints hash<TAB>comments/code for each commit in the range whose net new comment lines outnumber its added code lines; a comment line directly above a func line is the one func-comment requires and does not count
+# comment_heavy prints hash<TAB>comments/code for each commit in the range whose net new comment lines outnumber its added code lines, counted in its code files; a comment line directly above a func line is the one func-comment requires and does not count
 comment_heavy() {
 	[ -n "$ranges" ] || return 0
+	code_paths=(':!*.md' ':(exclude,glob)**/testdata/**' ':!*.golden')
 	# shellcheck disable=SC2086
-	for h in $(git log --no-merges --since="$comment_heavy_since" --format=%H $ranges 2>/dev/null); do
-		git show --format= --name-only "$h" | grep -qvE '\.md$|(^|/)testdata/|\.golden$' || continue
-		git show --format= --unified=1 "$h" | awk -v h="$h" '
+	git log --no-merges --date=short --format='%H %ad' $ranges 2>/dev/null | while read -r h ad; do
+		[[ "$ad" < "$comment_heavy_since" ]] && continue
+		[ -n "$(git show --format= --name-only "$h" -- "${code_paths[@]}")" ] || continue
+		git show --format= --unified=1 "$h" -- "${code_paths[@]}" | awk -v h="$h" '
 			/^(\+\+\+|---)/ { next }
 			{
 				s = substr($0, 2); sub(/^[[:space:]]+/, "", s)
