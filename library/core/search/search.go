@@ -83,6 +83,7 @@ func Search(workdir string, params Params) (Result, error) {
 		} else {
 			q.RepoURL = repoURL
 		}
+		q.WorkspaceURL = ""
 	case strings.HasPrefix(params.Scope, "repos:"):
 		urls := strings.Split(strings.TrimPrefix(params.Scope, "repos:"), ",")
 		q.RepoURLs = urls
