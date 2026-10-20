@@ -255,7 +255,7 @@ func PushWithProgress(workdir string, dryRun bool, codeBranches map[string]int, 
 		step("refs/gitmsg/*")
 		if !dryRun {
 			if _, err := execGitTransfer(workdir, pushArgs(remote, "refs/gitmsg/*:refs/gitmsg/*", force), done < total); err != nil {
-				return nil, wrapStateRefPushError(err)
+				return nil, wrapStateRefPushError(remote, err)
 			}
 			// The just-pushed state refs now match the remote; mirror them into the
 			// remote-tracking namespace so the next offline push preview doesn't
@@ -370,10 +370,10 @@ func wrapCodePushError(remote, branch string, err error) error {
 // bulk refs/gitmsg/* push so users know it's a state-ref conflict (two clones
 // wrote different content to the same per-element key) and not the kind of
 // divergence PushBranchWithMerge handles.
-func wrapStateRefPushError(err error) error {
+func wrapStateRefPushError(remote string, err error) error {
 	msg := err.Error()
 	if strings.Contains(msg, "non-fast-forward") || strings.Contains(msg, "fetch first") || strings.Contains(msg, "rejected") {
-		return fmt.Errorf("push refs: state-ref conflict on refs/gitmsg/*, fetch and reconcile manually: %w", err)
+		return fmt.Errorf("push refs: a state ref conflicts: run git fetch %s +refs/gitmsg/*:refs/gitmsg/*: %w", remote, err)
 	}
 	return fmt.Errorf("push refs: %w", err)
 }

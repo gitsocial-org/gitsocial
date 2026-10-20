@@ -23,7 +23,7 @@ func newMemoHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 func loadMemoHistoryVersions(workdir string, params map[string]string) ([]tuicore.DiffVersion, error) {
 	memoID := params["memoID"]
 	if memoID == "" {
-		return nil, fmt.Errorf("missing memoID")
+		return nil, fmt.Errorf("no memo in the route")
 	}
 	parsed := protocol.ParseRef(memoID)
 	if parsed.Value == "" {

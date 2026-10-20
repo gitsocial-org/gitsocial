@@ -179,7 +179,7 @@ func TestGitError(t *testing.T) {
 func TestGitError_noStderr(t *testing.T) {
 	t.Parallel()
 	err := &GitError{Op: "git push", Err: ErrGitExec}
-	if err.Error() != "git push: git command failed" {
+	if err.Error() != "git push: run git command" {
 		t.Errorf("Error() = %q", err.Error())
 	}
 }

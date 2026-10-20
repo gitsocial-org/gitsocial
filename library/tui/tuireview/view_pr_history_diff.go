@@ -28,7 +28,7 @@ func newPRHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 func loadPRHistoryVersions(workdir string, params map[string]string) ([]tuicore.DiffVersion, error) {
 	prID := params["prID"]
 	if prID == "" {
-		return nil, fmt.Errorf("missing prID")
+		return nil, fmt.Errorf("no pull request in the route")
 	}
 	parsed := protocol.ParseRef(prID)
 	if parsed.Value == "" {

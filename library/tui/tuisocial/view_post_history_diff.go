@@ -25,7 +25,7 @@ func newPostHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 func loadPostHistoryVersions(workdir string, params map[string]string) ([]tuicore.DiffVersion, error) {
 	postID := params["postID"]
 	if postID == "" {
-		return nil, fmt.Errorf("missing postID")
+		return nil, fmt.Errorf("no post in the route")
 	}
 	parsed := protocol.ParseRef(postID)
 	if parsed.Value == "" {

@@ -24,7 +24,7 @@ func newReleaseHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 func loadReleaseHistoryVersions(workdir string, params map[string]string) ([]tuicore.DiffVersion, error) {
 	id := params["releaseID"]
 	if id == "" {
-		return nil, fmt.Errorf("missing releaseID")
+		return nil, fmt.Errorf("no release in the route")
 	}
 	parsed := protocol.ParseRef(id)
 	if parsed.Value == "" {
