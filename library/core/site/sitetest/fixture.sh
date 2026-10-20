@@ -12,6 +12,8 @@ set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo=$(cd "$here/../../../.." && pwd)
 out="${1:-$here/.fixture}"
+mkdir -p "$out"
+out=$(cd "$out" && pwd)
 served="$out/served"
 marker="$served/thread-demo/.gitsocial/refs.json"
 stampfile="$out/.stamp"

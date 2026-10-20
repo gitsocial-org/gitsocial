@@ -31,7 +31,7 @@ fixture_build_bins() {
 	# this an installed gitsocial would serve the fixture's push surface.
 	export PATH="$repo/bin:$PATH"
 	locals3bin="$out/locals3bin"
-	go build -o "$locals3bin" "$here/../../objstore/locals3"
+	(cd "$repo" && go build -o "$locals3bin" ./library/core/objstore/locals3)
 	export XDG_CONFIG_HOME="$out/xdg"
 	cache="$out/cache"
 }
