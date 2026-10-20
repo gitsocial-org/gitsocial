@@ -147,7 +147,7 @@ func ComparePRVersions(workdir, cacheDir, prRef string, fromVersion, toVersion i
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	res := GetPRVersions(prRef, workspaceURL)
 	if !res.Success {
-		return result.Err[string](res.Error.Code, res.Error.Message)
+		return result.ErrFrom[string](res.Error)
 	}
 	versions := res.Data
 	if fromVersion < 0 || fromVersion >= len(versions) {
@@ -212,7 +212,7 @@ func GetVersionAwareReviews(workdir, prRef string) Result[[]VersionAwareReview] 
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	vRes := GetPRVersions(prRef, workspaceURL)
 	if !vRes.Success {
-		return result.Err[[]VersionAwareReview](vRes.Error.Code, vRes.Error.Message)
+		return result.ErrFrom[[]VersionAwareReview](vRes.Error)
 	}
 	versions := vRes.Data
 	if len(versions) == 0 {
@@ -222,12 +222,12 @@ func GetVersionAwareReviews(workdir, prRef string) Result[[]VersionAwareReview] 
 	// Get the canonical PR to fetch feedback
 	prRes := GetPR(prRef)
 	if !prRes.Success {
-		return result.Err[[]VersionAwareReview](prRes.Error.Code, prRes.Error.Message)
+		return result.ErrFrom[[]VersionAwareReview](prRes.Error)
 	}
 	pr := prRes.Data
 	feedbackRes := GetFeedbackForPR(pr.Repository, extractHashFromID(pr.ID), pr.Branch)
 	if !feedbackRes.Success {
-		return result.Err[[]VersionAwareReview](feedbackRes.Error.Code, feedbackRes.Error.Message)
+		return result.ErrFrom[[]VersionAwareReview](feedbackRes.Error)
 	}
 
 	currentVersion := len(versions) - 1

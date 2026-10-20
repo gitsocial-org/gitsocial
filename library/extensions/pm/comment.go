@@ -19,7 +19,7 @@ func CommentOnItem(workdir, itemRef, content string) Result[social.Post] {
 	itemID := protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch)
 	socialResult := social.CreateComment(workdir, itemID, content, nil)
 	if !socialResult.Success {
-		return result.Err[social.Post](socialResult.Error.Code, socialResult.Error.Message)
+		return result.ErrFrom[social.Post](socialResult.Error)
 	}
 
 	return result.Ok(socialResult.Data)

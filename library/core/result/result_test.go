@@ -121,3 +121,17 @@ func TestText_nilError(t *testing.T) {
 		t.Errorf("Text() = %q, want empty", got)
 	}
 }
+
+func TestErrFrom_keepsTheError(t *testing.T) {
+	e := &Error{Code: "NOT_FOUND", Message: "item not found", Details: "abc123"}
+	r := ErrFrom[int](e)
+	if r.Success {
+		t.Error("ErrFrom result should have Success=false")
+	}
+	if r.Error != e {
+		t.Fatal("ErrFrom should keep the same Error pointer")
+	}
+	if r.Error.Code != "NOT_FOUND" || r.Error.Message != "item not found" || r.Error.Details != "abc123" {
+		t.Errorf("Error = %+v, want the original fields", *r.Error)
+	}
+}

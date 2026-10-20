@@ -303,7 +303,7 @@ func applyReview(workdir, canonicalRef string, pMsg, parMsg *protocol.Message, a
 // outcome converts an extension's typed Result into an Outcome.
 func outcome[T any](res result.Result[T], ext, canonicalRef string) Result[Outcome] {
 	if !res.Success {
-		return result.Err[Outcome](res.Error.Code, res.Error.Message)
+		return result.ErrFrom[Outcome](res.Error)
 	}
 	return result.Ok(Outcome{Ext: ext, CanonicalRef: canonicalRef})
 }

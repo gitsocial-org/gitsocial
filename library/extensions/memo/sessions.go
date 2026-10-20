@@ -120,7 +120,7 @@ func GCSession(id string) Result[bool] {
 func GCSessionsOlderThan(d time.Duration) Result[[]string] {
 	listed := ListSessions("")
 	if !listed.Success {
-		return result.Err[[]string](listed.Error.Code, listed.Error.Message)
+		return result.ErrFrom[[]string](listed.Error)
 	}
 	cutoff := time.Now().Add(-d)
 	var deleted []string

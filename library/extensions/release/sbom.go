@@ -358,7 +358,7 @@ func fetchSBOMHTTP(artifactURL, filename string) ([]byte, error) {
 func GetSBOMDetails(workdir, releaseRef string) Result[SBOMSummary] {
 	res := GetSingleRelease(releaseRef)
 	if !res.Success {
-		return result.Err[SBOMSummary](res.Error.Code, res.Error.Message)
+		return result.ErrFrom[SBOMSummary](res.Error)
 	}
 	rel := res.Data
 	if rel.SBOM == "" {

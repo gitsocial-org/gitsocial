@@ -21,7 +21,7 @@ type StackEntry struct {
 func GetStack(prRef string) Result[[]StackEntry] {
 	startResult := GetPR(prRef)
 	if !startResult.Success {
-		return result.Err[[]StackEntry](startResult.Error.Code, startResult.Error.Message)
+		return result.ErrFrom[[]StackEntry](startResult.Error)
 	}
 	start := startResult.Data
 
@@ -112,7 +112,7 @@ func FindPRByHead(headRef string) []PullRequest {
 func RebaseStack(workdir, prRef string) Result[[]PullRequest] {
 	startResult := GetPR(prRef)
 	if !startResult.Success {
-		return result.Err[[]PullRequest](startResult.Error.Code, startResult.Error.Message)
+		return result.ErrFrom[[]PullRequest](startResult.Error)
 	}
 	start := startResult.Data
 	if start.State != PRStateOpen {
@@ -161,7 +161,7 @@ func RebaseStack(workdir, prRef string) Result[[]PullRequest] {
 func SyncStackTips(workdir, prRef string) Result[[]PullRequest] {
 	stackResult := GetStack(prRef)
 	if !stackResult.Success {
-		return result.Err[[]PullRequest](stackResult.Error.Code, stackResult.Error.Message)
+		return result.ErrFrom[[]PullRequest](stackResult.Error)
 	}
 
 	var updated []PullRequest

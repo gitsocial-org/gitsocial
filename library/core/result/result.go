@@ -36,6 +36,11 @@ func ErrWithDetails[T any](code, message string, details interface{}) Result[T] 
 	}
 }
 
+// ErrFrom creates a failed Result that carries the error of another result.
+func ErrFrom[T any](e *Error) Result[T] {
+	return Result[T]{Success: false, Error: e}
+}
+
 // Text renders the error for display, with the details after the message.
 func (e *Error) Text() string {
 	if e == nil {
