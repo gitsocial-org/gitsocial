@@ -353,7 +353,7 @@ func TestRetractRelease_notFound(t *testing.T) {
 func TestGetSingleRelease_byID(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/singlerel"
-	hash := "singleid1234"
+	hash := "5e1f1d123456"
 	branch := releaseTestBranch
 	insertReleaseTestCommit(t, repoURL, hash)
 	InsertReleaseItem(ReleaseItem{RepoURL: repoURL, Hash: hash, Branch: branch, Tag: cache.ToNullString("v1.0.0"), Version: cache.ToNullString("1.0.0")})
@@ -402,17 +402,15 @@ func TestGetSingleRelease_byVersion(t *testing.T) {
 	}
 }
 
-func TestGetSingleRelease_byPrefix(t *testing.T) {
+func TestGetSingleRelease_byRefWithoutBranch(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/test/singlepfx"
-	hash := "singlepfx123"
+	hash := "5e1f9f123456"
 	branch := releaseTestBranch
 	insertReleaseTestCommit(t, repoURL, hash)
 	InsertReleaseItem(ReleaseItem{RepoURL: repoURL, Hash: hash, Branch: branch, Tag: cache.ToNullString("v5.0.0")})
 
-	id := protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, branch)
-	prefix := id[:20]
-	res := GetSingleRelease(prefix)
+	res := GetSingleRelease(protocol.CreateRef(protocol.RefTypeCommit, hash, repoURL, ""))
 	if !res.Success {
 		t.Fatalf("GetSingleRelease() failed: %s", res.Error.Message)
 	}

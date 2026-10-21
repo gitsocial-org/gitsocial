@@ -222,7 +222,7 @@ func GetSingleRelease(releaseRef string) Result[Release] {
 	if hashErr == nil {
 		return result.Ok(ReleaseItemToRelease(*item))
 	}
-	// Try full ref match (handles full refs like repo#commit:hash@branch and prefixes thereof)
+	// Try full ref match (repo#commit:hash@branch)
 	if strings.Contains(releaseRef, "#") || strings.Contains(releaseRef, "://") {
 		if item, err := GetReleaseItemByFullRef(releaseRef); err == nil {
 			return result.Ok(ReleaseItemToRelease(*item))

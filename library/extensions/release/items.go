@@ -309,17 +309,24 @@ func GetReleaseItemByTagOrVersion(value string) (*ReleaseItem, error) {
 	})
 }
 
-// GetReleaseItemByFullRef retrieves a release item matching a full ref string or prefix.
-// This handles cases where the ref includes repo_url#commit:hash@branch.
-func GetReleaseItemByFullRef(refPrefix string) (*ReleaseItem, error) {
+// GetReleaseItemByFullRef retrieves the release item of a repo#commit:hash[@branch] ref, its live and newest row first.
+func GetReleaseItemByFullRef(fullRef string) (*ReleaseItem, error) {
+	parsed := protocol.ParseRef(fullRef)
+	if parsed.Type != protocol.RefTypeCommit || parsed.Repository == "" || parsed.Value == "" {
+		return nil, sql.ErrNoRows
+	}
+	cond, args := cache.HashPrefixMatch("v.hash", parsed.Value)
+	where := "v.repo_url = ? AND " + cond
+	args = append([]interface{}{parsed.Repository}, args...)
+	if parsed.Branch != "" {
+		where += " AND v.branch = ?"
+		args = append(args, parsed.Branch)
+	}
 	return cache.QueryLocked(func(db *sql.DB) (*ReleaseItem, error) {
-		// Match items whose constructed full ref starts with the given prefix
 		query := baseSelectFromView + `
-			WHERE (v.repo_url || '#commit:' || v.hash || '@' || v.branch) LIKE ? ESCAPE '\'
-			  AND NOT v.is_edit_commit AND NOT v.is_retracted
+			WHERE ` + where + ` AND NOT v.is_edit_commit AND NOT v.is_retracted
 			ORDER BY ` + cache.LiveFirstOrder("v") + `, v.timestamp DESC LIMIT 1`
-		row := db.QueryRow(query, cache.EscapeLike(refPrefix)+"%")
-		return scanResolvedRow(row)
+		return scanResolvedRow(db.QueryRow(query, args...))
 	})
 }
 
