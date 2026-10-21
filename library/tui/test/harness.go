@@ -150,6 +150,13 @@ func (h *Harness) processCmds(cmd tea.Cmd, depth int) {
 		}
 		return
 	}
+	// tea.Sequence yields an unexported []tea.Cmd; run its commands in order
+	if seq, ok := sequenceCmds(msg); ok {
+		for _, c := range seq {
+			h.processCmds(c, depth+1)
+		}
+		return
+	}
 	// Skip side-effectful messages that can't run headless
 	skip, isExec := shouldSkipMsg(msg)
 	if isExec {
@@ -162,6 +169,21 @@ func (h *Harness) processCmds(cmd tea.Cmd, depth int) {
 	m, next := h.model.Update(msg)
 	h.model = toModel(m)
 	h.processCmds(next, depth+1)
+}
+
+// sequenceCmds unpacks the message tea.Sequence returns, a []tea.Cmd the package keeps unexported.
+func sequenceCmds(msg tea.Msg) ([]tea.Cmd, bool) {
+	rv := reflect.ValueOf(msg)
+	if rv.Kind() != reflect.Slice || !strings.HasSuffix(fmt.Sprintf("%T", msg), ".sequenceMsg") {
+		return nil, false
+	}
+	cmds := make([]tea.Cmd, 0, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		if c, ok := rv.Index(i).Interface().(tea.Cmd); ok {
+			cmds = append(cmds, c)
+		}
+	}
+	return cmds, true
 }
 
 // shouldSkipCmd returns true for commands known to block in headless mode.
