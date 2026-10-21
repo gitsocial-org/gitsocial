@@ -34,6 +34,7 @@ func init() {
 				NewExtConfigCmd(reviewExt),
 				newReviewPRCmd(),
 				newReviewFeedbackCmd(),
+				newReviewSuggestionCmd(),
 				newReviewForkCmd(),
 			)
 		},
@@ -1098,6 +1099,58 @@ func newFeedbackCommentCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("pr")
 
 	return cmd
+}
+
+// --- suggestion ---
+
+// newReviewSuggestionCmd builds the group of commands for code suggestions.
+func newReviewSuggestionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "suggestion",
+		Short: "Code suggestions in review feedback",
+	}
+	cmd.AddCommand(newSuggestionApplyCmd())
+	return cmd
+}
+
+// newSuggestionApplyCmd builds the command that applies a suggestion to the working tree.
+func newSuggestionApplyCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "apply <feedback-ref>",
+		Short: "Apply a suggestion to the working tree",
+		Long: `Apply the suggestion of a feedback comment to the working tree. The
+suggested lines replace the lines that the comment covers. Nothing is staged
+or committed.
+
+Examples:
+  gitsocial review suggestion apply '#commit:abc123456789@gitmsg/review'
+  gitsocial review suggestion apply abc123`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !EnsureGitRepo(cmd) {
+				return exit(ExitNotRepo)
+			}
+			cfg := GetConfig(cmd)
+			if _, err := client.SyncWorkspaceLocal(cfg.WorkDir); err != nil {
+				slog.Debug("sync workspace", "error", err)
+			}
+			feedback := review.GetFeedback(args[0])
+			if !feedback.Success {
+				PrintError(cmd, feedback.Error.Text())
+				return exit(ExitError)
+			}
+			result := review.ApplySuggestion(cfg.WorkDir, feedback.Data)
+			if !result.Success {
+				PrintError(cmd, result.Error.Text())
+				return exit(ExitError)
+			}
+			if cfg.JSONOutput {
+				return PrintJSON(cmd, map[string]string{"applied": result.Data})
+			}
+			PrintSuccess(cmd, "Suggestion applied to "+result.Data)
+			return nil
+		},
+	}
 }
 
 // --- fork ---

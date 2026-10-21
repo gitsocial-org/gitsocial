@@ -43,6 +43,7 @@ gitsocial review feedback approve <pr-ref> [-m "LGTM"]
 gitsocial review feedback request-changes <pr-ref> -m "Why"
 gitsocial review feedback comment "Consider caching this" --pr <pr-ref> --commit <sha12> --file path/to.go \
     --new-line 42 [--new-line-end 50] [--old-line 40] [--old-line-end 48] [--suggest]
+gitsocial review suggestion apply <feedback-ref>       # write the suggested lines to the working tree
 ```
 
 Feedback applies to the version that the reviewer saw, and a later version does not dismiss it. See [Versions](#versions).
@@ -167,7 +168,7 @@ GitSocial does not dismiss feedback automatically.
 
 ### Other flows
 
-- **Suggestions.** `feedback comment --suggest` puts a replacement in a `suggestion` fence; the author applies it and pushes.
+- **Suggestions.** `feedback comment --suggest` puts a replacement in a `suggestion` fence; the author applies it with `suggestion apply`, commits and pushes.
 - **Several reviewers.** With `--reviewers bob,carol`, one `changes-requested` blocks the pull request, and it is ready when the latest feedback of each reviewer is `approved`.
 - **Linked issues.** `--closes <issue-ref>,<issue-ref>` closes the issues when the pull request merges.
 - **Discussion.** General comments are social comments on the pull request (`gitsocial social comment <pr-ref> "..."`), and replies nest with `reply-to`.
@@ -178,7 +179,7 @@ GitSocial does not dismiss feedback automatically.
 ## Reference
 
 - Versions and review aggregation: [GITREVIEW.md §1.5](../specs/GITREVIEW.md#15-editing-and-retracting) and [§1.8](../specs/GITREVIEW.md#18-review-aggregation).
-- Errors when you apply a suggestion from the TUI or RPC `review.applySuggestion`: `NOT_SUGGESTION`, `INVALID_PATH`, `PARSE_ERROR`, `FILE_ERROR`, `RANGE_ERROR`, `WRITE_ERROR`.
+- Errors when you apply a suggestion with `suggestion apply`, the TUI or RPC `review.applySuggestion`: `NOT_SUGGESTION`, `INVALID_PATH`, `PARSE_ERROR`, `FILE_ERROR`, `RANGE_ERROR`, `WRITE_ERROR`.
 - `review config set require-review true` makes approval a merge condition, so `pr merge` fails with `REVIEW_REQUIRED` until the latest feedback of each reviewer is `approved`.
 - `pr list` shows the pull requests of this repository, and the pull requests of [registered forks](CLI.md#gitsocial-fork) whose base is this repository.
 - Fork registrations are at `refs/gitmsg/core/forks/<urlHash>` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)).
