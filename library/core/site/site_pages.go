@@ -29,7 +29,7 @@ const (
 	sitePagesManifestKey = ".gitsocial/site/pages.json"
 	// sitePagesVersion is the page layer's schema version; bump it when a page
 	// head or its sealed markup changes.
-	sitePagesVersion = 38
+	sitePagesVersion = 39
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -275,7 +275,7 @@ func rebuildSitePages(client *objstore.Client, prefix string, refs map[string]st
 		!sitePagesFilesPending(manifest) && !siteFileDocsChanged(manifest.Files, docs, defaultBranch):
 		// Nothing a page derives from moved, but this push's shell upload may have written over index.html, so reclaim it.
 		err = writeSiteFrontPage(client, prefix, site, home)
-	case manifest != nil && manifest.Cursor == nil:
+	case manifest != nil && manifest.Cursor == nil && siteCorporaComplete(manifests):
 		pending, err = incrementalSitePages(client, prefix, site, manifest, manifests, tips, defaultBranch, home, files, src, refs, progress)
 	default:
 		pending, err = generateSitePages(client, prefix, site, manifest, manifests, tips, defaultBranch, home, files, src, refs, progress)
@@ -327,6 +327,16 @@ func readSitePagesManifests(client *objstore.Client, prefix string, refs map[str
 		tips[siteCodeExt] = code.Tip
 	}
 	return manifests, tips, nil
+}
+
+// siteCorporaComplete reports whether every items corpus is complete; a partial corpus keeps the page layer on the full regen and its cursor (TestRepair_partialItemsRebuildSetsCursor).
+func siteCorporaComplete(manifests map[string]*siteShardManifest) bool {
+	for _, m := range manifests {
+		if !m.Complete {
+			return false
+		}
+	}
+	return true
 }
 
 // sitePagesTipsCurrent reports whether the pages manifest consumed the current items-manifest tips; any drift triggers the incremental pass.
@@ -514,6 +524,8 @@ func generateSitePages(client *objstore.Client, prefix string, site sitePageSite
 	if err != nil {
 		return false, err
 	}
+	// A partial corpus seals no list page and keeps the cursor, so no pass lays a list out over a prefix of the items.
+	complete = complete && siteCorporaComplete(manifests)
 	// File pages go out after the item pages, which a bucket needs before it has any crawlable items.
 	filesState, budget, err := maintainSiteFilePages(client, prefix, site, sitePagesFilesState(prior), files, siteTitleSet(titles), prior == nil, budget, progress)
 	if err != nil {

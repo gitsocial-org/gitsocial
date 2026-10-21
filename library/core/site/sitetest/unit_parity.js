@@ -282,6 +282,11 @@ const headings = Object.entries(GS.LIST_HEADINGS).sort().map((e) => e.join("="))
 const fixtureHeadings = Object.entries(FIX.listHeadings).sort().map((e) => e.join("=")).join(",");
 eq(headings, fixtureHeadings, "LIST_HEADINGS matches the page layer's nav labels");
 
+console.log("=== parity invariant: the row text of a body-only item ===");
+for (const c of FIX.rowText) {
+  eq(GS.subjectBody(GS.cleanContent(c.message))[0], c.expect, c.name + ": row text");
+}
+
 console.log("=== parity invariant: the refs and mentions free text carries ===");
 for (const c of FIX.refTokens) {
   const refs = findCls(GS.renderMarkdown(c.text), "hash").filter((a) => a.tagName === "A").map((a) => a.getAttribute("href"));

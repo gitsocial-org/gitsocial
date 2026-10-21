@@ -28,6 +28,7 @@ type sitePageMsg struct {
 	Email   string
 	TS      int64
 	Subject string
+	Text    string           // a comment, feedback, repost or quote's first line, from its index entry (siteMetaEntry)
 	Message string           // full raw commit message from the bodies corpus
 	Header  *protocol.Header // nil for plain commits (implicit posts)
 	// AdoptedAuthor, AdoptedEmail and AdoptedTime name an adopted copy's original author and time (siteMetaEntry)
@@ -154,6 +155,14 @@ func pageItemBody(it *sitePageItem) string {
 	if it.Resolved.Message != "" {
 		// Drop link reference definitions here, the one accessor every page builder reads an item through.
 		return siteStripLinkRefDefs(protocol.ExtractCleanContent(it.Resolved.Message))
+	}
+	return it.Resolved.Subject
+}
+
+// pageRowText returns a body-only row's text: the indexed first line, else the indexed subject of a shard from before the field.
+func pageRowText(it *sitePageItem) string {
+	if it.Resolved.Text != "" {
+		return it.Resolved.Text
 	}
 	return it.Resolved.Subject
 }
@@ -316,7 +325,7 @@ func readSitePagesMeta(client *objstore.Client, prefix, ext string, items *siteS
 		}
 		msgs = append(msgs, sitePageMsg{
 			Ext: ext, SHA: e.SHA, Short: e.SHA[:12], Idx: len(msgs), Author: e.Author, Email: e.Email,
-			TS: e.TS, Subject: e.Subject, Header: protocol.ParseHeader(e.Header),
+			TS: e.TS, Subject: e.Subject, Text: e.Text, Header: protocol.ParseHeader(e.Header),
 			AdoptedAuthor: e.AdoptedAuthor, AdoptedEmail: e.AdoptedEmail, AdoptedTime: e.AdoptedTime,
 		})
 	}

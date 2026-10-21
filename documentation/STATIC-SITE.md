@@ -77,7 +77,7 @@ Effective when `publish`, `pages` and a valid `url` are all set. Every push then
 - The commits list of the default branch, one row per commit with no diffs. A row is citable as `commits/<n>.html#c-<sha12>`.
 - A file page for each prose document on the default branch, at `f/<path>.html`: markdown (`.md`, `.markdown`, `.mdown`, `.mdx`) and the extensionless convention documents (LICENSE, CONTRIBUTING, CHANGELOG and their siblings). The selection excludes documents under a dotdir or a vendored, test or fixture directory, and also submodules, symlinks, the root README and paths with a space or one of `@ : # ? %`. `filesInclude` and `filesExclude` change the selection.
 - The front page: one section with the branch, the latest commit and the root files, two of them shown and the rest behind a chevron, then the README.
-- `sitemap.xml` with every indexable page, and Atom feeds: `feed.xml` and one per type directory, memos and commits excluded.
+- `sitemap.xml` with every indexable page, and Atom feeds: `feed.xml` and one per type directory, memos and commits excluded; each push reads the bodies of a feed's entries before it writes the feed.
 
 What a page shows:
 
@@ -155,7 +155,7 @@ The app reads the artifacts under `.gitsocial/site/`, and the bucket's ref list 
 | Key | Content |
 |---|---|
 | `version` | shell version marker, a hash of the raw assets |
-| `items/<ext>/` | per-extension metadata index: full shards, a mutable head, a manifest; an adopted copy's entry also names its original author and time |
+| `items/<ext>/` | per-extension metadata index: full shards, a mutable head, a manifest; an adopted copy's entry also names its original author and time, and the entry of a comment, feedback, repost or quote carries the first line of its content as `text` |
 | `bodies/<ext>/` | message bodies, loaded on demand |
 | `items/code/` | one index of plain commits across code branches, with parent shas and no bodies |
 | `pages.json` | page-layer manifest: schema version, consumed tips, bootstrap cursor, list and commits partitions, the sidebar's item counts |
@@ -181,6 +181,7 @@ The shell and the pages:
 - The app links what a page shows as text: the author of a meta row to the author search when the email is known, an assignee, reviewer or label chip to its search facet (`assignee:`, `reviewer:`, `label:`), each ref of a trailer row to its route, a tip or merge hash to its commit, a browsable cross-repository ref or repository URL to the URL as written, the branches of a pull request card and every branch chip to the branch log, the file chip of a feedback to its lines on the head branch (the old lines on the base), a release head to its tag page, and the hash and parents of a commit page to their commits. The author bit, the feedback file chip and the release head are shared with the page, which links them to the same routes through `index.html`; `metaRow`, `feedbackFileRefs` and `detailHeads` in `parity_fixtures.json` pin the three. The page links the branch pair of a pull request to the same routes, and shows a fork head as its repository and branch. A raw pane, a quoted excerpt and a search snippet stay text.
 - A `#commit:<hash>` route with no branch resolves by hash through the item indexes first, so an item opens as its detail and a code commit as the raw commit page.
 - An adopted copy (GITMSG.md §1.5) shows its original author and time, and the repository it came from, on both renderers. Neither renderer lists a cross-repository edit, which is a proposal.
+- A list row of a comment, feedback, repost or quote shows the first line of its content, read from its index entry on both page passes. `rowText` in `parity_fixtures.json` pins that line on both renderers.
 - The timeline of the app shows [timeline actions](SOCIAL.md#timeline-actions). The app derives them in the browser from the edits and reviews that the item shards hold, so the artifacts do not change. `headerAction` has one definition in two places, `gs-core.js` and `core/cache/actions.go`, asserted equal on `sitetest/action_fixtures.json`. The timeline of the page layer lists posts only.
 - File discovery reads the default branch's tree from the local object database of the pusher and, when it cannot read the tree, keeps the published set.
 - A changed default branch rewrites every page.

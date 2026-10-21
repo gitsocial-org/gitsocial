@@ -1,7 +1,7 @@
 // verify_items_shards.js - the M1 sharded metadata-index reader contract over the
 // multi-shard showcase fixture (built with a lowered shard size, so social/pm
 // carry several sealed shards + a head). Asserts, by instrumenting fetch:
-//   1. the manifest is version 4 with sealed shards,
+//   1. the manifest is version 5 with sealed shards,
 //   2. the eager load touches ONLY the newest sealed shard + head (no older
 //      shards), and still resolves the newest timeline items,
 //   3. light search over the resident set stays eager (no older-shard fetch),
@@ -41,7 +41,7 @@ async function main() {
   for (const ext of ["social", "pm", "review", "memo"]) manifests[ext] = await readManifest(ext).catch(() => null);
   const ext = Object.keys(manifests).filter((e) => manifests[e]).sort((a, b) => manifests[b].shards.length - manifests[a].shards.length)[0];
   const m = manifests[ext];
-  ok("multi-shard fixture: chosen ext has sealed shards (" + ext + ")", m && m.version === 4 && m.shards.length >= 2, "shards=" + (m && m.shards.length));
+  ok("multi-shard fixture: chosen ext has sealed shards (" + ext + ")", m && m.version === 5 && m.shards.length >= 2, "shards=" + (m && m.shards.length));
 
   // (2) Eager load touches only the newest shard + head.
   {
@@ -49,7 +49,7 @@ async function main() {
     const ctx = GS.newContext(BASE);
     const idx = await GS.loadItemsIndex(ctx, ext);
     inst.restore();
-    ok("loadItemsIndex returns a v4 index with residentShas", idx && idx.version === 4 && idx.residentShas && idx.residentShas.size > 0);
+    ok("loadItemsIndex returns a v5 index with residentShas", idx && idx.version === 5 && idx.residentShas && idx.residentShas.size > 0);
     ok("index reports pending older shards", idx && !idx.allResident && idx.olderShards.length === m.shards.length - 1, "older=" + (idx && idx.olderShards.length));
     const fetched = shardFetches(inst.seen, ext, m);
     ok("eager load fetches one (newest) sealed shard", fetched === 1, "fetched=" + fetched);

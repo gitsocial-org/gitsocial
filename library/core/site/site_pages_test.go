@@ -1676,3 +1676,90 @@ func TestSitePages_branchPairLinks(t *testing.T) {
 		})
 	}
 }
+
+// TestSiteRowHead_bodyOnlyQuote asserts a quote whose first line is a quote block renders its row with that line from its index entry, the same row an attached body gives.
+func TestSiteRowHead_bodyOnlyQuote(t *testing.T) {
+	message := "> quoted\n\nMy take on it\n\nGitMsg: ext=\"social\"; type=\"quote\"; original=\"#commit:bbbbbbbbbbbb@gitmsg/social\"; v=\"0.1.0\""
+	sha := strings.Repeat("a", 40)
+	entry := metaOf(walkedItem{SHA: sha, Author: "Ada", Email: "ada@example.com", TS: 1700000000, Header: extractHeaderLine(message), Message: message})
+	indexed := &sitePageMsg{Ext: "social", SHA: sha, Short: sha[:12], Author: entry.Author, Email: entry.Email, TS: entry.TS, Subject: entry.Subject, Text: entry.Text, Header: protocol.ParseHeader(entry.Header)}
+	attached := *indexed
+	attached.Message = message
+	for name, msg := range map[string]*sitePageMsg{"index entry": indexed, "attached body": &attached} {
+		row := buildSiteListEntry(&sitePageItem{Msg: msg, Resolved: msg}, "post")
+		if !row.BodyOnly || row.Text != "> quoted" {
+			t.Errorf("%s: row = %+v, want a body-only row carrying %q", name, row, "> quoted")
+		}
+		page, err := renderSitePage("entries", []sitePageListEntry{row})
+		if err != nil {
+			t.Fatalf("render entries: %v", err)
+		}
+		if want := `<div class="body">&gt; quoted</div>`; !strings.Contains(string(page), want) {
+			t.Errorf("%s: row markup lacks %s:\n%s", name, want, page)
+		}
+	}
+}
+
+// TestSitePages_incrementalEqualsFull asserts a list page has the same rows after an incremental pass as after a full regen of the same messages, so a body-only row reads one text on both paths.
+func TestSitePages_incrementalEqualsFull(t *testing.T) {
+	quote := "> quoted line\n\nMy take on it\n\nGitMsg: ext=\"social\"; type=\"quote\"; original=\"s3://fake.example.com/other-demo#commit:cccccccccccc@gitmsg/social\"; v=\"0.1.0\""
+	repost := "# Ada: Thread root\n\nGitMsg: ext=\"social\"; type=\"repost\"; original=\"#commit:cccccccccccc@gitmsg/social\"; v=\"0.1.0\""
+	first := []pageMsgSpec{{msg: "Thread root\n\nroot body", ts: 1000}, {msg: quote, ts: 1001}, {msg: repost, ts: 1002}}
+	full, _ := testClient(t)
+	seedPagesConfig(t, full, pagesTestSite())
+	shas := seedSocialMessages(t, full, "", first)
+	delta := []pageMsgSpec{{msg: socialComment("Fresh reply body", shas[0]), author: "Bob", email: "bob@example.com", ts: 1010}, {msg: "New root post\n\nnew body", ts: 1011}}
+	seedSocialMessages(t, full, shas[len(shas)-1], delta)
+	if pending, _ := buildPages(t, full); pending {
+		t.Fatal("full regen: unexpected pending")
+	}
+	incremental, _ := testClient(t)
+	seedPagesConfig(t, incremental, pagesTestSite())
+	seedSocialMessages(t, incremental, "", first)
+	if pending, _ := buildPages(t, incremental); pending {
+		t.Fatal("first pass: unexpected pending")
+	}
+	seedSocialMessages(t, incremental, shas[len(shas)-1], delta)
+	if pending, state := buildPages(t, incremental); pending || state != sitePagesStateOn {
+		t.Fatalf("incremental pass: pending=%v state=%q", pending, state)
+	}
+	want, got := getKey(t, full, "posts/index.html"), getKey(t, incremental, "posts/index.html")
+	if !strings.Contains(want, "&gt; quoted line") || !strings.Contains(want, "# Ada: Thread root") {
+		t.Errorf("the full regen's list lacks the body-only rows' first lines:\n%s", want)
+	}
+	if got != want {
+		t.Errorf("the incremental pass's list differs from the full regen's:\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestSiteFeed_incrementalEqualsFull asserts a feed has the same entries and content after an incremental pass as after a full regen of the same messages.
+func TestSiteFeed_incrementalEqualsFull(t *testing.T) {
+	first := []pageMsgSpec{{msg: "Thread root\n\nroot body", ts: 1000}, {msg: "Second post\n\nsecond body", ts: 1001}}
+	full, _ := testClient(t)
+	seedPagesConfig(t, full, pagesTestSite())
+	shas := seedSocialMessages(t, full, "", first)
+	delta := []pageMsgSpec{{msg: socialComment("Fresh reply body", shas[0]), author: "Bob", email: "bob@example.com", ts: 1010}, {msg: "New root post\n\nnew body", ts: 1011}}
+	seedSocialMessages(t, full, shas[len(shas)-1], delta)
+	if pending, _ := buildPages(t, full); pending {
+		t.Fatal("full regen: unexpected pending")
+	}
+	incremental, _ := testClient(t)
+	seedPagesConfig(t, incremental, pagesTestSite())
+	seedSocialMessages(t, incremental, "", first)
+	if pending, _ := buildPages(t, incremental); pending {
+		t.Fatal("first pass: unexpected pending")
+	}
+	seedSocialMessages(t, incremental, shas[len(shas)-1], delta)
+	if pending, state := buildPages(t, incremental); pending || state != sitePagesStateOn {
+		t.Fatalf("incremental pass: pending=%v state=%q", pending, state)
+	}
+	for _, key := range []string{sitePagesFeedKey, "posts/" + sitePagesFeedKey} {
+		want, got := getKey(t, full, key), getKey(t, incremental, key)
+		if !strings.Contains(want, "second body") {
+			t.Errorf("%s: the full regen's feed lacks the content of a root outside the delta:\n%s", key, want)
+		}
+		if got != want {
+			t.Errorf("%s: the incremental pass's feed differs from the full regen's:\n%s\nwant\n%s", key, got, want)
+		}
+	}
+}

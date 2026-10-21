@@ -25,8 +25,10 @@ const (
 	siteItemsKeyPrefix = ".gitsocial/site/items/"
 	// siteBodiesKeyPrefix is the bucket namespace of the per-extension search corpora.
 	siteBodiesKeyPrefix = ".gitsocial/site/bodies/"
-	// siteItemsVersion is the artifact JSON schema version shared by every gitmsg corpus doc.
-	siteItemsVersion = 4
+	// siteItemsVersion is the items corpus's schema version; version 5 adds the text of a body-only entry.
+	siteItemsVersion = 5
+	// siteBodiesVersion is the bodies corpus's schema version.
+	siteBodiesVersion = 4
 	// siteCodeItemsVersion is the code corpus's schema version; its entries carry parent shas.
 	siteCodeItemsVersion = 5
 )
@@ -51,7 +53,7 @@ type siteItemsDoc struct {
 	Items   []siteMetaEntry `json:"items"`
 }
 
-// siteMetaEntry is one indexed commit's metadata: sha, author identity and time, the raw GitMsg header line, and the subject.
+// siteMetaEntry is one indexed commit's metadata: sha, author identity and time, the raw GitMsg header line, the subject, and the first line of a body-only entry.
 type siteMetaEntry struct {
 	SHA     string `json:"sha"`
 	Author  string `json:"author"`
@@ -59,6 +61,8 @@ type siteMetaEntry struct {
 	TS      int64  `json:"ts"`
 	Header  string `json:"header"`
 	Subject string `json:"subject"`
+	// Text is the first line of a comment, feedback, repost or quote, the row text of both page passes; omitempty keeps every other entry byte-identical.
+	Text string `json:"text,omitempty"`
 	// Branch is a code entry's attributed branch; omitempty keeps gitmsg entries byte-identical.
 	Branch string `json:"branch,omitempty"`
 	// Parents is a code entry's parent shas, which the repository graph needs.
@@ -101,9 +105,12 @@ type walkedItem struct {
 	Parents []string
 }
 
-// metaOf projects a walked commit into a metadata-index entry.
+// metaOf projects a walked commit into a metadata-index entry; a body-only type, and an edit that may omit its type, also carry the first line (TestParityRowText).
 func metaOf(w walkedItem) siteMetaEntry {
 	e := siteMetaEntry{SHA: w.SHA, Author: w.Author, Email: w.Email, TS: w.TS, Header: w.Header, Subject: subjectOf(w.Message)}
+	if h := protocol.ParseHeader(w.Header); h != nil && (sitePageBodyOnly(h.Fields["type"]) || h.Fields["edits"] != "") {
+		e.Text = contentFirstLine(w.Message)
+	}
 	e.AdoptedAuthor, e.AdoptedEmail, e.AdoptedTime = adoptedOf(w)
 	return e
 }
@@ -213,7 +220,7 @@ func contentFirstLine(message string) string {
 	}
 	content = strings.TrimSpace(siteStripLinkRefDefs(strings.ReplaceAll(content, "\r", "")))
 	line, _, _ := strings.Cut(content, "\n")
-	return line
+	return strings.TrimSpace(line)
 }
 
 // bodyOf projects a walked commit into a bodies-corpus entry.
@@ -597,6 +604,12 @@ func updateSiteItemsIndex(client *objstore.Client, prefix, ext, newTip string, s
 	bodies, err := readBodiesManifest(client, prefix, ext)
 	if err != nil {
 		return err
+	}
+	// An items manifest at an older schema version rebuilds the items shards from its entries and the bodies, which do not change.
+	if items == nil && bodies != nil {
+		if items, err = upgradeItemsCorpus(client, prefix, ext, bodies, sp); err != nil {
+			return err
+		}
 	}
 	cursor, err := readItemsCursor(client, prefix, ext)
 	if err != nil {

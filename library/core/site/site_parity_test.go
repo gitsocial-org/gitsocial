@@ -291,6 +291,13 @@ type parityPageBodyCase struct {
 	ExpectURLs []string `json:"expectURLs"`
 }
 
+// parityRowTextCase pins the first line a comment, feedback, repost or quote carries as its row text on both renderers.
+type parityRowTextCase struct {
+	Name    string `json:"name"`
+	Message string `json:"message"`
+	Expect  string `json:"expect"`
+}
+
 // parityRowBit pins one bit of a definition row: its text, and its href and rel when it links.
 type parityRowBit struct {
 	Text string `json:"text"`
@@ -316,6 +323,7 @@ type parityItemPageMetaCase struct {
 type parityFixtures struct {
 	RefTokens      []parityRefTokenCase      `json:"refTokens"`
 	PageBodyRefs   []parityPageBodyCase      `json:"pageBodyRefs"`
+	RowText        []parityRowTextCase       `json:"rowText"`
 	ItemPageMeta   []parityItemPageMetaCase  `json:"itemPageMeta"`
 	PRDiff         parityPRDiff              `json:"prDiff"`
 	MessageCases   []parityMessageCase       `json:"messageCases"`
@@ -623,6 +631,9 @@ func TestParityCardSkeleton(t *testing.T) {
 			msg := &sitePageMsg{
 				Ext: c.Ext, SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: c.FirstLine,
 				Header: &protocol.Header{Ext: c.Ext, Fields: c.Header},
+			}
+			if len(c.ExpectHead) == 0 {
+				msg.Text = c.FirstLine // a body-only row reads its index text
 			}
 			it := &sitePageItem{Msg: msg, Resolved: msg, Retracted: c.Header["retracted"] == "true"}
 			entry := buildSiteListEntry(it, sitePageDefaultTypes[c.Ext])
@@ -1295,6 +1306,29 @@ func TestParityPageBodyRefs(t *testing.T) {
 				t.Errorf("rendered anchors = %q, want %q", rendered, c.ExpectRefs)
 			}
 		})
+	}
+}
+
+// TestParityRowText asserts the items index writes a body-only entry's first line as unit_parity.js takes it from the app's subjectBody over cleanContent, and writes none for a title type.
+func TestParityRowText(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.RowText) == 0 {
+		t.Fatal("no row text cases in parity fixtures")
+	}
+	for _, c := range f.RowText {
+		t.Run(c.Name, func(t *testing.T) {
+			if got := contentFirstLine(c.Message); got != c.Expect {
+				t.Errorf("contentFirstLine = %q, want %q", got, c.Expect)
+			}
+			entry := metaOf(walkedItem{SHA: strings.Repeat("a", 40), Header: extractHeaderLine(c.Message), Message: c.Message})
+			if entry.Text != c.Expect {
+				t.Errorf("index text = %q, want %q", entry.Text, c.Expect)
+			}
+		})
+	}
+	post := "A post\n\nGitMsg: ext=\"social\"; type=\"post\"; v=\"0.1.0\""
+	if entry := metaOf(walkedItem{SHA: strings.Repeat("b", 40), Header: extractHeaderLine(post), Message: post}); entry.Text != "" {
+		t.Errorf("a post's index entry carries the text %q, want none", entry.Text)
 	}
 }
 

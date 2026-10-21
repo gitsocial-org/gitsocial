@@ -406,7 +406,7 @@ type sitePageListEntry struct {
 	Href       string
 	Title      string
 	BodyOnly   bool   // no head: the glyph and the marker lead the meta row (siteRowHead)
-	Text       string // a body-only row's own text, the body's first line
+	Text       string // a body-only row's own text, the first line of its content (pageRowText)
 	Meta       []sitePageBit
 }
 
@@ -1413,14 +1413,15 @@ func sitePageSubjectOrPlaceholder(subject string) string {
 	return "(untitled)"
 }
 
-// siteRowHead resolves a row's head: a body-only type takes none, so the marker leads its meta row and its first line stands as the card's text. Mirrors socialCard in gs-render.js.
+// siteRowHead resolves a row's head: a body-only type takes none, so the marker leads its meta row and its indexed first line stands as the card's text on both page passes (TestSitePages_incrementalEqualsFull). Mirrors socialCard in gs-render.js.
 func siteRowHead(it *sitePageItem) sitePageListEntry {
 	t := pageItemType(it)
-	subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
 	if sitePageBodyOnly(t) {
-		chip, _ := siteRowHeadChips(it, subject)
-		return sitePageListEntry{BodyOnly: true, Chip: chip, Text: subject}
+		text := pageRowText(it)
+		chip, _ := siteRowHeadChips(it, text)
+		return sitePageListEntry{BodyOnly: true, Chip: chip, Text: text}
 	}
+	subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
 	head := siteHeadSubject(t, pageItemField(it, "tag"), pageItemField(it, "version"), subject)
 	chip, tail := siteRowHeadChips(it, head)
 	return sitePageListEntry{Chip: chip, TailChips: tail, Title: head}

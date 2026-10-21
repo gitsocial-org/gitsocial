@@ -298,7 +298,7 @@ func TestRepair_HeadCountMismatch(t *testing.T) {
 				return &siteItemsDoc{Version: siteItemsVersion, Tip: tip, Items: nil}
 			}},
 			{"bodies head truncated", bodiesHeadKey("social"), func(tip string) any {
-				return &siteBodyIndex{Version: siteItemsVersion, Tip: tip, Items: nil}
+				return &siteBodyIndex{Version: siteBodiesVersion, Tip: tip, Items: nil}
 			}},
 		} {
 			client, _ := testClient(t)
@@ -457,6 +457,119 @@ func TestRepair_NoOpAndAppendStillWork(t *testing.T) {
 		assertLockstepState(t, client, "social", shas, shas[5])
 		if got := bucket.PutCount(shardKey); got != shardPuts {
 			t.Errorf("append re-PUT a sealed shard (%d -> %d PUTs)", shardPuts, got)
+		}
+	})
+}
+
+// TestRepair_itemsBumpKeepsBodies asserts an items manifest at an older schema version rebuilds the items shards alone, with the first line of a body-only entry, and writes nothing to the bodies corpus.
+func TestRepair_itemsBumpKeepsBodies(t *testing.T) {
+	withTestShardCount(func() {
+		client, bucket := testClient(t)
+		shas := seedChain(t, client, "", "", 5)
+		quote := "> quoted\n\nGitMsg: ext=\"social\"; type=\"quote\"; original=\"#commit:" + shas[0][:12] + "@gitmsg/social\"; v=\"0.1.0\""
+		sha, loose := makeLooseCommit(t, shas[4], quote, 1010)
+		if err := client.Put("objects/"+sha[:2]+"/"+sha[2:], loose); err != nil {
+			t.Fatalf("seed quote: %v", err)
+		}
+		shas = append(shas, sha)
+		mustUpdate(t, client, "social", sha)
+		bodies, err := readBodiesManifest(client, "", "social")
+		if err != nil || bodies == nil {
+			t.Fatalf("bodies manifest: %v", err)
+		}
+		bodiesKeys := append(make([]string, 0, 2+len(bodies.Shards)), bodiesManifestKey("social"), bodiesHeadKey("social"))
+		for _, s := range bodies.Shards {
+			bodiesKeys = append(bodiesKeys, siteBodiesDir("social")+s.Key)
+		}
+		puts := map[string]int{}
+		for _, key := range bodiesKeys {
+			puts[key] = bucket.PutCount(key)
+		}
+		stale, err := readItemsManifest(client, "", "social")
+		if err != nil || stale == nil {
+			t.Fatalf("items manifest: %v", err)
+		}
+		if len(stale.Shards) == 0 {
+			t.Fatal("the fixture seals no shard")
+		}
+		// The planted shards take the unsalted keys of the older version, as a bucket from before the tick holds them.
+		oldKeys := map[string]bool{}
+		for i, s := range stale.Shards {
+			entries, err := readItemsHeadEntries(client, siteItemsDir("social")+s.Key)
+			if err != nil {
+				t.Fatalf("read shard %s: %v", s.Key, err)
+			}
+			hash := shardContentHash(shardUnsaltedVersion, entries)
+			if _, err := putShardDoc(client, itemsCorpus, "social", siteItemsShardKey("social", hash), s.EndTip, entries, objstore.BrotliQualityShard); err != nil {
+				t.Fatalf("plant shard %s: %v", hash, err)
+			}
+			stale.Shards[i].Key, stale.Shards[i].Hash = shardObjectName(hash), hash
+			oldKeys[stale.Shards[i].Key] = true
+		}
+		stale.Version = shardUnsaltedVersion
+		if err := putShardManifest(client, itemsCorpus, "", "social", stale); err != nil {
+			t.Fatalf("plant the stale manifest: %v", err)
+		}
+		mustUpdate(t, client, "social", sha)
+		assertLockstepState(t, client, "social", shas, sha)
+		for _, key := range bodiesKeys {
+			if bucket.PutCount(key) != puts[key] {
+				t.Errorf("%s was written by the items upgrade", key)
+			}
+		}
+		items, _ := readItemsManifest(client, "", "social")
+		if items == nil || items.Version != siteItemsVersion || !items.Complete {
+			t.Fatalf("items manifest after the upgrade = %+v", items)
+		}
+		for _, s := range items.Shards {
+			if oldKeys[s.Key] {
+				t.Errorf("shard %s kept its key across the version tick", s.Key)
+			}
+		}
+		head, err := readItemsHeadEntries(client, siteItemsHeadKey("social"))
+		if err != nil || len(head) == 0 || head[len(head)-1].Text != "> quoted" {
+			t.Errorf("the quote's rebuilt entry carries text %q, want %q", head[len(head)-1].Text, "> quoted")
+		}
+	})
+}
+
+// TestRepair_partialItemsRebuildSetsCursor asserts a moved tip over an items rebuild the walk budget cut short keeps the page layer on the full regen with a cursor, and the pass after the backfill clears it.
+func TestRepair_partialItemsRebuildSetsCursor(t *testing.T) {
+	withTestShardCount(func() {
+		client, _ := testClient(t)
+		seedPagesConfig(t, client, pagesTestSite())
+		specs := make([]pageMsgSpec, 0, 6)
+		for i := 0; i < 6; i++ {
+			specs = append(specs, pageMsgSpec{msg: fmt.Sprintf("post %d", i), ts: int64(1000 + i)})
+		}
+		shas := seedSocialMessages(t, client, "", specs)
+		if pending, _ := buildPages(t, client); pending {
+			t.Fatal("unexpected pending")
+		}
+		// An older-version manifest that is not complete takes the bootstrap in place of the upgrade.
+		stale, _ := readItemsManifest(client, "", "social")
+		stale.Version, stale.Complete = shardUnsaltedVersion, false
+		if err := putShardManifest(client, itemsCorpus, "", "social", stale); err != nil {
+			t.Fatalf("plant the stale manifest: %v", err)
+		}
+		seedSocialMessages(t, client, shas[5], []pageMsgSpec{{msg: "post 6", ts: 1010}})
+		withTestWalkBudget(3, func() {
+			if pending, state := buildPages(t, client); !pending || state != "" {
+				t.Fatalf("partial rebuild: pending=%v state=%q, want true and no state", pending, state)
+			}
+		})
+		m, _ := readSitePagesManifest(client, "")
+		if m == nil || m.Cursor == nil || m.Items != nil {
+			t.Fatalf("pages manifest after a partial corpus = %+v, want a cursor and no counts", m)
+		}
+		if pending, state := buildPages(t, client); pending || state != sitePagesStateOn {
+			t.Fatalf("after the backfill: pending=%v state=%q", pending, state)
+		}
+		if m, _ = readSitePagesManifest(client, ""); m == nil || m.Cursor != nil || m.Items == nil {
+			t.Errorf("pages manifest after the backfill = %+v, want no cursor and the counts", m)
+		}
+		if !keyExists(client, "posts/index.html") || !keyExists(client, "i/"+shas[0][:12]+".html") {
+			t.Error("the completed pass must write the list and every item page")
 		}
 	})
 }

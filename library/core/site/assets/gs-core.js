@@ -1107,7 +1107,7 @@
     return {
       hash: e.sha, short: e.sha.slice(0, 12), tree: "", parents: [],
       authorName: e.author || "", authorEmail: e.email || "", authorTime: e.ts || 0,
-      content: "", rawMessage: header, subject: String(e.subject || ""),
+      content: String(e.text || ""), rawMessage: header, subject: String(e.subject || ""),
       gitmsg: parseGitmsg(header), refs: [], hollow: true,
       adoptedAuthor: e.adoptedAuthor || "", adoptedEmail: e.adoptedEmail || "", adoptedTime: e.adoptedTime || "",
     };

@@ -70,10 +70,13 @@ func shardObjectName(hash string) string {
 	return "shard-" + hash + ".json"
 }
 
-// shardContentHash keys a sealed shard by its member shas; a version past siteItemsVersion salts it, so a schema tick yields new keys.
+// shardUnsaltedVersion is the schema version whose shard keys carry no salt; each later version salts its keys, so a schema tick yields new keys.
+const shardUnsaltedVersion = 4
+
+// shardContentHash keys a sealed shard by its member shas, salted by any version past shardUnsaltedVersion.
 func shardContentHash[E shardEntry](version int, group []E) string {
 	h := sha256.New()
-	if version != siteItemsVersion {
+	if version != shardUnsaltedVersion {
 		fmt.Fprintf(h, "v%d\n", version)
 	}
 	for _, e := range group {

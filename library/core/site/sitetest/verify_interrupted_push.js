@@ -5,7 +5,7 @@
 //     site must still render via the reader's bounded loose-object walk.
 //   - healed-demo: same interruption, followed by one more incremental push.
 //     The push helper's repair state machine must have restored a valid
-//     version-4 manifest at the branch tip, and the site renders from it.
+//     version-5 manifest at the branch tip, and the site renders from it.
 const GS = require("../assets/gs-core.js");
 const ORIGIN = process.env.GS_SITE_ORIGIN || "http://localhost:8000";
 let pass = 0, fail = 0;
@@ -38,7 +38,7 @@ async function main() {
   {
     const base = ORIGIN + "/healed-demo/";
     const manifest = await fetchJSON(base, ".gitsocial/site/items/social/manifest.json");
-    ok("healed: items manifest restored", manifest !== null && manifest.version === 4, JSON.stringify(manifest && { version: manifest.version }));
+    ok("healed: items manifest restored", manifest !== null && manifest.version === 5, JSON.stringify(manifest && { version: manifest.version }));
     const refs = await fetchJSON(base, ".gitsocial/refs.json");
     const tip = refs && refs["refs/heads/gitmsg/social"];
     ok("healed: manifest tip matches the branch tip", manifest && tip && manifest.tip === tip, "manifest.tip=" + (manifest && manifest.tip) + " ref=" + tip);
@@ -46,7 +46,7 @@ async function main() {
     ok("healed: bodies manifest lockstepped", bodies && bodies.tip === manifest.tip);
     const ctx = GS.newContext(base);
     const idx = await GS.loadItemsIndex(ctx, "social");
-    ok("healed: loadItemsIndex returns the v4 index", idx && idx.version === 4);
+    ok("healed: loadItemsIndex returns the v5 index", idx && idx.version === 5);
     const items = await GS.loadExtItems(ctx, "social");
     ok("healed: all posts render, including the healing push", items.length >= 3, "items=" + items.length);
     const subjects = items.map((i) => (i.content || "").split("\n")[0]);
