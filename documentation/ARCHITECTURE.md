@@ -249,7 +249,13 @@ A push is the sequence: the data push, then the site step after it.
 
 You can delete the storage under `repositories/` at any time; GitSocial uses `cache.db`, not the storage, to decide what to fetch. The cache is append-only. A commit that leaves its source branch (rebase, force-push) is stale: `cache.MarkCommitsStale` or `MarkCommitsStaleByRepo` sets its `stale_since`. In the workspace, a row is stale when its branch is not the [home](#workspace-home-branch) of its commit, and `MarkCommitsStaleByHome` sets the value. Timeline and list queries exclude stale commits, and thread and detail views show them dimmed.
 
-SQLite: WAL, 64 MB page cache, temp store in memory, 16 connections, 256 MB mmap.
+| SQLite setting | Value |
+|---|---|
+| Journal | WAL, truncated to 64 MiB after a checkpoint |
+| Connections | 16 |
+| Page cache | 4 MiB per connection, 64 MiB for the pool |
+| Temp store | memory |
+| mmap | 256 MiB |
 
 ### Schema
 

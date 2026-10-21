@@ -338,7 +338,8 @@ func Open(cacheDir string) error {
 		"&_pragma=journal_mode(WAL)" +
 		"&_pragma=synchronous(NORMAL)" +
 		"&_pragma=busy_timeout(30000)" +
-		"&_pragma=cache_size(-65536)" +
+		"&_pragma=cache_size(-4096)" +
+		"&_pragma=journal_size_limit(67108864)" +
 		"&_pragma=mmap_size(268435456)" +
 		"&_pragma=temp_store(MEMORY)"
 
