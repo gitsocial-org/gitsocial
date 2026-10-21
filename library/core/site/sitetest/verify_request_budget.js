@@ -15,40 +15,11 @@
 require("./shim.js");
 require("../assets/icons.js");
 const GS = require("../assets/gs-app.js");
-const { setHash } = global.__shim;
+const { setHash, fetchStats, settle } = global.__shim;
 const origin = process.env.GS_SITE_ORIGIN || "http://localhost:8000";
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let pass = 0, fail = 0;
 const ok = (n, c, e) => { (c ? pass++ : fail++); console.log((c ? "PASS " : "FAIL ") + n + (!c && e ? " :: " + e : "")); };
-
-// Count every bucket fetch (any URL), regardless of caching layers above — the
-// visitor pays for each network request the reader issues.
-const realFetch = global.fetch;
-let fetches = 0;
-let inFlight = 0;
-global.fetch = async (url, opts) => {
-  fetches++;
-  inFlight++;
-  try { return await realFetch(url, opts); } finally { inFlight--; }
-};
-
-// settle waits until the route has actually STOPPED fetching: nothing in flight
-// and nothing new started for a quiet span. A flat sleep measured the wrong
-// thing here — several routes keep fetching after first paint (home's recent
-// activity is most of home's cost and fills after the landing paints, detail
-// routes enrich in the background), so whatever landed late simply went
-// uncounted. That variance is downward, the dangerous direction: a regression
-// that doubled a section's cost would read as a pass.
-async function settle(quietMs, maxMs) {
-  const quiet = quietMs || 400, deadline = Date.now() + (maxMs || 20000);
-  let seen = -1, still = Date.now();
-  while (Date.now() < deadline) {
-    if (inFlight > 0 || fetches !== seen) { seen = fetches; still = Date.now(); }
-    else if (Date.now() - still >= quiet) return;
-    await wait(50);
-  }
-}
 
 // measure drives one route on a FRESH cold context and returns the number of
 // fetches it issued, once every fetch the route started — including the ones it
@@ -56,10 +27,10 @@ async function settle(quietMs, maxMs) {
 async function measure(bucket, hash) {
   const ctx = GS.newContext(origin + "/" + bucket + "/");
   setHash(hash);
-  fetches = 0;
+  const before = fetchStats.started;
   await GS.route(ctx);
   await settle();
-  return fetches;
+  return fetchStats.started - before;
 }
 
 // discoverHashes pulls a representative item hash from each ext branch of a
@@ -86,11 +57,11 @@ async function run(label, bucket, hash, ceiling) {
 async function measureSplit(bucket, hash) {
   const ctx = GS.newContext(origin + "/" + bucket + "/");
   setHash(hash);
-  fetches = 0;
+  const before = fetchStats.started;
   await GS.route(ctx);
-  const atPaint = fetches;
+  const atPaint = fetchStats.started - before;
   await settle();
-  return { atPaint, total: fetches };
+  return { atPaint, total: fetchStats.started - before };
 }
 
 async function main() {

@@ -96,10 +96,9 @@ async function main() {
   require("./shim.js");
   require("../assets/icons.js");
   const GS = require("../assets/gs-app.js");
-  const { viewNode, textOf, setHash } = global.__shim;
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const { viewNode, textOf, setHash, settle } = global.__shim;
   function findClass(node, cls, out) { out = out || []; for (const c of (node && node._children) || []) { if (c && c.nodeType === 1) { if (c._cls && c._cls.has(cls)) out.push(c); findClass(c, cls, out); } } return out; }
-  await wait(300); // drain auto-run init home route
+  await settle();
 
   const base = origin + "/mid-push/";
   const CAP = GS.COUNTS_WALK_CAP;
@@ -148,7 +147,7 @@ async function main() {
 
     // Let the backgrounded counts settle; total loose work stays bounded (the
     // count walk is capped, so the route never touches all REVIEW_N).
-    await wait(2000);
+    await settle();
     ok("total loose work stays bounded after counts settle (never a full-branch walk)",
       looseGets < REVIEW_N, "totalLooseGets=" + looseGets + " reviewBranch=" + REVIEW_N);
   }

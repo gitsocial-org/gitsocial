@@ -12,7 +12,7 @@ require("./shim.js");
 require("../assets/icons.js");
 const GS = require("../assets/gs-app.js");
 const fs = require("fs");
-const { viewNode, textOf, setHash } = global.__shim;
+const { viewNode, textOf, setHash, settle } = global.__shim;
 let pass = 0, fail = 0;
 const ok = (n, c, e) => { (c ? pass++ : fail++); console.log((c ? "PASS " : "FAIL ") + n + (!c && e ? " :: " + e : "")); };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -33,7 +33,7 @@ const APP = fs.readFileSync(require("path").join(__dirname, "../assets/gs-app.js
 const ORIGIN = process.env.GS_SITE_ORIGIN || "http://localhost:8000";
 const TD = ORIGIN + "/" + (process.env.GS_SITE_BUCKET || "thread-demo") + "/";
 const EMPTY = ORIGIN + "/" + (process.env.GS_SITE_BUCKET_EMPTY || "other-demo") + "/";
-async function render(base, hash) { const ctx = GS.newContext(base); setHash(hash); await GS.route(ctx); await wait(400); return ctx; }
+async function render(base, hash) { const ctx = GS.newContext(base); setHash(hash); await GS.route(ctx); await settle(); return ctx; }
 
 async function item1() {
   console.log("\n--- Item 1: Memos tab always visible ---");
@@ -314,7 +314,7 @@ async function item9() {
 }
 
 (async () => {
-  await wait(700); // let gs-app init()'s boot route settle before driving routes
+  await settle();
   await item1(); item2(); await item3(); await item4(); await item5(); await item6(); await item7(); await item8(); await item9();
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

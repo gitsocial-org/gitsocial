@@ -165,7 +165,25 @@ global.URL.createObjectURL = () => "blob:mock/" + (++objCounter);
 global.URL.revokeObjectURL = () => {};
 global.Blob = function (parts, opts) { this.type = opts && opts.type; };
 
-global.__shim = { viewNode, textOf, findTag, docHandlers, mkEl, setHash: (h) => { global.location.hash = h; } };
+const fetchStats = { started: 0, inFlight: 0 };
+const shimFetch = global.fetch;
+global.fetch = async (url, opts) => {
+  fetchStats.started++;
+  fetchStats.inFlight++;
+  try { return await shimFetch(url, opts); } finally { fetchStats.inFlight--; }
+};
+// settle waits until no fetch is in flight and none has started for quietMs, capped at maxMs.
+async function settle(quietMs, maxMs) {
+  const quiet = quietMs || 400, deadline = Date.now() + (maxMs || 20000);
+  let seen = -1, still = Date.now();
+  while (Date.now() < deadline) {
+    if (fetchStats.inFlight > 0 || fetchStats.started !== seen) { seen = fetchStats.started; still = Date.now(); }
+    else if (Date.now() - still >= quiet) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+global.__shim = { viewNode, textOf, findTag, docHandlers, mkEl, fetchStats, settle, setHash: (h) => { global.location.hash = h; } };
 
 // Load the split reader into the shimmed context, in dependency order: the
 // DOM-free core, then the render layer. The app/boot layer is loaded by each

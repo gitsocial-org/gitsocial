@@ -133,10 +133,9 @@ async function main() {
   require("./shim.js");
   require("../assets/icons.js");
   const GS = require("../assets/gs-app.js");
-  const { viewNode, textOf, setHash } = global.__shim;
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const { viewNode, textOf, setHash, settle } = global.__shim;
   function findClass(node, cls, out) { out = out || []; for (const c of (node && node._children) || []) { if (c && c.nodeType === 1) { if (c._cls && c._cls.has(cls)) out.push(c); findClass(c, cls, out); } } return out; }
-  await wait(300); // drain the auto-run init home route
+  await settle();
 
   const CAP = GS.COUNTS_WALK_CAP;
   const WALK = GS.WALK_CAP;
@@ -148,14 +147,14 @@ async function main() {
   // driveRoute paints one hash under a bucket base and returns { painted,
   // looseGets, text }. It runs route() to completion (first paint), then lets any
   // backgrounded work settle so the reported total is the full route cost.
-  async function driveRoute(bucket, hash, settleMs) {
+  async function driveRoute(bucket, hash) {
     const ctx = GS.newContext(origin + "/" + bucket + "/");
     setHash(hash);
     looseGets = 0;
     await GS.route(ctx);
     const paintGets = looseGets;
     const painted = findClass(viewNode, "loading").length === 0;
-    await wait(settleMs || 1500);
+    await settle();
     return { painted, paintGets, totalGets: looseGets, text: textOf(viewNode) };
   }
 
@@ -190,7 +189,7 @@ async function main() {
     // exhaustion. First paint must be bounded across ALL four branches, not the
     // sum of their sizes.
     const branchSum = PM_N + REVIEW_N + SOCIAL_N + RELEASE_N;
-    const a = await driveRoute(mode, "#/analytics", 2500);
+    const a = await driveRoute(mode, "#/analytics");
     ok("[" + mode + "] #/analytics paints (not stuck on Loading…)", a.painted, a.text.slice(0, 60));
     ok("[" + mode + "] #/analytics renders the Analytics view", /Analytics/.test(a.text), a.text.slice(0, 60));
     ok("[" + mode + "] #/analytics first paint is BOUNDED (does not exhaust all four data branches)",

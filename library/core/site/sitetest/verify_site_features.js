@@ -21,7 +21,7 @@ require("./shim.js");
 const SHELL = require("./shellrev.js");
 require("../assets/icons.js");
 const GS = require("../assets/gs-app.js");
-const { viewNode, textOf, setHash } = global.__shim;
+const { viewNode, textOf, setHash, settle } = global.__shim;
 const ORIGIN = process.env.GS_SITE_ORIGIN || "http://localhost:8000";
 const BASE = ORIGIN + "/thread-demo/";
 let pass = 0, fail = 0;
@@ -33,10 +33,10 @@ function fire(node, ev, props) { (node && node._handlers && node._handlers[ev] |
 // route drives the app router with a shared ctx (so ctx.lastHash/backFrom persist
 // across navigations, as they do in a real session).
 let ctx = null;
-async function route(hash, fresh) { if (fresh || !ctx) ctx = GS.newContext(BASE); setHash(hash); await GS.route(ctx); await wait(900); }
+async function route(hash, fresh) { if (fresh || !ctx) ctx = GS.newContext(BASE); setHash(hash); await GS.route(ctx); await settle(); }
 
 async function main() {
-  await wait(2000); // drain the auto-run init home route before driving our own
+  await settle();
   // ---- board reads the pushed pm-config.json ----
   const cfg = await GS.loadSiteConfig(GS.newContext(BASE));
   ok("pm-config.json is present and parsed", !!cfg && Array.isArray(cfg.columns), "cfg=" + JSON.stringify(cfg && cfg.columns && cfg.columns.map((c) => c.name)));
