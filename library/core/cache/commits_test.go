@@ -3,6 +3,7 @@ package cache
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 )
@@ -52,29 +53,37 @@ func TestInsertCommits_basic(t *testing.T) {
 	}
 }
 
-func TestInsertCommits_defaultBranch(t *testing.T) {
+// TestInsertCommits_emptyBranchFails pins the schema invariant: a commit with an empty branch fails the call, and no commit of the call is inserted.
+func TestInsertCommits_emptyBranchFails(t *testing.T) {
 	setupTestDB(t)
-
-	commits := []Commit{
-		{
-			Hash:      "abc123456789",
-			RepoURL:   "https://github.com/user/repo",
-			Branch:    "", // empty should default to "main"
-			Message:   "Commit with empty branch",
-			Timestamp: time.Now().UTC(),
-		},
+	err := InsertCommits([]Commit{
+		{Hash: "abc123456789", RepoURL: "https://github.com/user/repo", Branch: "main", Message: "valid", Timestamp: time.Now().UTC()},
+		{Hash: "def456789abc", RepoURL: "https://github.com/user/repo", Branch: "", Message: "no branch", Timestamp: time.Now().UTC()},
+	})
+	if err == nil {
+		t.Fatal("InsertCommits() with an empty branch error = nil, want an error")
 	}
-
-	if err := InsertCommits(commits); err != nil {
-		t.Fatalf("InsertCommits() error = %v", err)
+	var n int
+	if err := DB().QueryRow(`SELECT COUNT(*) FROM core_commits`).Scan(&n); err != nil {
+		t.Fatalf("count core_commits: %v", err)
 	}
-
-	meta, err := GetRepositoryFetchMeta("https://github.com/user/repo")
-	if err != nil {
-		t.Fatalf("GetRepositoryFetchMeta() error = %v", err)
+	if n != 0 {
+		t.Errorf("core_commits rows = %d, want 0", n)
 	}
-	if meta.CommitCount != 1 {
-		t.Errorf("CommitCount = %d, want 1", meta.CommitCount)
+}
+
+// TestSchema_rejectsEmptyBranch pins the schema invariant: a direct insert with an empty branch fails the CHECK in each table that has it.
+func TestSchema_rejectsEmptyBranch(t *testing.T) {
+	setupTestDB(t)
+	inserts := map[string]string{
+		"core_commits":           `INSERT INTO core_commits (repo_url, hash, branch, message, timestamp) VALUES ('https://github.com/user/repo', 'abc123456789', '', 'm', '2025-10-21T12:00:00Z')`,
+		"core_list_repositories": `INSERT INTO core_list_repositories (list_id, repo_url, branch) VALUES ('reading', 'https://github.com/user/repo', '')`,
+	}
+	for table, insert := range inserts {
+		_, err := DB().Exec(insert)
+		if err == nil || !strings.Contains(err.Error(), "CHECK constraint failed") {
+			t.Errorf("insert into %s with an empty branch error = %v, want the CHECK constraint", table, err)
+		}
 	}
 }
 
@@ -101,7 +110,7 @@ func TestInsertCommits_duplicateIgnored(t *testing.T) {
 
 func TestInsertCommits_notOpen(t *testing.T) {
 	Reset()
-	err := InsertCommits([]Commit{{Hash: "abc", RepoURL: "url", Message: "msg", Timestamp: time.Now()}})
+	err := InsertCommits([]Commit{{Hash: "abc", RepoURL: "url", Branch: "main", Message: "msg", Timestamp: time.Now()}})
 	if err != ErrNotOpen {
 		t.Errorf("InsertCommits() error = %v, want ErrNotOpen", err)
 	}
@@ -307,7 +316,7 @@ func TestFilterUnfetchedCommits_queryError(t *testing.T) {
 func TestInsertCommits_prepareError(t *testing.T) {
 	setupTestDB(t)
 	ExecLocked(func(db *sql.DB) error { _, err := db.Exec("DROP TABLE core_commits"); return err })
-	err := InsertCommits([]Commit{{Hash: "abc", RepoURL: "url", Message: "msg", Timestamp: time.Now()}})
+	err := InsertCommits([]Commit{{Hash: "abc", RepoURL: "url", Branch: "main", Message: "msg", Timestamp: time.Now()}})
 	if err == nil {
 		t.Error("InsertCommits() should fail when table is dropped")
 	}

@@ -61,7 +61,7 @@ func (p *mentionProvider) GetNotifications(workdir string, filter Filter) ([]Not
 			var ts sql.NullString
 			var isRead int
 			if err := rows.Scan(&repoURL, &hash, &branch, &authorName, &authorEmail, &ts, &isRead); err != nil {
-				continue
+				return nil, err
 			}
 			var timestamp time.Time
 			if ts.Valid {

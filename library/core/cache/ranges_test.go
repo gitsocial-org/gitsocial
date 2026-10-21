@@ -372,3 +372,18 @@ func TestGetFetchedMonths_empty(t *testing.T) {
 		t.Errorf("len(months) = %d, want 0", len(months))
 	}
 }
+
+// TestGetFetchRanges_partialRange reads back a range with no fetched_at, as InsertFetchRange writes it.
+func TestGetFetchRanges_partialRange(t *testing.T) {
+	setupTestDB(t)
+	if _, err := InsertFetchRange("https://github.com/user/partial", "2025-10-01", "2025-10-31"); err != nil {
+		t.Fatalf("InsertFetchRange() error = %v", err)
+	}
+	ranges, err := GetFetchRanges("https://github.com/user/partial")
+	if err != nil {
+		t.Fatalf("GetFetchRanges() error = %v", err)
+	}
+	if len(ranges) != 1 || ranges[0].Status != "partial" || !ranges[0].FetchedAt.IsZero() {
+		t.Errorf("GetFetchRanges() = %+v, want one partial range with a zero FetchedAt", ranges)
+	}
+}

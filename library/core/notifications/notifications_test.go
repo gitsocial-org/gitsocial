@@ -659,29 +659,6 @@ func TestMentionProvider_GetNotifications_queryError(t *testing.T) {
 	}
 }
 
-func TestMentionProvider_GetNotifications_scanError(t *testing.T) {
-	setupTestDB(t)
-	workdir := setupGitRepo(t)
-	now := time.Now().UTC().Format(time.RFC3339)
-	_ = cache.ExecLocked(func(db *sql.DB) error {
-		_, _ = db.Exec(`INSERT INTO core_commits (repo_url, hash, branch, author_name, author_email, message, timestamp) VALUES (?, ?, ?, NULL, ?, ?, ?)`,
-			"https://github.com/x/y", "scan12345678", "main", "bob@example.com", "test", now)
-		_, _ = db.Exec(`INSERT INTO core_mentions (repo_url, hash, branch, email) VALUES (?, ?, ?, ?)`,
-			"https://github.com/x/y", "scan12345678", "main", "alice@example.com")
-		return nil
-	})
-
-	p := &mentionProvider{}
-	items, err := p.GetNotifications(workdir, Filter{})
-	if err != nil {
-		t.Fatalf("GetNotifications() error = %v", err)
-	}
-	// The scan should fail for the NULL author_name row, so it gets skipped
-	if len(items) != 0 {
-		t.Errorf("expected 0 items (scan error skipped), got %d", len(items))
-	}
-}
-
 func TestMentionProvider_GetUnreadCount_queryError(t *testing.T) {
 	setupTestDB(t)
 	workdir := setupGitRepo(t)

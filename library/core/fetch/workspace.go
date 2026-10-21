@@ -96,8 +96,10 @@ func processCommitBatch(ctx *workspaceSyncContext, commits []git.Commit) {
 			Timestamp:   gc.Timestamp,
 		})
 	}
+	// No extension row is written for a batch whose core rows are absent.
 	if err := cache.InsertCommits(cacheCommits); err != nil {
-		log.Debug("workspace sync insert failed", "error", err)
+		log.Warn("workspace sync insert failed", "error", err)
+		return
 	}
 	if _, err := cache.ReconcileVersions(); err != nil {
 		log.Debug("workspace sync reconcile failed", "error", err)

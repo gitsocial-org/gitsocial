@@ -35,9 +35,9 @@ CREATE TABLE IF NOT EXISTS social_interactions (
     repo_url TEXT NOT NULL,
     hash TEXT NOT NULL,
     branch TEXT NOT NULL,
-    comments INTEGER DEFAULT 0,
-    reposts INTEGER DEFAULT 0,
-    quotes INTEGER DEFAULT 0,
+    comments INTEGER NOT NULL DEFAULT 0,
+    reposts INTEGER NOT NULL DEFAULT 0,
+    quotes INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (repo_url, hash, branch)
 );
 
@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS social_repo_list_repositories (
     owner_repo_url TEXT NOT NULL,
     list_id TEXT NOT NULL,
     repo_url TEXT NOT NULL,
-    branch TEXT DEFAULT 'main',
+    branch TEXT NOT NULL,
     PRIMARY KEY (owner_repo_url, list_id, repo_url),
     FOREIGN KEY (owner_repo_url, list_id) REFERENCES social_repo_lists(repo_url, list_id) ON DELETE CASCADE
 );

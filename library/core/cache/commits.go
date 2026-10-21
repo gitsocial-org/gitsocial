@@ -82,6 +82,12 @@ func InsertCommits(commits []Commit) error {
 	if len(commits) == 0 {
 		return nil
 	}
+	// An empty branch is a caller bug under the home branch rules; the check runs before any transaction, so the call inserts nothing.
+	for _, c := range commits {
+		if c.Branch == "" {
+			return fmt.Errorf("insert commit %s: empty branch", c.Hash)
+		}
+	}
 	for start := 0; start < len(commits); start += commitInsertBatchSize {
 		end := start + commitInsertBatchSize
 		if end > len(commits) {
@@ -172,10 +178,6 @@ func insertCommitsTxn(commits []Commit) error {
 	var inserted [][2]string
 
 	for _, c := range commits {
-		branch := c.Branch
-		if branch == "" {
-			branch = "main"
-		}
 		repoURL := protocol.NormalizeURL(c.RepoURL)
 
 		// Extract edits, retracted, origin-time, origin-author, and labels fields from GitMsg header
@@ -232,7 +234,7 @@ func insertCommitsTxn(commits []Commit) error {
 
 		// signer_key: an empty string is confirmed unsigned; NULL means the git lookup failed at insert, and the backfill retries it.
 		var rowid int64
-		err := commitStmt.QueryRow(repoURL, c.Hash, branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail, c.SignerKey, isEditCommit, action).Scan(&rowid)
+		err := commitStmt.QueryRow(repoURL, c.Hash, c.Branch, c.AuthorName, c.AuthorEmail, c.Message, ts, originTime, edits, labels, now, originAuthorName, originAuthorEmail, c.SignerKey, isEditCommit, action).Scan(&rowid)
 		written := err == nil
 		if err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("insert commit %s: %w", c.Hash, err)
@@ -247,7 +249,7 @@ func insertCommitsTxn(commits []Commit) error {
 		if labels != nil {
 			labelsStr = *labels
 		}
-		if err := RebuildCSVLinkingTable(tx, "core_labels", "label", repoURL, c.Hash, branch, labelsStr); err != nil {
+		if err := RebuildCSVLinkingTable(tx, "core_labels", "label", repoURL, c.Hash, c.Branch, labelsStr); err != nil {
 			return fmt.Errorf("rebuild core_labels for %s: %w", c.Hash, err)
 		}
 
@@ -264,7 +266,7 @@ func insertCommitsTxn(commits []Commit) error {
 				}
 				canonicalBranch := parsed.Branch
 				if canonicalBranch == "" {
-					canonicalBranch = branch
+					canonicalBranch = c.Branch
 				}
 				var exists int
 				if err := tx.QueryRow(`SELECT 1 FROM core_commits WHERE repo_url = ? AND hash = ? LIMIT 1`,
@@ -273,7 +275,7 @@ func insertCommitsTxn(commits []Commit) error {
 					if isRetracted {
 						retracted = 1
 					}
-					if _, err := versionStmt.Exec(repoURL, c.Hash, branch, canonicalRepoURL, parsed.Value, canonicalBranch, retracted); err != nil {
+					if _, err := versionStmt.Exec(repoURL, c.Hash, c.Branch, canonicalRepoURL, parsed.Value, canonicalBranch, retracted); err != nil {
 						return fmt.Errorf("insert version record for %s: %w", c.Hash, err)
 					}
 					canonicals[[2]string{canonicalRepoURL, parsed.Value}] = true

@@ -144,7 +144,7 @@ func scanFetchRanges(rows *sql.Rows) ([]FetchRange, error) {
 	var ranges []FetchRange
 	for rows.Next() {
 		var fr FetchRange
-		var fetchedAt string
+		var fetchedAt sql.NullString
 
 		err := rows.Scan(
 			&fr.ID,
@@ -160,7 +160,8 @@ func scanFetchRanges(rows *sql.Rows) ([]FetchRange, error) {
 			return nil, err
 		}
 
-		if t, err := time.Parse(time.RFC3339, fetchedAt); err == nil {
+		// fetched_at is NULL for a range whose writer did not set it.
+		if t, err := time.Parse(time.RFC3339, fetchedAt.String); fetchedAt.Valid && err == nil {
 			fr.FetchedAt = t
 		}
 		ranges = append(ranges, fr)

@@ -187,3 +187,69 @@ func querySocialItem(t *testing.T, hash string) SocialItem {
 	}
 	return item
 }
+
+// TestSchema_noNullFlags pins the schema invariant: after the fetch path, no flag or count column holds NULL, and each is declared NOT NULL.
+func TestSchema_noNullFlags(t *testing.T) {
+	setupTestDB(t)
+	fixture := []struct{ hash, message string }{
+		{"a01f12345678", "Hello\n\n" + `GitMsg: ext="social"; type="post"; v="0.1.0"`},
+		{"c01f12345678", "Nice post!\n\n" + `GitMsg: ext="social"; type="comment"; original="#commit:a01f12345678@main"; v="0.1.0"`},
+		{"e01f12345678", "\n\n" + `GitMsg: ext="social"; type="repost"; original="#commit:a01f12345678@main"; v="0.1.0"`},
+		{"d01f12345678", "My thoughts\n\n" + `GitMsg: ext="social"; type="quote"; original="#commit:a01f12345678@main"; v="0.1.0"`},
+		{"ed1f12345678", "Hello again\n\n" + `GitMsg: ext="social"; type="post"; edits="#commit:a01f12345678@main"; v="0.1.0"`},
+		{"ed2f12345678", "\n\n" + `GitMsg: ext="social"; type="comment"; edits="#commit:c01f12345678@main"; retracted="true"; v="0.1.0"`},
+	}
+	for _, f := range fixture {
+		insertTestCommit(t, f.hash, f.message)
+		processSocialCommit(git.Commit{Hash: f.hash, Timestamp: time.Now()}, protocol.ParseMessage(f.message), socialSyncTestRepoURL, socialSyncTestBranch)
+	}
+	member := []cache.ListRepository{{ListID: "reading", RepoURL: "https://github.com/other/repo", Branch: "main"}}
+	if err := cache.InsertList(cache.CachedList{ID: "reading", Name: "Reading", Repositories: member}); err != nil {
+		t.Fatalf("InsertList() error = %v", err)
+	}
+	if err := cache.InsertExternalRepoList(cache.ExternalRepoList{RepoURL: socialSyncTestRepoURL, ListID: "reading", Name: "Reading", Repositories: member}); err != nil {
+		t.Fatalf("InsertExternalRepoList() error = %v", err)
+	}
+	columns := []struct{ table, column string }{
+		{"core_list_repositories", "branch"},
+		{"social_repo_list_repositories", "branch"},
+		{"core_commits", "branch"},
+		{"core_commits", "author_name"},
+		{"core_commits", "author_email"},
+		{"core_commits", "is_virtual"},
+		{"core_commits_version", "is_retracted"},
+		{"social_interactions", "comments"},
+		{"social_interactions", "reposts"},
+		{"social_interactions", "quotes"},
+	}
+	err := cache.ExecLocked(func(db *sql.DB) error {
+		for _, table := range []string{"core_commits_version", "social_interactions", "core_list_repositories", "social_repo_list_repositories"} {
+			var rows int
+			if err := db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&rows); err != nil {
+				return err
+			}
+			if rows == 0 {
+				t.Errorf("%s has no rows after the fixture, want rows to check", table)
+			}
+		}
+		for _, c := range columns {
+			var nulls, notNull int
+			if err := db.QueryRow(`SELECT COUNT(*) FROM ` + c.table + ` WHERE ` + c.column + ` IS NULL`).Scan(&nulls); err != nil {
+				return err
+			}
+			if nulls != 0 {
+				t.Errorf("%s.%s holds %d NULLs, want 0", c.table, c.column, nulls)
+			}
+			if err := db.QueryRow(`SELECT "notnull" FROM pragma_table_info(?) WHERE name = ?`, c.table, c.column).Scan(&notNull); err != nil {
+				return err
+			}
+			if notNull != 1 {
+				t.Errorf("%s.%s is not declared NOT NULL", c.table, c.column)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("query the schema: %v", err)
+	}
+}

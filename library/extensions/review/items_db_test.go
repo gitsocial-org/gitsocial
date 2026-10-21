@@ -785,3 +785,46 @@ func TestFindByHash_liveFirst(t *testing.T) {
 		t.Errorf("findByHash(gone) = %+v, %v, want the stale row", item, err)
 	}
 }
+
+// TestReviewState_nullScans pins the schema invariant: a feedback row with a NULL state scans without error in each reader that selects review_items.state.
+func TestReviewState_nullScans(t *testing.T) {
+	setupTestDB(t)
+	repoURL := "https://github.com/test/null-state"
+	const prHash, fbHash = "a0115e000001", "a0115e000002"
+	insertReviewTestCommit(t, repoURL, prHash)
+	insertReviewTestCommit(t, repoURL, fbHash)
+	if err := InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: prHash, Branch: reviewTestBranch, Type: string(ItemTypePullRequest), State: cache.ToNullString("open")}); err != nil {
+		t.Fatalf("InsertReviewItem(pull request) error = %v", err)
+	}
+	if err := InsertReviewItem(ReviewItem{
+		RepoURL: repoURL, Hash: fbHash, Branch: reviewTestBranch, Type: string(itemTypeFeedback),
+		PullRequestRepoURL: cache.ToNullString(repoURL), PullRequestHash: cache.ToNullString(prHash), PullRequestBranch: cache.ToNullString(reviewTestBranch),
+		ReviewStateField: cache.ToNullString("approved"),
+	}); err != nil {
+		t.Fatalf("InsertReviewItem(feedback) error = %v", err)
+	}
+	if item, err := GetReviewItem(repoURL, fbHash, reviewTestBranch); err != nil || item.State.Valid {
+		t.Errorf("GetReviewItem(feedback) = %+v, %v, want a row with a NULL state", item, err)
+	}
+	if _, err := GetReviewItemByRef("#commit:"+fbHash, ""); err != nil {
+		t.Errorf("GetReviewItemByRef(feedback) error = %v", err)
+	}
+	if items, err := getReviewItems(reviewQuery{RepoURL: repoURL}); err != nil || len(items) != 2 {
+		t.Errorf("getReviewItems() = %d items, %v, want both rows", len(items), err)
+	}
+	if res := GetPullRequests(repoURL, reviewTestBranch, nil, "", 0); !res.Success || len(res.Data) != 1 {
+		t.Errorf("GetPullRequests() = %+v, want the pull request", res)
+	}
+	if count, err := CountPullRequests(repoURL, nil); err != nil || count != 1 {
+		t.Errorf("CountPullRequests() = %d, %v, want 1", count, err)
+	}
+	if res := GetPullRequestsWithForks(repoURL, reviewTestBranch, []string{"https://github.com/fork/null-state"}, []string{"open"}, "", 0); !res.Success || len(res.Data) != 1 {
+		t.Errorf("GetPullRequestsWithForks() = %+v, want the pull request", res)
+	}
+	if res := GetFeedbackForPR(repoURL, prHash, reviewTestBranch); !res.Success || len(res.Data) != 1 {
+		t.Errorf("GetFeedbackForPR() = %+v, want the feedback", res)
+	}
+	if notifs, err := getFeedbackNotifications(repoURL, "owner@test.com", false); err != nil || len(notifs) != 1 {
+		t.Errorf("getFeedbackNotifications() = %d, %v, want the feedback", len(notifs), err)
+	}
+}

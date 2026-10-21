@@ -54,7 +54,7 @@ func RegisterSchema(name, schema string) {
 // schemaVersion is bumped whenever the core schema changes in a way that
 // requires reseeding the cache. Open() compares user_version to this and
 // nukes-and-recreates the file when it lags. Bump on every breaking change.
-const schemaVersion = 6
+const schemaVersion = 7
 
 const coreSchema = `
 -- Core: Raw commits (1:1 with git, per repo+branch). The is_retracted/has_edits/
@@ -65,16 +65,16 @@ const coreSchema = `
 CREATE TABLE IF NOT EXISTS core_commits (
     repo_url TEXT NOT NULL,
     hash TEXT NOT NULL,
-    branch TEXT NOT NULL DEFAULT 'main',
-    author_name TEXT,
-    author_email TEXT,
+    branch TEXT NOT NULL CHECK (branch <> ''),
+    author_name TEXT NOT NULL DEFAULT '',
+    author_email TEXT NOT NULL DEFAULT '',
     message TEXT NOT NULL,
     timestamp TEXT NOT NULL,
     origin_time TEXT,
     edits TEXT,
     labels TEXT,
     fetched_at TEXT,
-    is_virtual INTEGER DEFAULT 0,
+    is_virtual INTEGER NOT NULL DEFAULT 0,
     stale_since TEXT,
     origin_author_name TEXT,
     origin_author_email TEXT,
@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS core_commits_version (
     canonical_repo_url TEXT NOT NULL,
     canonical_hash TEXT NOT NULL,
     canonical_branch TEXT NOT NULL,
-    is_retracted INTEGER DEFAULT 0,
+    is_retracted INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (edit_repo_url, edit_hash, edit_branch),
     FOREIGN KEY (edit_repo_url, edit_hash, edit_branch) REFERENCES core_commits(repo_url, hash, branch),
     FOREIGN KEY (canonical_repo_url, canonical_hash, canonical_branch) REFERENCES core_commits(repo_url, hash, branch)
@@ -180,9 +180,9 @@ CREATE TABLE IF NOT EXISTS core_fetch_ranges (
     repo_url TEXT NOT NULL,
     range_start TEXT NOT NULL,
     range_end TEXT NOT NULL,
-    status TEXT DEFAULT 'partial',
+    status TEXT NOT NULL DEFAULT 'partial',
     fetched_at TEXT,
-    commit_count INTEGER DEFAULT 0,
+    commit_count INTEGER NOT NULL DEFAULT 0,
     error_message TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_core_fetch_ranges_repo ON core_fetch_ranges(repo_url);
@@ -202,7 +202,7 @@ CREATE INDEX IF NOT EXISTS idx_core_lists_workdir ON core_lists(workdir);
 CREATE TABLE IF NOT EXISTS core_list_repositories (
     list_id TEXT REFERENCES core_lists(id) ON DELETE CASCADE,
     repo_url TEXT NOT NULL,
-    branch TEXT DEFAULT 'main',
+    branch TEXT NOT NULL CHECK (branch <> ''),
     added_at TEXT,
     PRIMARY KEY (list_id, repo_url)
 );
