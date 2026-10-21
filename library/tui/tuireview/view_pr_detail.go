@@ -559,8 +559,11 @@ func (v *prDetailView) loadDiff(pr *review.PullRequest) tea.Cmd {
 			}()
 			go func() {
 				defer wg.Done()
+				if prCopy.State != review.PRStateOpen || diffCtx.LiveBase == "" {
+					return
+				}
 				var err error
-				behindCount, err = git.GetBehindCount(diffCtx.Workdir, diffCtx.Base, diffCtx.Head)
+				behindCount, err = git.GetBehindCount(diffCtx.Workdir, diffCtx.LiveBase, diffCtx.Head)
 				if err != nil {
 					log.Debug("failed to get behind count", "error", err)
 				}

@@ -17,10 +17,11 @@ import (
 
 // DiffContext holds resolved parameters for git diff operations.
 type DiffContext struct {
-	Workdir string // git repo to run operations in (workspace or fork bare repo)
-	Base    string // resolved git ref for base
-	Head    string // resolved git ref for head
-	Error   string // non-empty when diff resolution failed
+	Workdir  string // git repo to run operations in (workspace or fork bare repo)
+	Base     string // resolved git ref for base
+	Head     string // resolved git ref for head
+	LiveBase string // the base branch before the pin and the merge base; the behind count reads it
+	Error    string // non-empty when diff resolution failed
 }
 
 var fetchedRefs sync.Map // "forkDir\x00remote\x00branch" → true
@@ -246,6 +247,7 @@ func fetchFromWorkspace(forkDir, workdir, branch string) error {
 func ResolvePRDiff(workdir, cacheDir string, pr *PullRequest, commit string) DiffContext {
 	baseRef, headRef := qualifyPRRefs(workdir, pr)
 	ctx := ResolveDiffContext(workdir, cacheDir, baseRef, headRef)
+	ctx.LiveBase = ctx.Base
 	if commit != "" {
 		dir := ctx.Workdir
 		if _, err := git.ReadRef(dir, commit); err != nil {
