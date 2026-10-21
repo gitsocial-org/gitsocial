@@ -833,6 +833,9 @@ func TestFlows(t *testing.T) {
 		assertContains(t, rendered(ih), "Error: Cannot delete workspace repository")
 		ih.SetSize(40, 40)
 		assertContains(t, rendered(ih), "...l-atlas (0)")
+		if strings.Contains(rendered(ih), strings.Repeat("r", 35)) {
+			t.Error("the fork name is not cut to the label width")
+		}
 		ih.SetSize(120, 40)
 		ih.SendKeys("k", "x")
 		out = rendered(ih)

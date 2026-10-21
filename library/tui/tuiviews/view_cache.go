@@ -477,14 +477,14 @@ func (v *CacheView) Render(state *tuicore.State) string {
 	if len(v.stats.TopForks) > 0 {
 		for _, fork := range v.stats.TopForks {
 			forkName := fork.URL
-			if len(forkName) > 70 {
-				forkName = "..." + forkName[len(forkName)-67:]
+			if nameMax := labelWidth - 10; len(forkName) > nameMax && nameMax > 3 {
+				forkName = "..." + forkName[len(forkName)-(nameMax-3):]
 			}
 			size := cache.FormatBytesMB(fork.Size)
 			isSelected := cursorIndex == v.cursor
 			if isSelected {
 				v.cursorLine = strings.Count(b.String(), "\n")
-				b.WriteString(rowBg.Render(fmt.Sprintf("  %-80s  %s", forkName, size)))
+				b.WriteString(rowBg.Render(fmt.Sprintf("  %-*s  %s", labelWidth, forkName, size)))
 			} else {
 				fmt.Fprintf(&b, "  %s  %s", rs.Label.Render(forkName), rs.Value.Render(size))
 			}
