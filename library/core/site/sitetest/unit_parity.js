@@ -256,6 +256,10 @@ console.log("=== parity invariant: the Files changed section of a pull request =
   const shared = (row._children || []).map((c) => String(c.className || "").split(/\s+/).find((t) => P.rowSlots.includes(t))).filter(Boolean);
   eq(shared.join(","), P.rowSlots.join(","), "a file row carries the shared slots in order");
   eq(findCls(row, "diff-status")[0].className + "|" + findCls(row, "diff-status")[0].textContent, "diff-status s-added|A", "the status slot carries its class and letter");
+  for (const c of P.generated) eq(GS.isGeneratedFile(c.path, c.firstLine || ""), c.expect, c.name + ": generated");
+  const gen = GS.diffSection(null, [{ path: "go.sum", status: "modified" }, { path: "main.go", status: "modified" }], P.head, []);
+  const labels = findCls(gen, "diff-file-head").map((h) => findCls(h, "chip").map((n) => n.textContent).join(","));
+  eq(labels.join("|"), P.generatedLabel + "|", "a generated file carries the label and a plain file none");
 }
 
 console.log("=== parity invariant: the name an unconfigured site takes ===");

@@ -2079,6 +2079,20 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // diffStatusLabel maps a file status to its A, D or M letter.
   function diffStatusLabel(s) { return s === "added" ? "A" : s === "deleted" ? "D" : "M"; }
 
+  // GENERATED_PATH_RE matches the lockfiles, vendored trees and build outputs a diff collapses. Mirrors siteGeneratedPathRe in site_pages_diff.go.
+  const GENERATED_PATH_RE = /(^|\/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|go\.sum|Cargo\.lock|Gemfile\.lock|poetry\.lock|composer\.lock)$|(^|\/)(vendor|node_modules)\/|\.(pb\.go|min\.js|min\.css|map)$/;
+
+  // isGeneratedFile reports whether a changed file is generated: its path matches GENERATED_PATH_RE, or its first line, when known, carries the Go marker.
+  function isGeneratedFile(path, firstLine) {
+    return GENERATED_PATH_RE.test(path || "") || (!!firstLine && firstLine.includes("Code generated") && firstLine.includes("DO NOT EDIT"));
+  }
+
+  // diffFirstLine returns the first row of a diff model when it is line 1 of either side, else "".
+  function diffFirstLine(model) {
+    const row = model && model.hunks && model.hunks[0] && model.hunks[0].lines[0];
+    return row && (row.oldN === 1 || row.newN === 1) ? row.line : "";
+  }
+
   // hunkHeadText formats a hunk's @@ header.
   function hunkHeadText(h) {
     return "@@ -" + h.oldStart + "," + h.oldCount + " +" + h.newStart + "," + h.newCount + " @@";
@@ -2269,7 +2283,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return box;
   }
 
-  // diffSection renders a capped changed-file list with a unified|split toggle; every row starts collapsed, and a diff loads on its first expand; pr is the pull request header its feedback links files through.
+  // diffSection renders a capped changed-file list with a unified|split toggle; every row starts collapsed, a diff loads on its first expand, and Expand all skips a generated file; pr is the pull request header its feedback links files through.
   function diffSection(ctx, entries, title, caveats, fileFeedback, pr) {
     fileFeedback = fileFeedback || [];
     const shown = entries.slice(0, DIFF_FILE_CAP);
@@ -2296,8 +2310,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }
     // refreshExpandBtn labels the toggle from the per-file state.
     function refreshExpandBtn() {
-      if (!files.length) { expandBtn.style.display = "none"; return; }
-      const anyCollapsed = files.some((f) => !f.expanded);
+      const plain = files.filter((f) => !f.generated);
+      if (!plain.length) { expandBtn.style.display = "none"; return; }
+      expandBtn.style.display = "";
+      const anyCollapsed = plain.some((f) => !f.expanded);
       expandBtn.textContent = anyCollapsed ? "⊞ Expand all" : "⊟ Collapse all";
     }
     // apply repaints every expanded file in the current mode.
@@ -2312,13 +2328,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     });
     // expandAll expands the collapsed files with CONCURRENCY workers.
     async function expandAll() {
-      const pending = files.filter((f) => !f.expanded);
+      const pending = files.filter((f) => !f.expanded && !f.generated);
       let idx = 0;
       const worker = async () => { while (idx < pending.length) { const f = pending[idx++]; await f.expand(); } };
       await Promise.all(Array.from({ length: Math.min(CONCURRENCY, pending.length) || 1 }, worker));
     }
     expandBtn.addEventListener("click", () => {
-      if (files.some((f) => !f.expanded)) expandAll();
+      if (files.some((f) => !f.expanded && !f.generated)) expandAll();
       else for (const f of files) f.collapse();
     });
     fsBtn.addEventListener("click", (ev) => { ev.preventDefault(); openFullscreen(wrap, { live: true }); });
@@ -2327,17 +2343,20 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const body = el("div", { class: "diff-file-body" }, []);
       const fileIcon = iconEl(iconName(entry.path), "diff-file-icon");
       const entryFb = fileFeedback.filter((fb) => fb.header && fb.header.file === entry.path);
+      const genChip = el("span", { class: "chip" }, ["generated"]);
+      const generated = isGeneratedFile(entry.path);
       const fhead = el("div", { class: "diff-file-head" }, [
         el("span", { class: "diff-status s-" + entry.status }, [diffStatusLabel(entry.status)]),
         ...(fileIcon ? [fileIcon] : []),
         el("span", { class: "mono diff-path" }, [entry.path]),
+        ...(generated ? [genChip] : []),
         ...(entryFb.length ? [el("span", { class: "chip chip-count" }, [entryFb.length + (entryFb.length === 1 ? " comment" : " comments")])] : []),
         counts,
         fullscreenBtn(() => body),
       ]);
       body.style.display = "none";
       const lang = langForPath(entry.path);
-      const f = { expanded: false, model: null };
+      const f = { expanded: false, model: null, generated };
       f.renderBody = () => {
         if (!f.model) return;
         if (f.model.binary) { body.replaceChildren(el("div", { class: "notice" }, ["Binary file changed."])); return; }
@@ -2375,6 +2394,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
           if (f.model.binary) counts.textContent = "binary";
           else if (f.model.tooLarge) counts.textContent = "large";
           else counts.replaceChildren(el("span", { class: "cnt-add" }, ["+" + f.model.adds]), el("span", { class: "cnt-del" }, ["-" + f.model.dels]));
+          if (!f.generated && isGeneratedFile(entry.path, diffFirstLine(f.model))) { f.generated = true; fhead.insertBefore(genChip, counts); refreshExpandBtn(); }
         }
         f.renderBody();
       };
@@ -4480,6 +4500,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, DIFF_FILE_CAP, PR_DIFF_NOTICE, REF_LINK_RE, MENTION_RE, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackFileRef, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackFileRef, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

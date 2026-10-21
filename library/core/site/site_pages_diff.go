@@ -43,13 +43,14 @@ type sitePageDiff struct {
 
 // sitePageDiffFile is one changed file: its status, path, line counts and the hunks the page carries.
 type sitePageDiffFile struct {
-	Status string // added, deleted or modified
-	Letter string // A, D or M
-	Path   string
-	Adds   string
-	Dels   string
-	Binary bool
-	Hunks  []sitePageDiffHunk
+	Status    string // added, deleted or modified
+	Letter    string // A, D or M
+	Path      string
+	Adds      string
+	Dels      string
+	Binary    bool
+	Generated bool // siteGeneratedFile: the page renders the file closed
+	Hunks     []sitePageDiffHunk
 }
 
 // sitePageDiffHunk is one hunk: its @@ head in the app's form and its rows.
@@ -69,6 +70,9 @@ type sitePageDiffLine struct {
 
 // siteDiffRevRe admits the revision arguments a header field may hand to git: a sha prefix, or two joined by three dots.
 var siteDiffRevRe = regexp.MustCompile(`^[0-9a-f]{7,40}(\.\.\.[0-9a-f]{7,40})?$`)
+
+// siteGeneratedPathRe matches the lockfiles, vendored trees and build outputs a diff collapses; GENERATED_PATH_RE in gs-render.js is the same pattern.
+var siteGeneratedPathRe = regexp.MustCompile(`(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|go\.sum|Cargo\.lock|Gemfile\.lock|poetry\.lock|composer\.lock)$|(^|/)(vendor|node_modules)/|\.(pb\.go|min\.js|min\.css|map)$`)
 
 // siteHunkHeadRe captures the four numbers of a @@ hunk head; an omitted count is 1.
 var siteHunkHeadRe = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
@@ -190,12 +194,20 @@ func parseSitePRDiff(r *bufio.Reader) (sitePageDiff, bool) {
 	if len(files) > sitePRDiffFileCap {
 		d.Files, d.Omitted = files[:sitePRDiffFileCap], len(files)-sitePRDiffFileCap
 	}
+	for i := range d.Files {
+		d.Files[i].Generated = siteGeneratedFile(d.Files[i].Path, "")
+	}
 	capped, complete := parseSitePRPatch(r, d.Files)
 	d.More = capped
 	return d, complete
 }
 
-// parseSitePRPatch reads the unified patch into the files by block order; capped reports a stop at the row cap, complete a read to the end, and neither a stop at the last listed file.
+// siteGeneratedFile reports whether a changed file is generated: its path matches siteGeneratedPathRe, or its first line, when known, carries the Go marker; isGeneratedFile in gs-render.js is the same rule.
+func siteGeneratedFile(path, firstLine string) bool {
+	return siteGeneratedPathRe.MatchString(path) || (strings.Contains(firstLine, "Code generated") && strings.Contains(firstLine, "DO NOT EDIT"))
+}
+
+// parseSitePRPatch reads the unified patch into the files by block order, with no rows for a generated file; capped reports a stop at the row cap, complete a read to the end, and neither a stop at the last listed file.
 func parseSitePRPatch(r *bufio.Reader, files []sitePageDiffFile) (capped, complete bool) {
 	file, oldN, newN, rows := -1, 0, 0, 0
 	inHunk := false
@@ -213,12 +225,19 @@ func parseSitePRPatch(r *bufio.Reader, files []sitePageDiffFile) (capped, comple
 			}
 		case strings.HasPrefix(line, "@@"):
 			head, o, n, ok := siteHunkHead(line)
-			if !ok || file < 0 {
+			if !ok || file < 0 || files[file].Generated {
 				continue
 			}
 			files[file].Hunks = append(files[file].Hunks, sitePageDiffHunk{Head: head})
 			oldN, newN, inHunk = o, n, true
 		case inHunk && line != "" && strings.ContainsRune("+- ", rune(line[0])):
+			if files[file].Generated {
+				continue
+			}
+			if first := len(files[file].Hunks) == 1 && len(files[file].Hunks[0].Lines) == 0; first && (oldN == 1 && line[0] != '+' || newN == 1 && line[0] != '-') && siteGeneratedFile("", line[1:]) {
+				files[file].Generated, files[file].Hunks = true, nil
+				continue
+			}
 			if rows == sitePRDiffLineCap {
 				return true, false
 			}

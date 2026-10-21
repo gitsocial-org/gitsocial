@@ -253,7 +253,7 @@ type parityTagOrderCase struct {
 	Expect []string `json:"expect"`
 }
 
-// parityPRDiff pins the Files changed section both renderers build: its head, the file cap, the shared slots of a file row, the status letters, the hunk head form, the notice variant's parts and the notice wording.
+// parityPRDiff pins the Files changed section both renderers build: its head, the file cap, the shared slots of a file row, the status letters, the hunk head form, the notice variant's parts, the notice wording and the generated files.
 type parityPRDiff struct {
 	Head          string            `json:"head"`
 	FileCap       int               `json:"fileCap"`
@@ -264,8 +264,15 @@ type parityPRDiff struct {
 		Line   string `json:"line"`
 		Expect string `json:"expect"`
 	} `json:"hunkHeads"`
-	NoticeParts []string          `json:"noticeParts"`
-	Notices     map[string]string `json:"notices"`
+	NoticeParts    []string          `json:"noticeParts"`
+	Notices        map[string]string `json:"notices"`
+	GeneratedLabel string            `json:"generatedLabel"`
+	Generated      []struct {
+		Name      string `json:"name"`
+		Path      string `json:"path"`
+		FirstLine string `json:"firstLine"`
+		Expect    bool   `json:"expect"`
+	} `json:"generated"`
 }
 
 // parityRefTokenCase pins the refs and mentions one free text carries on both renderers.
@@ -1170,6 +1177,22 @@ func TestParityPRDiff(t *testing.T) {
 	}
 	if !strings.Contains(head, `<span class="diff-status s-added">A</span>`) || !strings.Contains(string(row), `<span class="subject">`+f.Head+` (1)</span>`) {
 		t.Errorf("file row markup:\n%s", row)
+	}
+	if len(f.Generated) == 0 {
+		t.Fatal("no generated file cases")
+	}
+	for _, c := range f.Generated {
+		if got := siteGeneratedFile(c.Path, c.FirstLine); got != c.Expect {
+			t.Errorf("%s: generated = %v, want %v", c.Name, got, c.Expect)
+		}
+	}
+	gen, err := renderSitePage("diff", &sitePageDiff{Count: 1, Files: []sitePageDiffFile{{Status: "modified", Letter: "M", Path: "go.sum", Adds: "2", Dels: "1", Generated: true}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantGen := `<details class="diff-file"><summary class="diff-file-head"><span class="diff-status s-modified">M</span><span class="mono diff-path">go.sum</span><span class="chip">` + f.GeneratedLabel + `</span><span class="diff-counts mono"><span class="cnt-add">+2</span><span class="cnt-del">-1</span></span></summary>` + "\n</details>"
+	if !strings.Contains(string(gen), wantGen) {
+		t.Errorf("generated file markup:\n%s\nwant\n%s", gen, wantGen)
 	}
 }
 

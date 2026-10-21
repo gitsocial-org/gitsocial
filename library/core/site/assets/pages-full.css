@@ -535,6 +535,8 @@
     cursor: pointer; font-size: var(--fs-ui);
   }
   .diff-file-head:hover { background: var(--chip); }
+  summary.diff-file-head { list-style: none; }
+  summary.diff-file-head::-webkit-details-marker { display: none; }
   .diff-status {
     flex: 0 0 auto; width: 1.1rem; text-align: center; font-family: var(--mono); letter-spacing: var(--mono-ls);
     font-size: var(--fs-ui); font-weight: 700; border-radius: 4px; color: #fff;

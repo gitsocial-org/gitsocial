@@ -84,7 +84,7 @@ What a page shows:
 - Item bodies render as escaped plain text, with each typed ref (`#commit:`, `#branch:`, `#tag:`, `#file:`, `#list:`) and each bare URL linked; a mention stays text. Only the README and file pages, the bucket owner's own content, render as markdown, with raw HTML rebuilt against an allowlist.
 - An item page lists the header fields that no other part of the page shows, the rows of the app's trailer list, under the body. A pull request page links its head and base branches.
 - A repository-relative image in the README shows as its alt text.
-- A pull request page carries a Files changed section: each changed file with its status letter, path and line counts, then the unified hunks up to a cap. Past the cap, a notice links the app for the rest. A range that does not resolve in the object database of the pusher shows a one-line notice in its place.
+- A pull request page carries a Files changed section: each changed file with its status letter, path and line counts, then the unified hunks up to a cap. Past the cap, a notice links the app for the rest. A generated file, such as a lockfile or a file under `vendor/`, shows closed with a `generated` label on the page and in the app; a click opens it, and the page leaves its hunks to the app. A range that does not resolve in the object database of the pusher shows a one-line notice in its place.
 - The pages of retracted items and very short file pages carry `noindex,follow`.
 - Every `<title>` is unique, and every description is prose with the markdown stripped.
 

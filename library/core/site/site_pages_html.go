@@ -172,13 +172,13 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{if .Extra}}<div class="asset-list">{{range .Extra}}{{template "assetrow" .}}{{end}}</div>
 {{end}}{{if .SignedBy}}<div class="asset-signed"><span class="meta">signed-by </span><span class="mono selectable">{{.SignedBy}}</span></div>
 {{end}}</div>
-{{end}}{{define "diff"}}<div class="diff-section"><div class="diff-head"><span class="subject">Files changed{{if not .Notice}} ({{.Count}}){{end}}</span></div>
+{{end}}{{define "diffhead"}}<span class="diff-status s-{{.Status}}">{{.Letter}}</span><span class="mono diff-path">{{.Path}}</span>{{if .Generated}}<span class="chip">generated</span>{{end}}<span class="diff-counts mono">{{if .Binary}}binary{{else}}<span class="cnt-add">+{{.Adds}}</span><span class="cnt-del">-{{.Dels}}</span>{{end}}</span>{{end}}{{define "diff"}}<div class="diff-section"><div class="diff-head"><span class="subject">Files changed{{if not .Notice}} ({{.Count}}){{end}}</span></div>
 {{if .Notice}}<div class="notice">{{.Notice}}</div>
-{{end}}{{range .Files}}<div class="diff-file"><div class="diff-file-head"><span class="diff-status s-{{.Status}}">{{.Letter}}</span><span class="mono diff-path">{{.Path}}</span><span class="diff-counts mono">{{if .Binary}}binary{{else}}<span class="cnt-add">+{{.Adds}}</span><span class="cnt-del">-{{.Dels}}</span>{{end}}</span></div>
+{{end}}{{range .Files}}{{if .Generated}}<details class="diff-file"><summary class="diff-file-head">{{template "diffhead" .}}</summary>{{else}}<div class="diff-file"><div class="diff-file-head">{{template "diffhead" .}}</div>{{end}}
 {{if .Hunks}}<div class="diff-file-body"><div class="diff-body unified">{{range .Hunks}}<div class="diff-hunk-head mono">{{.Head}}</div>
 {{range .Lines}}<div class="diff-line {{.Op}}"><span class="dl-num mono">{{.OldN}}</span><span class="dl-num mono">{{.NewN}}</span><span class="dl-sign mono">{{.Sign}}</span><span class="dl-text mono">{{.Text}}</span></div>
 {{end}}{{end}}</div></div>
-{{end}}</div>
+{{end}}{{if .Generated}}</details>{{else}}</div>{{end}}
 {{end}}{{if .Omitted}}<div class="notice">{{.Omitted}} more not shown.</div>
 {{end}}{{if .More}}<div class="notice">The page shows the first {{lineCap}} changed lines. <a href="{{.AppHref}}">The app shows the rest.</a></div>
 {{end}}</div>
