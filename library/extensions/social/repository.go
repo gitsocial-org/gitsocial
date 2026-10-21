@@ -130,15 +130,27 @@ func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepositor
 
 	targetLists := make(map[string]bool)
 	repoToLists := make(map[string][]string)
+	repoBranch := make(map[string]string)
 	for _, list := range listsResult.Data {
 		for _, repoRef := range list.Repositories {
 			id := protocol.ParseRepositoryID(repoRef)
 			if id.Repository == "" {
 				continue
 			}
+			if parsed := protocol.ParseRef(repoRef); parsed.Type == protocol.RefTypeBranch && repoBranch[id.Repository] == "" {
+				repoBranch[id.Repository] = parsed.Value
+			}
 			repoToLists[id.Repository] = append(repoToLists[id.Repository], list.ID)
 			if id.Repository == targetURL {
 				targetLists[list.ID] = true
+			}
+		}
+	}
+
+	if cachedRepos, err := cache.GetRepositories(); err == nil {
+		for _, cached := range cachedRepos {
+			if repoBranch[cached.URL] == "" {
+				repoBranch[cached.URL] = cached.Branch
 			}
 		}
 	}
@@ -176,7 +188,7 @@ func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepositor
 					ID:     url,
 					URL:    url,
 					Name:   protocol.GetFullDisplayName(url),
-					Branch: "main",
+					Branch: repoBranch[url],
 					Type:   repoTypeOther,
 				},
 				Relationships: RelationshipInfo{
@@ -205,7 +217,7 @@ func GetRelatedRepositories(workdir, targetURL string) Result[[]RelatedRepositor
 						ID:     url,
 						URL:    url,
 						Name:   protocol.GetFullDisplayName(url),
-						Branch: "main",
+						Branch: repoBranch[url],
 						Type:   repoTypeOther,
 					},
 					Relationships: RelationshipInfo{
