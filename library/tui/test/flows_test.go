@@ -684,6 +684,12 @@ func TestFlows(t *testing.T) {
 			assertContains(t, out, want)
 		}
 		ih.SendKey("a")
+		ih.SendKeys(strings.Split("file://"+bare, "")...)
+		ih.SendKeys("enter", "enter")
+		out = rendered(ih)
+		assertContains(t, out, "fork already registered")
+		assertContains(t, out, "Forks (1)")
+		ih.SendKey("a")
 		ih.SendKeys(strings.Split("ftp://example.com/x", "")...)
 		ih.SendKeys("enter", "enter")
 		assertContains(t, rendered(ih), "invalid fork URL")
@@ -720,12 +726,14 @@ func TestFlows(t *testing.T) {
 		ih.SetSize(120, 6)
 		assertContains(t, rendered(ih), "Forks (4)")
 		ih.SetSize(120, 40)
-		for _, key := range []string{"f", "c"} {
+		for _, sort := range []struct{ key, header string }{{"f", "Fetched ↓"}, {"c", "Commits ↓"}} {
 			ih.SendKey("v")
 			assertContains(t, rendered(ih), "Sort by:  [a]name  [f]fetched  [c]commits")
-			ih.SendKey(key)
-			if strings.Contains(rendered(ih), "URL ↓") {
-				t.Errorf("v then %s keeps the sort on the URL", key)
+			ih.SendKey(sort.key)
+			out := rendered(ih)
+			assertContains(t, out, sort.header)
+			if strings.Contains(out, "URL ↓") {
+				t.Errorf("v then %s keeps the sort on the URL", sort.key)
 			}
 		}
 		ih.SendKeys("v", "a")

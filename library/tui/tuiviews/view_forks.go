@@ -421,10 +421,15 @@ func (v *ForksView) sortForks() {
 func (v *ForksView) addFork(forkURL string) tea.Cmd {
 	workdir := v.workdir
 	return func() tea.Msg {
-		isFirst := len(gitmsg.GetForks(workdir)) == 0
+		forks := gitmsg.GetForks(workdir)
 		normalized := protocol.NormalizeURL(forkURL)
+		for _, f := range forks {
+			if protocol.NormalizeURL(f) == normalized {
+				return ForkAddedMsg{ForkURL: normalized, Err: fmt.Errorf("fork already registered: %s", normalized)}
+			}
+		}
 		err := gitmsg.AddFork(workdir, forkURL)
-		return ForkAddedMsg{ForkURL: normalized, Err: err, IsFirst: isFirst}
+		return ForkAddedMsg{ForkURL: normalized, Err: err, IsFirst: len(forks) == 0}
 	}
 }
 
@@ -484,8 +489,19 @@ func (v *ForksView) Render(state *tuicore.State) string {
 			url, commits, fetched string
 		}
 		rows := make([]forkRow, len(indices))
-		maxCommits := len("Commits")
-		maxFetched := len("Fetched")
+		commitsHeader := "Commits"
+		fetchedHeader := "Fetched"
+		urlHeader := "URL"
+		switch v.sortMode {
+		case forkSortCommits:
+			commitsHeader += " ↓"
+		case forkSortFetched:
+			fetchedHeader += " ↓"
+		case forkSortAlpha:
+			urlHeader += " ↓"
+		}
+		maxCommits := lipgloss.Width(commitsHeader)
+		maxFetched := lipgloss.Width(fetchedHeader)
 		for ri, idx := range indices {
 			forkURL := v.forks[idx]
 			c, f := forkMeta(forkURL)
@@ -503,19 +519,6 @@ func (v *ForksView) Render(state *tuicore.State) string {
 		}
 		commitsCol := lipgloss.NewStyle().Width(maxCommits).Align(lipgloss.Right)
 		fetchedCol := lipgloss.NewStyle().Width(maxFetched)
-
-		// Header with sort indicator
-		commitsHeader := "Commits"
-		fetchedHeader := "Fetched"
-		urlHeader := "URL"
-		switch v.sortMode {
-		case forkSortCommits:
-			commitsHeader += " ↓"
-		case forkSortFetched:
-			fetchedHeader += " ↓"
-		case forkSortAlpha:
-			urlHeader += " ↓"
-		}
 		header := fmt.Sprintf("  %s  %s  %s",
 			tuicore.Dim.Render(commitsCol.Render(commitsHeader)),
 			tuicore.Dim.Render(fetchedCol.Render(fetchedHeader)),
