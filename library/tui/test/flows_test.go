@@ -600,6 +600,12 @@ func TestFlows(t *testing.T) {
 		if got := ih.CurrentPath(); got != "/pm/issue" {
 			t.Fatalf("enter on a board cell: path = %q, want /pm/issue", got)
 		}
+		ih.SendKey("esc")
+		if err := pm.SetBoardConfig(iso.Workdir, pm.BoardConfig{ID: "triage", Name: "Triage", Columns: columns[:2]}); err != nil {
+			t.Fatalf("SetBoardConfig: %v", err)
+		}
+		ih.SendKeys("r", "down", "end", "right", "down")
+		assertContains(t, rendered(ih), "Either (0)")
 	})
 	t.Run("BoardFiltersAndScroll", func(t *testing.T) {
 		iso := SetupFixture(t)

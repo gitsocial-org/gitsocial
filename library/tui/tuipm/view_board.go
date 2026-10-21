@@ -474,10 +474,13 @@ func (v *boardView) adjustScroll() {
 	}
 }
 
-// clampRow pulls the selected row back inside the selected column.
+// clampRow pulls the selected column and row back inside the board.
 func (v *boardView) clampRow() {
-	if v.selectedCol >= len(v.board.Columns) {
+	if len(v.board.Columns) == 0 {
 		return
+	}
+	if v.selectedCol >= len(v.board.Columns) {
+		v.selectedCol = len(v.board.Columns) - 1
 	}
 	col := v.board.Columns[v.selectedCol]
 	if v.selectedRow >= len(col.Issues) {
