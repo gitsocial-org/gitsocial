@@ -51,6 +51,8 @@ publish() {
 	gg remote add "s3://$HOST/$bucket" >/dev/null
 	gg config site set publish true >/dev/null
 	gg config site set pages true >/dev/null
+	# The golden captures run on virtual time, which does not wait for Cache API work, so the store is off.
+	gg config site set objectStore false >/dev/null
 	gg config site set url "http://127.0.0.1:$port/$bucket/" >/dev/null
 	git -C "$W" push -q origin "$branch"
 	for refspec in "$@"; do git -C "$W" push -q origin "$refspec"; done

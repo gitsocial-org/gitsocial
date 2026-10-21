@@ -54,6 +54,7 @@ func TestWorkspaceSiteCustomizationRoundTrip(t *testing.T) {
 		Publish:          "true",
 		Pages:            "true",
 		ForkPullRequests: "true",
+		ObjectStore:      "false",
 		FilesInclude:     "*.txt",
 		FilesExclude:     "secret/*",
 	}

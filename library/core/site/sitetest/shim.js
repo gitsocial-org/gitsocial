@@ -183,7 +183,34 @@ async function settle(quietMs, maxMs) {
   }
 }
 
-global.__shim = { viewNode, textOf, findTag, docHandlers, mkEl, fetchStats, settle, setHash: (h) => { global.location.hash = h; } };
+// fakeCaches builds a CacheStorage stand-in over memory that outlives a context, so a suite boots twice on one store; the shim installs none, and a suite that wants one assigns global.caches.
+function fakeCaches() {
+  const stores = new Map();
+  const urlOf = (req) => (typeof req === "string" ? req : req.url);
+  const cacheFor = (name) => {
+    if (!stores.has(name)) {
+      const entries = new Map();
+      stores.set(name, {
+        entries,
+        async match(req) { const e = entries.get(urlOf(req)); return e ? new Response(e.body.slice(), { headers: e.headers }) : undefined; },
+        async put(req, res) { const body = new Uint8Array(await res.arrayBuffer()); const url = urlOf(req); entries.delete(url); entries.set(url, { body, headers: Object.fromEntries(res.headers) }); },
+        async delete(req) { return entries.delete(urlOf(req)); },
+        async keys() { return Array.from(entries.keys(), (u) => new Request(u)); },
+      });
+    }
+    return stores.get(name);
+  };
+  return {
+    open: async (name) => cacheFor(name),
+    has: async (name) => stores.has(name),
+    delete: async (name) => stores.delete(name),
+    keys: async () => Array.from(stores.keys()),
+    // entries lists one cache's entries in insertion order, each with its url, byte length and headers.
+    entries: (name) => Array.from(cacheFor(name).entries, ([url, e]) => ({ url, bytes: e.body.length, headers: e.headers })),
+  };
+}
+
+global.__shim = { viewNode, textOf, findTag, docHandlers, mkEl, fetchStats, settle, fakeCaches, setHash: (h) => { global.location.hash = h; } };
 
 // Load the split reader into the shimmed context, in dependency order: the
 // DOM-free core, then the render layer. The app/boot layer is loaded by each

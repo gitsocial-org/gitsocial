@@ -234,6 +234,8 @@ gg config site set pages true >/dev/null
 # notes.txt is not a document by the selection rule (markdown or a convention
 # name), so the file pages the suites expect come through the include override.
 gg config site set filesInclude "*.txt" >/dev/null
+# The Chrome captures run on virtual time, which waits for network fetches and not for Cache API work, so the store is off in the bucket they read.
+gg config site set objectStore false >/dev/null
 gg config site set url "http://127.0.0.1:$port/thread-demo/" >/dev/null
 git -C "$W" push -q origin 'refs/gitmsg/*:refs/gitmsg/*'
 gg push --site-only >/dev/null

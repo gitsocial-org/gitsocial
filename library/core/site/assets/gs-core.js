@@ -115,30 +115,153 @@
     return "objects/" + sha.slice(0, 2) + "/" + sha.slice(2);
   }
 
-  // getObject fetches, inflates and caches one git object; the pack listing orders the loose and packed lookups, and each falls back to the other.
+  // getObject returns one git object: the session cache, then the persistent store, then the bucket; an object from the bucket goes into both.
   async function getObject(ctx, sha, content) {
     if (ctx.objects.has(sha)) return ctx.objects.get(sha);
     // The cache holds the in-flight promise, so concurrent readers of one sha share a single fetch.
     const pending = (async () => {
-      if (await bucketIsPacked(ctx)) {
-        // A commit the pack map misses is most likely loose, so its one loose read comes before the probe of every pack index.
-        if (!content) {
-          const mapped = await getMappedObject(ctx, sha);
-          if (mapped !== null) return mapped;
-          const loose = await getLooseObject(ctx, sha);
-          return loose !== null ? loose : probePacks(ctx, sha);
-        }
-        const packed = await probePacks(ctx, sha);
-        // A miss in every pack still has a loose key to try: a bucket may carry objects loose until its next seal.
-        return packed !== null ? packed : getLooseObject(ctx, sha);
-      }
-      const loose = await getLooseObject(ctx, sha);
-      return loose !== null ? loose : getPackedObject(ctx, sha, content);
+      objectStore(ctx);
+      // A read that arrives before the store is open goes to the bucket; the store serves from the next read.
+      const stored = ctx.store && !ctx.store.off ? await readStoredObject(ctx, ctx.store, sha).catch(() => null) : null;
+      if (stored) return stored;
+      const obj = await readBucketObject(ctx, sha, content);
+      if (obj && ctx.store && !ctx.store.off) storeObject(ctx, ctx.store, sha, obj);
+      return obj;
     })();
     ctx.objects.set(sha, pending);
     // A rejection is not cached, so a transient failure recovers on the next call.
     pending.catch(() => { if (ctx.objects.get(sha) === pending) ctx.objects.delete(sha); });
     return pending;
+  }
+
+  // readBucketObject fetches and inflates one object from the bucket; the pack listing orders the loose and packed lookups, and each falls back to the other.
+  async function readBucketObject(ctx, sha, content) {
+    if (await bucketIsPacked(ctx)) {
+      // A commit the pack map misses is most likely loose, so its one loose read comes before the probe of every pack index.
+      if (!content) {
+        const mapped = await getMappedObject(ctx, sha);
+        if (mapped !== null) return mapped;
+        const loose = await getLooseObject(ctx, sha);
+        return loose !== null ? loose : probePacks(ctx, sha);
+      }
+      const packed = await probePacks(ctx, sha);
+      // A miss in every pack still has a loose key to try: a bucket may carry objects loose until its next seal.
+      return packed !== null ? packed : getLooseObject(ctx, sha);
+    }
+    const loose = await getLooseObject(ctx, sha);
+    return loose !== null ? loose : getPackedObject(ctx, sha, content);
+  }
+
+  // STORE_BYTE_BUDGET and STORE_COUNT_BUDGET bound the persistent object store of one bucket; STORE_OBJECT_MAX is the largest object it keeps.
+  const STORE_BYTE_BUDGET = 64 * 1048576;
+  const STORE_COUNT_BUDGET = 20000;
+  const STORE_OBJECT_MAX = 1048576;
+  // STORE_META_KEY is the store's one metadata entry, the entry count and the running byte total; no object key has this shape.
+  const STORE_META_KEY = "objects/gs-store-meta";
+  // STORE_DELETE_BATCH is how many entries one trim step deletes at once.
+  const STORE_DELETE_BATCH = 100;
+
+  // storeName names the Cache API cache of one bucket base.
+  function storeName(base) { return "gs-objects:" + base; }
+
+  // storeURL resolves a key under the base to the absolute URL the store keys it by, so a relative base override keys the same entries.
+  function storeURL(base, key) {
+    const raw = base + key;
+    try { return new URL(raw, typeof location !== "undefined" && typeof location.href === "string" ? location.href : undefined).href; } catch (_) { return raw; }
+  }
+
+  // objectStore starts the open of the bucket's persistent store once per context and returns its promise; ctx.store holds the open store, null when there is none.
+  function objectStore(ctx) {
+    if (ctx.storeOpen === undefined) {
+      ctx.store = null;
+      ctx.storeOpen = openObjectStore(ctx).catch(() => null).then((store) => { ctx.store = store; return store; });
+    }
+    return ctx.storeOpen;
+  }
+
+  // openObjectStore opens the cache and reads its entry count and byte total from the meta entry; a full store is trimmed before it takes a write.
+  async function openObjectStore(ctx) {
+    if (typeof caches === "undefined" || typeof Response === "undefined") return null;
+    const cfg = await loadSiteCustomization(ctx).catch(() => null);
+    if (cfg && (cfg.objectStore === false || cfg.objectStore === "false")) return null;
+    const cache = await caches.open(storeName(ctx.base));
+    const metaURL = storeURL(ctx.base, STORE_META_KEY);
+    const meta = await cache.match(metaURL);
+    let count = -1, bytes = 0;
+    if (meta) { try { const doc = await meta.json(); count = Number(doc.count); bytes = Number(doc.bytes) || 0; } catch (_) { count = -1; } }
+    // A store without a meta entry counts its keys once.
+    if (!Number.isInteger(count) || count < 0) count = (await cache.keys()).filter((req) => req.url !== metaURL).length;
+    const store = { cache, metaURL, count, bytes, off: false, metaBusy: false, metaDirty: false, ready: Promise.resolve() };
+    // The budgets hold at every moment: a session stops writing at the budget, and the next boot trims the store to three quarters.
+    if (store.count >= STORE_COUNT_BUDGET || store.bytes >= STORE_BYTE_BUDGET) store.ready = trimObjectStore(store).catch((e) => storeFailed(store, e));
+    return store;
+  }
+
+  // trimObjectStore removes the oldest entries, in insertion order, until the store is at three quarters of both budgets; a write during the trim waits behind it.
+  async function trimObjectStore(store) {
+    const keys = (await store.cache.keys()).filter((req) => req.url !== store.metaURL);
+    store.count = keys.length;
+    let n = Math.max(0, store.count - Math.floor(STORE_COUNT_BUDGET * 3 / 4));
+    // The count trim reads no sizes and scales the total by what it removes; the byte trim reads the size of each entry it removes.
+    if (n) store.bytes = Math.round(store.bytes * (store.count - n) / store.count);
+    while (n < keys.length && store.bytes > STORE_BYTE_BUDGET * 3 / 4) {
+      store.bytes = Math.max(0, store.bytes - storedSize(await store.cache.match(keys[n++])));
+    }
+    for (let i = 0; i < n; i += STORE_DELETE_BATCH) await Promise.all(keys.slice(i, Math.min(n, i + STORE_DELETE_BATCH)).map((req) => store.cache.delete(req)));
+    store.count -= n;
+    await syncStoreMeta(store);
+  }
+
+  // storedSize reads the byte length a stored entry declares, 0 when it declares none.
+  function storedSize(res) {
+    return res ? Number(res.headers.get("X-GS-Size")) || 0 : 0;
+  }
+
+  // readStoredObject returns the stored object of a sha, or null; a corrupt entry is deleted, so the bucket path runs.
+  async function readStoredObject(ctx, store, sha) {
+    const url = storeURL(ctx.base, objectKey(sha));
+    const res = await store.cache.match(url);
+    if (!res) return null;
+    const type = res.headers.get("X-GS-Type");
+    const body = new Uint8Array(await res.arrayBuffer());
+    if (type && body.length === storedSize(res)) return { type, body };
+    store.count--;
+    store.bytes = Math.max(0, store.bytes - storedSize(res));
+    store.cache.delete(url).catch(() => {});
+    return null;
+  }
+
+  // storeObject writes a bucket-resolved object into the store without awaiting it; an object over the cap or past a budget is not written.
+  function storeObject(ctx, store, sha, obj) {
+    const size = obj.body.length;
+    if (size > STORE_OBJECT_MAX) return;
+    const headers = { "X-GS-Type": obj.type, "X-GS-Size": String(size) };
+    store.ready.then(() => {
+      // The budget check runs after a trim the write waited behind.
+      if (store.off || store.count + 1 > STORE_COUNT_BUDGET || store.bytes + size > STORE_BYTE_BUDGET) return undefined;
+      store.count++;
+      store.bytes += size;
+      return store.cache.put(storeURL(ctx.base, objectKey(sha)), new Response(obj.body, { headers })).then(() => syncStoreMeta(store));
+    }).catch((e) => storeFailed(store, e));
+  }
+
+  // syncStoreMeta writes the entry count and the running byte total after a put; the writes are chained, so the last one carries the final figures.
+  async function syncStoreMeta(store) {
+    if (store.metaBusy) { store.metaDirty = true; return; }
+    store.metaBusy = true;
+    try {
+      do {
+        store.metaDirty = false;
+        await store.cache.put(store.metaURL, new Response(JSON.stringify({ count: store.count, bytes: store.bytes }), { headers: { "Content-Type": "application/json" } }));
+      } while (store.metaDirty);
+    } finally { store.metaBusy = false; }
+  }
+
+  // storeFailed turns the store off for the session after a failed write, a quota error in practice, and logs it once.
+  function storeFailed(store, err) {
+    if (store.off) return;
+    store.off = true;
+    try { console.warn("gitsocial: object store off for this session: " + ((err && err.message) || err)); } catch (_) { /* no console */ }
   }
 
   // getContentObject fetches a sha known to be a tree or a blob; the pack map indexes commits and tags only, so it is skipped.
@@ -1774,7 +1897,7 @@
   }
 
   function newContext(base) {
-    // newContext builds the per-session read context: the object cache, ref misses, tree expansion, walk states and the packfile reader state.
+    // newContext builds the per-session read context: the object cache, ref misses, tree expansion, walk states and the packfile reader state; the persistent store opens on the first object read.
     return { base, objects: new Map(), refMisses: new Set(), treeExpanded: new Set(), walks: {}, packs: { names: null, packed: null, bases: new Map(), maps: new Map(), idx: new Map(), size: new Map(), windows: new Map(), hits: [] } };
   }
 
@@ -4663,7 +4786,7 @@
 
   const core = {
     deriveBase, repoTitle, fetchBytes, fetchText, fetchRange, inflate, parseLooseObject, objectKey,
-    getObject, getContentObject, getStateObject, getPackedObject, packNames, bucketIsPacked, packMapShard, packKey, registerForkPack, packIdxOpen, packIdxLookup, packIdxFind, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
+    getObject, getContentObject, getStateObject, getPackedObject, objectStore, STORE_BYTE_BUDGET, STORE_COUNT_BUDGET, STORE_OBJECT_MAX, packNames, bucketIsPacked, packMapShard, packKey, registerForkPack, packIdxOpen, packIdxLookup, packIdxFind, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
     walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, anyRefHash, findRefItem, parseBranchField, resolveItems, adoptedOf,
     buildVersions, effectiveTime, effectiveAuthor, effectiveAuthorEmail, authorLabel,
     feedbackLine, feedbackAnchorKey, feedbackVerdict, feedbackAnchorLabel, hunkLineKeys, anchorFeedback, prFeedback,

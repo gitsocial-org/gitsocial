@@ -21,6 +21,7 @@ const DEFAULT = [
   "unit_render_code.js",
   "unit_render_detail.js",
   "unit_parity.js",
+  "unit_object_store.js",
   "verify_403.js",
   "verify_threads.js",
   "verify_memos.js",
@@ -46,6 +47,7 @@ const DEFAULT = [
   "verify_absent_keys.js",
   "verify_prism_deadline.js",
   "verify_request_budget.js",
+  "verify_object_store.js",
   "verify_styles.js",
 ];
 

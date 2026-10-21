@@ -39,6 +39,7 @@ var siteFields = []siteField{
 	{"publish", "true/false: master switch for the static site (default false)", func(c *site.SiteCustomization) *string { return &c.Publish }},
 	{"pages", "true/false: crawlable HTML pages (needs publish + url)", func(c *site.SiteCustomization) *string { return &c.Pages }},
 	{"forkPullRequests", "true/false: the open pull requests of registered forks", func(c *site.SiteCustomization) *string { return &c.ForkPullRequests }},
+	{"objectStore", "true/false: the app keeps git objects in the browser (default true)", func(c *site.SiteCustomization) *string { return &c.ObjectStore }},
 	{"filesInclude", "path globs the file pages publish beyond prose documents", func(c *site.SiteCustomization) *string { return &c.FilesInclude }},
 	{"filesExclude", "path globs the file pages never publish", func(c *site.SiteCustomization) *string { return &c.FilesExclude }},
 }
@@ -229,7 +230,7 @@ func validateSiteField(label, value string) string {
 		if len(value) > site.SiteConfigMaxDescription {
 			return "description too long (max 300 chars)"
 		}
-	case "publish", "pages", "forkPullRequests":
+	case "publish", "pages", "forkPullRequests", "objectStore":
 		if value != "true" && value != "false" {
 			return "must be true or false"
 		}

@@ -69,6 +69,8 @@ type SiteCustomization struct {
 	Pages       string `json:"pages,omitempty"`   // "true" enables the HTML page layer (needs publish + url)
 	// ForkPullRequests "true" publishes the open pull requests of registered forks under .gitsocial/forks/ (default off).
 	ForkPullRequests string `json:"forkPullRequests,omitempty"`
+	// ObjectStore "false" turns off the app's persistent object store in the browser (default on).
+	ObjectStore string `json:"objectStore,omitempty"`
 	// The file layer's globs, comma-separated strings so the type stays comparable.
 	FilesInclude string `json:"filesInclude,omitempty"`
 	FilesExclude string `json:"filesExclude,omitempty"`
@@ -218,6 +220,9 @@ func validateSiteCustomization(raw map[string]interface{}) (SiteCustomization, b
 	}
 	if v, ok := raw["forkPullRequests"]; ok {
 		c.ForkPullRequests = siteBoolString(v)
+	}
+	if v, ok := raw["objectStore"]; ok {
+		c.ObjectStore = siteBoolString(v)
 	}
 	if s, ok := raw["filesInclude"].(string); ok {
 		c.FilesInclude = NormalizeSiteGlobs(s)

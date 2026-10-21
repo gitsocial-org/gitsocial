@@ -121,7 +121,7 @@ func newExtConfigListCmd(ext string) *cobra.Command {
 
 // siteConfigKeys are the customization fields settable under the core config's
 // `site` sub-object, published as the static site's site-config.json artifact.
-var siteConfigKeys = map[string]bool{"title": true, "accent": true, "accentDark": true, "favicon": true, "image": true, "url": true, "description": true, "publish": true, "pages": true, "forkPullRequests": true, "filesInclude": true, "filesExclude": true}
+var siteConfigKeys = map[string]bool{"title": true, "accent": true, "accentDark": true, "favicon": true, "image": true, "url": true, "description": true, "publish": true, "pages": true, "forkPullRequests": true, "objectStore": true, "filesInclude": true, "filesExclude": true}
 
 // siteOverrideKeys maps the per-remote-overridable deployment keys to their git
 // config suffix (remote.<name>.<suffix>). Only these three deployment keys are
@@ -187,6 +187,7 @@ Keys:
   publish       true or false, default false: the site master switch
   pages         true or false, default false: the crawlable HTML pages
   forkPullRequests  true or false, default false: the open pull requests of forks
+  objectStore   true or false, default true: the app keeps git objects in the browser
   filesInclude  comma-separated globs the file pages also publish
   filesExclude  comma-separated globs the file pages skip
 
@@ -275,7 +276,7 @@ func newSiteConfigListCmd() *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), "No site customization set")
 				return nil
 			}
-			for _, k := range []string{"title", "accent", "accentDark", "favicon", "image", "url", "description", "publish", "pages", "forkPullRequests", "filesInclude", "filesExclude"} {
+			for _, k := range []string{"title", "accent", "accentDark", "favicon", "image", "url", "description", "publish", "pages", "forkPullRequests", "objectStore", "filesInclude", "filesExclude"} {
 				if v, ok := site[k].(string); ok && v != "" {
 					fmt.Fprintf(cmd.OutOrStdout(), "%s = %s\n", k, v)
 				}
@@ -295,7 +296,7 @@ func newSiteConfigSetCmd() *cobra.Command {
 		Short: "Set a site customization value",
 		Long: `Set a site customization value. Valid keys: title, description, accent,
 accentDark, favicon, image, url, publish, pages, forkPullRequests,
-filesInclude, filesExclude.
+objectStore, filesInclude, filesExclude.
 
   accent, accentDark  #rgb or #rrggbb, such as #0a7 or #00dddd
   favicon             a bucket key relative to the site root, uploaded
@@ -309,6 +310,8 @@ filesInclude, filesExclude.
                       publish true and a valid url
   forkPullRequests    true or false, default false: publish the open
                       pull requests of registered forks
+  objectStore         true or false, default true: the app keeps the git
+                      objects it read in the browser's Cache API
 
 With --remote <name> the value is stored in git config as
 remote.<name>.gitsocial-site-<key> and applies only to pushes to that
@@ -417,7 +420,7 @@ func resolveSiteConfigValue(key, value string) (string, error) {
 			return "", fmt.Errorf("description is %d chars, over the %d-char cap", len(trimmed), site.SiteConfigMaxDescription)
 		}
 		return trimmed, nil
-	case "publish", "pages", "forkPullRequests":
+	case "publish", "pages", "forkPullRequests", "objectStore":
 		v := strings.ToLower(strings.TrimSpace(value))
 		if v != "true" && v != "false" {
 			return "", fmt.Errorf("%s must be true or false, got %q", key, value)
