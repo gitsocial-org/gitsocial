@@ -27,11 +27,14 @@ import (
 
 var ErrNotOpen = errors.New("cache: database not open")
 
+var errLockBusy = errors.New("cache: lock held by another process")
+
 var (
-	dbPtr   atomic.Pointer[sql.DB]
-	initErr error
-	opened  bool
-	mu      sync.Mutex // serializes Open/Close/Reset; never held during DB operations
+	dbPtr    atomic.Pointer[sql.DB]
+	initErr  error
+	opened   bool
+	poolLock *os.File   // the shared lock of the open pool, released by Close and Reset
+	mu       sync.Mutex // serializes Open/Close/Reset; never held during DB operations
 )
 
 // Extension schema registration
@@ -289,13 +292,21 @@ func Open(cacheDir string) error {
 	}
 
 	start := time.Now()
-	if err := os.MkdirAll(cacheDir, 0700); err != nil {
+	var lock *os.File
+	fail := func(err error) error {
+		closeLock(lock)
 		initErr = err
 		opened = true
 		return err
 	}
+	if err := os.MkdirAll(cacheDir, 0700); err != nil {
+		return fail(err)
+	}
 
 	dbPath := filepath.Join(cacheDir, "cache.db")
+	// The open lock serializes the version probes, so a reseed meets only pools at the pool lock and no second probe is needed.
+	openLock, _ := takeLock(filepath.Join(cacheDir, "open.lock"), true, true)
+	defer closeLock(openLock)
 
 	// Refuse to open a cache whose schema is newer than this binary
 	// supports. Older binaries misreading newer caches (missing
@@ -304,14 +315,18 @@ func Open(cacheDir string) error {
 	if cacheVer, ok := readUserVersion(dbPath); ok && cacheVer > schemaVersion {
 		err := fmt.Errorf("cache schema version %d is newer than the supported %d: upgrade gitsocial",
 			cacheVer, schemaVersion)
-		initErr = err
-		opened = true
-		return err
+		return fail(err)
 	}
 
 	// An older cache is deleted and refilled by the next fetch; only the read markers are not in git, so they are carried over.
 	var markers [][4]string
-	if needsReseed(dbPath) {
+	reseed := needsReseed(dbPath)
+	// Each pool holds the shared lock for its life, so a reseed under the exclusive lock removes no file that another process has open.
+	lock, err := takeLock(filepath.Join(cacheDir, "cache.lock"), reseed, !reseed)
+	if err != nil {
+		return fail(errors.New("cache.db is open in another gitsocial process: close it, or run with --cache-dir"))
+	}
+	if reseed {
 		log.Info("cache schema is older than current; deleting and recreating", "path", dbPath)
 		markers = readMarkersFromFile(dbPath)
 		if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
@@ -346,9 +361,7 @@ func Open(cacheDir string) error {
 	d, err := sql.Open("sqlite", connStr)
 	if err != nil {
 		log.Error("cache open failed", "error", err)
-		initErr = err
-		opened = true
-		return err
+		return fail(err)
 	}
 
 	d.SetMaxOpenConns(16)
@@ -357,9 +370,7 @@ func Open(cacheDir string) error {
 	if err := applySchema(d, coreSchema); err != nil {
 		log.Error("cache core schema init failed", "error", err)
 		_ = d.Close()
-		initErr = err
-		opened = true
-		return err
+		return fail(err)
 	}
 	schemaMu.Lock()
 	names := make([]string, 0, len(extensionSchemas))
@@ -372,9 +383,7 @@ func Open(cacheDir string) error {
 			log.Error("cache extension schema init failed", "extension", name, "error", err)
 			schemaMu.Unlock()
 			_ = d.Close()
-			initErr = err
-			opened = true
-			return err
+			return fail(err)
 		}
 	}
 	schemaMu.Unlock()
@@ -384,11 +393,52 @@ func Open(cacheDir string) error {
 		log.Warn("cache user_version set failed", "error", err)
 	}
 
+	if reseed && lock != nil {
+		// The downgrade is a release and a new shared lock, the same on each OS; the open lock keeps a second reseed out meanwhile.
+		err = unlockFile(lock)
+		if err == nil {
+			err = lockFile(lock, false, true)
+		}
+		if err != nil {
+			log.Warn("cache pool runs without the lock", "error", err)
+			_ = lock.Close()
+			lock = nil
+		}
+	}
+	poolLock = lock
 	dbPtr.Store(d)
 	opened = true
 	initErr = nil
 	log.Debug("cache opened", "path", dbPath, "duration_ms", time.Since(start).Milliseconds())
 	return nil
+}
+
+// takeLock opens the lock file at path and takes its lock; a held lock gives errLockBusy, and a lock the filesystem refuses is logged and gives nil.
+func takeLock(path string, exclusive, wait bool) (*os.File, error) {
+	// A leftover lock file of a crashed process opens like a new one; its lock ended with the process.
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		log.Warn("cache open runs without the lock", "path", path, "error", err)
+		return nil, nil
+	}
+	if err := lockFile(f, exclusive, wait); err != nil {
+		_ = f.Close()
+		if errors.Is(err, errLockBusy) {
+			return nil, err
+		}
+		log.Warn("cache open runs without the lock", "path", path, "error", err)
+		return nil, nil
+	}
+	return f, nil
+}
+
+// closeLock releases and closes a lock that takeLock gave; nil is a lock that was not taken.
+func closeLock(f *os.File) {
+	if f == nil {
+		return
+	}
+	_ = unlockFile(f) // the close releases the lock as well
+	_ = f.Close()
 }
 
 // applySchema runs one schema in a transaction, so two processes that open the cache together do not interleave the drop and the create of a view.
@@ -489,7 +539,10 @@ func Close() error {
 		return nil
 	}
 	_, _ = d.Exec("PRAGMA optimize")
-	return d.Close()
+	err := d.Close()
+	closeLock(poolLock)
+	poolLock = nil
+	return err
 }
 
 // Reset closes the database and resets singleton state for testing.
@@ -499,6 +552,8 @@ func Reset() {
 	if d := dbPtr.Swap(nil); d != nil {
 		_ = d.Close()
 	}
+	closeLock(poolLock)
+	poolLock = nil
 	opened = false
 	initErr = nil
 }

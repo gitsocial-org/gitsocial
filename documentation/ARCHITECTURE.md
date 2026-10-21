@@ -134,7 +134,7 @@ Inside `core` the packages form a stack, and each imports only what is below it:
 |---|---|
 | `core/git` | the executor seam, the command timeout, the s3 helper alias memo |
 | `core/gitmsg` | the per-workdir caches |
-| `core/cache` | the database singleton, the extension schema registry |
+| `core/cache` | the database singleton and the lock of its pool, the extension schema registry |
 | `core/log` | the process logger |
 | `core/notifications` | the provider registry |
 | `core/identity` | the in-flight map, the DNS policy flag |
@@ -200,6 +200,8 @@ Outside the tree:
 
 ~/.cache/gitsocial/            # --cache-dir overrides
 ├── cache.db                   # SQLite
+├── cache.lock                 # shared by each open pool, exclusive during a reseed
+├── open.lock                  # serializes the version probe of each open
 ├── repositories/              # bare clones of followed repositories
 ├── forks/                     # bare clones of registered forks
 ├── imports/                   # import mapping files, one per repository URL
@@ -256,6 +258,14 @@ You can delete the storage under `repositories/` at any time; GitSocial uses `ca
 | Page cache | 4 MiB per connection, 64 MiB for the pool |
 | Temp store | memory |
 | mmap | 256 MiB |
+
+Each open pool holds `cache.lock` shared for its life, and a reseed holds it exclusive; `open.lock` serializes the version probe of each open.
+
+| Rule | Test |
+|---|---|
+| Two processes that open an older cache together reseed it once | `TestOpen_concurrentReseedOnce` |
+| A reseed is refused while another process holds the cache open | `TestOpen_reseedRefusedWhileOpen` |
+| A leftover `cache.lock` is not an error | `TestOpen_staleLockFile` |
 
 ### Schema
 

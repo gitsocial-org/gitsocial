@@ -120,13 +120,14 @@ Before a release, `scripts/release.sh` runs `GITSOCIAL_TEST_FULL=1 go test -race
 | linux/arm64 | yes | yes | no |
 | windows/amd64 | yes | no | no |
 
-Windows installs through the Scoop bucket the [README](../README.md#windows) names. No source file carries a platform build tag, and `runtime.GOOS` is read in one place.
+Windows installs through the Scoop bucket the [README](../README.md#windows) names. The two files of the cache open lock in `core/cache` carry the only platform build tags, and `runtime.GOOS` is read in one place.
 
 ## Environment
 
 | Variable | Set by | Effect |
 |---|---|---|
 | `GITSOCIAL_TEST_FULL` | the full tier, `scripts/coverage.sh`, `scripts/release.sh` | runs the guarded tests |
+| `GITSOCIAL_TEST_CACHE_CHILD` | `TestOpen_concurrentReseedOnce`, `TestOpen_reseedRefusedWhileOpen` | the cache directory a child process opens or holds; the children only |
 | `GITSOCIAL_COVERDIR` | the full tier, `scripts/coverage.sh` | the directory the child processes write coverage data into, and the switch for the `-cover` build |
 | `GITSOCIAL_PUSH_RANGES` | `scripts/hooks/pre-push` | the pushed code commits, without `gitmsg/*` data, that the subject and `comment-heavy` checks read; without it, the checks read `@{upstream}..HEAD`, and with no upstream neither check runs |
 | `GITSOCIAL_SKIP_GATE` | the user | skips the pre-push gate once |
