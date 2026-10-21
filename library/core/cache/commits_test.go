@@ -618,6 +618,31 @@ func TestInsertCommits_upgradesVirtualRow(t *testing.T) {
 	}
 }
 
+func TestInsertCommits_originTimeInUTC(t *testing.T) {
+	setupTestDB(t)
+	const repoURL = "https://github.com/user/offset"
+	msg := "Imported\n\nGitMsg: ext=\"social\"; type=\"post\"; origin-time=\"2025-10-21T14:00:00+02:00\"; v=\"0.1.0\""
+	if err := InsertCommits([]Commit{
+		{Hash: "0ff000000001", RepoURL: repoURL, Branch: "main", Message: msg, Timestamp: time.Date(2025, 10, 22, 0, 0, 0, 0, time.UTC)},
+		{Hash: "0ff000000002", RepoURL: repoURL, Branch: "main", Message: "Plain", Timestamp: time.Date(2025, 10, 21, 12, 30, 0, 0, time.UTC)},
+	}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	var originTime, first string
+	if err := DB().QueryRow(`SELECT origin_time FROM core_commits WHERE hash = '0ff000000001'`).Scan(&originTime); err != nil {
+		t.Fatalf("read origin_time: %v", err)
+	}
+	if originTime != "2025-10-21T12:00:00Z" {
+		t.Errorf("origin_time = %q, want 2025-10-21T12:00:00Z", originTime)
+	}
+	if err := DB().QueryRow(`SELECT hash FROM core_commits WHERE repo_url = ? ORDER BY effective_timestamp LIMIT 1`, repoURL).Scan(&first); err != nil {
+		t.Fatalf("read the first row: %v", err)
+	}
+	if first != "0ff000000001" {
+		t.Errorf("first row by effective_timestamp = %s, want the imported 0ff000000001", first)
+	}
+}
+
 // TestDeleteRepository_removesFTSRows pins invariant 7: the FTS rows of a deleted repository go with it, so an old text does not match a commit that reuses the rowid.
 func TestDeleteRepository_removesFTSRows(t *testing.T) {
 	setupTestDB(t)

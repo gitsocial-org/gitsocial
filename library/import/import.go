@@ -1254,7 +1254,7 @@ func refIdentity(src refSource, fallbackName, fallbackEmail string, fallbackTime
 	if when.IsZero() {
 		when = fallbackTime
 	}
-	return name, email, when.Format(time.RFC3339)
+	return name, email, when.UTC().Format(time.RFC3339)
 }
 
 // issueContentByID maps issue external IDs to their full content for ref quoting.
@@ -2055,7 +2055,7 @@ func buildOrigin(authorName, authorEmail string, createdAt time.Time, platform, 
 		Platform:    platform,
 	}
 	if !createdAt.IsZero() {
-		origin.Time = createdAt.Format(time.RFC3339)
+		origin.Time = createdAt.UTC().Format(time.RFC3339)
 	}
 	if path != "" {
 		origin.URL = protocol.NormalizeURL(repoURL) + "/" + path
@@ -2074,7 +2074,7 @@ func buildStateChangeOrigin(authorName, authorEmail string, timestamp time.Time,
 		Platform:    platform,
 	}
 	if !timestamp.IsZero() {
-		origin.Time = timestamp.Format(time.RFC3339)
+		origin.Time = timestamp.UTC().Format(time.RFC3339)
 	}
 	if path != "" {
 		origin.URL = protocol.NormalizeURL(repoURL) + "/" + path

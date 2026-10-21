@@ -194,6 +194,10 @@ func insertCommitsTxn(commits []Commit) error {
 				action = &a
 			}
 			if ot := msg.Header.Fields["origin-time"]; ot != "" {
+				// effective_timestamp compares origin_time as text with the UTC timestamp, so an offset goes to UTC.
+				if t, err := time.Parse(time.RFC3339, ot); err == nil {
+					ot = t.UTC().Format(time.RFC3339)
+				}
 				originTime = &ot
 			}
 			if l := msg.Header.Fields["labels"]; l != "" {
