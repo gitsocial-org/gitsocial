@@ -199,10 +199,8 @@ func discussionCommentExternalID(number int, c ghDiscussionComment) string {
 func (a *Adapter) planDiscussionComments(d ghDiscussion, opts importpkg.FetchOptions) []importpkg.ImportComment {
 	postID := fmt.Sprintf("%d", d.Number)
 	var out []importpkg.ImportComment
-	add := func(c ghDiscussionComment, extID, parentID string, parentCreatedAt time.Time) {
-		// A mapping written before databaseId keyed the comment by number and second.
-		legacyID := commentExternalID(d.Number, 0, c.CreatedAt)
-		if opts.SkipExternalIDs["comment:"+extID] || opts.SkipExternalIDs["comment:"+legacyID] {
+	add := func(c ghDiscussionComment, extID, parentID string) {
+		if opts.SkipExternalIDs["comment:"+extID] {
 			return
 		}
 		if opts.SkipBots && isBot(c.Author.Login) {
@@ -210,21 +208,20 @@ func (a *Adapter) planDiscussionComments(d ghDiscussion, opts importpkg.FetchOpt
 		}
 		author := a.resolveUser(c.Author.Login)
 		out = append(out, importpkg.ImportComment{
-			ExternalID:      extID,
-			PostID:          postID,
-			ParentID:        parentID,
-			ParentCreatedAt: parentCreatedAt,
-			Content:         c.Body,
-			AuthorName:      author.name,
-			AuthorEmail:     author.email,
-			CreatedAt:       c.CreatedAt,
+			ExternalID:  extID,
+			PostID:      postID,
+			ParentID:    parentID,
+			Content:     c.Body,
+			AuthorName:  author.name,
+			AuthorEmail: author.email,
+			CreatedAt:   c.CreatedAt,
 		})
 	}
 	for _, c := range d.Comments.Nodes {
 		parentID := discussionCommentExternalID(d.Number, c)
-		add(c, parentID, "", time.Time{})
+		add(c, parentID, "")
 		for _, r := range c.Replies.Nodes {
-			add(r, discussionCommentExternalID(d.Number, r), parentID, c.CreatedAt)
+			add(r, discussionCommentExternalID(d.Number, r), parentID)
 		}
 	}
 	return out

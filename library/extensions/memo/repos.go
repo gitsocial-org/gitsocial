@@ -116,9 +116,7 @@ func EnsureSessionRepo(sessionID, workspaceURL string) (string, string, error) {
 	return path, sessionID, nil
 }
 
-// SessionWorkspaceURL returns the workspace URL recorded on the session bare
-// repo at creation time, or "" when the repo predates the tag (legacy) or
-// the call fails.
+// SessionWorkspaceURL returns the workspace URL recorded on the session bare repo at creation time, or "" when none is read.
 func SessionWorkspaceURL(path string) string {
 	if path == "" {
 		return ""
@@ -197,10 +195,7 @@ func TierForRepoURL(repoURL, workspaceURL string, inheritedURLs []string) Tier {
 	return TierExternal
 }
 
-// AllTierRepoURLs returns the repo_url strings spanning every initialized
-// tier reachable from the workspace, in priority order: workspace, personal,
-// each session repo whose recorded workspace-url matches (or is unset for
-// legacy repos). Used as the IN-clause for tier-merging queries.
+// AllTierRepoURLs returns the repo_url of each initialized tier in priority order: workspace, personal, then each session of the workspace.
 func AllTierRepoURLs(workspaceURL string) []string {
 	urls := make([]string, 0, 4)
 	if workspaceURL != "" {
@@ -238,9 +233,7 @@ func listSessionRepos() []string {
 	return paths
 }
 
-// listSessionReposForWorkspace returns session bare-repo paths whose recorded
-// workspace-url matches workspaceURL, plus untagged (legacy) repos. Passing
-// an empty workspaceURL disables filtering — every session is returned.
+// listSessionReposForWorkspace returns the session repos whose memo.workspace-url is workspaceURL, or every session when workspaceURL is empty.
 func listSessionReposForWorkspace(workspaceURL string) []string {
 	all := listSessionRepos()
 	if workspaceURL == "" {
@@ -248,8 +241,7 @@ func listSessionReposForWorkspace(workspaceURL string) []string {
 	}
 	out := make([]string, 0, len(all))
 	for _, p := range all {
-		tag := SessionWorkspaceURL(p)
-		if tag == "" || tag == workspaceURL {
+		if SessionWorkspaceURL(p) == workspaceURL {
 			out = append(out, p)
 		}
 	}

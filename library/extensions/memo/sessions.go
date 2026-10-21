@@ -59,10 +59,7 @@ func InitSession(id, workspaceURL string) Result[string] {
 	return result.Ok(resolved)
 }
 
-// ListSessions returns session bare repos whose recorded workspace-url matches
-// workspaceURL (plus untagged legacy repos). Passing "" disables the filter —
-// used by gc and other admin paths that operate across workspaces. Each
-// session is synced to the cache before its stats are read.
+// ListSessions returns the session repos of workspaceURL, or every session for "", each synced to the cache before its stats are read.
 func ListSessions(workspaceURL string) Result[[]SessionInfo] {
 	dir, err := SessionDir()
 	if err != nil {

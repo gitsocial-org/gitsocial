@@ -101,18 +101,11 @@ func newMemoStatusCmd() *cobra.Command {
 	}
 }
 
-// formatInheritsLine summarizes inherited sources for memo status: count plus
-// oldest-fetch age, with an explicit warning if any URL isn't followed (so the
-// user knows fetch won't pick it up).
+// formatInheritsLine summarizes inherited sources for memo status: the count, then the sources not yet fetched or the oldest fetch age.
 func formatInheritsLine(statuses []memo.InheritStatus) string {
-	notFollowed := 0
 	neverFetched := 0
 	var oldest time.Time
 	for _, s := range statuses {
-		if !s.Followed {
-			notFollowed++
-			continue
-		}
 		if s.LastFetch.IsZero() {
 			neverFetched++
 			continue
@@ -123,8 +116,6 @@ func formatInheritsLine(statuses []memo.InheritStatus) string {
 	}
 	line := fmt.Sprintf("%d source(s)", len(statuses))
 	switch {
-	case notFollowed > 0:
-		line += fmt.Sprintf(", %d not followed — run `gitsocial fetch` to subscribe", notFollowed)
 	case neverFetched > 0:
 		line += fmt.Sprintf(", %d not yet fetched — run `gitsocial fetch`", neverFetched)
 	case !oldest.IsZero():

@@ -44,10 +44,7 @@ func SyncTierRepoToCache(repoPath string) error {
 	return indexCommits(repoURL, MemoBranch, commits)
 }
 
-// SyncAllTierReposToCache syncs the personal repo and every session repo
-// recorded under this workspace (legacy untagged sessions also sync, since
-// their visibility is workspace-wide). Missing repos are skipped. The
-// workspace tier arrives through the client's workspace sync.
+// SyncAllTierReposToCache syncs the personal repo and each session repo of the workspace; the workspace tier arrives through the workspace sync.
 func SyncAllTierReposToCache(workdir string) error {
 	if path, err := settings.PersonalRepoPath(); err == nil && git.BareRepoExists(path) {
 		if err := SyncTierRepoToCache(path); err != nil {

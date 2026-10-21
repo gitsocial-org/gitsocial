@@ -154,20 +154,13 @@ func IsInherited(workdir, url string) bool {
 	return err == nil
 }
 
-// InheritStatus describes one inherited source's freshness: whether it's
-// followed (so fetch picks it up) and when it was last fetched. Returned by
-// InheritsStatus and surfaced by `gitsocial memo status`.
+// InheritStatus is the last fetch of one inherited source, zero before its first fetch.
 type InheritStatus struct {
 	URL       string    `json:"url"`
-	Followed  bool      `json:"followed"`
 	LastFetch time.Time `json:"last_fetch"`
 }
 
-// InheritsStatus reports freshness for every inherited memo source the
-// workspace knows about. Joins the inherits ref set with core_repositories
-// (where `gitsocial fetch` records `last_fetch`). An unfollowed URL is a
-// legacy state — `inherit add` auto-follows since the §3.3 fix, but
-// pre-existing inherits may not be in any list.
+// InheritsStatus reports the last fetch of each inherited memo source, read from core_repositories.
 func InheritsStatus(workdir string) []InheritStatus {
 	urls := ListInherits(workdir)
 	if len(urls) == 0 {
@@ -181,12 +174,9 @@ func InheritsStatus(workdir string) []InheritStatus {
 	out := make([]InheritStatus, 0, len(urls))
 	for _, u := range urls {
 		s := InheritStatus{URL: u}
-		if r, ok := repoMap[u]; ok {
-			s.Followed = true
-			if r.LastFetch.Valid {
-				if t, err := time.Parse(time.RFC3339, r.LastFetch.String); err == nil {
-					s.LastFetch = t
-				}
+		if r, ok := repoMap[u]; ok && r.LastFetch.Valid {
+			if t, err := time.Parse(time.RFC3339, r.LastFetch.String); err == nil {
+				s.LastFetch = t
 			}
 		}
 		out = append(out, s)

@@ -554,8 +554,8 @@ func TestSessionWorkspaceFilter(t *testing.T) {
 	if ids["sess-b"] {
 		t.Errorf("workspace A list leaked sess-b; got %v", ids)
 	}
-	if !ids["sess-legacy"] {
-		t.Errorf("workspace A list missing untagged sess-legacy; got %v", ids)
+	if ids["sess-legacy"] {
+		t.Errorf("workspace A list has untagged sess-legacy; got %v", ids)
 	}
 
 	listedAll := ListSessions("")
@@ -1220,9 +1220,7 @@ func TestSessionLastUsed_tracksCommitTime(t *testing.T) {
 	}
 }
 
-// TestInheritsStatus_reportsFreshness locks the §3.5 fix: InheritsStatus
-// joins inherited URLs with core_repositories to surface follow-state and
-// last-fetch time so `memo status` can warn about stale or unfollowed sources.
+// TestInheritsStatus_reportsFreshness reports the last fetch of a fetched source and zero for one not yet fetched.
 func TestInheritsStatus_reportsFreshness(t *testing.T) {
 	setupTestDB(t)
 	freshHome(t)
@@ -1234,20 +1232,12 @@ func TestInheritsStatus_reportsFreshness(t *testing.T) {
 	}
 
 	urlFollowed := protocol.NormalizeURL("https://example.com/policies.git")
-	urlNotFollowed := protocol.NormalizeURL("https://example.com/legacy.git")
+	urlNotFetched := protocol.NormalizeURL("https://example.com/unfetched.git")
 
-	if r := AddInherit(dir, urlFollowed); !r.Success {
-		t.Fatalf("AddInherit(followed): %s", r.Error.Message)
-	}
-	// Add a legacy inherit by writing the ref directly without going through
-	// AddInherit's auto-follow (simulates an inherit added before §3.3 fix).
-	ref := inheritRefPath(urlNotFollowed)
-	hash, err := git.CreateCommitTree(dir, urlNotFollowed+"\n", "")
-	if err != nil {
-		t.Fatalf("legacy commit-tree: %v", err)
-	}
-	if err := git.WriteRef(dir, ref, hash); err != nil {
-		t.Fatalf("legacy ref write: %v", err)
+	for _, u := range []string{urlFollowed, urlNotFetched} {
+		if r := AddInherit(dir, u); !r.Success {
+			t.Fatalf("AddInherit(%s): %s", u, r.Error.Message)
+		}
 	}
 
 	// Record a fetch time for the followed URL via cache.InsertRepository.
@@ -1269,15 +1259,13 @@ func TestInheritsStatus_reportsFreshness(t *testing.T) {
 	for _, s := range statuses {
 		byURL[s.URL] = s
 	}
-	if s := byURL[urlFollowed]; !s.Followed {
-		t.Errorf("%s should report Followed=true", urlFollowed)
-	} else if s.LastFetch.IsZero() {
+	if s := byURL[urlFollowed]; s.LastFetch.IsZero() {
 		t.Errorf("%s should have LastFetch populated", urlFollowed)
 	} else if time.Since(s.LastFetch) < time.Hour {
 		t.Errorf("LastFetch %v unexpectedly recent", s.LastFetch)
 	}
-	if s := byURL[urlNotFollowed]; s.Followed {
-		t.Errorf("%s should report Followed=false (legacy inherit, no list entry)", urlNotFollowed)
+	if s := byURL[urlNotFetched]; !s.LastFetch.IsZero() {
+		t.Errorf("%s LastFetch = %v, want zero before its first fetch", urlNotFetched, s.LastFetch)
 	}
 }
 
