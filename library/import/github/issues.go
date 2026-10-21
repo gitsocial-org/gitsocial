@@ -141,7 +141,7 @@ func (a *Adapter) fetchIssues(opts importpkg.FetchOptions) ([]importpkg.ImportIs
 	}
 	a.prefetchUsers(logins)
 	out := make([]importpkg.ImportIssue, 0, len(raw))
-	var closedNumbers []int
+	var numbers, closedNumbers []int
 	var filtered int
 	for _, issue := range raw {
 		if opts.SkipExternalIDs[fmt.Sprintf("issue:%d", issue.Number)] {
@@ -185,7 +185,16 @@ func (a *Adapter) fetchIssues(opts importpkg.FetchOptions) ([]importpkg.ImportIs
 		if im.State == "closed" {
 			closedNumbers = append(closedNumbers, issue.Number)
 		}
+		numbers = append(numbers, issue.Number)
 		out = append(out, im)
+	}
+	if len(numbers) > 0 {
+		parents := a.batchParents(numbers)
+		for i := range out {
+			if parent, ok := parents[out[i].Number]; ok {
+				out[i].ParentID = fmt.Sprintf("%d", parent)
+			}
+		}
 	}
 	// Batch fetch closed_by via GraphQL instead of N+1 REST calls
 	if len(closedNumbers) > 0 {
@@ -281,6 +290,51 @@ func (a *Adapter) batchClosedBy(issueNumbers []int) map[int]string {
 			}
 			if len(issue.TimelineItems.Nodes) > 0 && issue.TimelineItems.Nodes[0].Actor != nil {
 				result[n] = issue.TimelineItems.Nodes[0].Actor.Login
+			}
+		}
+	}
+	return result
+}
+
+// batchParents fetches the parent issue number of each sub-issue via GraphQL in batches of 50.
+func (a *Adapter) batchParents(issueNumbers []int) map[int]int {
+	result := map[int]int{}
+	for i := 0; i < len(issueNumbers); i += 50 {
+		end := i + 50
+		if end > len(issueNumbers) {
+			end = len(issueNumbers)
+		}
+		batch := issueNumbers[i:end]
+		var fields string
+		for _, n := range batch {
+			fields += fmt.Sprintf("  i%d: issue(number: %d) { parent { number } }\n", n, n)
+		}
+		query := fmt.Sprintf("{ repository(owner: %q, name: %q) {\n%s} }", a.owner, a.repo, fields)
+		var resp struct {
+			Data struct {
+				Repository map[string]json.RawMessage `json:"repository"`
+			} `json:"data"`
+		}
+		if err := ghJSON(&resp, "api", "graphql", "-f", "query="+query); err != nil {
+			log.Debug("graphql batch parent query failed", "error", err)
+			continue
+		}
+		for _, n := range batch {
+			raw, ok := resp.Data.Repository[fmt.Sprintf("i%d", n)]
+			if !ok {
+				continue
+			}
+			var issue struct {
+				Parent *struct {
+					Number int `json:"number"`
+				} `json:"parent"`
+			}
+			if err := json.Unmarshal(raw, &issue); err != nil {
+				log.Debug("unmarshal issue parent data", "issue", n, "error", err)
+				continue
+			}
+			if issue.Parent != nil && issue.Parent.Number > 0 {
+				result[n] = issue.Parent.Number
 			}
 		}
 	}

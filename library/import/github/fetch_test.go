@@ -38,6 +38,8 @@ const (
 
 	pmClosedByJSON = `{"data":{"repository":{"i2":{"timelineItems":{"nodes":[{"actor":{"login":"alice"}}]}}}}}`
 
+	pmParentsJSON = `{"data":{"repository":{"i1":{"parent":null},"i2":{"parent":{"number":1}}}}}`
+
 	pmCommentsJSON = `{"data":{"repository":{"c1":{"comments":{"nodes":[
 		{"databaseId":555,"body":"Me too","author":{"login":"bob","name":"Bob"},
 		 "createdAt":"2024-06-18T08:00:00Z"}],"pageInfo":{"hasNextPage":false}}}}}}`
@@ -69,6 +71,8 @@ func TestFetchPM(t *testing.T) {
 			return ghResponse{stdout: pmIssuesJSON}
 		case ghArg(args, "comments(first:"):
 			return ghResponse{stdout: pmCommentsJSON}
+		case ghArg(args, "parent { number }"):
+			return ghResponse{stdout: pmParentsJSON}
 		case ghArg(args, "graphql"):
 			return ghResponse{stdout: pmClosedByJSON}
 		}
@@ -125,6 +129,9 @@ func TestFetchPM(t *testing.T) {
 	if len(first.RelatedIDs) != 1 || first.RelatedIDs[0] != "2" {
 		t.Errorf("issue 1 RelatedIDs = %v, want the #2 body reference", first.RelatedIDs)
 	}
+	if first.ParentID != "" {
+		t.Errorf("issue 1 ParentID = %q, want none", first.ParentID)
+	}
 
 	second := plan.Issues[1]
 	if second.State != "closed" || second.ClosedAt.IsZero() {
@@ -132,6 +139,9 @@ func TestFetchPM(t *testing.T) {
 	}
 	if second.ClosedByName != "Alice Example" || second.ClosedByEmail != "alice@example.com" {
 		t.Errorf("issue 2 closed-by = %q / %q", second.ClosedByName, second.ClosedByEmail)
+	}
+	if second.ParentID != "1" {
+		t.Errorf("issue 2 ParentID = %q, want the sub-issue parent 1", second.ParentID)
 	}
 
 	if len(plan.Comments) != 1 {

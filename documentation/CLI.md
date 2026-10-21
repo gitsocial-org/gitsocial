@@ -293,6 +293,7 @@ gitsocial import pm --state open --limit 100 --dry-run
 - GitLab reads `GITLAB_TOKEN`, then `GITLAB_PRIVATE_TOKEN`, when `--token` is not given.
 - `--update` applies the changes on the forge to the items that are already imported. `--labels auto|raw|skip` controls label mapping. `--email-map <file>` maps usernames to emails. `--skip-bots` is on by default.
 - An imported pull request takes `base-tip` and `head-tip` from the forge's commit ids, and from local branches only when the forge gives none. `--update` records the new tips of a pull request whose ids changed, also when nothing else changed.
+- An imported GitHub sub-issue keeps its parent issue, and GitSocial derives `root` from it.
 - The mapping file `~/.cache/gitsocial/imports/<url-slug>.json` maps platform ids to commit hashes; `--map-file` overrides it.
 
 ## Scripting

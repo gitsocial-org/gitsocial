@@ -645,3 +645,52 @@ func TestRun_SelectedExtensionsOnly(t *testing.T) {
 		t.Errorf("gitmsg/pm commits = %d, want 0", n)
 	}
 }
+
+func TestRun_ImportsIssueParents(t *testing.T) {
+	opts := newRunOptions(t)
+	opts.Extensions = []string{"pm"}
+	opts.Update = true
+	adapter := &fakeAdapter{pmPlan: &PMPlan{Issues: []ImportIssue{
+		{ExternalID: "3", Number: 3, Title: "Grandchild", State: "open", ParentID: "2", CreatedAt: fakeCreatedAt},
+		{ExternalID: "2", Number: 2, Title: "Child", State: "open", ParentID: "1", CreatedAt: fakeCreatedAt},
+		{ExternalID: "1", Number: 1, Title: "Root", State: "open", CreatedAt: fakeCreatedAt},
+	}}}
+	stats, err := Run(adapter, opts)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(stats.Errors) != 0 {
+		t.Fatalf("Errors = %+v, want none", stats.Errors)
+	}
+	mapping, err := ReadMapping(opts.CacheDir, opts.RepoURL, "")
+	if err != nil {
+		t.Fatalf("ReadMapping() error = %v", err)
+	}
+	repoURL := gitmsg.ResolveRepoURL(opts.WorkDir)
+	item := func(id string) *pm.PMItem {
+		t.Helper()
+		got, err := pm.GetPMItem(repoURL, mapping.GetHash(MappingKey("github", "issue", id)), "gitmsg/pm")
+		if err != nil {
+			t.Fatalf("GetPMItem(%s) error = %v", id, err)
+		}
+		return got
+	}
+	rootHash, childHash := mapping.GetHash(MappingKey("github", "issue", "1")), mapping.GetHash(MappingKey("github", "issue", "2"))
+	if child := item("2"); cache.FromNullString(child.ParentHash) != "" || cache.FromNullString(child.RootHash) != rootHash {
+		t.Errorf("level 1 parent = %q, root = %q, want root %q alone", child.ParentHash.String, child.RootHash.String, rootHash)
+	}
+	if grandchild := item("3"); cache.FromNullString(grandchild.ParentHash) != childHash || cache.FromNullString(grandchild.RootHash) != rootHash {
+		t.Errorf("level 2 parent = %q, root = %q, want parent %q and root %q", grandchild.ParentHash.String, grandchild.RootHash.String, childHash, rootHash)
+	}
+	if root := item("1"); root.ParentHash.String != "" || root.RootHash.String != "" {
+		t.Errorf("root issue parent = %q, root = %q, want none", root.ParentHash.String, root.RootHash.String)
+	}
+
+	before := len(branchCommits(t, opts.WorkDir, "gitmsg/pm"))
+	if _, err := Run(adapter, opts); err != nil {
+		t.Fatalf("second Run() error = %v", err)
+	}
+	if got := len(branchCommits(t, opts.WorkDir, "gitmsg/pm")); got != before {
+		t.Errorf("gitmsg/pm commits = %d after a second run, want %d", got, before)
+	}
+}

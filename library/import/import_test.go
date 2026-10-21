@@ -4,6 +4,7 @@ package importpkg
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -356,5 +357,35 @@ func TestDetectStackEdges_NoMatch(t *testing.T) {
 	edges := detectStackEdges(prs)
 	if len(edges) != 0 {
 		t.Errorf("independent PRs should not produce edges, got %+v", edges)
+	}
+}
+
+// orderIDs returns the external IDs of issues in order.
+func orderIDs(issues []ImportIssue) string {
+	ids := make([]string, len(issues))
+	for i, issue := range issues {
+		ids[i] = issue.ExternalID
+	}
+	return strings.Join(ids, ",")
+}
+
+func TestIssueOrderTopDown(t *testing.T) {
+	tests := []struct {
+		name   string
+		issues []ImportIssue
+		want   string
+	}{
+		{"flat", []ImportIssue{{ExternalID: "1"}, {ExternalID: "2"}}, "1,2"},
+		{"chain", []ImportIssue{{ExternalID: "3", ParentID: "2"}, {ExternalID: "2", ParentID: "1"}, {ExternalID: "1"}}, "1,2,3"},
+		{"wide tree", []ImportIssue{{ExternalID: "2", ParentID: "1"}, {ExternalID: "3", ParentID: "1"}, {ExternalID: "1"}, {ExternalID: "4", ParentID: "2"}}, "1,2,3,4"},
+		{"missing parent", []ImportIssue{{ExternalID: "2", ParentID: "9"}, {ExternalID: "1"}}, "2,1"},
+		{"cycle", []ImportIssue{{ExternalID: "1", ParentID: "2"}, {ExternalID: "2", ParentID: "1"}, {ExternalID: "3"}}, "3"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := orderIDs(issueOrderTopDown(tt.issues)); got != tt.want {
+				t.Errorf("issueOrderTopDown() = %s, want %s", got, tt.want)
+			}
+		})
 	}
 }

@@ -168,6 +168,9 @@ func Run(adapter SourceAdapter, opts Options) (Stats, error) {
 				stats.UpdatedMilestones += u.UpdatedMilestones
 				stats.Errors = append(stats.Errors, u.Errors...)
 			}
+			if !opts.DryRun {
+				stats.Errors = append(stats.Errors, applyIssueParents(opts, plan, mapping)...)
+			}
 		}
 		flushMapping(opts, mapping)
 		progress("pm", PhaseDone, stats, 0, 0, "")
@@ -2082,16 +2085,92 @@ func buildStateChangeOrigin(authorName, authorEmail string, timestamp time.Time,
 	return origin
 }
 
+// resolveIssueRef converts one external issue ID to a commit ref via the mapping file, or "" when it is not mapped.
+func resolveIssueRef(id, platform string, mapping *MappingFile) string {
+	if hash := mapping.GetHash(MappingKey(platform, "issue", id)); len(hash) >= 12 {
+		return "#commit:" + hash[:12]
+	}
+	return ""
+}
+
 // resolveIssueLinks converts external issue IDs to commit refs via the mapping file.
 func resolveIssueLinks(ids []string, platform string, mapping *MappingFile) []string {
 	var refs []string
 	for _, id := range ids {
-		key := MappingKey(platform, "issue", id)
-		if hash := mapping.GetHash(key); hash != "" && len(hash) >= 12 {
-			refs = append(refs, "#commit:"+hash[:12])
+		if ref := resolveIssueRef(id, platform, mapping); ref != "" {
+			refs = append(refs, ref)
 		}
 	}
 	return refs
+}
+
+// issueOrderTopDown orders issues so that each parent in the set comes before its children; issues in a parent cycle are left out.
+func issueOrderTopDown(issues []ImportIssue) []ImportIssue {
+	inSet := make(map[string]bool, len(issues))
+	for _, issue := range issues {
+		inSet[issue.ExternalID] = true
+	}
+	emitted := make(map[string]bool, len(issues))
+	ordered := make([]ImportIssue, 0, len(issues))
+	pending := issues
+	for len(pending) > 0 {
+		var waiting []ImportIssue
+		for _, issue := range pending {
+			if issue.ParentID == "" || !inSet[issue.ParentID] || emitted[issue.ParentID] {
+				ordered = append(ordered, issue)
+				emitted[issue.ExternalID] = true
+				continue
+			}
+			waiting = append(waiting, issue)
+		}
+		if len(waiting) == len(pending) {
+			for _, issue := range waiting {
+				log.Debug("issue parent cycle, importing the issue without a parent", "issue", issue.ExternalID, "parent", issue.ParentID)
+			}
+			break
+		}
+		pending = waiting
+	}
+	return ordered
+}
+
+// applyIssueParents gives each imported sub-issue its parent, top-down so each level derives its root from the level above.
+func applyIssueParents(opts Options, plan *PMPlan, mapping *MappingFile) []ImportError {
+	platform := mapping.Source
+	repoURL := gitmsg.ResolveRepoURL(opts.WorkDir)
+	var errors []ImportError
+	var applied int
+	for _, issue := range issueOrderTopDown(plan.Issues) {
+		if issue.ParentID == "" {
+			continue
+		}
+		childRef := resolveIssueRef(issue.ExternalID, platform, mapping)
+		parentRef := resolveIssueRef(issue.ParentID, platform, mapping)
+		if childRef == "" || parentRef == "" {
+			continue
+		}
+		existing, err := pm.GetPMItemByRef(childRef, repoURL)
+		if err != nil {
+			continue
+		}
+		current := cache.FromNullString(existing.ParentHash)
+		if current == "" {
+			current = cache.FromNullString(existing.RootHash)
+		}
+		if current == protocol.ParseRef(parentRef).Value {
+			continue
+		}
+		res := pm.UpdateIssue(opts.WorkDir, childRef, pm.UpdateIssueOptions{Parent: &parentRef})
+		if !res.Success {
+			errors = append(errors, ImportError{ExternalID: issue.ExternalID, Type: "issue-parent", Message: res.Error.Message})
+			continue
+		}
+		applied++
+	}
+	if opts.Verbose && applied > 0 {
+		fmt.Printf("  pm  linked %d sub-issue(s) to their parent\n", applied)
+	}
+	return errors
 }
 
 // toPMLabels parses scope/value label strings into PM labels.

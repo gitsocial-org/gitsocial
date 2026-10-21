@@ -134,6 +134,7 @@ type ImportIssue struct {
 	BlocksIDs     []string // external issue IDs this issue blocks
 	BlockedByIDs  []string // external issue IDs blocking this issue
 	RelatedIDs    []string // external issue IDs related to this issue
+	ParentID      string   // external issue ID of the parent issue
 	AuthorName    string
 	AuthorEmail   string
 	CreatedAt     time.Time
