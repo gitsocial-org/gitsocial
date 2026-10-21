@@ -258,7 +258,7 @@ func (c *DiffViewCore) handleKey(msg tea.KeyPressMsg, state *State) tea.Cmd {
 			return c.searchInput.Focus()
 		case "esc":
 			c.exitSearch()
-			return nil
+			return ConsumedCmd
 		}
 	}
 	return c.handleSharedKey(key)

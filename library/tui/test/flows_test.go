@@ -221,9 +221,12 @@ func TestFlows(t *testing.T) {
 		ih.SendKeys("v", "v", "w")
 		ih.SendKeys("/", "#", "backspace", "f", "i", "f", "t", "y", "enter")
 		assertContains(t, ih.Rendered(), "1/1  n:next")
-		ih.SendKeys("n", "N", "/", "esc")
+		ih.SendKeys("n", "N", "esc")
 		if got := ih.CurrentPath(); got != "/review/diff" {
-			t.Fatalf("closing the search: path = %q, want /review/diff", got)
+			t.Fatalf("esc on the search results: path = %q, want /review/diff", got)
+		}
+		if strings.Contains(rendered(ih), "n:next") {
+			t.Error("esc leaves the search footer")
 		}
 		ih.SetSize(50, 20)
 		assertContains(t, ih.Rendered(), "Files: 2")
