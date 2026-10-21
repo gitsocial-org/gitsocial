@@ -77,6 +77,10 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     // newer route's already-painted view. `setView` here shadows the module one.
     const myGen = ++routeGen;
     const setView = (nodes) => { if (myGen === routeGen) NS.setView(nodes); };
+    // A navigation aborts the transfers of the route before it; the object reads of this route carry its signal.
+    if (ctx.abort) ctx.abort.abort();
+    ctx.abort = typeof AbortController !== "undefined" ? new AbortController() : null;
+    ctx.signal = ctx.abort ? ctx.abort.signal : undefined;
     // Point the grammar loader at this session's bucket base (idempotent), so a
     // caller that drives route() directly (headless tests) still lazy-loads
     // grammars from the right place without going through init().

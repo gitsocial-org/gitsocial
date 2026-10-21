@@ -43,37 +43,67 @@
   const FETCH_TRIES = 4;
   const FETCH_HEADERS_MS = 20000;
 
-  // fetchHTTP retries 429, 5xx and header timeouts with jittered backoff; transport errors fail at once.
+  // abortError is the error of a transfer its route aborted; the flag tells it from a header timeout, which also aborts.
+  function abortError() {
+    const err = new Error("aborted");
+    err.name = "AbortError";
+    err.aborted = true;
+    return err;
+  }
+
+  // fetchHTTP retries 429, 5xx and header timeouts with jittered backoff; transport errors fail at once, and an abort of the caller's signal fails at once without a retry.
   async function fetchHTTP(url, opts) {
+    const outer = opts && opts.signal;
     for (let attempt = 1; ; attempt++) {
+      if (outer && outer.aborted) throw abortError();
       const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
       const timer = ac ? setTimeout(() => ac.abort(), FETCH_HEADERS_MS) : null;
+      const onAbort = ac && outer ? () => ac.abort() : null;
+      if (onAbort) outer.addEventListener("abort", onAbort);
       let res = null, err = null;
       try {
         res = await fetch(url, ac ? Object.assign({}, opts, { signal: ac.signal }) : opts);
-      } catch (e) { err = e; } finally { if (timer) clearTimeout(timer); }
+      } catch (e) { err = e; } finally {
+        if (timer) clearTimeout(timer);
+        if (onAbort) outer.removeEventListener("abort", onAbort);
+      }
+      if (outer && outer.aborted) throw abortError();
       if (res && res.status !== 429 && res.status < 500) return res;
       if (err && !(err.name === "AbortError")) throw err;
       if (attempt >= FETCH_TRIES) {
         if (err) throw err;
         return res;
       }
-      await new Promise((r) => setTimeout(r, 250 * Math.pow(2, attempt) * (1 + Math.random())));
+      await sleep(250 * Math.pow(2, attempt) * (1 + Math.random()), outer);
     }
   }
 
-  // fetchBytes GETs a bucket key relative to base: null on 404, a forbidden-tagged throw on 401 and 403.
-  async function fetchBytes(base, key) {
-    // The default cache mode honors the server's Cache-Control: immutable objects come from disk, mutable keys revalidate.
-    const res = await fetchHTTP(base + key);
-    if (res.status === 404) return null;
-    if (res.status === 401 || res.status === 403) {
-      const err = new Error("GET " + key + ": " + res.status + " forbidden");
-      err.forbidden = true;
-      throw err;
+  // sleep waits ms, or rejects with the abort error when the signal fires first.
+  function sleep(ms, signal) {
+    return new Promise((resolve, reject) => {
+      const onAbort = signal ? () => { clearTimeout(timer); reject(abortError()); } : null;
+      const timer = setTimeout(() => { if (onAbort) signal.removeEventListener("abort", onAbort); resolve(); }, ms);
+      if (onAbort) signal.addEventListener("abort", onAbort);
+    });
+  }
+
+  // fetchBytes GETs a bucket key relative to base: null on 404, a forbidden-tagged throw on 401 and 403; an optional signal aborts the transfer.
+  async function fetchBytes(base, key, signal) {
+    try {
+      // The default cache mode honors the server's Cache-Control: immutable objects come from disk, mutable keys revalidate.
+      const res = await fetchHTTP(base + key, signal ? { signal } : undefined);
+      if (res.status === 404) return null;
+      if (res.status === 401 || res.status === 403) {
+        const err = new Error("GET " + key + ": " + res.status + " forbidden");
+        err.forbidden = true;
+        throw err;
+      }
+      if (!res.ok) throw new Error("GET " + key + ": " + res.status);
+      return new Uint8Array(await res.arrayBuffer());
+    } catch (e) {
+      // An abort that lands during the body read carries the flag too, so a route that shares the read starts it again.
+      throw signal && signal.aborted ? abortError() : e;
     }
-    if (!res.ok) throw new Error("GET " + key + ": " + res.status);
-    return new Uint8Array(await res.arrayBuffer());
   }
 
   // keyExists answers whether a key is there without paying for its body; only a 404 counts as absent.
@@ -117,8 +147,19 @@
 
   // getObject returns one git object: the session cache, then the persistent store, then the bucket; an object from the bucket goes into both.
   async function getObject(ctx, sha, content) {
-    if (ctx.objects.has(sha)) return ctx.objects.get(sha);
-    // The cache holds the in-flight promise, so concurrent readers of one sha share a single fetch.
+    const signal = ctx.signal;
+    for (;;) {
+      const pending = ctx.objects.has(sha) ? ctx.objects.get(sha) : startObjectRead(ctx, sha, content);
+      try { return await pending; } catch (e) {
+        // A read that the route before this one started and aborted is started again for a caller whose route is live.
+        if (!e || !e.aborted || (signal && signal.aborted)) throw e;
+        if (ctx.objects.get(sha) === pending) ctx.objects.delete(sha);
+      }
+    }
+  }
+
+  // startObjectRead begins one shared read of a sha and caches its promise, so concurrent readers of one sha share a single fetch.
+  function startObjectRead(ctx, sha, content) {
     const pending = (async () => {
       objectStore(ctx);
       // A read that arrives before the store is open goes to the bucket; the store serves from the next read.
@@ -276,23 +317,27 @@
 
   // getLooseObject fetches and inflates one loose object, or null when the bucket carries no loose key for it.
   async function getLooseObject(ctx, sha) {
-    const compressed = await fetchBytes(ctx.base, objectKey(sha));
+    const compressed = await fetchBytes(ctx.base, objectKey(sha), ctx.signal);
     return compressed === null ? null : parseLooseObject(await inflate(compressed));
   }
 
   // ---- Packfile reader (see documentation/STATIC-SITE.md) ----
 
-  // fetchRange GETs a byte range of a bucket key and returns the bytes with the object's total size; end is exclusive, null runs to the end.
-  async function fetchRange(base, key, start, end) {
+  // fetchRange GETs a byte range of a bucket key and returns the bytes with the object's total size; end is exclusive, null runs to the end, and an optional signal aborts the transfer.
+  async function fetchRange(base, key, start, end, signal) {
     const spec = "bytes=" + start + "-" + (end === null ? "" : end - 1);
-    const res = await fetchHTTP(base + key, { headers: { Range: spec } });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error("GET " + key + " " + spec + ": " + res.status);
-    const body = new Uint8Array(await res.arrayBuffer());
-    const range = res.headers.get("Content-Range") || "";
-    const total = Number(range.slice(range.indexOf("/") + 1)) || 0;
-    if (res.status === 206) return { bytes: body, total };
-    return { bytes: body.subarray(start, end === null ? body.length : end), total: body.length };
+    try {
+      const res = await fetchHTTP(base + key, { headers: { Range: spec }, signal });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error("GET " + key + " " + spec + ": " + res.status);
+      const body = new Uint8Array(await res.arrayBuffer());
+      const range = res.headers.get("Content-Range") || "";
+      const total = Number(range.slice(range.indexOf("/") + 1)) || 0;
+      if (res.status === 206) return { bytes: body, total };
+      return { bytes: body.subarray(start, end === null ? body.length : end), total: body.length };
+    } catch (e) {
+      throw signal && signal.aborted ? abortError() : e;
+    }
   }
 
   // packKey returns a pack file's key: under the prefix its name is registered with, else the bucket's objects/pack.
@@ -339,7 +384,7 @@
     const name = sha.slice(0, 2);
     if (ctx.packs.maps.has(name)) return ctx.packs.maps.get(name);
     const promise = (async () => {
-      const bytes = await fetchBytes(ctx.base, ".gitsocial/packmap/" + name + ".json");
+      const bytes = await fetchBytes(ctx.base, ".gitsocial/packmap/" + name + ".json", ctx.signal);
       if (bytes === null) return null;
       try {
         const doc = JSON.parse(new TextDecoder().decode(bytes));
@@ -347,6 +392,7 @@
       } catch (_) { return null; }
     })();
     ctx.packs.maps.set(name, promise);
+    promise.catch(() => { if (ctx.packs.maps.get(name) === promise) ctx.packs.maps.delete(name); });
     return promise;
   }
 
@@ -385,13 +431,13 @@
   async function packIdxOpen(ctx, name) {
     if (ctx.packs.idx.has(name)) return ctx.packs.idx.get(name);
     const promise = (async () => {
-      const got = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), 0, IDX_HEAD_BYTES);
+      const got = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), 0, IDX_HEAD_BYTES, ctx.signal);
       if (got === null) return null;
       const idx = parsePackIdxHead(got.bytes, got.total || got.bytes.length);
       let bytes = got.bytes;
       if (bytes.length < idx.total && idx.total <= IDX_WHOLE_BYTES) {
         // A failed rest read leaves the index to slice reads, as a head-only open does.
-        const rest = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), bytes.length, idx.total).catch(() => null);
+        const rest = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), bytes.length, idx.total, ctx.signal).catch((e) => { if (e && e.aborted) throw e; return null; });
         if (rest !== null) {
           bytes = new Uint8Array(got.bytes.length + rest.bytes.length);
           bytes.set(got.bytes);
@@ -405,6 +451,7 @@
       return idx;
     })();
     ctx.packs.idx.set(name, promise);
+    promise.catch(() => { if (ctx.packs.idx.get(name) === promise) ctx.packs.idx.delete(name); });
     return promise;
   }
 
@@ -412,7 +459,7 @@
   function packIdxOfsSlice(ctx, idx, name, first, lo, hi) {
     if (idx.ofsSlices.has(first)) return idx.ofsSlices.get(first);
     const promise = (async () => {
-      const got = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), idx.ofsStart + lo * 4, idx.ofsStart + hi * 4);
+      const got = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), idx.ofsStart + lo * 4, idx.ofsStart + hi * 4, ctx.signal);
       return got === null ? null : got.bytes;
     })();
     idx.ofsSlices.set(first, promise);
@@ -426,7 +473,7 @@
     const raw = dv.getUint32(at * 4);
     if (!(raw & 0x80000000)) return raw;
     const bigAt = idx.ofsStart + idx.count * 4 + (raw & 0x7fffffff) * 8;
-    const got = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), bigAt, bigAt + 8);
+    const got = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), bigAt, bigAt + 8, ctx.signal);
     if (got === null || got.bytes.length < 8) return null;
     const bdv = new DataView(got.bytes.buffer, got.bytes.byteOffset, got.bytes.byteLength);
     return Number(bdv.getBigUint64(0));
@@ -437,10 +484,11 @@
     if (idx.shas) return idx.shas.subarray(lo * 20, hi * 20);
     if (idx.slices.has(first)) return idx.slices.get(first);
     const promise = (async () => {
-      const got = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), IDX_SHA_START + lo * 20, IDX_SHA_START + hi * 20);
+      const got = await fetchRange(ctx.base, packKey(ctx, name, ".idx"), IDX_SHA_START + lo * 20, IDX_SHA_START + hi * 20, ctx.signal);
       return got === null ? null : got.bytes;
     })();
     idx.slices.set(first, promise);
+    promise.catch(() => { if (idx.slices.get(first) === promise) idx.slices.delete(first); });
     return promise;
   }
 
@@ -511,7 +559,7 @@
     const promise = (async () => {
       const known = ctx.packs.size.get(name) || 0;
       if (known && winStart >= known) return null;
-      const got = await fetchRange(ctx.base, packKey(ctx, name, ".pack"), winStart, winStart + PACK_WINDOW_BYTES);
+      const got = await fetchRange(ctx.base, packKey(ctx, name, ".pack"), winStart, winStart + PACK_WINDOW_BYTES, ctx.signal);
       if (got && got.total) ctx.packs.size.set(name, got.total);
       return got;
     })();
@@ -522,7 +570,7 @@
 
   // packRange reads [start, end) through the window cache and returns { bytes, total }; null when the pack is absent.
   async function packRange(ctx, name, start, end) {
-    if (end - start > PACK_SPAN_MAX) return fetchRange(ctx.base, packKey(ctx, name, ".pack"), start, end);
+    if (end - start > PACK_SPAN_MAX) return fetchRange(ctx.base, packKey(ctx, name, ".pack"), start, end, ctx.signal);
     const first = Math.floor(start / PACK_WINDOW_BYTES) * PACK_WINDOW_BYTES;
     const starts = [];
     for (let ws = first; ws < end; ws += PACK_WINDOW_BYTES) starts.push(ws);
@@ -645,7 +693,7 @@
     const known = ctx.packs.size.get(name) || 0;
     if (end === null && known) end = known - 20;
     const got = end === null
-      ? await fetchRange(ctx.base, packKey(ctx, name, ".pack"), offset, null)
+      ? await fetchRange(ctx.base, packKey(ctx, name, ".pack"), offset, null, ctx.signal)
       : await packRange(ctx, name, offset, end);
     if (got === null) return null;
     if (got.total) ctx.packs.size.set(name, got.total);
@@ -921,7 +969,13 @@
         const h = state.frontier.shift();
         if (h && !state.visited.has(h)) { state.visited.add(h); batch.push(h); }
       }
-      const objs = await Promise.all(batch.map((h) => getObject(ctx, h)));
+      let objs;
+      // A failed batch returns to the frontier, so the next step reads it again.
+      try { objs = await Promise.all(batch.map((h) => getObject(ctx, h))); } catch (e) {
+        for (const h of batch) state.visited.delete(h);
+        state.frontier = batch.concat(state.frontier);
+        throw e;
+      }
       const nextParents = [];
       for (let i = 0; i < batch.length; i++) {
         const obj = objs[i];
@@ -1478,8 +1532,12 @@
     const tip = await refTip(ctx, EXT_BRANCHES[ext]);
     if (!tip) return null;
     const w = walkStateFor(ctx, "ext:" + ext, tip);
-    // Memoize the in-flight seed, so a second caller awaits it instead of proceeding over a half-seeded state.
-    if (!w.seedPromise) w.seedPromise = seedWalkFromIndex(ctx, ext, w);
+    // Memoize the in-flight seed, so a second caller awaits it instead of proceeding over a half-seeded state; a failed seed is not kept.
+    if (!w.seedPromise) {
+      const seed = seedWalkFromIndex(ctx, ext, w);
+      seed.catch(() => { if (w.seedPromise === seed) w.seedPromise = null; });
+      w.seedPromise = seed;
+    }
     await w.seedPromise;
     return w;
   }
@@ -1835,7 +1893,9 @@
       const h = state.frontier.splice(best, 1)[0];
       if (state.visited.has(h)) continue;
       state.visited.add(h);
-      const obj = await getObject(ctx, h);
+      let obj;
+      // A failed read returns its commit to the frontier, so the next step reads it again.
+      try { obj = await getObject(ctx, h); } catch (e) { state.visited.delete(h); state.frontier.unshift(h); throw e; }
       if (!obj || obj.type !== "commit") continue;
       const c = parseCommit(h, obj.body);
       state.commits.push(c);
@@ -3833,8 +3893,8 @@
       r[key]++;
     };
     const [social, review] = await Promise.all([
-      loadExtItemsForCounts(ctx, "social").catch(() => []),
-      loadExtItemsForCounts(ctx, "review").catch(() => []),
+      loadExtItemsForCounts(ctx, "social").catch(countsMiss),
+      loadExtItemsForCounts(ctx, "review").catch(countsMiss),
     ]);
     for (const it of social) {
       const h = it.header || {};
@@ -3866,6 +3926,12 @@
     }
     ctx.interactionCounts = counts;
     return counts;
+  }
+
+  // countsMiss reads a failed lane as empty, and lets an abort through so an aborted walk fills no memo.
+  function countsMiss(e) {
+    if (e && e.aborted) throw e;
+    return [];
   }
 
   // countsFor returns one item's counts from a loaded map, or null.
