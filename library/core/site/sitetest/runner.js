@@ -22,6 +22,7 @@ const DEFAULT = [
   "unit_render_detail.js",
   "unit_parity.js",
   "unit_object_store.js",
+  "unit_pack_probe.js",
   "unit_fetch_abort.js",
   "verify_403.js",
   "verify_threads.js",

@@ -789,13 +789,17 @@
     if (ctx.packs.hits[0] !== name) ctx.packs.hits = [name].concat(ctx.packs.hits.filter((n) => n !== name));
   }
 
-  // probePacks finds an object through each pack's index, in hit order.
+  // probePacks finds an object through the packs' indexes, CONCURRENCY of them in flight at a time in hit order, so a bucket of many packs costs a few round trips and not one per pack.
   async function probePacks(ctx, sha) {
-    for (const name of await orderedPacks(ctx)) {
-      const found = await packIdxLookup(ctx, name, sha);
-      if (found === null) continue;
-      notePackHit(ctx, name);
-      return readPackEntry(ctx, name, found.offset, found.end);
+    const names = await orderedPacks(ctx);
+    for (let i = 0; i < names.length; i += CONCURRENCY) {
+      const wave = names.slice(i, i + CONCURRENCY);
+      const found = await Promise.all(wave.map((name) => packIdxLookup(ctx, name, sha)));
+      for (let j = 0; j < wave.length; j++) {
+        if (found[j] === null) continue;
+        notePackHit(ctx, wave[j]);
+        return readPackEntry(ctx, wave[j], found[j].offset, found[j].end);
+      }
     }
     return null;
   }
