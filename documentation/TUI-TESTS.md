@@ -8,7 +8,7 @@ Headless integration tests drive the real TUI model over a seeded git repository
 
 ```bash
 go test ./library/tui/test/                              # the quick tier
-GITSOCIAL_TEST_FULL=1 go test ./library/tui/test/        # the full tier: adds TestSmoke, TestSequence, TestGolden/LayoutProperties
+GITSOCIAL_TEST_FULL=1 go test ./library/tui/test/        # the full tier: adds TestSmoke, TestSequence, TestFlows, TestGolden/LayoutProperties
 go test ./library/tui/test/ -run Golden -update          # regenerate the golden files
 go test ./library/tui/test/ -run TestGenerateFixture -generate   # regenerate the fixture tarballs
 scripts/test.sh -run Smoke ./library/tui/test/           # any of the above with streamed per-test progress
@@ -19,7 +19,8 @@ The tests create temporary directories and need no external services. Run times 
 | Run | Time |
 |---|---|
 | quick tier | 13 s |
-| full tier | 78 s |
+| full tier | 160 s |
+| `TestFlows` | 65 s |
 | `TestSmoke` | 40 s |
 | `TestGolden/LayoutProperties` | 20 s |
 
@@ -37,6 +38,7 @@ library/tui/test/
 ├── golden_test.go        # golden files and layout properties
 ├── navigation_test.go    # view transitions
 ├── sequence_test.go      # multi-step interactions
+├── flows_test.go         # the key sequences of one view at a time
 ├── form_test.go          # form submits
 ├── diff_test.go          # diff view keys
 ├── cursor_test.go        # list cursor stability
@@ -115,6 +117,7 @@ The cache is filled with `client.SyncWorkspace`, workspace first and fork second
 | `golden_test.go` | `TestGoldenTime_labelHoldsForALongRun` | the fixture keeps one relative-time label for the full run |
 | `navigation_test.go` | `TestNavigation/GlobalKeys` (`S`, `P`, `R`, `V`, `M`), `Back`, `SiteEditToggle`, `MultiLevelBack`, `Detail`, `Search`, `Help`, `Notifications` | the global jump keys open their routes; `esc` goes back, and `/`, `?` and `@` open search, help and notifications |
 | `sequence_test.go` | `TestSequence/*`: AllExtensions, BrowseAndReturn, IssuesFlow, SettingsAndBack, QuickJumpOverridesHistory, the `*OpensForm` and `*Navigates` flows per item type, PostRetractShowsConfirm, SearchFlow, PRDiffNavigates, MultipleViewRenders, PushConfirmNamesRemote | multi-step flows; full tier only |
+| `flows_test.go` | `TestFlows/*`: `PRDetail{OpenAndMerged,CommitsAndSuggestion,StackActions,MergeCloseRetract}`, `ReviewDiffKeys`, `Post{ThreadKeys,TitlesAndSources,RetractAccept}`, `ListPickerCreateAndDelete`, `ListReposAddAndRemove`, `IssueDetail{CardRows,CloseAndRetract,AdoptForkIssue}`, `Board{Moves,FiltersAndScroll}`, `Forks{RemoveAndAdd,SortSearchAndRemove}`, `Cache{ConfirmsDismissed,DeleteAndClear}`, `NavPanel{WalkAndCommit,JumpsAndFold}`, `NotificationOpensEditedIssue`, `ReleaseArtifactExportFails`, `DiffFullscreenHidesNav`, `RefLinksResolve`, `FetchModeChoiceAndBusyKeys`, `PushRemotePicker` | the key sequences of one view: its panes, modes, searches, sorts, filters, forms and confirms, with the result each key leaves on the screen; a flow that writes runs on an isolated copy, and one that adds a repository uses a `file://` URL so that nothing goes to the network; full tier only |
 | `form_test.go` | `TestMilestoneFormCreates`, `TestSprintFormCreates` | a submitted create form opens the detail view of the new item, on an isolated fixture |
 | `diff_test.go` | `TestDiffTabMovesToNextFile` | `tab` in a diff moves the cursor to the next file and leaves the panel focus alone, on an isolated fixture with a two-file commit |
 | `cursor_test.go` | `TestTimelineCursorSurvivesFetch`, `TestTimelineCursorSurvivesBackNav` | the timeline selection stays after a fetch and after a return from a detail view |
@@ -125,7 +128,7 @@ The cache is filled with `client.SyncWorkspace`, workspace first and fork second
 
 ## Notes
 
-- Commands run synchronously to a depth of 50, and the harness runs each command in a `tea.BatchMsg`. A command that would block is skipped by function name before execution: `BlinkCmd`, `startFetch`, `tea.Tick` (message timeouts, the auto-fetch heartbeat). These messages are dropped after execution: `tea.QuitMsg`, `setWindowTitleMsg`, `execMsg` (editor and process launches, counted in `SkippedExecN`), `cursor.BlinkMsg`. `SetHeadless(true)` skips the terminal-dependent commands in `Init()`.
+- Commands run synchronously to a depth of 50, and the harness runs each command in a `tea.BatchMsg` and, in order, each command of a `tea.Sequence`. A command that would block is skipped by function name before execution: `BlinkCmd`, `startFetch`, `tea.Tick` (message timeouts, the auto-fetch heartbeat). These messages are dropped after execution: `tea.QuitMsg`, `setWindowTitleMsg`, `execMsg` (editor and process launches, counted in `SkippedExecN`), `cursor.BlinkMsg`. `SetHeadless(true)` skips the terminal-dependent commands in `Init()`.
 - `tui.Model.Update` returns either `tui.Model` or `*tui.Model`; `toModel` handles both.
 - The suite finds these problems:
   - panics on empty data and render crashes
@@ -133,4 +136,5 @@ The cache is filled with `client.SyncWorkspace`, workspace first and fork second
   - missing `Activate` calls, navigation dead ends and registration-order bugs
   - content regressions, broken box drawing and height overflow
 - `assertFrameFits` finds horizontal overflow on each route in `TestGolden/LayoutProperties`, at 120x40, 80x24 and 200x60, and `assertFitsTerminal` finds it on each `TestDisplay` view. Both measure printable cells with `tuicore.AnsiWidth`, so a border past the terminal edge fails on its own line, not as a golden diff.
-- The suite does not find these problems: a terminal under 80 columns, a view that a key opens and no route opens (a form, a diff, a confirmation), and content that the frame cut to fit. A clipped line fits the frame, so no test reports the content that it lost.
+- Two edits of one item in the same second tie on the commit timestamp and resolve by hash, so a flow that edits one item twice calls `waitNextSecond` between the edits.
+- The suite does not find these problems: a terminal under 80 columns, a view that a key opens and no route opens (a form, a diff, a confirmation) on a view that `TestFlows` does not drive, and content that the frame cut to fit. A clipped line fits the frame, so no test reports the content that it lost.

@@ -60,6 +60,12 @@ func TestProposalAccept(t *testing.T) {
 	if got.Data.HasProposedEdits {
 		t.Error("post-accept: the proposed-edit marker should clear")
 	}
+	// The accepting edit is now the newest row, so the proposal sits one row down.
+	h.NavigateTo(tuicore.LocPMIssueHistory(f.IssueID))
+	h.SendKeys("down", "A")
+	if out := rendered(h); !strings.Contains(out, "already been accepted") {
+		t.Errorf("expected the second accept to report the accepted proposal, got:\n%s", out)
+	}
 }
 
 // TestProposalDecline drives the decline key and verifies the marker clears
