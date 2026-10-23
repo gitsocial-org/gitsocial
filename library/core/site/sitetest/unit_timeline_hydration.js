@@ -96,6 +96,16 @@ async function main() {
   eq(by2.get(Z).content, "", "a body with no source stays empty");
   eq(GS.itemSubject(by2.get(Z)), "Z subject", "and its card falls back to the index subject");
 
+  console.log("=== a manifest with null in place of an empty shard list still seeds the index ===");
+  served[".gitsocial/site/items/social/manifest.json"] = JSON.stringify({ version: 5, tip: Z, complete: true, shards: null });
+  log = [];
+  const ctx3 = GS.newContext(BASE);
+  const idx3 = await GS.loadItemsIndex(ctx3, "social");
+  ok(!!idx3 && idx3.items.length === 2 && idx3.allResident, "the head alone is the index");
+  const r3 = await GS.loadTimelineWindow(ctx3, false);
+  eq(r3.items.length, 2, "the window comes from the index");
+  eq(countOf("objects/" + Z.slice(0, 2) + "/"), 0, "no walk from the tip reads the tip's object");
+
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);
 }

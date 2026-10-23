@@ -1233,8 +1233,10 @@
     if (!mtext) return null;
     let m;
     try { m = JSON.parse(mtext); } catch { return null; }
-    if (!m || (m.version !== 4 && m.version !== 5) || !/^[0-9a-f]{40}$/.test(m.tip || "") || !Array.isArray(m.shards)) return null;
-    const newest = m.shards.length ? m.shards[m.shards.length - 1] : null;
+    // A manifest written before the empty list was pinned carries null for no sealed shard; the head alone is a complete index.
+    const shards = m && m.shards == null ? [] : m && m.shards;
+    if (!m || (m.version !== 4 && m.version !== 5) || !/^[0-9a-f]{40}$/.test(m.tip || "") || !Array.isArray(shards)) return null;
+    const newest = shards.length ? shards[shards.length - 1] : null;
     // Assemble oldest-first (shard, then head) before reversing to the newest-first order resolveItems expects.
     const eagerKeys = [];
     if (newest) eagerKeys.push(dir + newest.key);
@@ -1249,11 +1251,11 @@
     }
     items.reverse();
     const residentShas = new Set(items.map((e) => e.sha));
-    const olderShards = m.shards.slice(0, Math.max(0, m.shards.length - 1)).map((s) => dir + s.key).reverse();
+    const olderShards = shards.slice(0, Math.max(0, shards.length - 1)).map((s) => dir + s.key).reverse();
     return {
       version: m.version, tip: m.tip, complete: m.complete !== false, bodiesBytes: m.bodiesBytes || 0,
       items, residentShas, olderShards, dir, allResident: olderShards.length === 0,
-      olderBytes: m.shards.slice(0, Math.max(0, m.shards.length - 1)).reduce((n, s) => n + (s.bytes || 0), 0),
+      olderBytes: shards.slice(0, Math.max(0, shards.length - 1)).reduce((n, s) => n + (s.bytes || 0), 0),
     };
   }
 

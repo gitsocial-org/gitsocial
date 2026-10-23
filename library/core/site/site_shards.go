@@ -138,8 +138,11 @@ func shardSizes(m *siteShardManifest) map[string]int {
 	return sizes
 }
 
-// putShardManifest uploads one corpus's manifest.
+// putShardManifest uploads one corpus's manifest; a corpus with no sealed shard writes an empty list, since the app reads only an array.
 func putShardManifest[E shardEntry](client *objstore.Client, corpus shardCorpus[E], prefix, ext string, m *siteShardManifest) error {
+	if m.Shards == nil {
+		m.Shards = []siteShardEntry{}
+	}
 	comp, err := objstore.CompressJSON(m, objstore.BrotliQualityFull)
 	if err != nil {
 		return err

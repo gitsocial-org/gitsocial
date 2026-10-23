@@ -313,3 +313,21 @@ func TestReadCompressedJSON_TranscodedBody(t *testing.T) {
 		t.Errorf("garbage manifest: got (%+v, %v), want (nil, nil)", m, err)
 	}
 }
+
+// TestManifest_NoSealedShardWritesEmptyList: a manifest with no sealed shard,
+// as a re-read manifest of a small corpus carries it, writes "shards":[] and
+// not null, the shape the app's reader accepts.
+func TestManifest_NoSealedShardWritesEmptyList(t *testing.T) {
+	client, _ := testClient(t)
+	m := &siteShardManifest{Version: siteItemsVersion, Tip: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Complete: true, Head: siteShardHead{Count: 2, Bytes: 10}}
+	if err := putShardManifest(client, itemsCorpus, "", "memo", m); err != nil {
+		t.Fatalf("putShardManifest: %v", err)
+	}
+	var raw map[string]any
+	if found, err := objstore.ReadCompressedJSON(client, itemsCorpus.manifestKey("memo"), &raw); err != nil || !found {
+		t.Fatalf("read manifest: found=%v err=%v", found, err)
+	}
+	if shards, ok := raw["shards"].([]any); !ok || len(shards) != 0 {
+		t.Errorf("shards = %#v, want an empty list", raw["shards"])
+	}
+}
