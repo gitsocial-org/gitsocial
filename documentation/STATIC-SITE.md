@@ -77,7 +77,7 @@ Effective when `publish`, `pages` and a valid `url` are all set. Every push then
 - A list page per type, paged oldest-first with `older →` and `← newer` links. A full page holds a complete page of rows, and later pushes do not rewrite it; the newest rows are on the head page, `index.html`. Milestones and sprints are in `issues`.
 - The commits list of the default branch, one row per commit with no diffs. A row is citable as `commits/<n>.html#c-<sha12>`.
 - A file page for each prose document on the default branch, at `f/<path>.html`: markdown (`.md`, `.markdown`, `.mdown`, `.mdx`) and the extensionless convention documents (LICENSE, CONTRIBUTING, CHANGELOG and their siblings). The selection excludes documents under a dotdir or a vendored, test or fixture directory, and also submodules, symlinks, the root README and paths with a space or one of `@ : # ? %`. `filesInclude` and `filesExclude` change the selection.
-- The front page: one section with the branch, the latest commit and the root files, two of them shown and the rest behind a chevron, then the README.
+- The front page: one section with the branch, the latest commit and the root files, each with the type icon of the app, two of them shown and the rest behind a chevron, then the README.
 - `sitemap.xml` with every indexable page, and Atom feeds: `feed.xml` and one per type directory, memos and commits excluded; each push reads the bodies of a feed's entries before it writes the feed.
 
 What a page shows:
@@ -198,6 +198,7 @@ The shell and the pages:
 - The sections of an item detail are in the order of its page, whatever the order their reads finish in: for a pull request, the body, then Reviews, then Files changed, then Comments.
 - Only the app shows sidebar counts: branches and tags come from `refs.json`, and commits and the item counts from `pages.json`, which carries the item counts only after a complete pass.
 - An item count is the open work, the rows that its list shows first: Issues, Pull Requests, Milestones and Sprints show their Open filter first. The sidebar of a generated page carries no count.
+- The sidebar of a generated page is the app's, read from the shell: a destination with a page links the page, and every other, from Search to Configuration, links its route in the shell, which needs JavaScript.
 
 Commits pages:
 

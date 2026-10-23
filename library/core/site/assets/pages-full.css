@@ -62,13 +62,13 @@
   /* Button system: three bases — bordered control, pill, and bare text — each
      stated once; a component's own later rule carries only its deviations
      (layout, a link color, an intentional size). */
-  .diff-btn, .version-diff-btn, .gran-btn, .pref-btn, .share-link, .fs-btn {
+  .diff-btn, .version-diff-btn, .gran-btn, .pref-btn, .share-link, .fs-btn, .copy-btn {
     background: var(--btn); border: 1px solid var(--line); border-radius: var(--r-ctl);
     padding: var(--pad-ctl); cursor: pointer; font-family: var(--mono); letter-spacing: var(--mono-ls);
     font-size: var(--fs-ui); color: var(--muted); line-height: 1.2;
   }
   .diff-btn:hover, .version-diff-btn:hover, .gran-btn:hover, .pref-btn:hover,
-  .share-link:hover, .fs-btn:hover { color: var(--text); background: var(--chip); }
+  .share-link:hover, .fs-btn:hover, .copy-btn:hover { color: var(--text); background: var(--chip); }
   .pref-btn:hover, .share-link:hover { border-color: var(--link); }
   /* .facet-chip rides the pill base for the shared recipe (border, radius,
      cursor, mono voice) and keeps only its deviations at its own rule below
@@ -438,7 +438,7 @@
     /* Tighter than --pad-panel on purpose, and a step less on top, where the
        first line's own leading adds to it: code-only, so cards and the other
        panel surfaces keep the shared pair. */
-    padding: var(--sp-2) var(--sp-4) var(--sp-3); overflow: auto; margin: var(--sp-3) 0; line-height: 0.8;
+    padding: var(--sp-2) var(--sp-4) var(--sp-3); overflow: auto; margin: var(--sp-3) 0; font-size: var(--fs-code); line-height: 1.45;
   }
   .markdown pre.codeblock code { background: none; border: none; padding: 0; font-size: var(--fs-code); }
   .markdown img { max-width: 100%; height: auto; }
@@ -494,18 +494,18 @@
   .view-toggle { padding: var(--sp-1) var(--sp-3); }
   .view-toggle:hover { background: var(--chip); }
   .view-toggle.active { color: var(--text); background: var(--chip); font-weight: 600; }
-  /* Fullscreen affordance: expand button on code/diff/fenced blocks, and the
+  /* Fullscreen affordance: copy and expand buttons on code/diff/fenced blocks, and the
      full-viewport overlay it opens. */
-  .fs-btn { padding: 0.15rem var(--sp-2); line-height: 1; }
+  .fs-btn, .copy-btn { padding: 0.15rem var(--sp-2); line-height: 1; }
   .fs-wrap { position: relative; }
-  .fs-wrap > .fs-btn { position: absolute; top: var(--sp-2); right: var(--sp-2); z-index: 2; }
+  .fs-wrap > .fs-btns { position: absolute; top: var(--sp-2); right: var(--sp-2); z-index: 2; display: flex; gap: var(--sp-1); }
   .fs-overlay { position: fixed; inset: 0; z-index: 50; background: var(--bg); }
-  /* Floating close: a semi-transparent circled X sitting at the content block's
-     top-right corner, one step in from the viewport edge. The text-mixed
+  /* Floating close, and the copy of a code block before it: semi-transparent
+     circles in one fixed box at the content block's top-right corner, one step in from the viewport edge. The text-mixed
      backing and currentColor glyph read over code on both themes; dimmed while
      idle, full opacity on hover. */
-  .fs-close.circle {
-    position: fixed; top: var(--sp-1); right: var(--sp-1); z-index: 51;
+  .fs-circles { position: fixed; top: var(--sp-1); right: var(--sp-1); z-index: 51; display: flex; gap: var(--sp-1); }
+  .fs-close.circle, .fs-copy.circle {
     width: 2rem; height: 2rem; border-radius: 50%; border: none; padding: 0;
     display: flex; align-items: center; justify-content: center;
     background: color-mix(in srgb, var(--text) 12%, transparent);
@@ -513,7 +513,7 @@
     opacity: 0.6; backdrop-filter: blur(2px);
     transition: opacity 0.12s ease;
   }
-  .fs-close.circle:hover { opacity: 1; }
+  .fs-close.circle:hover, .fs-copy.circle:hover { opacity: 1; }
   .fs-content { position: absolute; inset: 0; overflow: auto; padding: var(--shell-pad); }
   .fs-content .blob, .fs-content .diff-file-body, .fs-content pre.codeblock { max-width: 100%; }
   .meta-strip { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-3); }

@@ -350,6 +350,15 @@ type parityFixtures struct {
 	ListEmpty      map[string]string         `json:"listEmpty"`
 	ListHeadings   map[string]string         `json:"listHeadings"`
 	TagOrder       []parityTagOrderCase      `json:"tagOrder"`
+	TreeIcons      []parityTreeIconCase      `json:"treeIcons"`
+}
+
+// parityTreeIconCase is one root entry and the icon key and hue class both renderers give it.
+type parityTreeIconCase struct {
+	Name  string `json:"name"`
+	Kind  string `json:"kind"`
+	Key   string `json:"key"`
+	Color string `json:"color"`
 }
 
 // loadParityFixtures reads the shared JSON fixtures the JS half also consumes.
@@ -1381,5 +1390,33 @@ func TestParityItemPageMeta(t *testing.T) {
 				t.Errorf("rows markup is one dl of dt and dd pairs:\n%s", page)
 			}
 		})
+	}
+}
+
+// TestParityTreeIcons pins the icon key and the hue class of a root entry of the
+// home section to the fixture unit_parity.js asserts, and checks that every key
+// the tables name is in the vendored set.
+func TestParityTreeIcons(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.TreeIcons) == 0 {
+		t.Fatal("no tree icon cases in parity fixtures")
+	}
+	for _, c := range f.TreeIcons {
+		key := siteIconName(c.Name, c.Kind)
+		if key != c.Key || siteIconColor[key] != c.Color {
+			t.Errorf("%s %q: key %q color %q, fixture %q %q", c.Kind, c.Name, key, siteIconColor[key], c.Key, c.Color)
+		}
+	}
+	for _, m := range []map[string]string{siteIconFilenames, siteIconExt} {
+		for name, key := range m {
+			if _, ok := sitePagesIcons[key]; !ok {
+				t.Errorf("%s: icon key %q is not in icons.js", name, key)
+			}
+		}
+	}
+	for _, key := range []string{"folder", "folder-open", "git", "symlink", "file"} {
+		if _, ok := sitePagesIcons[key]; !ok {
+			t.Errorf("icon key %q is not in icons.js", key)
+		}
 	}
 }

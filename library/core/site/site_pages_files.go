@@ -25,7 +25,7 @@ const (
 )
 
 // siteFilesList describes the file directory the way sitePageList describes a type dir, so the shared template and sidebar serve it.
-var siteFilesList = sitePageList{Dir: sitePagesFilesDir, Label: "files", Route: "/code", NavLabel: "Files", Glyph: "❯", Section: "Repository"}
+var siteFilesList = sitePageList{Dir: sitePagesFilesDir, Label: "files", Route: "/code", NavLabel: "Code", Glyph: "❯"}
 
 // siteFileDocExts maps a prose extension to whether it renders as markdown.
 var siteFileDocExts = map[string]bool{

@@ -807,7 +807,7 @@ func TestSitePages_FrontHome(t *testing.T) {
 		t.Fatalf("rebuildSitePages: pending=%v err=%v", pending, err)
 	}
 	front := getKey(t, client, sitePagesFrontKey)
-	if !strings.Contains(front, "README") || !strings.Contains(front, "readme paragraph text") {
+	if !strings.Contains(front, `<section class="readme">`) || !strings.Contains(front, "readme paragraph text") {
 		t.Error("front page must carry the README section")
 	}
 	if strings.Contains(front, `class="notice"`) {
@@ -816,8 +816,8 @@ func TestSitePages_FrontHome(t *testing.T) {
 	if !strings.Contains(front, `<a class="chip" href="https://example.com/index.html#branch:main">⎇ main</a> <a class="home-commit" href="https://example.com/index.html#commit:`+head[:12]+`@main"><span class="home-row-subject">readme</span> <span class="meta"><span class="author" title="t@example.com">T</span> · <span class="reltime"`) {
 		t.Error("the head line must carry the branch chip, then the tip commit as one link")
 	}
-	if !strings.Contains(front, `<a class="home-row" href="https://example.com/index.html#file:README.md@main"><span class="home-row-subject">README.md</span></a>`) {
-		t.Error("the code block must list the root files as one-line links")
+	if !strings.Contains(front, `<a class="home-row" href="https://example.com/index.html#file:README.md@main"><span class="gs-icon tree-icon"><svg `) || !strings.Contains(front, `</svg></span><span class="home-row-subject">README.md</span></a>`) {
+		t.Error("the code block must list the root files as one-line links with the type icon")
 	}
 	if i, j := strings.Index(front, `class="home-section"`), strings.Index(front, "readme paragraph text"); i < 0 || j < 0 || j < i {
 		t.Error("the README must render after the code block")
@@ -852,7 +852,7 @@ func TestSitePages_FrontReadmeRendered(t *testing.T) {
 	// Asserted on the README SECTION, not the full page: the page's own boot
 	// hooks are script tags, and this case is about what the README turned into.
 	front := getKey(t, client, sitePagesFrontKey)
-	start := strings.Index(front, `<p class="meta">README</p>`)
+	start := strings.Index(front, `<section class="readme">`)
 	if start < 0 {
 		t.Fatal("front page carries no README section")
 	}
@@ -1760,6 +1760,51 @@ func TestSiteFeed_incrementalEqualsFull(t *testing.T) {
 		}
 		if got != want {
 			t.Errorf("%s: the incremental pass's feed differs from the full regen's:\n%s\nwant\n%s", key, got, want)
+		}
+	}
+}
+
+// TestSitePageSidebar_mirrorsTheShell: the page sidebar carries the shell's nav in its order, a page link where a page exists and a shell link elsewhere.
+func TestSitePageSidebar_mirrorsTheShell(t *testing.T) {
+	labels := make([]string, 0, len(sitePagesShellNav))
+	for _, item := range sitePagesShellNav {
+		labels = append(labels, item.Label)
+	}
+	want := "Search Home Timeline Lists Board Issues Milestones Sprints Pull Requests Code Commits Branches Graph Tags Releases Memos Analytics Configuration"
+	if got := strings.Join(labels, " "); got != want {
+		t.Fatalf("shell nav = %q, want %q", got, want)
+	}
+	links := map[string]sitePageNavLink{}
+	sections := make([]string, 0, 4)
+	for _, g := range sitePageSidebar("../", "issues", true) {
+		sections = append(sections, g.Section)
+		for _, l := range g.Links {
+			links[l.Label] = l
+		}
+	}
+	if got := strings.Join(sections, ","); got != ",Social,PM,Repository," {
+		t.Errorf("sections = %q, want the shell's four", got)
+	}
+	cases := map[string]sitePageNavLink{
+		"Home":   {Href: "../index.html", Label: "Home", Glyph: "⌂"},
+		"Issues": {Href: "../issues/index.html", Label: "Issues", Glyph: "○", Current: true},
+		"Code":   {Href: "../f/index.html", Label: "Code", Glyph: "❯"},
+		"Board":  {Href: "../index.html#/board", Label: "Board", Glyph: "▦", App: true},
+		"Search": {Href: "../index.html#/search", Label: "Search", Glyph: "⌕", App: true},
+	}
+	for label, want := range cases {
+		if got := links[label]; got != want {
+			t.Errorf("%s = %+v, want %+v", label, got, want)
+		}
+	}
+	for _, g := range sitePageSidebar("./", "", false) {
+		for _, l := range g.Links {
+			if l.Label == "Code" && (l.Href != "./index.html#/code" || !l.App) {
+				t.Errorf("Code with no file pages = %+v, want the shell route", l)
+			}
+			if l.Label == "Home" && !l.Current {
+				t.Error("the front page's Home is not current")
+			}
 		}
 	}
 }

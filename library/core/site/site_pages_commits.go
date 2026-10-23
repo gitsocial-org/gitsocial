@@ -17,7 +17,7 @@ const (
 )
 
 // siteCommitsList describes the commits directory the way sitePageList describes a type dir; it is not a member of sitePageLists, whose loops are keyed on gitmsg roots.
-var siteCommitsList = sitePageList{Ext: siteCodeExt, Dir: siteCommitsDir, Label: "commits", Route: siteCommitsRoute, NavLabel: "Commits", Glyph: "≡", Section: "Repository"}
+var siteCommitsList = sitePageList{Ext: siteCodeExt, Dir: siteCommitsDir, Label: "commits", Route: siteCommitsRoute, NavLabel: "Commits", Glyph: "≡"}
 
 // siteCommitsState is the commits layer's published pagination, read back by the next push and by the app's own /commits route, so one partition serves both.
 type siteCommitsState struct {

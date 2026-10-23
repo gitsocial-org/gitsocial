@@ -183,7 +183,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{if .More}}<div class="notice">The page shows the first {{lineCap}} changed lines. <a href="{{.AppHref}}">The app shows the rest.</a></div>
 {{end}}</div>
 {{end}}{{define "glyph"}}{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{end}}{{define "hometoggle"}}<summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></summary>
-{{end}}{{define "filerow"}}<a class="home-row" href="{{.Href}}"><span class="home-row-subject">{{.Name}}</span></a>
+{{end}}{{define "filerow"}}<a class="home-row" href="{{.Href}}">{{.Icon}}<span class="home-row-subject">{{.Name}}</span></a>
 {{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}>{{if .BodyOnly}}<span class="meta meta-lead">{{template "glyph" .}}{{if .Chip}}{{template "chip" .Chip}} {{end}}{{template "bits" .Meta}}</span>
 {{if .Text}}<div class="body">{{.Text}}</div>
 {{end}}{{else}}<div class="card-head">{{template "glyph" .}}{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a>{{range .TailChips}} {{template "chip" .}}{{end}}</div>
@@ -219,10 +219,10 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{with .Home}}<div class="home-section"><div class="home-head"><a class="chip" href="{{.BranchHref}}">⎇ {{.Branch}}</a>{{with .Latest}} <a class="home-commit" href="{{.Href}}"><span class="home-row-subject">{{.Subject}}</span> <span class="meta">{{template "bits" .Meta}}</span></a>{{end}}</div>
 {{if .Files}}<div class="home-files">{{range .Files}}{{template "filerow" .}}{{end}}{{if .MoreFiles}}<details class="home-more">{{template "hometoggle"}}{{range .MoreFiles}}{{template "filerow" .}}{{end}}</details><div class="home-fade"></div>{{end}}</div>
 {{end}}</div>
-{{end}}{{with .Home}}{{if .Readme}}<section><p class="meta">README</p>
+{{end}}{{with .Home}}{{if .Readme}}<section class="readme">
 {{.Readme.HTML}}{{if .Readme.Truncated}}<p class="notice">Truncated. The full file is in the repository.</p>
 {{end}}</section>
-{{end}}{{end}}<footer>{{range .Chrome.Nav}}{{range .Links}}{{if not .Current}}<a href="{{.Href}}">{{.Label}}</a> {{end}}{{end}}{{end}}</footer>
+{{end}}{{end}}<footer>{{range .Chrome.Nav}}{{range .Links}}{{if not (or .Current .App)}}<a href="{{.Href}}">{{.Label}}</a> {{end}}{{end}}{{end}}</footer>
 {{template "foot"}}{{end}}`
 
 // sitePageTemplates is the parsed page template set, with the core CSS and the boot script spliced in.
@@ -380,12 +380,14 @@ type siteItemPageData struct {
 }
 
 // sitePageNavLink is one sidebar entry: the app's nav item, pointed at this
-// site's own generated page (Current takes the app's .active treatment).
+// site's own generated page (Current takes the app's .active treatment) or,
+// for a destination with no page, at its route in the shell (App).
 type sitePageNavLink struct {
 	Href    string
 	Label   string
 	Glyph   string
 	Current bool
+	App     bool // the footer lists the page links only
 }
 
 // sitePageNavGroup is one sidebar section and its links; an empty Section
@@ -447,7 +449,8 @@ type siteFrontCommit struct {
 // siteFrontFile is one root-tree row in the front page's file listing.
 type siteFrontFile struct {
 	Name string
-	Href string // app link to the file/directory view
+	Href string        // app link to the file/directory view
+	Icon template.HTML // the type icon the app's treeIcon gives the row
 }
 
 // siteFrontReadme is the front page's README, rendered by site_markdown.go; item bodies take sitePageParas instead and stay escaped text.
@@ -467,7 +470,7 @@ type sitePageSite struct {
 	Files       bool         // the file layer has pages: every sidebar carries the Files entry
 }
 
-// sitePageList describes one type directory: extension, bucket dir, label, shell route and sidebar identity.
+// sitePageList describes one type directory: extension, bucket dir, label, shell route, sidebar label and glyph.
 type sitePageList struct {
 	Ext      string
 	Dir      string
@@ -475,14 +478,13 @@ type sitePageList struct {
 	Route    string
 	NavLabel string
 	Glyph    string
-	Section  string // sidebar section ("" — an ungrouped top-level item)
 }
 
 // sitePageLists orders the five type directories; the routes match gs-core.js parseRoute's INDEX_TABS.
 var sitePageLists = []sitePageList{
-	{Ext: "pm", Dir: "issues", Label: "issues", Route: "/issues", NavLabel: "Issues", Glyph: "○", Section: "PM"},
-	{Ext: "review", Dir: "prs", Label: "pull requests", Route: "/prs", NavLabel: "Pull Requests", Glyph: "⑂", Section: "Repository"},
-	{Ext: "social", Dir: "posts", Label: "posts", Route: "/timeline", NavLabel: "Timeline", Glyph: "⏱", Section: "Social"},
+	{Ext: "pm", Dir: "issues", Label: "issues", Route: "/issues", NavLabel: "Issues", Glyph: "○"},
+	{Ext: "review", Dir: "prs", Label: "pull requests", Route: "/prs", NavLabel: "Pull Requests", Glyph: "⑂"},
+	{Ext: "social", Dir: "posts", Label: "posts", Route: "/timeline", NavLabel: "Timeline", Glyph: "⏱"},
 	{Ext: "release", Dir: "releases", Label: "releases", Route: "/releases", NavLabel: "Releases", Glyph: "⏏"},
 	{Ext: "memo", Dir: "memos", Label: "memos", Route: "/memos", NavLabel: "Memos", Glyph: "☞"},
 }
@@ -1449,34 +1451,69 @@ func buildSiteListEntry(it *sitePageItem, defaultType string) sitePageListEntry 
 	return row
 }
 
-// sitePageNavSections orders the sidebar's sections, mirroring the app's nav; the empty section closes the list.
-var sitePageNavSections = []string{"Social", "PM", "Repository", ""}
+// sitePageNavItem is one entry of the shell's sidebar: its section, route, glyph and label.
+type sitePageNavItem struct {
+	Section, Route, Glyph, Label string
+}
 
-// sitePageSidebar builds a page's sidebar from the app's nav, narrowed to the destinations that have a generated page.
-func sitePageSidebar(base, current string, files bool) []sitePageNavGroup {
-	groups := []sitePageNavGroup{{Links: []sitePageNavLink{
-		{Href: base + "index.html", Label: "Home", Glyph: "⌂", Current: current == ""},
-	}}}
-	lists := append(append([]sitePageList{}, sitePageLists...), siteCommitsList)
-	if files {
-		lists = append(lists, siteFilesList)
+// sitePagesShellNav is the sidebar of the embedded shell, in its order and words; the page sidebar mirrors it.
+var sitePagesShellNav = sitePagesReadShellNav()
+
+// sitePagesShellNavRe matches one nav anchor of the shell: its route, its glyph and its label.
+var sitePagesShellNavRe = regexp.MustCompile(`<a href="#(/[a-z]*)" data-nav="[a-z]+"[^>]*><span class="nav-icon">([^<]*)</span>([A-Za-z ]+)`)
+
+// sitePagesShellSectionRe matches a section label of the shell's nav.
+var sitePagesShellSectionRe = regexp.MustCompile(`<div class="nav-section">([^<]*)</div>`)
+
+// sitePagesReadShellNav reads the sidebar of the embedded shell; a shell with no nav panics at init, like the favicon read.
+func sitePagesReadShellNav() []sitePageNavItem {
+	data, err := siteFiles.ReadFile("assets/index.html")
+	if err != nil {
+		panic("site: read embedded assets/index.html for the pages' sidebar: " + err.Error())
 	}
-	for _, section := range sitePageNavSections {
-		group := sitePageNavGroup{Section: section}
-		for _, l := range lists {
-			if l.Section != section {
-				continue
-			}
-			group.Links = append(group.Links, sitePageNavLink{
-				Href:    base + l.Dir + "/index.html",
-				Label:   l.NavLabel,
-				Glyph:   l.Glyph,
-				Current: l.Dir == current,
-			})
+	text := string(data)
+	start, end := strings.Index(text, `<nav id="nav"`), strings.Index(text, "</nav>")
+	if start < 0 || end < start {
+		panic(`site: no <nav id="nav"> in the embedded assets/index.html: the generated pages have no sidebar`)
+	}
+	var items []sitePageNavItem
+	section := ""
+	for _, line := range strings.Split(text[start:end], "\n") {
+		line = strings.TrimSpace(line)
+		if m := sitePagesShellSectionRe.FindStringSubmatch(line); m != nil {
+			section = m[1]
+		} else if line == "</div>" {
+			section = ""
+		} else if m := sitePagesShellNavRe.FindStringSubmatch(line); m != nil {
+			items = append(items, sitePageNavItem{Section: section, Route: m[1], Glyph: m[2], Label: m[3]})
 		}
-		if len(group.Links) > 0 {
-			groups = append(groups, group)
+	}
+	return items
+}
+
+// sitePageSidebar builds a page's sidebar from the shell's: a destination with a generated page links the page, and every other links its route in the shell.
+func sitePageSidebar(base, current string, files bool) []sitePageNavGroup {
+	dirs := map[string]string{"/": ""}
+	for _, l := range append(append([]sitePageList{}, sitePageLists...), siteCommitsList) {
+		dirs[l.Route] = l.Dir
+	}
+	if files {
+		dirs[siteFilesList.Route] = siteFilesList.Dir
+	}
+	var groups []sitePageNavGroup
+	for _, item := range sitePagesShellNav {
+		link := sitePageNavLink{Label: item.Label, Glyph: item.Glyph}
+		if dir, ok := dirs[item.Route]; !ok {
+			link.Href, link.App = base+"index.html#"+item.Route, true
+		} else if dir == "" {
+			link.Href, link.Current = base+"index.html", current == ""
+		} else {
+			link.Href, link.Current = base+dir+"/index.html", dir == current
 		}
+		if n := len(groups); n == 0 || groups[n-1].Section != item.Section {
+			groups = append(groups, sitePageNavGroup{Section: item.Section})
+		}
+		groups[len(groups)-1].Links = append(groups[len(groups)-1].Links, link)
 	}
 	return groups
 }

@@ -592,8 +592,8 @@ async function main() {
     // by the boot class alone so the boot and the app read as one design.
     ok("the loading state is painted by the same class, not by markup", /html\.gs-boot body::before\s*\{[^}]*border-radius:\s*50%[^}]*animation:[^}]*gs-spin/.test(head), "head=" + head.slice(head.indexOf("<style data-gs-core>"), head.indexOf("</style>")).slice(0, 400));
     // The no-JS contract: the page still reads.
-    ok("the served page is complete without JS (content in the body as served)", /<p class="meta">README<\/p>/.test(front.text) && /class="home-section"/.test(front.text));
-    ok("the front page owns no heading; the README's come first", front.text.indexOf("<h1") > front.text.indexOf('<p class="meta">README</p>'));
+    ok("the served page is complete without JS (content in the body as served)", /<section class="readme">/.test(front.text) && /class="home-section"/.test(front.text));
+    ok("the front page owns no heading; the README's come first", front.text.indexOf("<h1") > front.text.indexOf('<section class="readme">'));
 
     // The cloak is conditional, so the condition is worth RUNNING rather than
     // reading. The script is executed here against a stub document/window for
@@ -720,7 +720,7 @@ async function main() {
     const front = await get(base + "index.html");
     const text = pageText(front.text);
     const [pageOpen, pageRest] = front.text.slice(front.text.indexOf('<div class="home-section">')).split('<details class="home-more">');
-    const pageNames = (html) => Array.from((html || "").matchAll(/<a class="home-row"[^>]*><span class="home-row-subject">([^<]*)<\/span>/g)).map((m) => unesc(m[1]));
+    const pageNames = (html) => Array.from((html || "").matchAll(/<a class="home-row"[^>]*>(?:<span class="gs-icon[^"]*"><svg [^]*?<\/svg><\/span>)?<span class="home-row-subject">([^<]*)<\/span>/g)).map((m) => unesc(m[1]));
     ok("home view rendered the section to compare", chips.length === 1 && shown.length > 0 && !!commitText, "chips=" + JSON.stringify(chips) + " commit=" + commitText);
     ok("front page carries the home view's branch chips", chips.every((c) => text.includes(c)), "chips=" + JSON.stringify(chips));
     ok("front page carries the home view's tip commit", text.includes(commitText), "commit=" + commitText);
@@ -736,7 +736,7 @@ async function main() {
     // carries the structure the app renders, and none of the source it came from.
     const md = findClass(view, "markdown")[0];
     const appHeadings = findTag(md, /^h[1-6]$/).map((h) => global.__shim.textOf(h).trim()).filter(Boolean);
-    const readmeStart = front.text.indexOf('<p class="meta">README</p>');
+    const readmeStart = front.text.indexOf('<section class="readme">');
     const readme = readmeStart < 0 ? "" : front.text.slice(readmeStart, front.text.indexOf("</section>", readmeStart));
     ok("home view renders the README as markdown", !!md && appHeadings.length > 0, "headings=" + JSON.stringify(appHeadings));
     ok("front page carries the same headings as real heading elements",

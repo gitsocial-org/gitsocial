@@ -304,7 +304,6 @@
   :where(#gs-page) footer, :where(#gs-page) pre, :where(#gs-page) code { font-family: var(--mono); letter-spacing: var(--mono-ls); }
   :where(#gs-page) footer { font-size: var(--fs-dense); }
   :where(#gs-page) footer a { margin-right: var(--sp-4); }
-  :where(#gs-page) section { border-top: 1px solid var(--line); margin-top: var(--sp-5); padding-top: var(--sp-4); }
   :where(#gs-page) pre {
     font-size: var(--fs-dense); line-height: 1; overflow-x: auto; margin: var(--sp-3) 0;
     background: var(--panel); padding: var(--sp-3); border: 1px solid var(--line);

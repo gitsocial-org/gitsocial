@@ -1414,7 +1414,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     } else inner = node.cloneNode ? node.cloneNode(true) : node;
     const content = el("div", { class: "fs-content" }, [inner]);
     const close = el("button", { class: "fs-close circle", type: "button", "aria-label": "Close fullscreen", title: "Close (Esc)" }, ["✕"]);
-    const overlay = el("div", { class: "fs-overlay" }, [content, close]);
+    const circles = el("div", { class: "fs-circles" }, [...(opts.text ? [copyBtn(() => opts.text, "fs-copy circle")] : []), close]);
+    const overlay = el("div", { class: "fs-overlay" }, [content, circles]);
     // shut closes the overlay and restores a live node.
     function shut() { overlay.remove(); document.body.style.overflow = ""; document.removeEventListener("keydown", onKey); if (restore) restore(); }
     // onKey closes on Escape.
@@ -1425,16 +1426,31 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     document.body.append(overlay);
   }
 
-  // fullscreenBtn returns a small expand button that opens getTarget() fullscreen.
-  function fullscreenBtn(getTarget) {
+  // fullscreenBtn returns a small expand button that opens getTarget() fullscreen; text, when given, is what the overlay's copy button copies.
+  function fullscreenBtn(getTarget, text) {
     const b = el("button", { class: "fs-btn", type: "button", "aria-label": "Fullscreen", title: "Fullscreen" }, ["⤢"]);
-    b.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); openFullscreen(getTarget()); });
+    b.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); openFullscreen(getTarget(), { text }); });
     return b;
   }
 
-  // wrapFullscreen wraps a content node with a positioned expand button.
-  function wrapFullscreen(node) {
-    return el("div", { class: "fs-wrap" }, [fullscreenBtn(() => node), node]);
+  // copyBtn renders a Copy button that puts the text on the clipboard and shows a check mark for a moment; cls adds classes.
+  function copyBtn(getText, cls) {
+    const b = el("button", { class: "copy-btn" + (cls ? " " + cls : ""), type: "button", "aria-label": "Copy", title: "Copy" }, ["⧉"]);
+    b.addEventListener("click", async (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      let done = false;
+      try { if (navigator && navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(getText()); done = true; } } catch (e) { /* clipboard denied */ }
+      if (!done) return;
+      b.textContent = "✓";
+      setTimeout(() => { b.textContent = "⧉"; }, 1500);
+    });
+    return b;
+  }
+
+  // wrapFullscreen wraps a content node with its copy and expand buttons; text is what the copy puts on the clipboard.
+  function wrapFullscreen(node, text) {
+    const btns = el("div", { class: "fs-btns" }, [copyBtn(() => text), fullscreenBtn(() => node, text)]);
+    return el("div", { class: "fs-wrap" }, [btns, node]);
   }
 
   // ---- Markdown rendering (browser only; raw HTML via the sanitizer) ----
@@ -1565,7 +1581,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     else if (block.type === "thematic") parent.append(el("hr", {}, []));
     else if (block.type === "code") {
       const codeEl = highlightTo(el("code", {}, []), block.text, langForFence(block.lang));
-      parent.append(wrapFullscreen(el("pre", { class: "codeblock" }, [codeEl])));
+      parent.append(wrapFullscreen(el("pre", { class: "codeblock" }, [codeEl]), block.text));
     } else if (block.type === "list") parent.append(renderMdList(block, mdctx));
     else if (block.type === "table") parent.append(renderMdTable(block, mdctx));
     else if (block.type === "admonition") {
@@ -2046,7 +2062,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const renderRaw = () => {
       const raw = rawBlobPane(textStr, path, branch, line, lineEnd);
       if (raw.firstHl) setTimeout(() => raw.firstHl.scrollIntoView({ block: "center" }), 0);
-      return wrapFullscreen(raw.code);
+      return wrapFullscreen(raw.code, textStr);
     };
     if (isMarkdownPath(path)) {
       const dir = path.indexOf("/") >= 0 ? path.slice(0, path.lastIndexOf("/")) : "";

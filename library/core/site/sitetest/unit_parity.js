@@ -97,6 +97,11 @@ for (const c of FIX.rowHeads) {
 }
 
 console.log("=== parity invariant: the asset count a release row carries ===");
+for (const c of FIX.treeIcons) {
+  const key = GS.iconName(c.name, c.kind);
+  eq(key, c.key, "tree icon key of " + c.name);
+  eq(GS.iconColorClass(key), c.color, "tree icon color of " + c.name);
+}
 for (const c of FIX.releaseRows) {
   eq(GS.releaseAssetLabel(c.artifacts), c.expectLabel, c.name + ": asset label");
 }

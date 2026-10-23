@@ -1,7 +1,7 @@
 // unit_render_markdown.js - shim-rendered units for the markdown renderer:
 // tables, lists, raw-HTML sanitizing, relative link and image resolution,
-// in-page heading anchors, ::: admonitions, and the fullscreen overlay a
-// code block opens.
+// in-page heading anchors, ::: admonitions, and the copy button and the
+// fullscreen overlay of a code block.
 require("./shim.js");
 const GS = require("../assets/gs-render.js");
 const { textOf, findTag } = global.__shim;
@@ -101,11 +101,18 @@ eq(findTag(code, "pre").map((n) => n.className), ["codeblock"], "a fence renders
 eq(findTag(code, "code").map(textOf), ["func main() {}"], "the fence body renders as text without a tokenizer");
 const fsBtn = findTag(code, "button").find((b) => b._cls.has("fs-btn"));
 ok(!!fsBtn, "a code block carries a fullscreen button");
+eq(findTag(code, "button").map((b) => b.className), ["copy-btn", "fs-btn"], "a code block carries a copy button, then the fullscreen one");
+global.__copied = null;
+fire(findTag(code, "button")[0], "click");
+eq(global.__copied, "func main() {}", "the copy button puts the fence body on the clipboard");
 fire(fsBtn, "click");
 let overlays = () => document.body._children.filter((c) => c.nodeType === 1 && c._cls && c._cls.has("fs-overlay"));
 eq(overlays().length, 1, "the button opens one overlay on the body");
 eq(document.body.style.overflow, "hidden", "the overlay locks body scrolling");
 ok(textOf(overlays()[0]).indexOf("func main() {}") !== -1, "the overlay shows a copy of the code");
+global.__copied = null;
+fire(findClass(overlays()[0], "fs-copy")[0], "click");
+eq(global.__copied, "func main() {}", "the overlay carries a copy button for the same text");
 fire(findClass(overlays()[0], "fs-close")[0], "click");
 eq(overlays().length, 0, "the close button removes the overlay");
 eq(document.body.style.overflow, "", "closing restores body scrolling");

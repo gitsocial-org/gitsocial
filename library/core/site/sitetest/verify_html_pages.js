@@ -43,7 +43,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
     /<div class="home-head"><a class="chip" href="[^"]*index\.html#branch:main">⎇ main<\/a> <a class="home-commit" href="[^"]*index\.html#commit:[0-9a-f]{12}@main"><span class="home-row-subject">Add python and rust sources<\/span> <span class="meta"><span class="author"[^>]*>[^<]+<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span><\/span><\/a><\/div>/.test(front.text));
   // The sidebar counts are the app's alone: a count baked into a sealed page would go stale.
   ok("a served page's sidebar carries no counts", !/nav-count/.test(front.text.replace(/<style data-gs-core>[\s\S]*?<\/style>/, "")));
-  ok("front lists the root files as one-line links", /<a class="home-row" href="[^"]*index\.html#file:notes\.txt@main"><span class="home-row-subject">notes\.txt<\/span><\/a>/.test(front.text));
+  ok("front lists the root files as one-line links", /<a class="home-row" href="[^"]*index\.html#file:notes\.txt@main"><span class="gs-icon tree-icon"><svg [^]*?<\/svg><\/span><span class="home-row-subject">notes\.txt<\/span><\/a>/.test(front.text));
   ok("the section shows two rows and folds the rest behind its chevron, under a fade",
     /<div class="home-files">(<a class="home-row"[^\n]*?<\/a>\n){2}<details class="home-more"><summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg [^]*?<\/details><div class="home-fade"><\/div><\/div>/.test(front.text));
   ok("the section carries no label and no activity rows", !/>Show all|>See more|Recent activity/.test(front.text));
@@ -192,7 +192,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   // The README is the front page's, so it gets no second page of its own.
   ok("the root README gets no file page", (await get(TD + "f/README.html")).status === 404);
   const fileIndex = await get(TD + "f/index.html");
-  ok("f/index.html lists the published documents", fileIndex.status === 200 && /<h1>Files<\/h1>/.test(fileIndex.text) && /href="notes\.html"/.test(fileIndex.text));
+  ok("f/index.html lists the published documents", fileIndex.status === 200 && /<h1>Code<\/h1>/.test(fileIndex.text) && /href="notes\.html"/.test(fileIndex.text));
   ok("every page's sidebar links the file index", /href="\.\/f\/index\.html"/.test(front.text) && /href="\.\.\/f\/index\.html"/.test(posts.text));
   // notes.txt is under the 100-word floor: its page exists and carries
   // noindex,follow, and only the file index reaches the sitemap.

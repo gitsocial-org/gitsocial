@@ -407,6 +407,7 @@ func readSiteFrontLatest(src *objstore.LocalCommitSource, site sitePageSite, sha
 type siteTreeEntry struct {
 	Name  string
 	IsDir bool
+	Mode  string
 }
 
 // siteTreeRow is one raw tree entry: its mode, name and object sha.
@@ -453,7 +454,7 @@ func readSiteRootTree(src *objstore.LocalCommitSource, tip string) []siteTreeEnt
 	}
 	var entries []siteTreeEntry
 	for _, row := range parseSiteTreeRows(body) {
-		entries = append(entries, siteTreeEntry{Name: row.Name, IsDir: row.Mode == siteTreeDirMode})
+		entries = append(entries, siteTreeEntry{Name: row.Name, IsDir: row.Mode == siteTreeDirMode, Mode: row.Mode})
 	}
 	return entries
 }
@@ -503,7 +504,7 @@ func buildSiteFrontFiles(entries []siteTreeEntry, site sitePageSite, branch stri
 	})
 	files := make([]siteFrontFile, 0, len(ordered))
 	for _, e := range ordered {
-		files = append(files, siteFrontFile{Name: e.Name, Href: sitePageAppURL(site, "file:"+e.Name+"@"+branch)})
+		files = append(files, siteFrontFile{Name: e.Name, Href: sitePageAppURL(site, "file:"+e.Name+"@"+branch), Icon: siteTreeIcon(e.Name, siteTreeKind(e.Mode))})
 	}
 	return files
 }
