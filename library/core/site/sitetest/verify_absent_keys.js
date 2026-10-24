@@ -10,8 +10,8 @@
 //     would leave an extension branch reading as empty, with no error anywhere.
 //     So an omitted refname is probed live, and the bound is that the probe
 //     happens ONCE per context rather than once per route,
-//   - a pack map shard for a sha the caller already knows is a tree or a blob
-//     (the map indexes commits and tags only, and is written sparsely),
+//   - a tree or blob read on a packed bucket goes through its pack map shard and
+//     probes no pack index; a delta reads the head of its own pack's index,
 //   - /favicon.ico at the ORIGIN root, which a generated page provokes by
 //     declaring no icon — and under a bucket prefix that key is outside the site
 //     altogether, so no push could ever make it resolve.
@@ -30,7 +30,7 @@ const realFetch = global.fetch;
 let log = [];
 global.fetch = async (url, opts) => {
   const res = await realFetch(url, opts);
-  log.push({ url: String(url).replace(ORIGIN, ""), status: res.status, method: (opts && opts.method) || "GET" });
+  log.push({ url: String(url).replace(ORIGIN, ""), status: res.status, method: (opts && opts.method) || "GET", range: (opts && opts.headers && opts.headers.Range) || "" });
   return res;
 };
 const mark = () => log.length;
@@ -117,28 +117,23 @@ async function main() {
   ok("a bucket with no manifest still probes the live ref key",
     hits(since(at), /refs\/heads\/main$/).length === 1, since(at).map((r) => r.url).join(" | "));
 
-  // ---- 2. a tree or blob read consults no pack map shard ----
+  // ---- 2. a tree or blob read goes through the pack map and probes no index ----
   const packedCtx = GS.newContext(PACKED);
   const head = await GS.resolveRef(PACKED, "refs/heads/main");
-  await GS.getObject(packedCtx, head); // the commit itself legitimately uses the map
+  await GS.getObject(packedCtx, head);
   at = mark();
   const node = await GS.resolvePath(packedCtx, head, "notes.txt");
   const blob = node && await GS.getContentObject(packedCtx, node.sha);
   const content = since(at);
   ok("the blob read really happened", !!(blob && blob.type === "blob" && blob.body.length > 0), node ? node.type : "no node");
-  ok("walking a tree to a blob consults no pack map shard",
-    hits(content, /packmap/).length === 0, hits(content, /packmap/).map((r) => r.status + " " + r.url).join(" | "));
+  ok("walking a tree to a blob reads its pack map shards",
+    hits(content, /\/packmap\//).length > 0, content.map((r) => r.status + " " + r.url).join(" | "));
+  const idxReads = hits(content, /\/objects\/pack\/.*\.idx/);
+  ok("walking a tree to a blob probes no pack index: a delta reads only the head of its own pack's index",
+    new Set(idxReads.map((r) => r.url)).size <= 1 && idxReads.every((r) => /^bytes=0-\d+$/.test(r.range)),
+    idxReads.map((r) => r.status + " " + r.range + " " + r.url).join(" | "));
   ok("nothing in a content read 404s", content.every((r) => r.status < 400),
     content.filter((r) => r.status >= 400).map((r) => r.status + " " + r.url).join(" | "));
-
-  // The map is sparse, so a shard the reader skips is often not there
-  // to be found — which is what makes such a probe a 404 rather than a small 200.
-  let missing = 0;
-  for (let i = 0; i < 256; i++) {
-    const name = i.toString(16).padStart(2, "0");
-    if ((await GS.fetchBytes(PACKED, ".gitsocial/packmap/" + name + ".json")) === null) missing++;
-  }
-  ok("the pack map is sparse (" + missing + " of 256 prefixes have no shard)", missing > 0);
 
   // ---- 3. every generated page declares an icon, so the browser never falls
   // back to the origin-root /favicon.ico ----

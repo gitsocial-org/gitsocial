@@ -215,7 +215,7 @@ func readPackRange(t *testing.T, pack []byte, offset, size int64) (objType strin
 
 // TestUploadPacked_TypeSplitAndPackMap: a push above the threshold writes two
 // packs — commits and tags in one, trees and blobs in the other — publishes
-// every commit's byte range in the pack map, and writes no loose object.
+// every object's byte range in the pack map, and writes no loose object.
 func TestUploadPacked_TypeSplitAndPackMap(t *testing.T) {
 	client, _ := testClient(t)
 	dir := packTestRepo(t, 6)
@@ -296,6 +296,48 @@ func TestUploadPacked_TypeSplitAndPackMap(t *testing.T) {
 			t.Errorf("%s: pack map range decoded to %q, want %q", sha, body, want)
 		}
 	}
+	// Every tree and blob has an entry in the content pack. ReadPackedObject
+	// decodes a whole entry and refuses a delta, which the browser resolves.
+	content, err := client.Get("objects/pack/" + contentPack + ".pack")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deltas := 0
+	for sha, kind := range kinds {
+		if kind != "tree" && kind != "blob" {
+			continue
+		}
+		doc, err := readPackMapShard(client, "", packMapShardName(sha))
+		if err != nil {
+			t.Fatalf("read pack map shard for %s: %v", sha, err)
+		}
+		at, ok := doc.Offsets[sha]
+		if !ok || len(at) != 3 {
+			t.Fatalf("pack map has no byte range for %s %s", kind, sha)
+		}
+		if doc.Packs[at[0]] != contentPack {
+			t.Errorf("%s maps to pack %q, want %q", sha, doc.Packs[at[0]], contentPack)
+		}
+		if code := (content[at[1]] >> 4) & 7; code == 6 || code == 7 {
+			if _, _, _, err := ReadPackedObject(client, "", sha); err == nil {
+				t.Errorf("%s: ReadPackedObject read a delta entry without an error", sha)
+			}
+			deltas++
+			continue
+		}
+		gotType, body, ok, err := ReadPackedObject(client, "", sha)
+		if err != nil || !ok {
+			t.Fatalf("ReadPackedObject %s %s: ok=%v err=%v", kind, sha, ok, err)
+		}
+		want, err := exec.Command("git", "-C", dir, "cat-file", kind, sha).Output()
+		if err != nil {
+			t.Fatalf("git cat-file %s %s: %v", kind, sha, err)
+		}
+		if gotType != kind || !bytes.Equal(body, want) {
+			t.Errorf("%s: pack map entry decoded to %s %q, want %s %q", sha, gotType, body, kind, want)
+		}
+	}
+	t.Logf("%d content entries are deltas", deltas)
 	// No object may be in more than one pack, or the walker's loose-first rule
 	// would pick a duplicate.
 	seen := map[string]bool{}
@@ -639,7 +681,7 @@ func TestParsePackIdx_MatchesGitShowIndex(t *testing.T) {
 			objects = append(objects, sha)
 		}
 	}
-	built, err := buildPack(objects, false, true)
+	built, err := buildPack(objects, false)
 	if err != nil {
 		t.Fatalf("buildPack: %v", err)
 	}
@@ -1314,7 +1356,7 @@ func TestBuildPack_PinsIndexVersionAndPackSize(t *testing.T) {
 		}
 	}
 
-	built, err := buildPack(objects, false, true)
+	built, err := buildPack(objects, false)
 	if err != nil {
 		t.Fatalf("buildPack under a hostile pack config: %v", err)
 	}

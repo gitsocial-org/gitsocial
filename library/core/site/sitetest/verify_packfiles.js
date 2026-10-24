@@ -2,13 +2,12 @@
 // whose git objects — state-ref objects included — live in packfiles, and
 // refdelta-demo, a hand-built REF_DELTA pack of the same objects.
 //
-// Three read paths have to work there, and the split is what the design is for:
-// a commit or tag is located by the pack map (one Range GET, no index,
-// no delta chain, because the commits pack is written with --depth=0), a tree or
-// blob goes through the pack index — read whole up to 64 KiB, range-read via its
-// fanout above that — and may resolve OFS_DELTA / REF_DELTA bases, and a
-// state-ref commit resolves out of the same packs (state objects pack like
-// everything else; the loose fallback only covers not-yet-sealed buckets).
+// Three read paths have to work there: an object is located by the pack map
+// (a commit is one Range GET with no delta chain, because the commits pack is
+// written with --depth=0, and a tree or blob may resolve OFS_DELTA / REF_DELTA
+// bases), an object with no map entry goes through the pack index (read whole up
+// to 64 KiB, range-read via its fanout above that), and a state-ref commit
+// resolves out of the same packs (the loose fallback covers unsealed buckets).
 //
 // Every reconstructed object is checked CONTENT-ADDRESSED: the sha-1 of
 // "<type> <len>\0" + body must equal the sha that was asked for. A delta reader
@@ -216,7 +215,7 @@ async function main() {
     commitReads.filter((r) => /\.idx/.test(r.url)).length === 0,
     commitReads.map((r) => r.url).join(" | "));
 
-  // ---- content path: the pack index locates trees and blobs ----
+  // ---- content path: the pack map locates trees and blobs ----
   const codeCtx = GS.newContext(BASE);
   const head = await GS.resolveRef(BASE, "refs/heads/main");
   const headObj = await readsBack(codeCtx, head, "the branch tip commit");
@@ -235,6 +234,8 @@ async function main() {
   // index it searched, or a packed bucket's file views pay for the index on
   // every session.
   const rangeCtx = GS.newContext(BASE);
+  // An empty pack map on the context sends every read to the index probe.
+  for (let i = 0; i < 256; i++) rangeCtx.packs.maps.set(i.toString(16).padStart(2, "0"), Promise.resolve(null));
   at = mark();
   const cold = await GS.resolvePath(rangeCtx, head, "notes.txt");
   if (cold) await GS.getObject(rangeCtx, cold.sha);

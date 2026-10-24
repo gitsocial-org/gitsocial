@@ -1,4 +1,4 @@
-// pack.go - packfiles on the push path: the two packs, the .idx parser, and the pack map a reader resolves a commit through
+// pack.go - packfiles on the push path: the two packs, the .idx parser, and the pack map a reader resolves an object through
 //
 // A push packs its whole delta or leaves it all loose: git's dumb walker falls
 // back to a pack only on a loose 404, so no object may exist as both.
@@ -55,7 +55,7 @@ type builtPack struct {
 	entries []packMapEntry
 }
 
-// packMapDoc is one pack map shard: its packs, and sha to [packIndex, offset, size] for each commit or tag under its prefix.
+// packMapDoc is one pack map shard: its packs, and sha to [packIndex, offset, size] for each object under its prefix.
 type packMapDoc struct {
 	Version int                `json:"version"`
 	Packs   []string           `json:"packs"`
@@ -86,7 +86,7 @@ func classifyObjects(shas []string) (commitLike, content, missing []string, err 
 	return commitLike, content, missing, nil
 }
 
-// buildDeltaPacks builds the two packs a packed write produces; a sha the local odb lacks is an error, since dropping one would publish a broken pack.
+// buildDeltaPacks builds the two packs a packed write produces, each with its map entries; a sha the local odb lacks is an error, since dropping one would publish a broken pack.
 func buildDeltaPacks(shas []string) ([]*builtPack, error) {
 	commitLike, content, missing, err := classifyObjects(shas)
 	if err != nil {
@@ -95,11 +95,11 @@ func buildDeltaPacks(shas []string) ([]*builtPack, error) {
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("git cat-file --batch-check: %d objects missing locally, starting with %s", len(missing), missing[0])
 	}
-	commitPack, err := buildPack(commitLike, true, true)
+	commitPack, err := buildPack(commitLike, true)
 	if err != nil {
 		return nil, err
 	}
-	contentPack, err := buildPack(content, false, false)
+	contentPack, err := buildPack(content, false)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func buildDeltaPacks(shas []string) ([]*builtPack, error) {
 }
 
 // buildPack runs git pack-objects over a sha list and reads the pack, its index and its byte ranges back; noDelta is what makes a commit one self-contained stream.
-func buildPack(shas []string, noDelta, withEntries bool) (*builtPack, error) {
+func buildPack(shas []string, noDelta bool) (*builtPack, error) {
 	if len(shas) == 0 {
 		return nil, nil
 	}
@@ -147,13 +147,11 @@ func buildPack(shas []string, noDelta, withEntries bool) (*builtPack, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read pack index: %w", err)
 	}
-	built := &builtPack{name: name, pack: pack, idx: idx, objects: len(shas)}
-	if withEntries {
-		if built.entries, err = packEntryRanges(idx, int64(len(pack))); err != nil {
-			return nil, err
-		}
+	entries, err := packEntryRanges(idx, int64(len(pack)))
+	if err != nil {
+		return nil, err
 	}
-	return built, nil
+	return &builtPack{name: name, pack: pack, idx: idx, objects: len(shas), entries: entries}, nil
 }
 
 // packIdxEntry is one object's position in a pack index: its sha and offset.
@@ -314,7 +312,7 @@ func ReadPackedObject(client *Client, prefix, sha string) (objType string, body 
 // packObjectTypes maps a pack entry's 3-bit type code to the git object type name; 6 and 7 are the delta codes.
 var packObjectTypes = map[byte]string{1: "commit", 2: "tree", 3: "blob", 4: "tag"}
 
-// inflatePackEntry decodes one non-delta pack entry from its byte range; a delta entry is an error, since the map indexes only the commits pack.
+// inflatePackEntry decodes one non-delta pack entry from its byte range; a delta entry is an error, since the Go readers read only commits.
 func inflatePackEntry(raw []byte) (objType string, body []byte, err error) {
 	if len(raw) == 0 {
 		return "", nil, fmt.Errorf("pack entry: empty range")

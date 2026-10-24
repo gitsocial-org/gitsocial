@@ -146,10 +146,10 @@
   }
 
   // getObject returns one git object: the session cache, then the persistent store, then the bucket; an object from the bucket goes into both.
-  async function getObject(ctx, sha, content) {
+  async function getObject(ctx, sha) {
     const signal = ctx.signal;
     for (;;) {
-      const pending = ctx.objects.has(sha) ? ctx.objects.get(sha) : startObjectRead(ctx, sha, content);
+      const pending = ctx.objects.has(sha) ? ctx.objects.get(sha) : startObjectRead(ctx, sha);
       try { return await pending; } catch (e) {
         // A read that the route before this one started and aborted is started again for a caller whose route is live.
         if (!e || !e.aborted || (signal && signal.aborted)) throw e;
@@ -159,13 +159,13 @@
   }
 
   // startObjectRead begins one shared read of a sha and caches its promise, so concurrent readers of one sha share a single fetch.
-  function startObjectRead(ctx, sha, content) {
+  function startObjectRead(ctx, sha) {
     const pending = (async () => {
       objectStore(ctx);
       // A read that arrives before the store is open goes to the bucket; the store serves from the next read.
       const stored = ctx.store && !ctx.store.off ? await readStoredObject(ctx, ctx.store, sha).catch(() => null) : null;
       if (stored) return stored;
-      const obj = await readBucketObject(ctx, sha, content);
+      const obj = await readBucketObject(ctx, sha);
       if (obj && ctx.store && !ctx.store.off) storeObject(ctx, ctx.store, sha, obj);
       return obj;
     })();
@@ -176,21 +176,16 @@
   }
 
   // readBucketObject fetches and inflates one object from the bucket; the pack listing orders the loose and packed lookups, and each falls back to the other.
-  async function readBucketObject(ctx, sha, content) {
+  async function readBucketObject(ctx, sha) {
     if (await bucketIsPacked(ctx)) {
-      // A commit the pack map misses is most likely loose, so its one loose read comes before the probe of every pack index.
-      if (!content) {
-        const mapped = await getMappedObject(ctx, sha);
-        if (mapped !== null) return mapped;
-        const loose = await getLooseObject(ctx, sha);
-        return loose !== null ? loose : probePacks(ctx, sha);
-      }
-      const packed = await probePacks(ctx, sha);
-      // A miss in every pack still has a loose key to try: a bucket may carry objects loose until its next seal.
-      return packed !== null ? packed : getLooseObject(ctx, sha);
+      const mapped = await getMappedObject(ctx, sha);
+      if (mapped !== null) return mapped;
+      // An object the pack map misses is most likely loose from a small push, so its one loose read comes before the probe of every pack index.
+      const loose = await getLooseObject(ctx, sha);
+      return loose !== null ? loose : probePacks(ctx, sha);
     }
     const loose = await getLooseObject(ctx, sha);
-    return loose !== null ? loose : getPackedObject(ctx, sha, content);
+    return loose !== null ? loose : getPackedObject(ctx, sha);
   }
 
   // STORE_BYTE_BUDGET and STORE_COUNT_BUDGET bound the persistent object store of one bucket; STORE_OBJECT_MAX is the largest object it keeps.
@@ -305,9 +300,9 @@
     try { console.warn("gitsocial: object store off for this session: " + ((err && err.message) || err)); } catch (_) { /* no console */ }
   }
 
-  // getContentObject fetches a sha known to be a tree or a blob; the pack map indexes commits and tags only, so it is skipped.
+  // getContentObject fetches a sha known to be a tree or a blob.
   function getContentObject(ctx, sha) {
-    return getObject(ctx, sha, true);
+    return getObject(ctx, sha);
   }
 
   // getStateObject fetches a sha a state ref points at (config, lists, forks).
@@ -763,13 +758,13 @@
     return out;
   }
 
-  // getPackedObject resolves one object out of the packfiles: the pack map for commits and tags, then each pack's index for the rest.
-  async function getPackedObject(ctx, sha, content) {
-    const mapped = content ? null : await getMappedObject(ctx, sha);
+  // getPackedObject resolves one object out of the packfiles: its pack map shard first, then each pack's index.
+  async function getPackedObject(ctx, sha) {
+    const mapped = await getMappedObject(ctx, sha);
     return mapped !== null ? mapped : probePacks(ctx, sha);
   }
 
-  // getMappedObject reads a commit or tag at the range its pack map shard records, or null when the shard has no entry.
+  // getMappedObject reads an object at the range its pack map shard records, or null when the shard has no entry.
   async function getMappedObject(ctx, sha) {
     const map = await packMapShard(ctx, sha);
     const at = map && map.offsets[sha];
