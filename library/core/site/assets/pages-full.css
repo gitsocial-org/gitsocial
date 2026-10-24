@@ -139,6 +139,8 @@
   body.nav-collapsed .nav { display: none; }
   body.nav-collapsed .shell { grid-template-columns: 1fr; }
   body.nav-collapsed .nav-handle { display: block; }
+  /* The fixed handle sits over the content's top-left corner, so the content starts under it. */
+  body.nav-collapsed .content { padding-top: var(--sp-6); }
   /* Layout width: fixed (max-width shell, the reading default) or full width
      (code/diff-friendly), toggled in the sidebar header and persisted. */
   body.wide .shell { max-width: none; }
@@ -383,6 +385,9 @@
      below it under the viewport-pinned .nav-footer. */
   .nav-tree-slot { margin: 0.1rem 0 var(--sp-1) var(--sp-2); max-height: 18rem; overflow-x: hidden; overflow-y: auto; }
   .nav-tree-slot:empty { display: none; }
+  /* A click on Code, on the code route, hides the tree and turns the caret back. */
+  .nav-tree-slot.nav-tree-hidden { display: none; }
+  #nav a[data-nav="code"].tree-open .nav-icon { transform: rotate(90deg); }
   .nav-tree-list { border: none; background: transparent; }
   .nav-tree-list .tree-row { padding: 0.06rem var(--sp-2); line-height: 1.4; font-size: var(--fs-ui); border-radius: var(--r-ctl); }
   .nav-tree-list .tree-row .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1023,6 +1028,7 @@
     body.nav-collapsed .shell { grid-template-columns: 1fr; }
     /* The desktop floating handle is never the mobile mechanism. */
     .nav-handle { display: none !important; }
+    body.nav-collapsed .content { padding-top: 0; }
     #nav { flex-direction: column; }
   }
 

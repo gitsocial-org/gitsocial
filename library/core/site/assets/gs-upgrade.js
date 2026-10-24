@@ -108,7 +108,7 @@
     '        <a href="#/sprints" data-nav="sprints"><span class="nav-icon">◷</span>Sprints</a></div>',
     '      <div class="nav-group"><div class="nav-section">Repository</div>',
     '        <a href="#/prs" data-nav="prs"><span class="nav-icon">⑂</span>Pull Requests</a>',
-    '        <a href="#/code" data-nav="code"><span class="nav-icon">❯</span>Code<span id="nav-code-search" class="nav-search" role="button" tabindex="0" aria-label="Search files" title="Search files"></span></a>',
+    '        <a href="#/code" data-nav="code" id="nav-code"><span class="nav-icon">❯</span>Code<span id="nav-code-search" class="nav-search" role="button" tabindex="0" aria-label="Search files" title="Search files"></span></a>',
     '        <div id="nav-tree-slot" class="nav-tree-slot"></div>',
     '        <a href="#/commits" data-nav="commits"><span class="nav-icon">≡</span>Commits</a>',
     '        <a href="#/branches" data-nav="branches"><span class="nav-icon">⎇</span>Branches</a>',

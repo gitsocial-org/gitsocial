@@ -217,6 +217,26 @@ const NAV_FOOTER_EXPR = `(function () {
     clientHeight: slot.clientHeight, hits: Object.keys(hits) };
 })()`;
 
+// CODE_TOGGLE_EXPR clicks the Code item twice on the code route and reports the slot's display after each click.
+const CODE_TOGGLE_EXPR = `(function () {
+  var link = document.getElementById("nav-code"), slot = document.getElementById("nav-tree-slot");
+  if (!link || !slot) return { hidden: false, shown: false, hash: location.hash };
+  link.click();
+  var hidden = getComputedStyle(slot).display === "none" && !link.classList.contains("tree-open");
+  link.click();
+  var shown = getComputedStyle(slot).display !== "none" && link.classList.contains("tree-open");
+  return { hidden: hidden, shown: shown, hash: location.hash };
+})()`;
+
+// NAV_COLLAPSE_EXPR collapses the sidebar and reports where the handle ends and the content begins.
+const NAV_COLLAPSE_EXPR = `(function () {
+  document.getElementById("nav-collapse").click();
+  var handle = document.getElementById("nav-handle").getBoundingClientRect(), view = document.getElementById("view");
+  var first = view.firstElementChild ? view.firstElementChild.getBoundingClientRect() : view.getBoundingClientRect();
+  document.getElementById("nav-handle").click();
+  return { handleBottom: Math.round(handle.bottom), contentTop: Math.round(first.top) };
+})()`;
+
 // checkNavFooter asserts the sidebar tree is bounded and no nav row runs under
 // the credit pinned at the sidebar's bottom.
 async function checkNavFooter(bin) {
@@ -225,6 +245,8 @@ async function checkNavFooter(bin) {
     const page = await cdp.open(browser, WIDTH, HEIGHT, "light");
     await cdp.load(browser, page, BASE + "#/code", BUDGET);
     const got = await cdp.evaluate(browser, page, NAV_FOOTER_EXPR);
+    const toggled = await cdp.evaluate(browser, page, CODE_TOGGLE_EXPR);
+    const collapsed = await cdp.evaluate(browser, page, NAV_COLLAPSE_EXPR);
     await cdp.close(browser, page);
     if (!got.found) {
       ok("sidebar tree: the code route fills the slot", false, "no .nav-footer or #nav-tree-slot");
@@ -234,6 +256,8 @@ async function checkNavFooter(bin) {
     ok("sidebar tree: it scrolls inside its own box", bound, "max-height=" + got.maxHeight + " overflow-y=" + got.overflowY);
     ok("sidebar tree: the box holds the cap", got.clientHeight <= parseFloat(got.maxHeight), "height=" + got.clientHeight + " cap=" + got.maxHeight);
     ok("sidebar tree: no nav row runs under the credit at " + WIDTH + "x" + HEIGHT, got.hits.length === 0, got.hits.join(" | "));
+    ok("sidebar tree: a click on Code hides it, and a second click shows it", toggled.hidden && toggled.shown && toggled.hash === "#/code", JSON.stringify(toggled));
+    ok("collapsed sidebar: the content starts under the handle", collapsed.contentTop >= collapsed.handleBottom, JSON.stringify(collapsed));
   } finally {
     await cdp.quit(browser);
   }

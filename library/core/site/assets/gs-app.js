@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadForkPulls, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadForkPulls, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -297,6 +297,17 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     btn.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") activateNavSearch(ev); });
   }
 
+  // wireCodeToggle makes a click on Code, on the code route it already shows, hide or show the sidebar tree instead of a navigation.
+  function wireCodeToggle(ctx) {
+    const link = typeof document !== "undefined" && document.getElementById ? document.getElementById("nav-code") : null;
+    if (!link || !link.addEventListener) return;
+    link.addEventListener("click", (ev) => {
+      if (parseRoute(location.hash).type !== "code") return;
+      ev.preventDefault();
+      toggleCodeTree(ctx);
+    });
+  }
+
   // isTypingTarget reports whether an event target is a text-entry control, so
   // the `/` shortcut does not steal a slash the user is typing into a field.
   function isTypingTarget(t) {
@@ -429,6 +440,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     // Not awaited: the counts fill in beside the nav and never hold the first route.
     updateNavCounts(ctx);
     wireNavSearch();
+    wireCodeToggle(ctx);
     startFreshnessWatch(ctx);
     const run = () => route(ctx);
     window.addEventListener("hashchange", run);

@@ -300,6 +300,20 @@ async function main() {
   eq(findClass(bwrap, "action-link").map((a) => textOf(a) + "@" + a.getAttribute("href")).slice(-1), ["5 tags →@#/tags"],
     "the branch list links the tags beside the compare action");
 
+  console.log("=== the sidebar tree hides on a Code click and comes back ===");
+  const slot = document.getElementById("nav-tree-slot"), codeLink = document.getElementById("nav-code");
+  await GS.updateCodeSidebar(ctx, { type: "code" });
+  eq(findClass(slot, "tree-row").length > 0, true, "the code route fills the sidebar slot");
+  eq([slot.classList.contains("nav-tree-hidden"), codeLink.classList.contains("tree-open")], [false, true], "the tree shows and the Code item is marked open");
+  GS.toggleCodeTree(ctx);
+  eq([slot.classList.contains("nav-tree-hidden"), codeLink.classList.contains("tree-open")], [true, false], "a toggle hides the tree and clears the mark");
+  await GS.updateCodeSidebar(ctx, { type: "file", path: "docs/deep.txt", branch: "trunk" });
+  eq([findClass(slot, "tree-row").length > 0, slot.classList.contains("nav-tree-hidden")], [true, true], "a file route refills the tree and keeps it hidden");
+  GS.toggleCodeTree(ctx);
+  eq([slot.classList.contains("nav-tree-hidden"), codeLink.classList.contains("tree-open")], [false, true], "a second toggle shows it again");
+  await GS.updateCodeSidebar(ctx, { type: "commits" });
+  eq([slot.childNodes.length, codeLink.classList.contains("tree-open")], [0, false], "another route empties the slot and clears the mark");
+
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);
 }

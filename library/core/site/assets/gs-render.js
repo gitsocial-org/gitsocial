@@ -4487,21 +4487,17 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return null;
   }
 
-  // updateCodeSidebar fills or clears the sidebar file tree for the route; any failure clears the slot.
-  async function updateCodeSidebar(ctx, r) {
-    const slot = typeof document !== "undefined" && document.getElementById ? document.getElementById("nav-tree-slot") : null;
-    if (!slot) return;
-    const target = codeSidebarTarget(r);
-    if (!target) { slot.replaceChildren(); return; }
+  // codeSidebarList builds the sidebar file tree of a code or file route, or null when the route has none or a read fails.
+  async function codeSidebarList(ctx, target) {
     try {
       const head = await headFor(ctx);
       const branch = target.branch || headBranchName(head);
-      if (!branch) { slot.replaceChildren(); return; }
+      if (!branch) return null;
       const tip = await refTip(ctx, "refs/heads/" + branch);
-      if (!tip) { slot.replaceChildren(); return; }
+      if (!tip) return null;
       const rootNode = await resolvePath(ctx, tip, "");
       const rootEntries = rootNode && (await getTree(ctx, rootNode.sha));
-      if (!rootEntries) { slot.replaceChildren(); return; }
+      if (!rootEntries) return null;
       // Ancestors auto-expand so the active row is visible.
       const parts = target.path ? target.path.split("/") : [];
       for (let n = 1; n < parts.length; n++) ctx.treeExpanded.add(parts.slice(0, n).join("/"));
@@ -4511,11 +4507,41 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       }
       const listNode = el("div", { class: "tree-list nav-tree-list" }, []);
       mountTree(ctx, listNode, rootEntries, "", branch, { expanded: ctx.treeExpanded, activePath: target.path });
-      slot.replaceChildren(listNode);
-    } catch (e) { slot.replaceChildren(); }
+      return listNode;
+    } catch (e) { return null; }
+  }
+
+  // markCodeTree turns the caret of the Code nav item while the sidebar tree is shown.
+  function markCodeTree(open) {
+    const link = typeof document !== "undefined" && document.getElementById ? document.getElementById("nav-code") : null;
+    if (link) link.classList.toggle("tree-open", open);
+  }
+
+  // applyCodeTreeState hides or shows the filled slot by the context's flag and marks the Code item.
+  function applyCodeTreeState(ctx, slot) {
+    const filled = slot.childNodes.length > 0;
+    slot.classList.toggle("nav-tree-hidden", filled && !!ctx.treeHidden);
+    markCodeTree(filled && !ctx.treeHidden);
+  }
+
+  // toggleCodeTree hides or shows the sidebar file tree for the life of the context; a click on Code on the code route calls it.
+  function toggleCodeTree(ctx) {
+    ctx.treeHidden = !ctx.treeHidden;
+    const slot = typeof document !== "undefined" && document.getElementById ? document.getElementById("nav-tree-slot") : null;
+    if (slot) applyCodeTreeState(ctx, slot);
+  }
+
+  // updateCodeSidebar fills or clears the sidebar file tree for the route; any failure clears the slot.
+  async function updateCodeSidebar(ctx, r) {
+    const slot = typeof document !== "undefined" && document.getElementById ? document.getElementById("nav-tree-slot") : null;
+    if (!slot) return;
+    const target = codeSidebarTarget(r);
+    const listNode = target ? await codeSidebarList(ctx, target) : null;
+    slot.replaceChildren(...(listNode ? [listNode] : []));
+    applyCodeTreeState(ctx, slot);
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackFileRef, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, treeOrBlob, updateCodeSidebar, updateNavCounts });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackFileRef, highlightsSettled, setGrammarBase, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, revokeObjectUrls, sanitizeInert, searchIconEl, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

@@ -199,6 +199,7 @@ The shell and the pages:
 - The sections of an item detail are in the order of its page, whatever the order their reads finish in: for a pull request, the body, then Reviews, then Files changed, then Comments.
 - Only the app shows sidebar counts: branches and tags come from `refs.json`, and commits and the item counts from `pages.json`, which carries the item counts only after a complete pass.
 - An item count is the open work, the rows that its list shows first: Issues, Pull Requests, Milestones and Sprints show their Open filter first. The sidebar of a generated page carries no count.
+- On the code route the file tree sits under Code in the sidebar, and a click on Code hides it or shows it again for the visit. The « control collapses the sidebar, » brings it back, and the content starts under that handle.
 - The sidebar of a generated page is the app's, read from the shell: a destination with a page links the page, and every other, from Search to Configuration, links its route in the shell, which needs JavaScript.
 
 Commits pages:
