@@ -213,8 +213,9 @@ async function item8() {
   // toggle in view-modes) ABOVE the clamped content pane, and the pane keeps
   // body-clamp at build even though itemDetail builds the cards detached (the
   // measure polls until layout, no 0-height misread).
-  const c0kids = cards.length ? cards[0]._children.filter((c) => c && c.nodeType === 1) : [];
-  ok("context card renders detail-meta row first (above content)", !!c0kids[0] && c0kids[0]._cls.has("detail-meta") && findClass(c0kids[0], "meta").length >= 1, c0kids[0] && c0kids[0].className);
+  const c0kids = cards.length ? cards[0]._children.filter((c) => c && c.nodeType === 1).slice(1) : [];
+  ok("context card leads with its glyph", !!cards[0] && cards[0]._children.filter((c) => c && c.nodeType === 1)[0]._cls.has("type-glyph"));
+  ok("context card renders detail-meta row after the glyph (above content)", !!c0kids[0] && c0kids[0]._cls.has("detail-meta") && findClass(c0kids[0], "meta").length >= 1, c0kids[0] && c0kids[0].className);
   ok("context card meta row carries the right-aligned Raw toggle", !!c0kids[0] && findClass(c0kids[0], "view-modes").length === 1 && findClass(c0kids[0], "view-toggle").length === 1);
   ok("clamp wrap follows the meta row", !!c0kids[1] && c0kids[1]._cls.has("body-clamp-wrap"), c0kids[1] && c0kids[1].className);
   const ctxPane = c0kids[1] && c0kids[1]._children[0];
@@ -246,6 +247,9 @@ async function item8() {
   const origDd = findTag(viewNode, "dd").find((dd) => /other-demo#commit:/.test(textOf(dd)));
   ok("cross-repo original stays plain text (no link)", !!origDd && findTag(origDd, "a").length === 0, origDd ? "links=" + findTag(origDd, "a").length : "no dd");
   ok("cross-repo quote keeps embedded block, no reply-context head", /from s3:\/\/fake\.example\.com\/other-demo/.test(textOf(viewNode)) && !/In reply to/.test(textOf(viewNode)), textOf(viewNode).slice(0, 120));
+  const embHead = (findClass(viewNode, "embedded")[0] || { _children: [] })._children.filter((c) => c && c.nodeType === 1)[0];
+  const embHeadKids = embHead ? embHead._children.filter((c) => c && c.nodeType === 1).map((c) => String(c.className).split(" ")[0]) : [];
+  ok("the embedded quote box leads with the glyph of the quoted item and its author line", !!embHead && embHead._cls.has("meta") && embHeadKids[0] === "type-glyph" && embHeadKids[1] === "author", embHeadKids.join(","));
   // A branchless commit route resolves by hash: an item opens as its detail, a code commit as the raw commit page.
   await render(TD, "#commit:" + quote.commit.short);
   ok("a branchless route to an item opens the item detail", findClass(viewNode, "detail-topbar").length === 1 && findClass(viewNode, "subject-commit").length === 0, textOf(viewNode).slice(0, 80));
@@ -307,6 +311,18 @@ async function item9() {
   // never clamps (reply permalinks clamp only their context cards — Item 8).
   await render(TD, "#/timeline");
   ok("timeline cards render clamp-wrapped bodies", findClass(viewNode, "body-clamp-wrap").length > 0, "wraps=" + findClass(viewNode, "body-clamp-wrap").length);
+  const excerpts = findClass(viewNode, "excerpt").map(textOf);
+  ok("a commit with a body shows its excerpt from bodies/code", excerpts.some((t) => t.indexOf("A third line, so the notes count to three.") !== -1), excerpts.length + " excerpts");
+  const headRow = findClass(viewNode, "heading-row")[0];
+  const toggle = headRow && findTag(headRow, "button")[0];
+  ok("the timeline toggle is a glyph button on the heading line", !!toggle && textOf(findTag(headRow, "h1")[0]) === "Timeline" && findClass(viewNode, "page-actions").length === 0, headRow && textOf(headRow));
+  ok("the timeline opens on excerpts with a compact toggle", !!toggle && textOf(toggle) === "≡" && toggle.getAttribute("title") === "Compact" && findClass(viewNode, "timeline-compact").length === 0, toggle && textOf(toggle));
+  fire(toggle, "click");
+  ok("the toggle sets the list to compact cards", findClass(viewNode, "timeline-compact").length === 1 && textOf(toggle) === "▤" && toggle.getAttribute("title") === "Excerpts", toggle && textOf(toggle));
+  ok("the choice is remembered", global.localStorage.getItem("timeline") === "line", global.localStorage.getItem("timeline"));
+  await render(TD, "#/timeline");
+  ok("a new render keeps the remembered choice", findClass(viewNode, "timeline-compact").length === 1);
+  global.localStorage.removeItem("timeline");
   const social = await GS.loadExtItems(GS.newContext(TD), "social");
   const rootPost = social.find((i) => (i.content || "").startsWith("Shipping the S3 static site reader"));
   await render(TD, "#commit:" + rootPost.commit.hash + "@gitmsg/social");

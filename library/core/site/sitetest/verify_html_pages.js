@@ -40,7 +40,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   // The front page IS the app's home landing (the upgrade re-renders the same
   // thing): one section, its head line, the root entries, then the README.
   ok("the head line is the branch chip, then the tip commit, each a link",
-    /<div class="home-head"><a class="chip" href="[^"]*index\.html#branch:main">⎇ main<\/a> <a class="home-commit" href="[^"]*index\.html#commit:[0-9a-f]{12}@main"><span class="home-row-subject">Add python and rust sources<\/span> <span class="meta"><span class="author"[^>]*>[^<]+<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span><\/span><\/a><\/div>/.test(front.text));
+    /<div class="home-head"><a class="chip" href="[^"]*index\.html#branch:main">⎇ main<\/a> <a class="home-commit" href="[^"]*index\.html#commit:[0-9a-f]{12}@main"><span class="home-row-subject">Add python and rust sources<\/span> <span class="meta"><span class="author"[^>]*>[^<]+<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <span class="hash">[0-9a-f]{12}<\/span><\/span><\/a><\/div>/.test(front.text));
   // The sidebar counts are the app's alone: a count baked into a sealed page would go stale.
   ok("a served page's sidebar carries no counts", !/nav-count/.test(front.text.replace(/<style data-gs-core>[\s\S]*?<\/style>/, "")));
   ok("front lists the root files as one-line links", /<a class="home-row" href="[^"]*index\.html#file:notes\.txt@main"><span class="gs-icon tree-icon"><svg [^]*?<\/svg><\/span><span class="home-row-subject">notes\.txt<\/span><\/a>/.test(front.text));
@@ -63,7 +63,8 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("front inlines the core sheet with the page-structural rules", /<style data-gs-core>/.test(front.text) && /:where\(#gs-page\) h2/.test(front.text));
   // The sidebar and the home section are shared vocabulary, so the core
   // sheet — inlined, hence live before pages-full.css lands — carries them.
-  ok("the inlined core carries the shared sidebar and home vocabulary", /\.nav-list a/.test(front.text) && /\.nav-icon\s*\{/.test(front.text) && /\.home-row\s*\{/.test(front.text) && /\.home-toggle\s*\{/.test(front.text));
+  ok("the inlined core carries the shared sidebar and home vocabulary", /\.nav-list a/.test(front.text) && /\.nav-icon\s*\{/.test(front.text) && /\.home-row\s*\{/.test(front.text) && /\.home-toggle\s*\{/.test(front.text) && /\.nav-hamburger\s*\{/.test(front.text));
+  ok("the front page's sidebar carries the narrow-screen toggle and its hamburger", front.text.includes('class="page-nav-toggle"') && front.text.includes('for="page-nav-toggle"'));
   ok("the inlined core gates dark on the stored-theme class with a media fallback", /html\.dark-mode/.test(front.text) && /@media \(prefers-color-scheme: ?dark\)/.test(front.text) && /html\.light-mode/.test(front.text));
   ok("front links pages-full.css", front.text.includes('<link rel="stylesheet" href="./' + SHELL + 'pages-full.css">'));
   ok("front references gs-upgrade.js (defer)", front.text.includes('<script defer src="./' + SHELL + 'gs-upgrade.js">'));
@@ -107,6 +108,9 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("thread inlines direct replies", !!thread && thread.includes(REPLY_TEXT) && thread.includes("What about generation-mode buckets?"));
   ok("thread inlines nested replies in order", !!thread && thread.indexOf("Thanks, appreciate it!") > thread.indexOf(REPLY_TEXT) && thread.includes("Seconded, well earned."));
   ok("nested reply carries its reply-to attribution", !!thread && /reply to /.test(thread));
+  const replies = thread ? thread.split('<div class="card comment">').slice(1) : [];
+  ok("a reply card leads with its glyph, then its author line, then its body", replies.length > 0 && replies.every((r) => /^\n<span class="type-glyph tg-comment" title="comment">↩<\/span><p class="meta"><(?:a|span) class="author"[^\n]*<\/p>\n<div>/.test(r)), replies[0] && replies[0].slice(0, 300));
+  ok("a reply's author line reads author, date, hash, the hash opening its route", replies.length > 0 && replies.every((r) => /<p class="meta"><(?:a|span) class="author"[^>]*>[^<]*<\/(?:a|span)> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="\.\.\/index\.html#commit:[0-9a-f]{12}@gitmsg\/social">[0-9a-f]{12}<\/a>/.test(r)), replies[0] && replies[0].slice(0, 400));
   // A post is the root of its own page, feed entry and OG card, and its first
   // line names it on every other surface, so it keeps that line as its heading.
   // The body-only rule is for replies and for a repost's absent content.
@@ -148,12 +152,15 @@ const REPLY_TEXT = "Congrats, this is huge!";
   const issues = await get(TD + "issues/index.html");
   ok("issues list folds milestones/sprints in", issues.text.includes("v1.0 Launch") && issues.text.includes("Sprint 1: Foundations"));
   ok("issues list links item pages", /href="\.\.\/i\/[0-9a-f]{12}\.html"/.test(issues.text));
-  // Rows lead with the app's own glyph, tinted by state on issues and PRs, and
-  // carry no state chip repeating that tint — the same card the booted app paints.
-  ok("issue rows lead with a state-tinted glyph and no state chip", /<div class="card-head"><span class="type-glyph tg-(?:open|closed)" title="issue · (?:open|closed)">[○●]<\/span> <a class="subject"/.test(issues.text) && !/<span class="type-glyph tg-(?:open|closed|merged)"[^>]*>[○●⑂]<\/span> <span class="chip state/.test(issues.text), issues.text.slice(issues.text.indexOf('<div class="card"'), issues.text.indexOf('<div class="card"') + 220));
-  // A milestone keeps its chip: its glyph carries no state tint, so the pill is
-  // the row's only lifecycle cue.
-  ok("milestone rows keep their state chip beside the glyph", /<span class="type-glyph tg-milestone" title="milestone">◇<\/span> <span class="chip state [a-z]+">/.test(issues.text));
+  // Rows lead with the app's own glyph, then the author line, which ends on the
+  // worded state only for a state other than open, then the head.
+  const issueRows = issues.text.split('<div class="card"').slice(1).filter((r) => r.includes('title="issue · '));
+  const openRows = issueRows.filter((r) => r.includes('title="issue · open"')), closedRows = issueRows.filter((r) => r.includes('title="issue · closed"'));
+  ok("an open issue row leads with its glyph, then the author line with no state, then the subject", openRows.length > 0 && openRows.every((r) => /^[^>]*><span class="type-glyph tg-open" title="issue · open">○<\/span><span class="meta"><(?:a|span) class="author"(?:(?!class="marker")[^\n])*\n<div class="card-head"><a class="subject"/.test(r)), openRows[0] && openRows[0].slice(0, 400));
+  ok("a closed issue row ends its author line with the worded state, and heads with the subject", closedRows.length > 0 && closedRows.every((r) => /^[^>]*><span class="type-glyph tg-closed" title="issue · closed">●<\/span><span class="meta"><(?:a|span) class="author"[^\n]* · <span class="marker">closed<\/span><\/span>\n<div class="card-head"><a class="subject"/.test(r)), closedRows[0] && closedRows[0].slice(0, 400));
+  // A milestone or sprint row follows the same rule: an open milestone and a planned sprint word no state.
+  ok("an open milestone row words no state and heads with its subject alone", /<span class="type-glyph tg-open" title="milestone[^"]*">◇<\/span><span class="meta">(?:(?!class="marker")[^\n])*\n<div class="card-head"><a class="subject"/.test(issues.text));
+  ok("a planned sprint row words no state and heads with its subject alone", /<span class="type-glyph tg-open" title="sprint[^"]*">◷<\/span><span class="meta">(?:(?!class="marker")[^\n])*\n<div class="card-head"><a class="subject"/.test(issues.text));
   const memos = await get(TD + "memos/index.html");
   ok("memos list carries the fixture memos", memos.text.includes("Cache invalidation policy"));
   const posts = await get(TD + "posts/index.html");
@@ -167,7 +174,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   const commits = await get(TD + "commits/index.html");
   ok("commits/index.html served", commits.status === 200);
   ok("commits page reads without JS (heading + card rows)", /<h1>Commits<\/h1>/.test(commits.text) && /<div class="card" id="c-/.test(commits.text));
-  ok("commits rows carry a citable anchor, an app link and indexable meta", /<div class="card" id="c-[0-9a-f]{12}"><div class="card-head"><span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="\.\.\/index\.html#commit:[0-9a-f]{12}@main">[^<]+<\/a><\/div>\s*<span class="meta"><span class="author"[^>]*>Ada Lovelace<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="[^"]*">[0-9a-f]{12}<\/a><\/span><\/div>/.test(commits.text), commits.text.slice(commits.text.indexOf('<div class="card"'), commits.text.indexOf('<div class="card"') + 300));
+  ok("commits rows carry a citable anchor, an app link and indexable meta", /<div class="card" id="c-[0-9a-f]{12}"><span class="type-glyph tg-commit" title="commit">•<\/span><span class="meta"><span class="author"[^>]*>Ada Lovelace<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="[^"]*">[0-9a-f]{12}<\/a><\/span>\s*<div class="card-head"><a class="subject" href="\.\.\/index\.html#commit:[0-9a-f]{12}@main">[^<]+<\/a><\/div>\s*<\/div>/.test(commits.text), commits.text.slice(commits.text.indexOf('<div class="card"'), commits.text.indexOf('<div class="card"') + 300));
   ok("commits page lists the default branch's commits", commits.text.includes("Add python and rust sources") && commits.text.includes("Initial commit: README"));
   // Only the DEFAULT branch: the feature branch's commit is in the code corpus
   // (the timeline interleaves it) but not in this list.

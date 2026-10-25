@@ -1,6 +1,6 @@
 // verify_site_features.js - fixture-backed proofs for the site's feature surfaces:
 //   board honors the pushed .gitsocial/site/pm-config.json
-//   issue/PR cards carry enrichment chips (labels/assignee/priority/counts/origin)
+//   issue/PR cards carry enrichment chips (counts/labels/assignee/priority/origin)
 //   search deep-link (#/search/<q>) initializes AND executes the query
 //   a detail page's back link returns to where the user came from
 //   the Tags page lists tags with the pushed tags.json values; a tag route resolves to the commit (annotated peeled)
@@ -59,8 +59,8 @@ async function main() {
 
   // ---- PR card review summary (fixture PR has an approval + a change request) ----
   await route("#/prs");
-  const prChips = findClass(viewNode, "card-chips").flatMap((r) => findClass(r, "chip").map(textOf));
-  ok("PR card shows a review summary (✓/✗) from cross-branch feedback", prChips.some((t) => /[✓✗]/.test(t)), prChips.join(" | "));
+  const prCounts = findClass(viewNode, "card-chips").flatMap((r) => findClass(r, "count").map(textOf));
+  ok("PR card shows a review summary (✓/✗) from cross-branch feedback as count chips", prCounts.some((t) => /[✓✗]/.test(t)), prCounts.join(" | "));
 
   // ---- history-aware back link ----
   // Come from the board, open an issue, the back link points to the board.
@@ -397,15 +397,15 @@ async function main() {
   ok("windowed timeline code count matches un-windowed set", w2.items.filter((i) => i._ext === "code").length === code.length, "w2=" + w2.items.filter((i) => i._ext === "code").length + " full=" + code.length);
 
   // ---- code commits are sourced from the push-maintained code items index ----
-  // thread-demo's `push --site-only` builds .gitsocial/site/items/code/ (metadata-only,
-  // no bodies), so the timeline surfaces code commits from index JSON with NO
-  // per-commit loose-object GET — the ~fetches-per-first-visit win. Assert the
-  // artifact is present, carries NO code bodies corpus, and that resolving the
+  // thread-demo's `push --site-only` builds .gitsocial/site/items/code/ and its
+  // bodies at bodies/code/, so the timeline surfaces code commits from index JSON with NO
+  // per-commit loose-object GET — the ~fetches-per-first-visit win. Assert both
+  // artifacts are present, and that resolving the
   // code items fetches zero commit objects (only the index shard/head JSON).
   const codeManifest = await GS.fetchText(BASE, ".gitsocial/site/items/code/manifest.json");
   ok("code items index manifest is published (v5, parents)", !!codeManifest && JSON.parse(codeManifest).version === 5, (codeManifest || "").slice(0, 60));
   const codeBodies = await GS.fetchText(BASE, ".gitsocial/site/bodies/code/manifest.json");
-  ok("code corpus is metadata-only (no bodies index)", !codeBodies, "bodies manifest unexpectedly present");
+  ok("code index publishes its bodies corpus (v4)", !!codeBodies && JSON.parse(codeBodies).version === 4, (codeBodies || "").slice(0, 60));
   {
     const realFetch = global.fetch;
     let looseGets = 0;
@@ -420,20 +420,21 @@ async function main() {
 
   {
     // The fixture carries no draft pull request and no prerelease, so the two
-    // chips the page leads its head with are checked on constructed items.
+    // markers the author line ends on are checked on constructed items.
     const headOrder = (node) => {
       const head = (node._children || []).find((c) => c && c._cls && c._cls.has("card-head"));
-      return (head._children || []).map((c) => (c._cls && c._cls.has("chip") ? "chip:" : c.tagName === "A" ? "subject:" : "glyph:") + textOf(c).trim());
+      return (head._children || []).map((c) => (c._cls && c._cls.has("chip") ? "chip:" : c.tagName === "A" ? "subject:" : "other:") + textOf(c).trim());
     };
     const commit = { hash: "b".repeat(40), short: "bbbbbbbbbbbb", authorName: "Ada", authorTime: 1757000000 };
     const draft = GS.prCard({ header: { type: "pull-request", state: "open", draft: "true", head: "feat", base: "main" }, content: "Add the thing", commit }, null);
-    ok("a draft pull request leads its head with the draft chip", JSON.stringify(headOrder(draft)) === JSON.stringify(["glyph:⑂", "chip:draft", "subject:Add the thing"]), JSON.stringify(headOrder(draft)));
+    const marker = (node) => findClass((node._children || []).find((c) => c && c._cls && c._cls.has("meta")), "marker").map(textOf);
+    ok("a draft pull request words draft on its author line and heads with its subject", JSON.stringify(headOrder(draft)) === JSON.stringify(["subject:Add the thing"]) && JSON.stringify(marker(draft)) === JSON.stringify(["draft"]), JSON.stringify(headOrder(draft)) + " " + JSON.stringify(marker(draft)));
     const pre = GS.releaseCard({ header: { type: "release", tag: "v2.0.0", version: "2.0.0", prerelease: "true" }, content: "v2.0.0", commit });
-    ok("a prerelease leads its head with the prerelease chip", headOrder(pre)[1] === "chip:prerelease" && headOrder(pre)[2] === "subject:v2.0.0", JSON.stringify(headOrder(pre)));
+    ok("a prerelease words prerelease on its author line and heads with its tag", JSON.stringify(headOrder(pre)) === JSON.stringify(["subject:v2.0.0"]) && JSON.stringify(marker(pre)) === JSON.stringify(["prerelease"]), JSON.stringify(headOrder(pre)) + " " + JSON.stringify(marker(pre)));
     const stable = GS.releaseCard({ header: { type: "release", tag: "v1.0.0", version: "1.0.0" }, content: "v1.0.0", commit });
-    ok("a stable release heads with its tag alone, the version rendered once", JSON.stringify(headOrder(stable)) === JSON.stringify(["glyph:⏏", "subject:v1.0.0"]), JSON.stringify(headOrder(stable)));
+    ok("a stable release heads with its tag alone, the version rendered once", JSON.stringify(headOrder(stable)) === JSON.stringify(["subject:v1.0.0"]), JSON.stringify(headOrder(stable)));
     const post = GS.timelineCard({ header: { type: "post" }, content: "First line\n\nRest", commit }, null);
-    ok("a post promotes its first line to the subject", headOrder(post)[1] === "subject:First line", JSON.stringify(headOrder(post)));
+    ok("a post promotes its first line to the subject", headOrder(post)[0] === "subject:First line", JSON.stringify(headOrder(post)));
     for (const type of ["comment", "repost", "quote"]) {
       const node = GS.timelineCard({ header: { type }, content: "Opening of a sentence", commit }, null);
       ok("a " + type + " renders whole, with no promoted subject", !(node._children || []).some((c) => c && c._cls && c._cls.has("card-head")));
@@ -456,7 +457,9 @@ async function main() {
 
   for (const [tab, label] of Object.entries(GS.LIST_HEADINGS)) {
     await route("#/" + tab, true);
-    const first = (viewNode._children || [])[0];
+    // The timeline's h1 shares its heading line with the toggle.
+    const lead = (viewNode._children || [])[0];
+    const first = lead && lead._cls && lead._cls.has("heading-row") ? lead._children.find((c) => c && c.nodeType === 1) : lead;
     ok("/" + tab + " opens with its nav label as the h1", !!first && first.tagName === "H1" && textOf(first) === label, first ? first.tagName + ":" + textOf(first) : "empty view");
   }
   await route("#/", true);

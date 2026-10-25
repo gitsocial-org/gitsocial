@@ -1,5 +1,5 @@
 // site_code_index_test.go - the CODE items index (one merged corpus across every
-// code branch, metadata-only, no bodies). Mirrors the ext site_items tests over
+// code branch) and its bodies corpus. Mirrors the ext site_items tests over
 // an in-process memBucket seeding real loose commit objects: bootstrap across
 // pushes with a small budget, incremental append, multi-branch dedup +
 // attribution, and force-push repair (a rewrite dropping a commit from one branch
@@ -8,6 +8,8 @@
 package site
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
@@ -69,6 +71,43 @@ func codeCorpusEntries(t *testing.T, client *objstore.Client) []siteMetaEntry {
 	return append(out, head...)
 }
 
+// assertCodeBodies asserts the code bodies corpus is at the items tip and holds the message of every indexed commit.
+func assertCodeBodies(t *testing.T, client *objstore.Client) {
+	t.Helper()
+	items, err := readItemsManifest(client, "", siteCodeExt)
+	if err != nil || items == nil {
+		t.Fatalf("code manifest: %v (nil=%v)", err, items == nil)
+	}
+	bodies, err := readBodiesManifest(client, "", siteCodeExt)
+	if err != nil || bodies == nil {
+		t.Fatalf("code bodies manifest: %v (nil=%v)", err, bodies == nil)
+	}
+	if bodies.Tip != items.Tip {
+		t.Fatalf("bodies tip %s, items tip %s", bodies.Tip[:8], items.Tip[:8])
+	}
+	messages := map[string]string{}
+	keys := make([]string, 0, 1+len(bodies.Shards))
+	keys = append(keys, bodiesHeadKey(siteCodeExt))
+	for _, s := range bodies.Shards {
+		keys = append(keys, siteBodiesDir(siteCodeExt)+s.Key)
+	}
+	for _, key := range keys {
+		entries, err := readBodyDocItems(client, key)
+		if err != nil {
+			t.Fatalf("read %s: %v", key, err)
+		}
+		for _, e := range entries {
+			messages[e.SHA] = e.Message
+		}
+	}
+	for _, e := range codeCorpusEntries(t, client) {
+		msg, ok := messages[e.SHA]
+		if !ok || subjectOf(msg) != e.Subject {
+			t.Fatalf("indexed commit %s has no body in bodies/code (found=%v)", e.SHA[:8], ok)
+		}
+	}
+}
+
 // branchOf returns the attributed branch of a sha in a code entry list ("" when
 // absent).
 func branchOf(entries []siteMetaEntry, sha string) string {
@@ -95,13 +134,7 @@ func TestCode_BootstrapSingleBranch(t *testing.T) {
 		if !m.Complete {
 			t.Fatalf("small branch should complete in one push")
 		}
-		if m.BodiesBytes != 0 {
-			t.Fatalf("code corpus must carry NO bodies (bodiesBytes=%d)", m.BodiesBytes)
-		}
-		// No bodies corpus artifacts written.
-		if bm, _ := readBodiesManifest(client, "", siteCodeExt); bm != nil {
-			t.Fatalf("code corpus wrote a bodies manifest, must be metadata-only")
-		}
+		assertCodeBodies(t, client)
 		got := codeCorpusShas(t, client)
 		if len(got) != 6 {
 			t.Fatalf("covered %d commits, want 6", len(got))
@@ -171,6 +204,7 @@ func TestCode_BootstrapResumesAcrossPushes(t *testing.T) {
 
 			// Backfill pushes until complete (bounded).
 			for i := 0; i < 10; i++ {
+				assertCodeBodies(t, client)
 				m, _ := readItemsManifest(client, "", siteCodeExt)
 				if m != nil && m.Complete {
 					break
@@ -208,6 +242,7 @@ func TestCode_AppendNewCommits(t *testing.T) {
 		shas = append(shas, seedChain(t, client, shas[5], "", 3)...)
 		refs["refs/heads/main"] = shas[8]
 		mustUpdateCode(t, client, refs, "main")
+		assertCodeBodies(t, client)
 		got := codeCorpusShas(t, client)
 		if len(got) != 9 {
 			t.Fatalf("covered %d commits, want 9", len(got))
@@ -288,6 +323,7 @@ func TestCode_ForcePushRebaseRepairsShards(t *testing.T) {
 		if m == nil || !m.Complete {
 			t.Fatalf("post-force-push manifest not complete")
 		}
+		assertCodeBodies(t, client)
 	})
 }
 
@@ -333,6 +369,7 @@ func TestCode_ForcePushKeepsCommitReachableFromOtherBranch(t *testing.T) {
 				t.Fatalf("shared commit %s attributed %q after main reached it, want main", s[:8], b)
 			}
 		}
+		assertCodeBodies(t, client)
 	})
 }
 
@@ -349,6 +386,9 @@ func TestCode_DeleteWhenNoBranches(t *testing.T) {
 		mustUpdateCode(t, client, map[string]string{}, "main")
 		if m, _ := readItemsManifest(client, "", siteCodeExt); m != nil {
 			t.Fatalf("code manifest survived dropping every code branch")
+		}
+		if m, _ := readBodiesManifest(client, "", siteCodeExt); m != nil {
+			t.Fatalf("code bodies manifest survived dropping every code branch")
 		}
 	})
 }
@@ -400,5 +440,95 @@ func TestCode_GitmsgBranchesExcluded(t *testing.T) {
 		if len(got) != 4 {
 			t.Fatalf("code coverage %d, want 4 (data branch excluded)", len(got))
 		}
+	})
+}
+
+// TestSiteCodeBodies_everyIndexedCommit: a commit's whole message, body included, is in bodies/code, and the bodies manifest commits before the items manifest.
+func TestSiteCodeBodies_everyIndexedCommit(t *testing.T) {
+	withTestShardCount(func() {
+		client, _ := testClient(t)
+		parent := ""
+		for i := 0; i < 6; i++ {
+			sha, loose := makeLooseCommit(t, parent, fmt.Sprintf("Subject %d\n\nBody paragraph %d", i, i), int64(1000+i))
+			if err := client.Put("objects/"+sha[:2]+"/"+sha[2:], loose); err != nil {
+				t.Fatalf("seed commit %d: %v", i, err)
+			}
+			parent = sha
+		}
+		mustUpdateCode(t, client, map[string]string{"refs/heads/main": parent}, "main")
+		assertCodeBodies(t, client)
+		head, err := readBodyDocItems(client, bodiesHeadKey(siteCodeExt))
+		if err != nil || len(head) == 0 {
+			t.Fatalf("bodies head: %v (len=%d)", err, len(head))
+		}
+		if newest := head[len(head)-1]; !strings.Contains(newest.Message, "Body paragraph 5") {
+			t.Fatalf("newest body %q lacks its second paragraph", newest.Message)
+		}
+
+		failed, bucket := testClient(t)
+		shas := seedChain(t, failed, "", "", 3)
+		bucket.FailPut(bodiesManifestKey(siteCodeExt))
+		if err := updateSiteCodeIndex(failed, "", codeTipsOf(map[string]string{"refs/heads/main": shas[2]}, "main"), "main", nil); err == nil {
+			t.Fatalf("a failed bodies manifest write did not fail the rebuild")
+		}
+		if m, _ := readItemsManifest(failed, "", siteCodeExt); m != nil {
+			t.Fatalf("the items manifest committed before the bodies manifest")
+		}
+	})
+}
+
+// TestSiteCodeBodies_olderBucketRepairs: a bucket with items/code/ and no bodies/code/ classifies as a repair, and the next push writes the corpus.
+func TestSiteCodeBodies_olderBucketRepairs(t *testing.T) {
+	withTestShardCount(func() {
+		client, _ := testClient(t)
+		shas := seedChain(t, client, "", "", 6)
+		refs := map[string]string{"refs/heads/main": shas[5]}
+		mustUpdateCode(t, client, refs, "main")
+		if err := deleteBodiesSharded(client, "", siteCodeExt); err != nil {
+			t.Fatalf("drop bodies: %v", err)
+		}
+		items, _ := readItemsManifest(client, "", siteCodeExt)
+		head, _ := readItemsHeadEntries(client, siteItemsHeadKey(siteCodeExt))
+		tip := codeCorpusTip(codeTipsOf(refs, "main"))
+		if got := classifyCodeState(items, nil, nil, len(head), 0, tip); got != actionRepair {
+			t.Fatalf("a bucket with no code bodies classified %d, want repair", got)
+		}
+		mustUpdateCode(t, client, refs, "main")
+		assertCodeBodies(t, client)
+		if got := len(codeCorpusShas(t, client)); got != 6 {
+			t.Fatalf("coverage %d after repair, want 6", got)
+		}
+	})
+}
+
+// TestSiteCodeBodies_tailRepairMidBootstrap: a tip that moves while a bootstrap is in flight repairs the tail of both corpora, and the backfill completes them together.
+func TestSiteCodeBodies_tailRepairMidBootstrap(t *testing.T) {
+	withTestShardCount(func() {
+		withTestWalkBudget(5, func() {
+			client, _ := testClient(t)
+			shas := seedChain(t, client, "", "", 13)
+			refs := map[string]string{"refs/heads/main": shas[12]}
+			mustUpdateCode(t, client, refs, "main")
+			if c, _ := readItemsCursor(client, "", siteCodeExt); c == nil {
+				t.Fatalf("push 1 left no cursor")
+			}
+			shas = append(shas, seedChain(t, client, shas[12], "more-", 2)...)
+			refs["refs/heads/main"] = shas[14]
+			mustUpdateCode(t, client, refs, "main")
+			assertCodeBodies(t, client)
+			for i := 0; i < 10; i++ {
+				if m, _ := readItemsManifest(client, "", siteCodeExt); m != nil && m.Complete {
+					break
+				}
+				mustUpdateCode(t, client, refs, "main")
+				assertCodeBodies(t, client)
+			}
+			if got := len(codeCorpusShas(t, client)); got != 15 {
+				t.Fatalf("coverage %d, want 15", got)
+			}
+			if m, _ := readBodiesManifest(client, "", siteCodeExt); m == nil || !m.Complete {
+				t.Fatalf("bodies manifest not complete after the backfill")
+			}
+		})
 	})
 }

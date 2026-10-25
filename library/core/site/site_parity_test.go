@@ -95,11 +95,12 @@ type parityAuthorCase struct {
 	ExpectHref  string `json:"expectHref"`
 }
 
-// parityMetaRow pins the meta row skeleton: its bit classes in order, the edited row's, and its author cases.
+// parityMetaRow pins the meta row skeleton: its bit classes in order, the route of a comment's hash, the edited row's, and its author cases.
 type parityMetaRow struct {
-	Bits       []string           `json:"bits"`
-	EditedBits []string           `json:"editedBits"`
-	Authors    []parityAuthorCase `json:"authors"`
+	Bits             []string           `json:"bits"`
+	EditedBits       []string           `json:"editedBits"`
+	CommentHashRoute string             `json:"commentHashRoute"`
+	Authors          []parityAuthorCase `json:"authors"`
 }
 
 // parityDefaultTitle pins the name a site with no configured title takes.
@@ -125,14 +126,14 @@ type parityReleaseRowCase struct {
 	ExpectLabel string `json:"expectLabel"`
 }
 
-// parityCardSkeletonCase pins the head slots one item type's list row fills; an empty ExpectHead is a body-only row, which leads its meta row with ExpectLead.
+// parityCardSkeletonCase pins the head slots one item type's list row fills and the word that ends its author line; an empty ExpectHead is a body-only row.
 type parityCardSkeletonCase struct {
-	Name       string            `json:"name"`
-	Ext        string            `json:"ext"`
-	Header     map[string]string `json:"header"`
-	FirstLine  string            `json:"firstLine"`
-	ExpectHead []string          `json:"expectHead"`
-	ExpectLead []string          `json:"expectLead"`
+	Name         string            `json:"name"`
+	Ext          string            `json:"ext"`
+	Header       map[string]string `json:"header"`
+	FirstLine    string            `json:"firstLine"`
+	ExpectHead   []string          `json:"expectHead"`
+	ExpectMarker string            `json:"expectMarker"`
 }
 
 // parityCardSkeleton pins the one card shape: its part order, its head's slot order, the body-only part order, and a case per item type.
@@ -451,6 +452,14 @@ func TestParityMetaRow(t *testing.T) {
 	if row.Meta[2].Href != "../i/"+msg.Short+".html" {
 		t.Errorf("list row hash href = %q, want the item's own page", row.Meta[2].Href)
 	}
+	comment := &sitePageMsg{Ext: "social", SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: "A comment", Header: &protocol.Header{Ext: "social", Fields: map[string]string{"type": "comment"}}}
+	reply := buildSiteReply(&sitePageItem{Msg: comment, Resolved: comment}, it, parityRefAsHref)
+	if got := strings.Join(parityBitClasses(reply.Meta, len(f.MetaRow.Bits)), ","); got != want {
+		t.Errorf("reply meta bits = %q, want %q", got, want)
+	}
+	if reply.Meta[2].Href != "../index.html"+f.MetaRow.CommentHashRoute {
+		t.Errorf("reply hash href = %q, want the route %q under the shell", reply.Meta[2].Href, f.MetaRow.CommentHashRoute)
+	}
 }
 
 // TestParityEditedMetaRow asserts an edited item carries the marker as a bit
@@ -564,7 +573,7 @@ func TestParityReleaseRow(t *testing.T) {
 			for _, b := range row.Meta {
 				bits = append(bits, b.Class+"|"+b.Text)
 			}
-			want := []string{"author|unknown", "reltime|" + sitePageDate(msg.TS)}
+			want := []string{"author|unknown", "reltime|" + sitePageDate(msg.TS), "hash|" + msg.Short}
 			if c.ExpectLabel != "" {
 				want = append(want, "|"+c.ExpectLabel)
 			}
@@ -588,48 +597,64 @@ func parityCardSlots(head string) []string {
 	return out
 }
 
-// parityHeadedCard asserts a headed row fills the head's slots in order, then the meta row.
+// parityCardMarker asserts the author line ends on the worded state or marker, or carries none.
+func parityCardMarker(t *testing.T, card string, c parityCardSkeletonCase) {
+	t.Helper()
+	if c.ExpectMarker == "" {
+		if strings.Contains(card, `class="marker"`) {
+			t.Errorf("want no marker on the author line: %s", card)
+		}
+		return
+	}
+	if !strings.Contains(card, ` · <span class="marker">`+c.ExpectMarker+"</span></span>") {
+		t.Errorf("want the author line to end on %q: %s", c.ExpectMarker, card)
+	}
+}
+
+// parityHeadedCard asserts a headed row leads with the glyph, then the author line, then the head with its slots in order.
 func parityHeadedCard(t *testing.T, card string, c parityCardSkeletonCase, parts []string) {
 	t.Helper()
-	open, end := strings.Index(card, `<div class="card-head">`), strings.Index(card, "</div>")
+	open := strings.Index(card, `<div class="card-head">`)
+	end := strings.Index(card[max(open, 0):], "</div>") + open
 	if open < 0 || end < open {
 		t.Fatalf("no card head in %s", card)
 	}
 	if got := parityCardSlots(card[open:end]); strings.Join(got, ",") != strings.Join(c.ExpectHead, ",") {
 		t.Errorf("head slots = %v, want %v", got, c.ExpectHead)
 	}
-	for i, part := range parts[:2] {
-		at := strings.Index(card, `class="`+part+`"`)
+	for i, part := range parts[:3] {
+		at := strings.Index(card, `class="`+part)
 		if at < 0 {
 			t.Fatalf("no %s in %s", part, card)
 		}
-		if i > 0 && at < strings.Index(card, `class="`+parts[i-1]+`"`) {
+		if i > 0 && at < strings.Index(card, `class="`+parts[i-1]) {
 			t.Errorf("%s comes before %s", part, parts[i-1])
 		}
 	}
 }
 
-// parityBodyOnlyCard asserts a body-only row takes no head, leads its meta row with the glyph and the marker, and stands on its first line.
+// parityBodyOnlyCard asserts a body-only row takes no head, leads with the glyph and the author line, and stands on its first line.
 func parityBodyOnlyCard(t *testing.T, card string, c parityCardSkeletonCase, parts []string) {
 	t.Helper()
 	if strings.Contains(card, `class="card-head"`) {
 		t.Errorf("a body-only row carries a card head: %s", card)
 	}
-	want := append([]string{parts[0]}, c.ExpectLead...)
+	want := []string{parts[0], parts[1]}
 	got := parityCardSlots(card)
 	if len(got) < len(want) || strings.Join(got[:len(want)], ",") != strings.Join(want, ",") {
 		t.Errorf("row slots = %v, want them to lead with %v", got, want)
 	}
-	meta := strings.Index(card, `<span class="meta meta-lead">`)
-	body := strings.Index(card, `<div class="`+parts[1]+`">`+c.FirstLine+`</div>`)
+	meta := strings.Index(card, `<span class="`+parts[1]+`">`)
+	body := strings.Index(card, `<div class="`+parts[2]+`">`+c.FirstLine+`</div>`)
 	if meta < 0 || body < meta {
-		t.Errorf("want the meta row then the %s carrying %q: %s", parts[1], c.FirstLine, card)
+		t.Errorf("want the meta row then the %s carrying %q: %s", parts[2], c.FirstLine, card)
 	}
 }
 
 // TestParityCardSkeleton asserts a list row's markup is the one card shape
-// unit_parity.js asserts on the app's own card: the head's slots in order and
-// then the meta row, or no head at all on a body-only type.
+// unit_parity.js asserts on the app's own card: the glyph, the author line
+// ending on its worded state, then the head's slots in order, or no head at
+// all on a body-only type.
 func TestParityCardSkeleton(t *testing.T) {
 	f := loadParityFixtures(t)
 	if len(f.CardSkeleton.Cases) == 0 {
@@ -650,6 +675,7 @@ func TestParityCardSkeleton(t *testing.T) {
 			if err != nil {
 				t.Fatalf("render entries: %v", err)
 			}
+			parityCardMarker(t, string(page), c)
 			if len(c.ExpectHead) == 0 {
 				parityBodyOnlyCard(t, string(page), c, f.CardSkeleton.BodyOnlyParts)
 				return

@@ -576,7 +576,9 @@ async function main() {
   {
     const head = front.text.slice(0, front.text.indexOf("</head>"));
     const hideRules = (head.match(/[^{}]*\{[^{}]*display:\s*none[^{}]*\}/g) || []);
-    ok("every display:none rule in the page's own CSS is class-gated", hideRules.length > 0 && hideRules.every((r) => /html\.gs-boot\s/.test(r)), JSON.stringify(hideRules));
+    // The narrow-screen sidebar is the reader's own toggle: its hamburger and the links it closes stay in the document.
+    const readerToggle = (r) => /^\s*\.page-nav \.nav-hamburger\s*\{/.test(r) || /^\s*\.page-nav-toggle\s*\{/.test(r) || /^\s*\.page-nav-toggle:not\(:checked\) ~ \.nav-list, \.page-nav-toggle:not\(:checked\) ~ \.nav-footer\s*\{/.test(r);
+    ok("every display:none rule in the page's own CSS is class-gated or the reader's toggle", hideRules.length > 0 && hideRules.every((r) => /html\.gs-boot\s/.test(r) || readerToggle(r)), JSON.stringify(hideRules));
     ok("the mount is served plain (no hidden attribute, no inline display)", /<div id="gs-page" data-base="[^"]*">/.test(front.text) && !/id="gs-page"[^>]*(hidden|style=)/.test(front.text));
     ok("the served <html> carries no boot class of its own", /<html lang="en">/.test(front.text));
     // The hide has to beat first paint, so it cannot wait for the deferred
@@ -761,9 +763,9 @@ async function main() {
     const page = await get(base + "commits/index.html");
     ok("commits/index.html served + readable without JS", page.status === 200 && /<h1>Commits<\/h1>/.test(page.text));
     ok("commits page carries gs-route(/commits) + data-base(../) + upgrade script", /name="gs-route" content="\/commits"/.test(page.text) && /data-base="\.\.\/"/.test(page.text) && new RegExp('<script defer src="\\.\\./' + SHELL_RE + 'gs-upgrade\\.js">').test(page.text));
-    // The row leads with the commit glyph, the same one the app's code card paints.
-    const rows = [...page.text.matchAll(/<div class="card" id="(c-[0-9a-f]{12})"><div class="card-head"><span class="type-glyph tg-commit" title="commit">◦<\/span> <a class="subject" href="([^"]+)">([\s\S]*?)<\/a><\/div>\s*<span class="meta">([\s\S]*?)<\/span><\/div>/g)]
-      .map((m) => ({ id: m[1], href: m[2], subject: unesc(m[3]), meta: unesc(m[4].replace(/<[^>]*>/g, "")) }));
+    // The row leads with the commit glyph, the same one the app's code card paints, then the author line and the head.
+    const rows = [...page.text.matchAll(/<div class="card" id="(c-[0-9a-f]{12})"><span class="type-glyph tg-commit" title="commit">•<\/span><span class="meta">([\s\S]*?)<\/span>\s*<div class="card-head"><a class="subject" href="([^"]+)">([\s\S]*?)<\/a><\/div>\s*<\/div>/g)]
+      .map((m) => ({ id: m[1], href: m[3], subject: unesc(m[4]), meta: unesc(m[2].replace(/<[^>]*>/g, "")) }));
     ok("commits page lists rows", rows.length > 0, "rows=" + rows.length);
     // Every row is a citable place: an id a URL can name, and a subject linking
     // into the app's commit view (the rich surface a commit already has).

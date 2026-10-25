@@ -11,6 +11,8 @@ function ok(c, msg, extra) { if (c) { pass++; } else { fail++; console.log("FAIL
 function findClass(node, cls, out) { out = out || []; for (const c of (node && node._children) || []) { if (c && c.nodeType === 1) { if (c._cls && c._cls.has(cls)) out.push(c); findClass(c, cls, out); } } return out; }
 function fire(node, ev, props) { for (const fn of (node && node._handlers && node._handlers[ev]) || []) fn(Object.assign({ preventDefault() {}, stopPropagation() {}, key: "", button: 0, target: { closest() { return null; } } }, props || {})); }
 const chipText = (node) => findClass(node, "chip").map(textOf);
+const elems = (node) => ((node && node._children) || []).filter((c) => c && c.nodeType === 1);
+const firstClass = (node) => String(node.className || "").trim().split(/\s+/)[0];
 const H = (s) => (s.repeat(12)).slice(0, 12);
 const sha40 = (s) => (s.repeat(40)).slice(0, 40);
 function item(short, header, content, refs) {
@@ -40,21 +42,36 @@ eq(chipHref("chip-label"), ["A kind/bug #/search/label%3Akind%2Fbug"], "a label 
 eq(chipHref("chip-priority"), ["A high #/search/label%3Apriority%2Fhigh"], "a priority chip searches its priority label");
 eq(findClass(rich, "chip-due").map((c) => c.tagName), ["SPAN"], "a due chip stays text");
 
+// markerOf reads the word that ends a card's author line, or "" when the line ends on another bit.
+const markerOf = (node) => { const last = elems(findClass(node, "meta")[0]).pop(); return last && last._cls.has("marker") ? textOf(last) : ""; };
 const marked = GS.memoCard(item("b", { type: "memo", retracted: "true", "origin-platform": "github", "origin-url": "https://example.com/1" }, "Memo"));
-const markedChips = chipText(marked);
-eq([markedChips[0], markedChips[1]], ["retracted", "↗ github"], "retracted leads the card, then the origin badge");
-eq(chipText(findClass(marked, "card-head")[0]), ["retracted"], "the retracted marker rides the head's one chip slot");
-eq(chipText(findClass(marked, "card-chips")[0]), ["↗ github"], "and the chip row carries the rest");
+eq(markerOf(marked), "retracted", "retracted is worded at the end of the author line");
+eq(chipText(findClass(marked, "meta")[0]), [], "the marker is a plain bit, not a chip");
+eq(chipText(findClass(marked, "card-head")[0]), [], "the head holds the subject alone");
+eq(chipText(findClass(marked, "card-chips")[0]), ["↗ github"], "and the chip row carries the origin badge");
 const deadComment = GS.timelineCard(Object.assign(item("z", { type: "comment", retracted: "true" }, "Gone"), { _ext: "social" }));
-eq(chipText(findClass(deadComment, "meta")[0]), ["retracted"], "a body-only card has no head, so the marker leads its meta row");
+eq(markerOf(deadComment), "retracted", "a body-only card ends its author line with the marker too");
+const closedIssue = GS.timelineCard(Object.assign(item("y", { type: "issue", state: "closed" }, "Closed one"), { _ext: "pm" }));
+eq([markerOf(closedIssue), chipText(findClass(closedIssue, "card-head")[0])], ["closed", []], "a state other than open is worded on the author line, off the head");
+eq(markerOf(GS.timelineCard(Object.assign(item("y", { type: "issue", state: "open" }, "Open one"), { _ext: "pm" }))), "", "an open item words no state");
+eq(markerOf(GS.prCard(item("y", { type: "pull-request", state: "open", draft: "true" }, "Drafted"))), "draft", "a draft pull request words its marker");
+const editedClosed = GS.timelineCard(Object.assign(item("y", { type: "issue", state: "closed" }, "Closed one"), { _ext: "pm", edited: true }));
+eq([markerOf(editedClosed), findClass(editedClosed, "edited").length], ["closed", 0], "the state word stands in for the edited marker");
 eq(findClass(marked, "chip-origin")[0].getAttribute("title"), "https://example.com/1", "the origin chip links its upstream URL in the title");
 eq(chipText(GS.memoCard(item("c", { type: "memo", "origin-author-email": "49699333+dependabot[bot]@users.noreply.github.com", "origin-author-name": "dependabot[bot]" }, "Bump"))).indexOf("⚙ bot") !== -1, true, "an automation author gets a bot chip");
 eq(chipText(GS.memoCard(item("d", { type: "memo", "origin-author-email": "ada@example.com", "origin-author-name": "Ada" }, "Note"))).indexOf("⚙ bot"), -1, "a human origin author gets no bot chip");
 
-const counted = GS.prCard(item("e", { type: "pull-request", state: "open" }, "Counted"), { approved: 2, changesRequested: 1, comments: 4, reposts: 3, quotes: 1 });
-const countedText = chipText(counted);
-ok(countedText.indexOf("✓2 ✗1") !== -1, "the review chip tallies approvals and change requests", countedText.join(" | "));
-ok(countedText.indexOf("↩ 4") !== -1 && countedText.indexOf("↻ 3") !== -1 && countedText.indexOf("❞ 1") !== -1, "comment, repost and quote counts each get a chip", countedText.join(" | "));
+console.log("=== the counts lead the chip row, as chips ===");
+const counted = GS.prCard(item("e", { type: "pull-request", state: "open", head: "feature", base: "trunk", labels: "kind/bug" }, "Counted"), { approved: 2, changesRequested: 1, comments: 4, reposts: 3, quotes: 1 });
+const countsOf = (node) => findClass(node, "count").map(textOf);
+eq(countsOf(counted), ["↩ 4", "↻ 3", "❞ 1", "✓ 2", "✗ 1"], "comments, reposts, quotes and reviews each give an icon and a number");
+eq(findClass(counted, "count").map((c) => c.className), ["chip count", "chip count", "chip count", "chip count review-ok", "chip count review-no"], "each count is a chip, the review ones marked by verdict");
+eq(elems(findClass(counted, "card-chips")[0]).map(textOf), ["↩ 4", "↻ 3", "❞ 1", "✓ 2", "✗ 1", "feature → trunk", "kind/bug"], "the counts lead the chip row, then the branch pair, then the labels");
+eq(findClass(counted, "card-counts").length, 0, "the counts have no row of their own");
+eq(elems(counted).slice(-1).map(firstClass), ["card-chips"], "the chip row is the last part of the card");
+eq(countsOf(GS.prCard(item("e", { type: "pull-request", state: "open" }, "Quiet"), { approved: 0, comments: 0 })), [], "a count of zero gives no chip");
+eq(findClass(GS.timelineCard(Object.assign(item("e", { type: "issue", state: "open" }, "Uncounted"), { _ext: "pm" })), "card-chips").length, 0, "a card with no count and no chip has no row");
+eq(countsOf(GS.timelineCard(Object.assign(item("e", { type: "post" }, "Counted post"), { _ext: "social" }), { comments: 2 })), ["↩ 2"], "a post carries its comment count");
 
 console.log("=== a pull request card links its branches and its stack ===");
 const anchorsOf = (node) => findTag(node, "a").map((a) => textOf(a) + "@" + a.getAttribute("href"));
@@ -64,16 +81,18 @@ eq(textOf(flow), "feature → trunk", "the branch chip names the head and the ba
 eq(anchorsOf(flow), ["feature@#branch:feature", "trunk@#branch:trunk"], "each side links to its branch log");
 eq(findClass(stacked, "chip").filter((c) => textOf(c) === "stacked").map((c) => c.tagName + "@" + c.getAttribute("href")), ["A@#commit:" + H("e") + "@gitmsg/review"], "the stacked chip opens the pull request it depends on");
 const forked = GS.prCard(item("g", { type: "pull-request", state: "open", head: "https://example.com/fork#branch:feature", base: "#branch:trunk" }, "From a fork"));
-eq(anchorsOf(findClass(forked, "chip").find((c) => textOf(c).indexOf("→") !== -1)), ["https://example.com/fork#branch:feature@https://example.com/fork#branch:feature", "trunk@#branch:trunk"], "a fork head links to its URL as written");
+const forkFlow = findClass(forked, "chip").find((c) => textOf(c).indexOf("→") !== -1);
+eq(anchorsOf(forkFlow), ["example.com/fork:feature@https://example.com/fork#branch:feature", "trunk@#branch:trunk"], "a fork head reads owner/repo:branch and links to its URL as written");
+eq(findTag(forkFlow, "a")[0].getAttribute("title"), "https://example.com/fork#branch:feature", "the fork head carries the full field as its title");
+eq(elems(findClass(stacked, "card-chips")[0]).map(textOf).slice(0, 2), ["feature → trunk", "stacked"], "the branch pair leads the chip row, the stacked chip after it");
 
-console.log("=== a release row counts its assets where another row links its hash ===");
+console.log("=== a release row counts its assets after its hash ===");
 const metaBits = (node) => textOf(findClass(node, "meta")[0]).split(" · ");
 const shipped = GS.releaseCard(item("r", { type: "release", tag: "v1.0", version: "1.0", artifacts: "linux.tar.gz, mac.tar.gz" }, "Ship it"));
-eq(metaBits(shipped).slice(0, 1).concat(metaBits(shipped).slice(2)), ["Ada", "2 assets"], "the release row ends on its asset count");
-eq(findClass(shipped, "hash").length, 0, "and carries no commit hash");
+eq(metaBits(shipped).slice(0, 1).concat(metaBits(shipped).slice(2)), ["Ada", H("r").slice(0, 12), "2 assets"], "the release row ends on its hash and its asset count");
 eq(chipText(shipped).indexOf("2 assets"), -1, "the count is a meta bit, not a head chip");
-eq(metaBits(GS.releaseCard(item("s", { type: "release", tag: "v1.1", artifacts: "one.tar.gz" }, "Ship one"))).slice(2), ["1 asset"], "one artifact reads singular");
-eq(metaBits(GS.releaseCard(item("t", { type: "release", tag: "v1.2" }, "Ship none"))).length, 2, "a release naming no artifact drops the bit");
+eq(metaBits(GS.releaseCard(item("s", { type: "release", tag: "v1.1", artifacts: "one.tar.gz" }, "Ship one"))).slice(3), ["1 asset"], "one artifact reads singular");
+eq(metaBits(GS.releaseCard(item("t", { type: "release", tag: "v1.2" }, "Ship none"))).length, 3, "a release naming no artifact drops the bit");
 eq(findClass(GS.memoCard(item("u", { type: "memo" }, "A memo")), "hash").length, 1, "every other row keeps its hash");
 
 console.log("=== a row's type glyph takes its class from the item type ===");
@@ -111,9 +130,57 @@ fire(codeCard, "click");
 eq(global.location.hash, "#/", "a click that ends a text selection does not navigate");
 global.__selection = { isCollapsed: true };
 
+console.log("=== every card leads with its glyph, then its author line ===");
+const parts = (node) => elems(node).map(firstClass);
+const shapes = [
+  ["an issue", GS.timelineCard(Object.assign(item("1", { type: "issue", state: "open" }, "An issue"), { _ext: "pm" })), "card-head"],
+  ["a pull request", GS.timelineCard(Object.assign(item("2", { type: "pull-request", state: "open" }, "A PR"), { _ext: "review" })), "card-head"],
+  ["a release", GS.releaseCard(item("3", { type: "release", tag: "v1.2" }, "v1.2")), "card-head"],
+  ["a memo", GS.memoCard(item("4", { type: "memo" }, "A memo")), "card-head"],
+  ["a titled post", GS.timelineCard(Object.assign(item("5", { type: "post" }, "A post\n\nIts body"), { _ext: "social" })), "card-head"],
+  ["a commit", GS.timelineCard({ _ext: "code", _branch: "trunk", commit: { hash: sha40("6"), short: H("6"), content: "Fix the walk", authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000 } }), "card-head"],
+  ["a comment", GS.timelineCard(Object.assign(item("7", { type: "comment" }, "A reply"), { _ext: "social" })), "body-clamp-wrap"],
+  ["a milestone", findClass(GS.milestonesBody([item("m", { type: "milestone", state: "open", due: "2026-09-01" }, "v1.0 Launch")])[0], "card")[0], "card-head"],
+  ["a sprint", findClass(GS.sprintsBody([item("n", { type: "sprint", state: "active", start: "2026-07-01", end: "2026-07-14" }, "Sprint 1")])[0], "card")[0], "card-head"],
+  ["a search result", GS.searchResultCard(item("o", { type: "issue", state: "open" }, "Found it"), { ext: "pm", branch: "gitmsg/pm" }, "found"), "card-head"],
+  ["a commit of the commits page", GS.commitCard({ hash: sha40("p"), short: H("p"), content: "Fix the walk", authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000 }, "trunk", { id: "c-" + H("p"), time: "2025-06-15", refSha: H("p") }), "card-head"],
+];
+for (const [name, node, third] of shapes) eq(parts(node).slice(0, 3), ["type-glyph", "meta", third], name + ": the glyph, the author line, then the " + (third === "card-head" ? "head" : "body"));
+const typeless = GS.timelineCard(Object.assign(item("8", { type: "proposal" }, "An unknown type"), { _ext: "pm" }));
+eq([firstClass(elems(typeless)[0]), textOf(elems(typeless)[0])], ["type-glyph", ""], "a type with no glyph keeps the mark column, empty");
+eq(GS.metaRow(item("9", { type: "post" }, "x"), "gitmsg/social")._children.filter((c) => c && c.nodeType === 1).map(firstClass)[0], "author", "the author line opens on the author");
+const groupMeta = textOf(elems(shapes.find((s) => s[0] === "a milestone")[1])[1]);
+eq(groupMeta.split(" · ").filter((b, i) => i !== 1), ["Ada", H("m"), "due 2026-09-01", "0 issues"], "a milestone's author line carries the due date and the issue count after the hash");
+
+console.log("=== a timeline action is the actor line, the head and the folded text ===");
+const target = item("t", { type: "issue", state: "closed" }, "Fix the parser");
+const action = (header, content) => Object.assign(item("u", header, content), { _ext: "pm", _branch: "gitmsg/pm", _action: "closed", _target: target, _subject: "Fix the parser" });
+const closed = GS.timelineCard(action({ edits: "#commit:" + H("t") + "@gitmsg/pm", state: "closed" }, "Fix the parser\n\nThe parser drops a line"));
+eq(parts(closed), ["type-glyph", "meta", "card-head", "excerpt"], "an action card is the glyph, the actor line, the head and the excerpt");
+ok(/^Ada closed · /.test(textOf(elems(closed)[1])), "the actor line names the actor and the verb", textOf(elems(closed)[1]));
+ok(textOf(findClass(closed, "excerpt")[0]).indexOf("The parser drops a line") !== -1, "the excerpt is the body of the edit", textOf(closed));
+const fold = findClass(closed, "body-clamp-wrap")[0];
+const foldToggle = findClass(closed, "body-clamp-toggle")[0];
+eq([fold._cls.has("folded"), textOf(foldToggle)], [true, "Show more"], "the text is folded behind Show more");
+fire(foldToggle, "click");
+eq([fold._cls.has("folded"), textOf(foldToggle)], [false, "Show less"], "a click opens the text");
+eq(findClass(GS.timelineCard(action({ state: "closed" }, "Fix the parser")), "excerpt").length, 0, "an edit with no body carries no excerpt");
+const review = Object.assign(item("v", { type: "feedback", "review-state": "changes-requested" }, "Split this function"), { _ext: "review", _branch: "gitmsg/review", _action: "changes-requested", _target: target, _subject: "A PR" });
+ok(textOf(findClass(GS.timelineCard(review), "excerpt")[0]).indexOf("Split this function") !== -1, "a review's excerpt is its whole text");
+ok(/^Ada requested changes · /.test(textOf(findClass(GS.timelineCard(review), "meta")[0])), "a changes-requested review reads requested changes", textOf(findClass(GS.timelineCard(review), "meta")[0]));
+
+console.log("=== a timeline entry shows its body as an excerpt ===");
+const withBody = () => Object.assign(item("x", { type: "issue", state: "open" }, "Fix it\n\nThe parser drops a line"), { _ext: "pm" });
+const excerpts = findClass(GS.timelineCard(withBody()), "excerpt");
+eq(excerpts.length, 1, "an issue with a body carries one excerpt");
+ok(textOf(excerpts[0]).indexOf("The parser drops a line") !== -1, "the excerpt holds the body", textOf(excerpts[0]));
+eq(findClass(GS.timelineCard(Object.assign(item("x", { type: "issue", state: "open" }, "Fix it"), { _ext: "pm" })), "excerpt").length, 0, "an issue with no body carries no excerpt");
+const issueList = GS.issuesBody([withBody()], null)[0];
+eq([findClass(issueList, "card").length, findClass(issueList, "excerpt").length], [1, 0], "the issue list row carries no excerpt");
+
 console.log("=== a comment renders whole, under the quote it answers ===");
 const reply = item("f", { type: "comment", original: "#commit:" + H("1") + "@gitmsg/social" }, "First line of the reply\nand the rest",
-  [{ ref: "#commit:" + H("1") + "@gitmsg/social", quoted: "> the original post", author: "Bob", email: "bob@example.com", time: "2026-01-02T03:04:05Z" }]);
+  [{ ref: "#commit:" + H("1") + "@gitmsg/social", quoted: "> the original post", author: "Bob", email: "bob@example.com", time: "2026-01-02T03:04:05Z", type: "post" }]);
 const replyCard = GS.timelineCard(Object.assign(reply, { _ext: "social" }));
 eq(findClass(replyCard, "subject").length, 0, "a comment card has no subject link, so its first line stays a sentence");
 const quote = findClass(replyCard, "reply-quote")[0];
@@ -124,8 +191,12 @@ ok(quote._cls.has("dimmed"), "a comment dims the excerpt it answers");
 global.location.hash = "#/";
 fire(quote, "click");
 eq(global.location.hash, "#commit:" + H("1") + "@gitmsg/social", "clicking the excerpt opens what the comment answers");
-const repost = GS.timelineCard(Object.assign(item("g", { type: "repost", original: "#commit:" + H("1") + "@gitmsg/social" }, "", [{ ref: "#commit:" + H("1") + "@gitmsg/social", quoted: "> the original post", author: "Bob" }]), { _ext: "social" }));
+const quoteHead = elems(quote)[0];
+eq([firstClass(quoteHead), elems(quoteHead).map(firstClass).slice(0, 2)], ["reply-quote-head", ["type-glyph", "author"]], "the quote box leads with the glyph of the quoted item and its author line");
+const repost = GS.timelineCard(Object.assign(item("g", { type: "repost", original: "#commit:" + H("1") + "@gitmsg/social" }, "# Bob: the original post", [{ ref: "#commit:" + H("1") + "@gitmsg/social", quoted: "> the original post", author: "Bob", type: "post" }]), { _ext: "social" }));
 ok(!findClass(repost, "reply-quote")[0]._cls.has("dimmed"), "a repost shows the original undimmed");
+ok(/^Ada reposted · /.test(textOf(findClass(repost, "meta")[0])), "a repost's author line reads Name reposted", textOf(findClass(repost, "meta")[0]));
+eq(parts(repost), ["type-glyph", "meta", "reply-quote"], "a repost shows the original in the quote box in place of its own text");
 
 console.log("=== a list member ===");
 const memberOf = (ref) => findTag(GS.listMemberRow(ref), "a").map((a) => a.getAttribute("href")).concat(findClass(GS.listMemberRow(ref), "selectable").map(textOf));
@@ -190,8 +261,23 @@ function autoScroll() {
   }, 5);
 }
 
-// rest holds the assertions that need no scheduling, and closes the run.
-function rest() {
+// rest holds the assertions that need no scheduling and the branch and tag views, and closes the run.
+async function rest() {
+  console.log("=== a branch card and a tag card lead with their glyph ===");
+  // refsCtx reads its branches and tags from the manifest and the tags artifact alone, and knows the release branch is absent, so nothing is fetched.
+  const refsCtx = {
+    base: "http://bucket.test/repo/", walks: {}, refMisses: new Set(["refs/heads/gitmsg/release"]),
+    head: Promise.resolve({ branch: "refs/heads/main", sha: sha40("1") }),
+    manifest: Promise.resolve({ "refs/heads/main": sha40("1"), "refs/heads/feature": sha40("2"), "refs/tags/v1.0": sha40("3") }),
+    siteTags: { version: 1, tags: [{ name: "v1.0", sha: sha40("3"), commit: sha40("3"), time: 1750000000, author: "Ada", email: "ada@example.com", prev: "", count: 2 }] },
+  };
+  const branchCards = (await GS.branchesView(refsCtx)).flatMap((n) => (n._cls && n._cls.has("card") ? [n] : []));
+  eq(branchCards.map((c) => parts(c)), [["type-glyph", "card-head"], ["type-glyph", "card-head"]], "a branch card is the glyph, then its head, since a branch has no author line");
+  eq(branchCards.map((c) => textOf(elems(c)[0])), ["⎇", "⎇"], "the branch glyph is the sidebar's");
+  const tagCards = (await GS.tagsView(refsCtx)).flatMap((n) => findClass(n, "card"));
+  eq(tagCards.map((c) => parts(c)), [["type-glyph", "meta", "card-head"]], "a tag card is the glyph, the author line, then its head");
+  eq(tagCards.map((c) => textOf(elems(c)[0])), ["⌗"], "the tag glyph is the sidebar's");
+
   console.log("=== the state filter bar ===");
   const many = Array.from({ length: 150 }, (_, i) => item("h", { type: "pull-request", state: i < 40 ? "merged" : "open" }, "PR " + i));
   const filtered = GS.filteredListView(many, (it) => GS.prCard(it), "prs", GS.PR_STATES, "No pull requests in this repository.")[0];

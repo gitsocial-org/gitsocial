@@ -58,7 +58,7 @@
      rules keep their border-color shifts but no longer suppress the outline.
      (Browsers treat a focused text input as :focus-visible, so inputs show the
      ring on click-focus too — accepted.) */
-  :is(button, input):focus-visible { outline: 2px solid color-mix(in srgb, var(--link) 60%, transparent); outline-offset: 1px; }
+  :is(a, button, input):focus-visible { outline: 2px solid color-mix(in srgb, var(--link) 60%, transparent); outline-offset: 1px; }
   /* Button system: three bases — bordered control, pill, and bare text — each
      stated once; a component's own later rule carries only its deviations
      (layout, a link color, an intentional size). */
@@ -171,34 +171,38 @@
     overflow: hidden; background: var(--panel);
   }
   /* Cards / items. */
-  .card {
-    background: var(--chip); border: 1px solid var(--line); border-radius: var(--r-panel);
-    padding: var(--pad-panel); margin: 0 0 var(--sp-3);
-  }
+  /* A card is a row of a feed: a hairline under it, no frame, no fill, as a post on Twitter or Bluesky. */
+  .card { border-bottom: 1px solid var(--line); padding: var(--sp-4) 0 var(--sp-4) var(--sp-2); margin: 0; }
+  /* The board keeps its boxes: a lane is a stack of tiles, not a feed. */
+  .card.board-card { background: var(--chip); border: 1px solid var(--line); border-radius: var(--r-panel); padding: var(--sp-3); margin-bottom: var(--sp-3); }
+  /* A card is scanned, not read: it is sans at the medium size, and the detail page keeps the serif. */
+  .card:not(.board-card) { font-family: var(--sans); font-size: var(--fs-md); }
+  /* A quoted excerpt reads at the card's size; the meta line and the chips are set like the sidebar, small mono, and only the author keeps the card's face. */
+  .card:not(.board-card) .embedded-quote { font-size: inherit; }
+  /* A card led by its type glyph is two columns: the glyph mark, then every other part. */
+  .card:has(> .type-glyph) { display: grid; grid-template-columns: var(--sp-5) minmax(0, 1fr); }
+  .card > :not(.type-glyph) { grid-column: 2; }
+  .card > .type-glyph { align-self: start; }
   /* Whole-card navigation: the card links to its item detail, so it takes a
      pointer cursor and a tree-row-like hover (chip tint + link-tinted border).
      Inner anchors and text selection keep their own behavior in JS. */
-  .card.clickable { cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
-  .card.clickable:hover {
-    border-color: color-mix(in srgb, var(--link) 45%, var(--line));
-    background: var(--chip-hover);
-  }
-  /* Subject scale: one semantic element, weight 600 outside a card, sized by context —
-     card = mono at --fs-md, detail = --fs-h1 (it is the page title), diff-head =
-     --fs-h4, board-card = --fs-ui. The size tiers live on the context rules
-     (.detail/.card here, diff-head and board-card at their own rules below);
-     cards nest inside .detail views, so the card tier is stated after the
-     detail tier to win the card size back. */
+  .card.clickable { cursor: pointer; transition: background 0.12s ease; }
+  .card.clickable:hover { background: var(--chip-hover); }
+  /* Subject scale: one semantic element at weight 600, sized by context —
+     card = --fs-md in the body font, detail = --fs-h1 (it is the page title),
+     diff-head = --fs-h4, board-card = --fs-ui. The size tiers live on
+     the context rules; cards nest inside .detail views, so the card tier is
+     stated after the detail tier to win the card size back. */
   .subject { font-weight: 600; }
   /* A release head links its tag page in the color of the heading. */
   h1.subject a { color: inherit; }
-  /* Card head: glyph + state chip + subject + trailing chips on one baseline row,
-     with a small gap so chips never touch (and the chip row aligns to the subject
-     column). The leading glyph drops its own inline margin — the flex gap spaces
-     it — so subject text and any wrapped chips share one left edge. */
+  /* Card head: state chip + subject + trailing chips on one baseline row,
+     with a small gap so chips never touch. */
   .card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); }
   .card-head .subject { flex: 1 1 0; min-width: 0; }
   .card-head .type-glyph { margin-right: 0; font-size: var(--fs-md); width: calc(var(--sp-5) + var(--sp-3) - var(--sp-2)); }
+  /* The mark column holds the glyph at its left edge. */
+  .card > .type-glyph { margin-right: 0; font-size: var(--fs-md); width: var(--sp-5); text-align: left; }
   /* A detail head is a card head at page scale. */
   .card-head > h1.subject { font-size: var(--fs-h1); line-height: 1; margin: var(--sp-2) 0 var(--sp-1); }
   .card .body { white-space: pre-wrap; word-break: break-word; margin-top: var(--sp-2); }
@@ -210,6 +214,8 @@
   /* A card is a row in a list, not a page: an image inside one is a badge or a
      thumbnail, and is bounded so a single screenshot cannot own the timeline. */
   .card .body-md img { max-height: 12rem; width: auto; }
+  /* A heading in a card reads at the body scale: the detail page keeps the page scale. */
+  .card .body-md :is(h1, h2, h3, h4, h5, h6) { font-size: var(--fs-md); font-weight: 600; line-height: var(--lh-body); margin: var(--sp-4) 0; padding: 0; border: 0; }
   /* List-card body clamp: long messages cap at ~10 rendered lines (--lh-body
      em-steps, matching the base font shorthand) with a theme-independent
      mask fade over the last ~2 lines; fixed-em gradient stops keep bodies
@@ -221,30 +227,45 @@
     mask-image: linear-gradient(to bottom, #000 calc(8 * var(--lh-body) * 1em), transparent calc(10 * var(--lh-body) * 1em));
   }
   .body-clamp-toggle { display: block; margin-top: var(--sp-1); padding: 0.15rem 0; }
-  .meta { color: var(--muted); font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); display: inline-flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; margin-left: calc(var(--sp-5) + var(--sp-3)); }
-  /* The indent above aligns a meta row under a card head's subject, past the
-     glyph column. A card with no head (post, comment, memo) leads the meta row
-     with the glyph itself, which then has to start AT the glyph column like
-     every other card — same specificity ladder as the rule it overrides. */
-  #gs-page .card .meta.meta-lead, .meta.meta-lead { margin-left: 0; }
-  /* Under a head the row is a block, so it sits one step below the subject instead of on a body-size line of its own. */
+  /* An action card shows its subject and a Show more that opens the text; the item's own card shows the same text. */
+  .body-clamp-wrap.folded > .body { display: none; }
+  .body-clamp-wrap.folded > .body-clamp-toggle { margin-top: 0; }
+  /* The compact timeline keeps the author line and the subject line of each card. */
+  .timeline-compact .excerpt, .timeline-compact .reply-quote, .timeline-compact .card-head ~ .body-clamp-wrap { display: none; }
+  /* It cuts the text of a post or comment to its first line, with no top space inside the cut. */
+  .timeline-compact .card > .body-clamp-wrap { max-height: calc(var(--lh-body) * 1em); overflow: hidden; margin-top: var(--sp-2); }
+  .timeline-compact .card > .body-clamp-wrap * { margin-top: 0; padding-top: 0; }
+  /* The meta line is small mono, dimmed, like a sidebar item; the author stands out in the face of the card and the text color. */
+  .meta { color: var(--muted); font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); display: inline-flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
+  /* Beside a head the row is a block, so it sits one step from the subject instead of on a body-size line of its own. */
   .card-head + .meta { display: flex; margin-top: var(--sp-1); }
+  .meta + .card-head { margin-top: var(--sp-1); }
+  /* The author of a card's author line, and of a quote box, reads in the text color. */
+  .meta .author { font-family: var(--sans); letter-spacing: 0; font-size: var(--fs-md); font-weight: 700; color: var(--text); }
+  /* The interaction counts close a card: icon then number, no pill. */
+  /* The interaction counts lead the chip row as chips of icon and number; a review count keeps its verdict color. */
+  .chip.count.review-ok { color: var(--open); }
+  .chip.count.review-no { color: var(--danger); }
   .hash { font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); color: var(--muted); }
-  /* Type glyphs carry one consistent semantic scheme across every view (timeline,
-     search, lists, board, milestones, detail): a state-bearing glyph (issue,
-     pull-request) is colored by state (open/closed/merged), and every neutral TYPE
-     glyph (release, post, milestone, sprint, memo, …) shares the single muted
-     color. This mirrors the TUI, which dims card glyphs and conveys state through
-     the state chip. */
+  /* Every type glyph is muted; outside a card, as on the board, an issue or a pull request takes the color of its state. */
   .type-glyph { display: inline-block; width: 1.1em; margin-right: 0.3em; text-align: center; line-height: 1; vertical-align: middle; font-family: var(--mono); letter-spacing: var(--mono-ls); color: var(--muted); }
   .type-glyph.tg-open { color: var(--open); }
   .type-glyph.tg-closed { color: var(--closed); }
   .type-glyph.tg-merged { color: var(--merged); }
+  /* A glyph in a card's mark column or in a quote box takes the text color, whatever the state: the shape carries the state. */
+  .card > .type-glyph, .reply-quote-head .type-glyph, .embedded .type-glyph { color: var(--text); }
   .chip {
     display: inline-block; background: var(--code-bg); border-radius: var(--r-pill);
     padding: 0.05rem var(--sp-3); font-size: var(--fs-ui); color: var(--muted);
     font-family: var(--mono); letter-spacing: var(--mono-ls); font-weight: 500;
   }
+  /* In a card a chip is set like the meta line: the same face, size and weight; a hover tints it and never underlines it. */
+  .card .chip { font-weight: 400; }
+  a.chip:hover { background: var(--chip-hover); color: var(--text); text-decoration: none; }
+  a.chip.state:hover { color: #fff; }
+  /* A link inside a chip, such as a branch of the head to base flow, takes the chip's color and no underline. */
+  .chip a { color: inherit; }
+  .chip a:hover { color: var(--text); text-decoration: none; }
   .chip.state { color: #fff; }
   .chip.open { background: var(--open); }
   .chip.closed { background: var(--closed); }
@@ -303,12 +324,16 @@
   .detail .subject { font-size: var(--fs-h1); }
   /* A code commit's subject is chrome, like its rows in the commits list and the graph. */
   .detail .subject.subject-commit { font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-h4); }
-  .detail .card .subject, .card .subject { font-size: var(--fs-md); font-family: var(--mono); letter-spacing: var(--mono-ls); font-weight: 400; }
+  /* A card subject is the first line of the message, so it reads in the body font and the text color. */
+  .card:not(.board-card) .subject { font-size: var(--fs-md); font-weight: 400; color: inherit; }
+  /* A branch or tag name stays in the voice of a ref. */
+  .card .subject.mono { font-family: var(--mono); letter-spacing: var(--mono-ls); }
   .back { display: inline-block; margin-bottom: var(--sp-4); color: var(--muted); font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); }
   /* Detail top bar: the back link on the left, the page's controls on the right,
-     on one row so neither disturbs the meta line. */
-  .detail-topbar { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
+     on one row so neither disturbs the meta line. A list heading line takes the same shape. */
+  .detail-topbar, .heading-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
   .detail-topbar .back { margin-bottom: var(--sp-4); }
+  .heading-row { margin-bottom: var(--sp-4); }
   .detail-topbar .page-actions, .detail-topbar .view-modes { margin: 0; }
   .share-link {
     flex: 0 0 auto; max-width: 100%; overflow: hidden;
@@ -422,6 +447,12 @@
   .blob-img img { max-width: 100%; height: auto; }
   /* README / Markdown. */
   .markdown { margin-top: var(--sp-4); word-break: break-word; }
+  /* In a card the rendered text starts under the author line with no blank line of its own, and ends at the card's edge. */
+  .card .markdown { margin-top: var(--sp-2); }
+  /* Inside a body box the text block adds no margin of its own: the clamp's clipping would keep it from merging with the box's. */
+  .card .body > .markdown { margin-top: 0; }
+  .card .markdown > :first-child { margin-top: 0; }
+  .card .markdown > :last-child { margin-bottom: 0; }
   .markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin: var(--sp-4) 0 var(--sp-3); line-height: 1.2; }
   .markdown h1 { font-size: var(--fs-h1); line-height: 1; padding-top: var(--sp-1); border-bottom: 1px solid var(--line); padding-bottom: var(--sp-2); }
   .markdown h2 { font-size: var(--fs-h2); padding-top: var(--sp-4); border-bottom: 1px solid var(--line); padding-bottom: var(--sp-1); }
@@ -656,7 +687,7 @@
      own post. De-emphasized so the anchor post stays visually primary — smaller
      text, tighter padding, and a slight fade on the context cards. */
   .reply-context { margin-top: 0; margin-bottom: var(--sp-4); font-size: var(--fs-ui); opacity: 0.82; }
-  .reply-context .card.comment { padding: var(--sp-3); }
+  .reply-context .card.comment { padding: var(--sp-3) 0 var(--sp-3) var(--sp-2); }
   /* Thread hierarchy: a comment-row lays `depth` rail guides beside the card;
      each rail-guide is a vertical connector line (one per reply level; indent is
      capped in JS at THREAD_MAX_DEPTH). align-items:stretch runs the guides the
@@ -668,10 +699,7 @@
   /* Detail meta line: author/time on the left, the small Rendered|Raw toggle
      right-aligned on the same line (the blob-head pattern). */
   .detail-meta { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin: 0.1rem 0; }
-  /* The global .meta indent exists to clear a card's glyph column;
-     no glyph precedes the detail meta line, so the author name aligns flush
-     with the content edge here. */
-  .detail-meta .meta { flex: 1 1 auto; margin-left: 0; }
+  .detail-meta .meta { flex: 1 1 auto; }
   .detail-meta .view-modes { margin: 0; flex: 0 0 auto; }
   /* An item's excerpt of what it answers or quotes, carried by its own commit:
      .reply-quote on a card, .embedded on a detail page and under a cross-repo
@@ -679,8 +707,8 @@
      or quote and full-strength under a repost, whose original is the item
      rather than context for it. */
   .embedded, .reply-quote {
-    margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); border-left: 5px solid var(--line);
-    background: var(--code-bg); border-radius: 0 var(--r-ctl) var(--r-ctl) 0;
+    margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line);
+    background: var(--code-bg); border-radius: var(--r-panel);
   }
   .embedded-from { font-style: italic; }
   /* The block is its own navigation target — it opens the PARENT, not the reply
@@ -691,10 +719,10 @@
      mis-navigation. */
   .reply-quote.clickable { cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
   .reply-quote.clickable:hover {
-    border-left-color: color-mix(in srgb, var(--link) 55%, var(--line));
+    border-color: color-mix(in srgb, var(--link) 55%, var(--line));
     background: color-mix(in srgb, var(--link) 8%, var(--code-bg));
   }
-  .reply-quote-head { margin-bottom: var(--sp-1); }
+  .reply-quote-head, .embedded > .meta:first-child { margin-bottom: var(--sp-1); }
   .reply-quote.dimmed .reply-quote-body { color: var(--muted); }
   .embedded-quote { white-space: pre-wrap; word-break: break-word; color: var(--muted); margin: var(--sp-1) 0; font-size: var(--fs-ui); }
   /* PM detail extras (milestone/sprint members, sub-issues, relations),
@@ -716,10 +744,8 @@
   .pm-rel-label { min-width: 4.5rem; }
   .chip.pm-sub-chip { background: var(--link-t2); color: var(--text); }
   /* Card enrichment chips (labels/assignees/priority/retracted) on issue/PR list
-     cards: a wrapping row below the meta, mirroring the TUI card stats. */
+     cards: a wrapping row below the content, mirroring the TUI card stats. */
   .card-chips { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-2); }
-  /* Under a head the chips share the meta row's indent past the glyph column. */
-  .card-head ~ .card-chips { margin-left: calc(var(--sp-5) + var(--sp-3)); }
   .chip.chip-assignee { background: var(--link-t2); color: var(--text); }
   .chip.chip-priority { color: var(--text); }
   .chip.chip-priority.prio-critical { background: var(--danger-t3); }
@@ -731,9 +757,6 @@
      the noise it is meant to label. */
   .chip.chip-bot { color: var(--muted); }
   .chip.chip-due { background: var(--warn-t2); color: var(--text); }
-  .chip.chip-review { color: var(--text); }
-  .chip.chip-review .review-ok { color: var(--open); font-weight: 600; }
-  .chip.chip-review .review-no { color: var(--danger); font-weight: 600; }
   /* Kanban board: horizontally scrolling columns, each a header + issue cards.
      The row scrolls in its own box inside the fixed shell; the scroll box's
      edge fades say that more columns sit past a clipped edge. */
@@ -763,10 +786,9 @@
   .board-col-name { flex: 1 1 auto; white-space: nowrap; }
   .board-col-toggle, .board-col-hide { flex: 0 0 auto; line-height: 1; padding: 0 0.1rem; }
   .board-empty { color: var(--muted); text-align: center; padding: var(--sp-3) 0; font-size: var(--fs-ui); }
-  /* A board card is chrome, not prose: mono at the UI size, set tighter than
-     the serif body so a wrapped title stays one compact block in the lane. */
-  .card.board-card { margin-bottom: var(--sp-3); padding: var(--sp-3); font-family: var(--mono); letter-spacing: var(--mono-ls); line-height: 1; }
-  .card.board-card .subject { font-size: var(--fs-ui); }
+  /* A board card is a tile: the sans at the UI size, set tight so a wrapped title stays one compact block in the lane; its chips keep the small mono of the sidebar. */
+  .card.board-card { margin-bottom: var(--sp-3); padding: var(--sp-3); font-family: var(--sans); line-height: 1; }
+  .card.board-card .subject { font-size: var(--fs-ui); font-weight: 400; }
   /* Board card title line: glyph + subject as ONE flex child so a long subject
      wraps its text under itself without the glyph splitting onto its own row in a
      narrow column (G8). The glyph hugs the first line; the subject text flows. */
@@ -869,7 +891,7 @@
   /* The diff's feedback containers hold its dense size; the cards inherit it. */
   .diff-feedback { grid-column: 1 / -1; padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-6); background: var(--link-t1); border-top: 1px dashed var(--line); font-size: var(--fs-ui); }
   /* The left border is a kind marker, the verdict, never selection; padding and radius come from .card. */
-  .card.feedback { border-left: 3px solid var(--muted); }
+  .card.feedback { border-left: 3px solid var(--muted); padding-left: var(--sp-3); }
   .card.feedback.verdict-approved { border-left-color: var(--open); }
   .card.feedback.verdict-changes-requested { border-left-color: var(--danger); }
   .diff-feedback > .card { margin-bottom: 0; }
@@ -974,14 +996,6 @@
      scrim only appear at <=720px; the drawer CSS lives in the media block. */
   .mobile-bar { display: none; }
   .nav-scrim { display: none; }
-  /* Inline SVG icon (not a ☰ text glyph, whose ink sits high in the em box and
-     defeats box-centering): the icon box is the ink, so flex centering is exact. */
-  .nav-hamburger {
-    background: transparent; border: none; color: var(--text); cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    padding: 0.1rem var(--sp-2); flex: 0 0 auto;
-  }
-  .nav-hamburger svg { display: block; }
   /* Mobile title links home (same route as the desktop repo-title) and centers on
      the bar's cross axis so it sits level with the hamburger despite the smaller
      font — display:flex + align-items:center pins the text box to the row center. */

@@ -98,8 +98,9 @@ async function main() {
   await run("home", TD, "#/", 20);
   // The settled ceiling fell 85 → 50 when hydration moved to the bodies corpus: a
   // window's bodies are a few shard reads per lane, and only a commit the corpus
-  // misses pays its own object read.
-  await run("timeline", TD, "#/timeline", 50);
+  // misses pays its own object read. It rose 50 → 53 when code commits filled from
+  // bodies/code: the manifest, the newest shard and the head (measured 47 → 50).
+  await run("timeline", TD, "#/timeline", 53);
   // The timeline's cards come from the metadata index; the bodies behind them come
   // from the bodies corpus and load after the paint. A regression that puts them
   // back in front of it reads here as the paint count climbing toward the settled one.

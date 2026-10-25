@@ -53,6 +53,8 @@ const reviewActions = actions(review, "review");
 eq(names(reviewActions), ["de0000000001 ready", FB + " approved", "feedbac00004 changes-requested", "de0000000002 merged"], "pull request and review actions");
 eq(reviewActions[1]._subject, "Add the fix", "a review names its pull request");
 eq(reviewActions[1]._target.commit.short, PR, "a review targets its pull request");
+const unknownRef = actions([review[0], commit(FB, 120, rv({ type: "feedback", "pull-request": "#unknown:" + PR, "review-state": "approved" }), "Looks right")], "review");
+eq([unknownRef[0]._target.commit.short, unknownRef[0]._subject], [PR, "Add the fix"], "a review finds its pull request through a reference of any type");
 
 const closes = "#commit:a55000000001@gitmsg/pm,#commit:a55000000002@gitmsg/pm";
 const merge = actions([

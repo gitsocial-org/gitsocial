@@ -94,7 +94,8 @@ gcommit "Initial commit: README"
 printf 'one\ntwo\n' >"$W/notes.txt"
 gcommit "Add notes"
 printf 'one\ntwo\nthree\n' >"$W/notes.txt"
-gcommit "Extend notes"
+# A commit with a body, so the timeline shows its excerpt from bodies/code (verify_pages.js).
+gcommit $'Extend notes\n\nA third line, so the notes count to three.'
 # Source files in non-base languages, so the reader lazy-loads their grammars
 # (grammars/prism-python.js, prism-rust.js) when a visitor opens them; the shell
 # ships every grammar file (E1 coverage: verify_grammars.js / verify_site_features.js).
@@ -196,7 +197,7 @@ git -C "$W" tag -a v1.0 -m "First public release" main
 # publish content branches, tags, then a curated list, then the site shell.
 # main + feature/notes-expand carry plain (non-gitmsg) code commits, so the site
 # push below builds the single CODE items index (.gitsocial/site/items/code/,
-# metadata-only, no bodies) that the reader's timeline sources code commits from
+# with its bodies at bodies/code/) that the reader's timeline sources code commits from
 # without a per-commit loose-object walk (verify_site_features.js code-index
 # assertions; the multi-branch attribution rides on main vs feature/notes-expand).
 git -C "$W" push -q origin main

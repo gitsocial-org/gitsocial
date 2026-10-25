@@ -105,9 +105,17 @@ The site is the app shell, the pre-rendered pages and the two stylesheets. Five 
 
 1. Every page shows its content without JavaScript; the app adds to what the reader sees and never replaces it.
 2. The page layer and the app render a component from the same class names and the same tokens. Two markups for one component is a defect.
-3. Body text is serif; the frame, code and metadata are small mono. Nothing is decorative.
+3. A page body is serif, to read; a card is sans, to scan; the frame, code and metadata are small mono. Nothing is decorative.
 4. Every rule holds on any repository: no README, no issues, a tree of thousands of files, an `.mdx` documentation site.
 5. A missing asset or a failed fetch shows a one-line notice at the position of the content, never a blank or an endless spinner.
+
+A card has the shape of a post in a feed, on both renderers:
+
+1. The type glyph, in the text color, in a mark column at the left. The shape of the glyph shows the state of an issue, a milestone or a sprint. An item with no glyph keeps the column, empty.
+2. The author line: the author, the time, the hash and the markers, such as edited. A state other than open or planned, such as closed or merged, or a marker, such as draft, prerelease or retracted, is the last word of the line, and it replaces the edited marker. An action and a repost put the verb after the author: "Ada closed", "Ada reposted".
+3. The head of a titled item (the subject, then the tail chips, such as the version of a release), or the body of a comment, quote or repost.
+4. The body or the excerpt, then the quote box of a reply, a quote or a repost, which leads with the glyph and the author line of the quoted item.
+5. One row of chips: the counts of comments, reposts, quotes and reviews, in the app only and only when one is not zero; then the head and base branches of a pull request; then bot, origin, due date, priority, assignees and labels. A card with no count and no chip has no row.
 
 The tokens are declared once, in `pages-core.css`; `site_pages_tokens_test.go` fails on a spacing value off the scale or a token declared elsewhere. `sitetest/parity_fixtures.json` records the markup and wording that the page layer and the app share. A visual change includes its golden and baseline update in the same commit.
 
@@ -158,7 +166,8 @@ The app reads the artifacts under `.gitsocial/site/`, and the bucket's ref list 
 | `version` | shell version marker, a hash of the raw assets |
 | `items/<ext>/` | per-extension metadata index: full shards, a mutable head, a manifest; an adopted copy's entry also names its original author and time, and the entry of a comment, feedback, repost or quote carries the first line of its content as `text` |
 | `bodies/<ext>/` | message bodies, loaded on demand |
-| `items/code/` | one index of plain commits across code branches, with parent shas and no bodies |
+| `items/code/` | one index of plain commits across code branches, with parent shas |
+| `bodies/code/` | the message of each commit in `items/code/`, which the timeline of the app reads for its excerpts |
 | `pages.json` | page-layer manifest: schema version, consumed tips, bootstrap cursor, list and commits partitions, the sidebar's item counts |
 | `site-config.json` | the customization values |
 | `pm-config.json` | the resolved PM board |
@@ -184,6 +193,7 @@ The shell and the pages:
 - An adopted copy (GITMSG.md §1.5) shows its original author and time, and the repository it came from, on both renderers. Neither renderer lists a cross-repository edit, which is a proposal.
 - A list row of a comment, feedback, repost or quote shows the first line of its content, read from its index entry on both page passes. `rowText` in `parity_fixtures.json` pins that line on both renderers.
 - The timeline of the app shows [timeline actions](SOCIAL.md#timeline-actions). The app derives them in the browser from the edits and reviews that the item shards hold, so the artifacts do not change. `headerAction` has one definition in two places, `gs-core.js` and `core/cache/actions.go`, asserted equal on `sitetest/action_fixtures.json`. The timeline of the page layer lists posts only.
+- The timeline of the app shows the body of a commit, an issue or a pull request as an excerpt under its head, with the clamp of a post; an action folds its text behind Show more. A commit gets its body from `bodies/code/` and reads no object, so a commit that the corpus does not hold shows its subject only. The glyph button at the right of the Timeline heading switches the list to compact cards, the author line and the subject line of each, and back; the browser keeps the choice.
 - File discovery reads the default branch's tree from the local object database of the pusher and, when it cannot read the tree, keeps the published set.
 - A changed default branch rewrites every page.
 - The Tags page shows each tag's date and author, its commit count since the previous tag, and a release chip for a tag that a release names.
@@ -201,6 +211,7 @@ The shell and the pages:
 - An item count is the open work, the rows that its list shows first: Issues, Pull Requests, Milestones and Sprints show their Open filter first. The sidebar of a generated page carries no count.
 - On the code route the file tree sits under Code in the sidebar, and a click on Code hides it or shows it again for the visit. The « control collapses the sidebar, » brings it back, and the content starts under that handle.
 - The sidebar of a generated page is the app's, read from the shell: a destination with a page links the page, and every other, from Search to Configuration, links its route in the shell, which needs JavaScript.
+- On a narrow screen, the sidebar of a generated page is a bar with a hamburger, and the hamburger opens the links with no script.
 
 Commits pages:
 
@@ -216,12 +227,12 @@ Page entry:
 
 Index maintenance:
 
-- Each extension keeps two append-only corpora, `items/<ext>/` and `bodies/<ext>/`: content-hash-keyed full shards, a mutable head and a manifest.
+- Each extension keeps two append-only corpora, `items/<ext>/` and `bodies/<ext>/`: content-hash-keyed full shards, a mutable head and a manifest. The code index keeps the same two, `items/code/` and `bodies/code/`, in the same write order.
 - Artifacts are built from objects that the push uploaded before any ref moved, so they never name a commit that a reader cannot resolve.
 - One rebuild writes bodies shards, items shards, bodies head, items head, bodies manifest, items manifest, then the cursor. The manifests are the only commit points.
 - A document at another schema version reads as absent, and the reader uses a bounded object walk instead.
 - A rebuild takes one action: no-op, append, repair, bootstrap or backfill. Append owns the newest end and backfill the oldest. After an items manifest exists, the only reset is a manifest tip that is unreachable from the pushed tip.
-- `items/code/` takes its tip as a digest over the sorted branch tips, attributes each commit to a branch by the reader's own rule, and repairs the index when the tip changes.
+- `items/code/` takes its tip as a digest over the sorted branch tips, attributes each commit to a branch by the reader's own rule, and repairs the index when the tip changes or `bodies/code/` is not at its tip.
 
 ### Push-time maintenance
 

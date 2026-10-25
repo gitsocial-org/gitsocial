@@ -45,6 +45,7 @@
     --open: #1f9d55; --closed: #8957e5; --merged: #8250df;
     --warn: #bf8700; --danger: #cf222e;
     --serif: 'EB Garamond', Georgia, serif;
+    --sans: -apple-system, 'Segoe UI', Roboto, Inter, sans-serif;
     --mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace; --mono-ls: -0.02rem;
     /* File-type icon hues from the Pierre @pierre/vscode-icons palette (MIT):
        shade 600 (--pl-*) for the light parchment, shade 400 (--pd-*) for the
@@ -169,6 +170,13 @@
     display: flex; align-items: center; gap: var(--sp-2);
     padding-bottom: var(--sp-3); margin-bottom: var(--sp-3); border-bottom: 1px solid var(--line);
   }
+  /* The hamburger opens the sidebar on a narrow screen: a button in the app, a label for the page's checkbox. */
+  .nav-hamburger {
+    background: transparent; border: none; color: var(--text); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0.1rem var(--sp-2); flex: 0 0 auto;
+  }
+  .nav-hamburger svg { display: block; }
   .repo-icon { width: 18px; height: 18px; flex: 0 0 auto; border-radius: var(--r-ctl); object-fit: contain; }
   .repo-title {
     flex: 1 1 auto; min-width: 0;
@@ -217,7 +225,7 @@
   }
   .home-head .chip { flex: 0 0 auto; }
   .home-commit { display: flex; align-items: center; gap: var(--sp-3); flex: 1 1 auto; min-width: 0; color: var(--text); }
-  .home-commit .meta { flex: 0 0 auto; margin: 0; }
+  .home-commit .meta { flex: 0 1 auto; min-width: 0; margin: 0; }
   .home-row {
     display: flex; align-items: center; gap: var(--sp-3); line-height: 1.6;
     font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-code); color: var(--text);
@@ -264,6 +272,10 @@
     position: absolute; left: var(--shell-pad); top: var(--shell-pad);
     width: var(--nav-w); display: flex; flex-direction: column;
   }
+  /* The page's sidebar toggle: a checkbox the hamburger label checks, present only on a narrow screen. */
+  .page-nav-toggle { display: none; }
+  .page-nav .nav-hamburger { display: none; }
+  .page-nav-toggle:focus-visible ~ .nav-header .nav-hamburger { outline: 2px solid color-mix(in srgb, var(--link) 60%, transparent); outline-offset: 1px; }
   /* The page's brand credit sits in flow under its links. pages-full.css pins
      the app's to the viewport bottom, which a scrolling sidebar needs and a
      short static column does not — under it the credit would strand far below
@@ -298,9 +310,11 @@
      The class vocabulary the pages share with the app (.chip, .card,
      .markdown, …) is NOT restated here — it comes from
      pages-full.css, so the pages render the app's own treatment. */
-  :where(#gs-page, #view) h1 { font-size: var(--fs-h1); line-height: 1; margin: var(--sp-2) 0 var(--sp-1); }
+  :where(#gs-page, #view) h1 { font-size: var(--fs-h1); line-height: 1; margin: 0 0 var(--sp-1); }
   :where(#gs-page) h2 { font-size: var(--fs-h2); line-height: 1.25; margin: var(--sp-1) 0 var(--sp-2); }
   :where(#gs-page) p { margin: var(--sp-4) 0; }
+  :where(#gs-page) .card p:first-child { margin-top: var(--sp-2); }
+  :where(#gs-page) .card p:last-child { margin-bottom: 0; }
   :where(#gs-page) footer, :where(#gs-page) pre, :where(#gs-page) code { font-family: var(--mono); letter-spacing: var(--mono-ls); }
   :where(#gs-page) footer { font-size: var(--fs-dense); }
   :where(#gs-page) footer a { margin-right: var(--sp-4); }
@@ -323,26 +337,28 @@
   :where(#gs-page) .notice { color: var(--muted); font-size: var(--fs-ui); padding: var(--sp-2) var(--sp-3); }
   /* A reply is a card, not a section, so without this it has no separation at
      all during the async sheet's load window. Full's version wins once it lands. */
-  :where(#gs-page) .card.comment, :where(#gs-page) .card.feedback { border: 1px solid var(--line); border-radius: var(--r-ctl); padding: var(--sp-3); margin: var(--sp-3) 0; }
+  :where(#gs-page) .card.comment, :where(#gs-page) .card.feedback { border-bottom: 1px solid var(--line); padding: var(--sp-4) 0 var(--sp-4) var(--sp-2); }
   /* The pages' meta lines are static text joined with literal separators, not
-     the app's flex rows: block flow, flush left, with only a card's meta
-     keeping the app's glyph-column indent. The id weight is deliberate — it
-     must beat pages-full.css's .meta (inline-flex + the glyph-column indent). */
-  #gs-page .meta { font-size: var(--fs-ui); color: var(--muted); display: block; margin-left: 0; }
-  #gs-page .card .meta { margin-top: var(--sp-1); margin-left: calc(var(--sp-5) + var(--sp-3)); }
+     the app's flex rows: block flow, flush left. The id weight is deliberate — it
+     must beat pages-full.css's .meta (inline-flex). */
+  #gs-page .meta { font-size: var(--fs-ui); color: var(--muted); display: block; }
+  #gs-page .card .meta { margin-top: var(--sp-1); }
+  /* The author line of a glyph-led card sits level with the glyph. */
+  #gs-page .card > .type-glyph + .meta { margin: 0; }
   #gs-page .tomb { color: var(--muted); font-style: italic; }
   #gs-page .home-row:hover, #gs-page .home-commit:hover { text-decoration: none; }
   @media (max-width: 720px) {
     #gs-page { padding: var(--sp-3); }
-    /* No drawer without JS (the app's hamburger is a scripted control), so the
-       sidebar leads the page as a wrapped row of the same nav items, section
-       labels reading inline as the group headings they are. Nothing is hidden:
-       every served byte stays visible to a crawler and a no-JS reader. */
-    #gs-page > .page-nav { position: static; width: auto; margin-bottom: var(--sp-3); }
-    #gs-page .nav-list, #gs-page .nav-list .nav-group { flex-direction: row; flex-wrap: wrap; gap: var(--sp-2); }
-    #gs-page .nav-list .nav-group { width: 100%; }
-    #gs-page .nav-list .nav-group a { margin-left: 0; }
-    /* The credit follows that row as a quiet footnote rather than a ruled band
-       across the page (on desktop it closes a column; here it closes nothing). */
-    #gs-page .nav-footer { margin-top: var(--sp-2); padding: var(--sp-1) 0; border-top: none; }
+    /* The tip's meta row is wider than a phone with its hash, so it wraps under the subject. */
+    .home-commit { flex-wrap: wrap; }
+    /* The bar and the checkbox open the sidebar without a script, and nothing leaves the document. */
+    #gs-page > .page-nav { position: static; width: auto; }
+    #gs-page .nav-header {
+      gap: var(--sp-3); background: var(--bg); border-bottom: 1px solid var(--line);
+      padding: var(--sp-3); margin: calc(var(--sp-3) * -1) calc(var(--sp-3) * -1) var(--sp-3);
+    }
+    #gs-page .nav-hamburger { display: flex; }
+    #gs-page .nav-header .repo-title { font-weight: 400; }
+    .page-nav-toggle { display: block; position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .page-nav-toggle:not(:checked) ~ .nav-list, .page-nav-toggle:not(:checked) ~ .nav-footer { display: none; }
   }

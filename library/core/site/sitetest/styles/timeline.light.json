@@ -1,112 +1,79 @@
 {
   ".card": [
     {
-      "shape": "div.card-head > span.meta > div.body-clamp-wrap",
-      "padding": "9.6px 14.4px",
-      "margin": "0px 0px 9.6px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "shape": "span.type-glyph > span.meta > div.body-clamp-wrap > div.clickable.dimmed.reply-quote",
+      "padding": "14.4px 0px 14.4px 6.4px",
+      "margin": "0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
       "color": "rgb(0, 0, 0)",
-      "backgroundColor": "srgb(1 1 1 / 0.35)",
-      "borderLeftColor": "srgb(0 0 0 / 0.18)",
-      "borderRadius": "10px"
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(0, 0, 0)",
+      "borderRadius": "0px"
     },
     {
-      "shape": "div.card-head > span.meta > div.card-chips",
-      "padding": "9.6px 14.4px",
-      "margin": "0px 0px 9.6px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "shape": "span.type-glyph > span.meta > div.body-clamp-wrap > div.dimmed.reply-quote",
+      "padding": "14.4px 0px 14.4px 6.4px",
+      "margin": "0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
       "color": "rgb(0, 0, 0)",
-      "backgroundColor": "srgb(1 1 1 / 0.35)",
-      "borderLeftColor": "srgb(0 0 0 / 0.18)",
-      "borderRadius": "10px"
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(0, 0, 0)",
+      "borderRadius": "0px"
     },
     {
-      "shape": "div.card-head > span.meta",
-      "padding": "9.6px 14.4px",
-      "margin": "0px 0px 9.6px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "shape": "span.type-glyph > span.meta > div.card-head > div.body-clamp-wrap",
+      "padding": "14.4px 0px 14.4px 6.4px",
+      "margin": "0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
       "color": "rgb(0, 0, 0)",
-      "backgroundColor": "srgb(1 1 1 / 0.35)",
-      "borderLeftColor": "srgb(0 0 0 / 0.18)",
-      "borderRadius": "10px"
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(0, 0, 0)",
+      "borderRadius": "0px"
     },
     {
-      "shape": "div.card-head",
-      "padding": "9.6px 14.4px",
-      "margin": "0px 0px 9.6px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "shape": "span.type-glyph > span.meta > div.card-head > div.card-chips",
+      "padding": "14.4px 0px 14.4px 6.4px",
+      "margin": "0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
       "color": "rgb(0, 0, 0)",
-      "backgroundColor": "srgb(1 1 1 / 0.35)",
-      "borderLeftColor": "srgb(0 0 0 / 0.18)",
-      "borderRadius": "10px"
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(0, 0, 0)",
+      "borderRadius": "0px"
     },
     {
-      "shape": "span.meta.meta-lead > div.body-clamp-wrap > div.clickable.dimmed.reply-quote",
-      "padding": "9.6px 14.4px",
-      "margin": "0px 0px 9.6px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "shape": "span.type-glyph > span.meta > div.card-head > div.excerpt",
+      "padding": "14.4px 0px 14.4px 6.4px",
+      "margin": "0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
       "color": "rgb(0, 0, 0)",
-      "backgroundColor": "srgb(1 1 1 / 0.35)",
-      "borderLeftColor": "srgb(0 0 0 / 0.18)",
-      "borderRadius": "10px"
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(0, 0, 0)",
+      "borderRadius": "0px"
     },
     {
-      "shape": "span.meta.meta-lead > div.body-clamp-wrap > div.dimmed.reply-quote",
-      "padding": "9.6px 14.4px",
-      "margin": "0px 0px 9.6px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "shape": "span.type-glyph > span.meta > div.card-head",
+      "padding": "14.4px 0px 14.4px 6.4px",
+      "margin": "0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
       "color": "rgb(0, 0, 0)",
-      "backgroundColor": "srgb(1 1 1 / 0.35)",
-      "borderLeftColor": "srgb(0 0 0 / 0.18)",
-      "borderRadius": "10px"
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(0, 0, 0)",
+      "borderRadius": "0px"
     }
   ],
   ".card-head": [
     {
-      "shape": "span.type-glyph > a.subject",
+      "shape": "a.subject",
       "padding": "0px",
-      "margin": "0px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
-      "color": "rgb(0, 0, 0)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(0, 0, 0)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "span.type-glyph > span.chip.open.state > a.subject",
-      "padding": "0px",
-      "margin": "0px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
-      "color": "rgb(0, 0, 0)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(0, 0, 0)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "span.type-glyph > span.chip.planned.state > a.subject",
-      "padding": "0px",
-      "margin": "0px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
-      "color": "rgb(0, 0, 0)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(0, 0, 0)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "span.type-glyph > span.meta.meta-lead",
-      "padding": "0px",
-      "margin": "0px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "margin": "3.2px 0px 0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
       "color": "rgb(0, 0, 0)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "borderLeftColor": "rgb(0, 0, 0)",
@@ -115,33 +82,11 @@
   ],
   ".card-chips": [
     {
-      "shape": "a.chip.chip-label > span.chip.chip-count",
-      "padding": "0px",
-      "margin": "6.4px 0px 0px 28.8px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
-      "color": "rgb(0, 0, 0)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(0, 0, 0)",
-      "borderRadius": "0px"
-    },
-    {
       "shape": "a.chip.chip-label",
       "padding": "0px",
-      "margin": "6.4px 0px 0px 28.8px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
-      "color": "rgb(0, 0, 0)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(0, 0, 0)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "span.chip.chip-count",
-      "padding": "0px",
-      "margin": "6.4px 0px 0px 28.8px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "margin": "6.4px 0px 0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
       "color": "rgb(0, 0, 0)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "borderLeftColor": "rgb(0, 0, 0)",
@@ -150,20 +95,42 @@
     {
       "shape": "span.chip.chip-due",
       "padding": "0px",
-      "margin": "6.4px 0px 0px 28.8px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "margin": "6.4px 0px 0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
       "color": "rgb(0, 0, 0)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "borderLeftColor": "rgb(0, 0, 0)",
       "borderRadius": "0px"
     },
     {
-      "shape": "span.chip.chip-review > span.chip.chip-count",
+      "shape": "span.chip.count > a.chip.chip-label",
       "padding": "0px",
-      "margin": "6.4px 0px 0px 28.8px",
-      "fontSize": "21px",
-      "fontFamily": "\"EB Garamond\", Georgia, serif",
+      "margin": "6.4px 0px 0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
+      "color": "rgb(0, 0, 0)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(0, 0, 0)",
+      "borderRadius": "0px"
+    },
+    {
+      "shape": "span.chip.count > span.chip.count.review-ok > span.chip.count.review-no > span.chip",
+      "padding": "0px",
+      "margin": "6.4px 0px 0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
+      "color": "rgb(0, 0, 0)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(0, 0, 0)",
+      "borderRadius": "0px"
+    },
+    {
+      "shape": "span.chip.count",
+      "padding": "0px",
+      "margin": "6.4px 0px 0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
       "color": "rgb(0, 0, 0)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "borderLeftColor": "rgb(0, 0, 0)",
@@ -172,7 +139,7 @@
   ],
   ".meta": [
     {
-      "shape": "a.author > a.subject > span.reltime",
+      "shape": "a.author > span.reltime > a.hash > a.chip",
       "padding": "0px",
       "margin": "0px",
       "fontSize": "12.8px",
@@ -183,31 +150,9 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "a.author > span.reltime > a.hash > a.chip",
+      "shape": "a.author > span.reltime > a.hash > span.marker",
       "padding": "0px",
-      "margin": "3.2px 0px 0px 28.8px",
-      "fontSize": "12.8px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.31 0.3 0.27)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.31 0.3 0.27)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "a.author > span.reltime > a.hash > span.chip",
-      "padding": "0px",
-      "margin": "3.2px 0px 0px 28.8px",
-      "fontSize": "12.8px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.31 0.3 0.27)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.31 0.3 0.27)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "a.author > span.reltime > a.hash > span.edited",
-      "padding": "0px",
-      "margin": "3.2px 0px 0px 28.8px",
+      "margin": "0px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
       "color": "srgb(0.31 0.3 0.27)",
@@ -218,29 +163,7 @@
     {
       "shape": "a.author > span.reltime > a.hash",
       "padding": "0px",
-      "margin": "0px 0px 3.2px",
-      "fontSize": "12.8px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.31 0.3 0.27)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.31 0.3 0.27)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "a.author > span.reltime > a.hash",
-      "padding": "0px",
-      "margin": "3.2px 0px 0px 28.8px",
-      "fontSize": "12.8px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.31 0.3 0.27)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.31 0.3 0.27)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "a.author > span.reltime",
-      "padding": "0px",
-      "margin": "0px 0px 3.2px",
+      "margin": "0px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
       "color": "srgb(0.31 0.3 0.27)",
@@ -251,7 +174,18 @@
     {
       "shape": "span.type-glyph > a.author > span.reltime > a.hash",
       "padding": "0px",
-      "margin": "0px",
+      "margin": "0px 0px 3.2px",
+      "fontSize": "12.8px",
+      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
+      "color": "srgb(0.31 0.3 0.27)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "srgb(0.31 0.3 0.27)",
+      "borderRadius": "0px"
+    },
+    {
+      "shape": "span.type-glyph > a.author > span.reltime",
+      "padding": "0px",
+      "margin": "0px 0px 3.2px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
       "color": "srgb(0.31 0.3 0.27)",
@@ -260,7 +194,7 @@
       "borderRadius": "0px"
     }
   ],
-  ".edited": [
+  ".marker": [
     {
       "shape": "",
       "padding": "0px",
@@ -291,9 +225,9 @@
       "margin": "0px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(255, 255, 255)",
-      "backgroundColor": "rgb(107, 114, 128)",
-      "borderLeftColor": "rgb(255, 255, 255)",
+      "color": "rgb(207, 34, 46)",
+      "backgroundColor": "srgb(0 0 0 / 0.08)",
+      "borderLeftColor": "rgb(207, 34, 46)",
       "borderRadius": "999px"
     },
     {
@@ -302,9 +236,9 @@
       "margin": "0px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(255, 255, 255)",
-      "backgroundColor": "rgb(31, 157, 85)",
-      "borderLeftColor": "rgb(255, 255, 255)",
+      "color": "rgb(31, 157, 85)",
+      "backgroundColor": "srgb(0 0 0 / 0.08)",
+      "borderLeftColor": "rgb(31, 157, 85)",
       "borderRadius": "999px"
     },
     {
@@ -328,41 +262,6 @@
       "backgroundColor": "srgb(0 0 0 / 0.08)",
       "borderLeftColor": "srgb(0.31 0.3 0.27)",
       "borderRadius": "999px"
-    },
-    {
-      "shape": "span.review-ok > span.review-no",
-      "padding": "0.8px 9.6px",
-      "margin": "0px",
-      "fontSize": "12.8px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(0, 0, 0)",
-      "backgroundColor": "srgb(0 0 0 / 0.08)",
-      "borderLeftColor": "rgb(0, 0, 0)",
-      "borderRadius": "999px"
-    }
-  ],
-  ".chip.state": [
-    {
-      "shape": "",
-      "padding": "0.8px 9.6px",
-      "margin": "0px",
-      "fontSize": "12.8px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(255, 255, 255)",
-      "backgroundColor": "rgb(107, 114, 128)",
-      "borderLeftColor": "rgb(255, 255, 255)",
-      "borderRadius": "999px"
-    },
-    {
-      "shape": "",
-      "padding": "0.8px 9.6px",
-      "margin": "0px",
-      "fontSize": "12.8px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(255, 255, 255)",
-      "backgroundColor": "rgb(31, 157, 85)",
-      "borderLeftColor": "rgb(255, 255, 255)",
-      "borderRadius": "999px"
     }
   ],
   ".subject": [
@@ -371,10 +270,10 @@
       "padding": "0px",
       "margin": "0px",
       "fontSize": "15.2px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(0, 170, 119)",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
+      "color": "rgb(0, 0, 0)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(0, 170, 119)",
+      "borderLeftColor": "rgb(0, 0, 0)",
       "borderRadius": "0px"
     }
   ],
@@ -385,9 +284,9 @@
       "margin": "0px 3.84px 0px 0px",
       "fontSize": "12.8px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.31 0.3 0.27)",
+      "color": "rgb(0, 0, 0)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.31 0.3 0.27)",
+      "borderLeftColor": "rgb(0, 0, 0)",
       "borderRadius": "0px"
     },
     {
@@ -396,31 +295,9 @@
       "margin": "0px",
       "fontSize": "15.2px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(137, 87, 229)",
+      "color": "rgb(0, 0, 0)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(137, 87, 229)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "",
-      "padding": "0px",
-      "margin": "0px",
-      "fontSize": "15.2px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "rgb(31, 157, 85)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "rgb(31, 157, 85)",
-      "borderRadius": "0px"
-    },
-    {
-      "shape": "",
-      "padding": "0px",
-      "margin": "0px",
-      "fontSize": "15.2px",
-      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
-      "color": "srgb(0.31 0.3 0.27)",
-      "backgroundColor": "rgba(0, 0, 0, 0)",
-      "borderLeftColor": "srgb(0.31 0.3 0.27)",
+      "borderLeftColor": "rgb(0, 0, 0)",
       "borderRadius": "0px"
     }
   ]

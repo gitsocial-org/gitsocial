@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card, and feedbackFileRefs the file route the anchor chip opens through the branches of the pull request; the page prefixes it with its path to the shell. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head, and the tag route a release head links to; the page prefixes it with its path to the shell. rowHeads pins the same for a list or activity row, whose tinted glyph carries the state its head chip would repeat. metaRow pins the meta row skeleton: the bit classes in order, the same row once the item is edited, and the author label, its email title and the author search route both renderers derive; the page prefixes the route with its path to the shell. defaultTitles pins the name both renderers give a site with no configured title. listEmpty pins each list route\u0027s empty sentence, which both renderers show. rowGlyphs pins the type glyph class and title both renderers give a row, the extension default standing in for a header that names no type. releaseRows pins the asset count both renderers put on a release row in place of its hash. releaseNotes pins the blocks a release body splits into, so the commit rows and their hashes read the same on both surfaces, and releaseAssets pins the artifact, checksum and SBOM rows and which of them carry a link. markdownPaths pins the extensions both renderers render as prose and mdxStrip the MDX blocks both drop before parsing, and frontMatter the YAML block both drop from any prose document first. admonitions pins the ::: component both renderers build from one class set: the block's classes, its title line's class and text, a body word that must stay visible, and the openers that degrade to visible text (expectClass empty). cardSkeleton pins the one card shape: the part order and the head slot order both renderers build, per item type, and the headless shape a body-only type takes, where the marker leads the meta row and the first line stands as the card's text. homeRows pins how many root entries the home section shows on both renderers before its chevron. adopted pins an adopted copy's row on both renderers: its original author and time from the GitMsg-Ref (origin-time over both, the git time when the snapshot's does not parse), the adopted-from bit after the hash on a row and on the detail head, no adopts field row, the index entry fields the page layer writes and the app reads, and a list that sorts the copy by its original time below a plain issue created between it and the copy's commit, and that neither lists a cross-repository edit. itemCounts pins the sidebar count per list: the open items the page layer writes to its manifest and the rows the app's lists show under their default Open filter, duplicate milestones and sprints merged by origin URL, else subject. prDiff pins the Files changed section of a pull request on both renderers: its head, the file cap, the slots of a file row that both share, the status letters, the form of a hunk head, the parts of the notice variant, the wording of each notice, and the label and the cases of a generated file, which both renderers show closed. refTokens pins the refs and mentions one free text carries on both renderers, and pageBodyRefs the ref anchors and the bare URL links a page body carries, the same a.hash anchors the app body carries. itemPageMeta pins the definition rows an item page lists against the trailer rows of the app detail: the keys in order, the text of each value and the link each bit carries; the page prefixes a route with its path to the shell. rowText pins the first line of a comment, feedback, repost or quote, as written: the text the items index writes for its list row and the line the app renders its card from. treeIcons pins the icon key and the hue class both renderers give a root entry of the home section, by its name or its kind.",
+  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card, and feedbackFileRefs the file route the anchor chip opens through the branches of the pull request; the page prefixes it with its path to the shell. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head, and the tag route a release head links to; the page prefixes it with its path to the shell. rowHeads pins the same for a list or activity row, which drops an open pill, since open is the default state. metaRow pins the meta row skeleton: the bit classes in order, which a list row, an item page and a comment of a thread share, the route the hash of a comment opens, the same row once the item is edited, and the author label, its email title and the author search route both renderers derive; the page prefixes the route with its path to the shell. defaultTitles pins the name both renderers give a site with no configured title. listEmpty pins each list route\u0027s empty sentence, which both renderers show. rowGlyphs pins the type glyph class and title both renderers give a row, the extension default standing in for a header that names no type. releaseRows pins the asset count both renderers put on a release row after its hash. releaseNotes pins the blocks a release body splits into, so the commit rows and their hashes read the same on both surfaces, and releaseAssets pins the artifact, checksum and SBOM rows and which of them carry a link. markdownPaths pins the extensions both renderers render as prose and mdxStrip the MDX blocks both drop before parsing, and frontMatter the YAML block both drop from any prose document first. admonitions pins the ::: component both renderers build from one class set: the block's classes, its title line's class and text, a body word that must stay visible, and the openers that degrade to visible text (expectClass empty). cardSkeleton pins the one card shape: the type glyph as the first part, the author line after it, then the head or the body; the head slot order both renderers build, per item type; and the headless shape a body-only type takes, where the marker leads the author line and the first line stands as the card's text. homeRows pins how many root entries the home section shows on both renderers before its chevron. adopted pins an adopted copy's row on both renderers: its original author and time from the GitMsg-Ref (origin-time over both, the git time when the snapshot's does not parse), the adopted-from bit after the hash on a row and on the detail head, no adopts field row, the index entry fields the page layer writes and the app reads, and a list that sorts the copy by its original time below a plain issue created between it and the copy's commit, and that neither lists a cross-repository edit. itemCounts pins the sidebar count per list: the open items the page layer writes to its manifest and the rows the app's lists show under their default Open filter, duplicate milestones and sprints merged by origin URL, else subject. prDiff pins the Files changed section of a pull request on both renderers: its head, the file cap, the slots of a file row that both share, the status letters, the form of a hunk head, the parts of the notice variant, the wording of each notice, and the label and the cases of a generated file, which both renderers show closed. refTokens pins the refs and mentions one free text carries on both renderers, and pageBodyRefs the ref anchors and the bare URL links a page body carries, the same a.hash anchors the app body carries. itemPageMeta pins the definition rows an item page lists against the trailer rows of the app detail: the keys in order, the text of each value and the link each bit carries; the page prefixes a route with its path to the shell. rowText pins the first line of a comment, feedback, repost or quote, as written: the text the items index writes for its list row and the line the app renders its card from. treeIcons pins the icon key and the hue class both renderers give a root entry of the home section, by its name or its kind.",
   "messageCases": [
     {
       "name": "gpgsig-message-body",
@@ -292,12 +292,52 @@
   ],
   "rowHeads": [
     {
-      "name": "issue-row-leaves-the-state-to-its-glyph",
+      "name": "open-issue-row-carries-no-pill",
+      "ext": "pm",
+      "header": { "type": "issue", "state": "open" },
+      "firstLine": "Fix the parser",
+      "expectSubject": "Fix the parser",
+      "expectChips": []
+    },
+    {
+      "name": "typeless-pm-row-is-an-open-issue-with-no-pill",
+      "ext": "pm",
+      "header": {},
+      "firstLine": "Fix the parser",
+      "expectSubject": "Fix the parser",
+      "expectChips": []
+    },
+    {
+      "name": "closed-issue-row-leads-with-its-state-pill",
       "ext": "pm",
       "header": { "type": "issue", "state": "closed" },
       "firstLine": "Fix the parser",
       "expectSubject": "Fix the parser",
+      "expectChips": [{ "class": "state closed", "label": "closed" }]
+    },
+    {
+      "name": "open-pull-request-row-carries-no-pill",
+      "ext": "review",
+      "header": { "type": "pull-request", "state": "open" },
+      "firstLine": "Expand notes with more lines",
+      "expectSubject": "Expand notes with more lines",
       "expectChips": []
+    },
+    {
+      "name": "merged-pull-request-row-leads-with-its-state-pill",
+      "ext": "review",
+      "header": { "type": "pull-request", "state": "merged" },
+      "firstLine": "Ship v1.0",
+      "expectSubject": "Ship v1.0",
+      "expectChips": [{ "class": "state merged", "label": "merged" }]
+    },
+    {
+      "name": "active-sprint-row-keeps-its-state-chip",
+      "ext": "pm",
+      "header": { "type": "sprint", "state": "active" },
+      "firstLine": "Sprint 2",
+      "expectSubject": "Sprint 2",
+      "expectChips": [{ "class": "state active", "label": "active" }]
     },
     {
       "name": "draft-pull-request-row-keeps-the-draft-chip",
@@ -352,6 +392,7 @@
   "metaRow": {
     "bits": ["author", "reltime", "hash"],
     "editedBits": ["author", "reltime", "hash", "edited"],
+    "commentHashRoute": "#commit:aaaaaaaaaaaa@gitmsg/social",
     "authors": [
       { "name": "a display name over its email", "author": "Ada Lovelace", "email": "ada@example.com", "expectLabel": "Ada Lovelace", "expectTitle": "ada@example.com", "expectHref": "#/search/author%3Aada%40example.com" },
       { "name": "an email alone labels the row", "author": "", "email": "ada@example.com", "expectLabel": "ada@example.com", "expectTitle": "", "expectHref": "#/search/author%3Aada%40example.com" },
@@ -372,7 +413,7 @@
     { "name": "a typeless pm item reads as an issue", "ext": "pm", "header": {}, "expectClass": "tg-open", "expectTitle": "issue \u00b7 open" },
     { "name": "a closed issue is tinted closed", "ext": "pm", "header": { "type": "issue", "state": "closed" }, "expectClass": "tg-closed", "expectTitle": "issue \u00b7 closed" },
     { "name": "a merged pull request is tinted merged", "ext": "review", "header": { "type": "pull-request", "state": "merged" }, "expectClass": "tg-merged", "expectTitle": "pull-request \u00b7 merged" },
-    { "name": "a milestone", "ext": "pm", "header": { "type": "milestone", "state": "completed" }, "expectClass": "tg-milestone", "expectTitle": "milestone" },
+    { "name": "a done milestone is tinted closed", "ext": "pm", "header": { "type": "milestone", "state": "completed" }, "expectClass": "tg-closed", "expectTitle": "milestone · completed" },
     { "name": "a release", "ext": "release", "header": { "type": "release", "tag": "v1.0" }, "expectClass": "tg-release", "expectTitle": "release" },
     { "name": "a typeless memo reads as a memo", "ext": "memo", "header": {}, "expectClass": "tg-memo", "expectTitle": "memo" }
   ],
@@ -384,16 +425,17 @@
     { "name": "separators alone drop the bit", "artifacts": " , ", "expectLabel": "" }
   ],
   "cardSkeleton": {
-    "parts": ["card-head", "meta", "card-chips"],
-    "head": ["type-glyph", "chip", "subject", "chip"],
-    "bodyOnlyParts": ["meta", "body"],
+    "parts": ["type-glyph", "meta", "card-head", "card-chips"],
+    "head": ["subject", "chip"],
+    "bodyOnlyParts": ["type-glyph", "meta", "body"],
     "cases": [
-      { "name": "an issue leaves its state to the tinted glyph", "ext": "pm", "header": { "type": "issue", "state": "open", "labels": "kind/bug" }, "firstLine": "Fix the parser", "expectHead": ["type-glyph", "subject"] },
-      { "name": "a draft pull request leads its subject with the draft chip", "ext": "review", "header": { "type": "pull-request", "draft": "true", "head": "feature", "base": "trunk" }, "firstLine": "Rework the walk", "expectHead": ["type-glyph", "chip", "subject"] },
-      { "name": "a release trails its subject with the version chip", "ext": "release", "header": { "type": "release", "tag": "v1.0", "version": "1.0.1" }, "firstLine": "Ship the rewrite", "expectHead": ["type-glyph", "subject", "chip"] },
-      { "name": "a post heads with its glyph and its subject", "ext": "social", "header": { "type": "post" }, "firstLine": "The tree carries sources only", "expectHead": ["type-glyph", "subject"] },
-      { "name": "a comment row takes no head, its first line standing as the card's text", "ext": "social", "header": { "type": "comment", "original": "#commit:aaaaaaaaaaaa" }, "firstLine": "A comment on the issue", "expectHead": [], "expectLead": ["type-glyph"] },
-      { "name": "a retracted quote row leads its meta row with the marker", "ext": "social", "header": { "type": "quote", "original": "#commit:aaaaaaaaaaaa", "retracted": "true" }, "firstLine": "Quoting the upstream post", "expectHead": [], "expectLead": ["type-glyph", "chip"] }
+      { "name": "an open issue heads with its subject alone", "ext": "pm", "header": { "type": "issue", "state": "open", "labels": "kind/bug" }, "firstLine": "Fix the parser", "expectHead": ["subject"], "expectMarker": "" },
+      { "name": "a closed issue words its state at the end of its author line", "ext": "pm", "header": { "type": "issue", "state": "closed" }, "firstLine": "Fix the parser", "expectHead": ["subject"], "expectMarker": "closed" },
+      { "name": "a draft pull request words the draft marker at the end of its author line", "ext": "review", "header": { "type": "pull-request", "draft": "true", "head": "feature", "base": "trunk" }, "firstLine": "Rework the walk", "expectHead": ["subject"], "expectMarker": "draft" },
+      { "name": "a release trails its subject with the version chip", "ext": "release", "header": { "type": "release", "tag": "v1.0", "version": "1.0.1" }, "firstLine": "Ship the rewrite", "expectHead": ["subject", "chip"], "expectMarker": "" },
+      { "name": "a post heads with its subject under its author line", "ext": "social", "header": { "type": "post" }, "firstLine": "The tree carries sources only", "expectHead": ["subject"], "expectMarker": "" },
+      { "name": "a comment row takes no head, its first line standing as the card's text", "ext": "social", "header": { "type": "comment", "original": "#commit:aaaaaaaaaaaa" }, "firstLine": "A comment on the issue", "expectHead": [], "expectMarker": "" },
+      { "name": "a retracted quote row ends its author line with the marker", "ext": "social", "header": { "type": "quote", "original": "#commit:aaaaaaaaaaaa", "retracted": "true" }, "firstLine": "Quoting the upstream post", "expectHead": [], "expectMarker": "retracted" }
     ]
   },
   "homeRows": { "limit": 2 },

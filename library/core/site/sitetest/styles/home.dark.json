@@ -1,7 +1,7 @@
 {
   ".meta": [
     {
-      "shape": "span.author > span.reltime",
+      "shape": "span.author > span.reltime > span.hash",
       "padding": "0px",
       "margin": "0px",
       "fontSize": "12.8px",

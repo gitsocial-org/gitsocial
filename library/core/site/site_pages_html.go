@@ -159,7 +159,8 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 </body>
 </html>
 {{end}}{{define "sidebar"}}<aside class="page-nav">
-<div class="nav-header">{{if .RepoIcon}}<img class="repo-icon" src="{{.RepoIcon}}" alt="">{{end}}<a class="repo-title" href="{{.Base}}index.html">{{.SiteTitle}}</a></div>
+<input type="checkbox" class="page-nav-toggle" id="page-nav-toggle" aria-label="Open navigation">
+<div class="nav-header"><label for="page-nav-toggle" class="nav-hamburger" aria-label="Open navigation"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></label>{{if .RepoIcon}}<img class="repo-icon" src="{{.RepoIcon}}" alt="">{{end}}<a class="repo-title" href="{{.Base}}index.html">{{.SiteTitle}}</a></div>
 <nav class="nav-list">{{range .Nav}}{{if .Section}}<div class="nav-group"><div class="nav-section">{{.Section}}</div>{{end}}{{range .Links}}<a href="{{.Href}}"{{if .Current}} class="active"{{end}}><span class="nav-icon">{{.Glyph}}</span>{{.Label}}</a>{{end}}{{if .Section}}</div>{{end}}{{end}}</nav>
 <div class="nav-footer"><a class="foot-brand" href="https://gitsocial.org"><svg class="logo-small" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" /></svg><span>Built with GitSocial</span></a></div>
 </aside>
@@ -182,12 +183,12 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{if .Omitted}}<div class="notice">{{.Omitted}} more not shown.</div>
 {{end}}{{if .More}}<div class="notice">The page shows the first {{lineCap}} changed lines. <a href="{{.AppHref}}">The app shows the rest.</a></div>
 {{end}}</div>
-{{end}}{{define "glyph"}}{{if .Glyph}}<span class="type-glyph {{.GlyphClass}}" title="{{.GlyphTitle}}">{{.Glyph}}</span> {{end}}{{end}}{{define "hometoggle"}}<summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></summary>
+{{end}}{{define "glyph"}}<span class="type-glyph{{if .GlyphClass}} {{.GlyphClass}}{{end}}"{{if .GlyphTitle}} title="{{.GlyphTitle}}"{{end}}>{{.Glyph}}</span>{{end}}{{define "hometoggle"}}<summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></summary>
 {{end}}{{define "filerow"}}<a class="home-row" href="{{.Href}}">{{.Icon}}<span class="home-row-subject">{{.Name}}</span></a>
-{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}>{{if .BodyOnly}}<span class="meta meta-lead">{{template "glyph" .}}{{if .Chip}}{{template "chip" .Chip}} {{end}}{{template "bits" .Meta}}</span>
-{{if .Text}}<div class="body">{{.Text}}</div>
-{{end}}{{else}}<div class="card-head">{{template "glyph" .}}{{if .Chip}}{{template "chip" .Chip}} {{end}}<a class="subject" href="{{.Href}}">{{.Title}}</a>{{range .TailChips}} {{template "chip" .}}{{end}}</div>
-<span class="meta">{{template "bits" .Meta}}</span>{{end}}</div>
+{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}>{{template "glyph" .}}{{if or .Meta .BodyOnly}}<span class="meta">{{template "bits" .Meta}}{{if .Chip}} · <span class="marker">{{.Chip.Label}}</span>{{end}}</span>
+{{end}}{{if .BodyOnly}}{{if .Text}}<div class="body">{{.Text}}</div>
+{{end}}{{else}}<div class="card-head"><a class="subject" href="{{.Href}}">{{.Title}}</a>{{range .TailChips}} {{template "chip" .}}{{end}}</div>
+{{end}}</div>
 {{end}}{{end}}{{define "item"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
 {{if .Heading}}{{template "detailhead" .}}
@@ -196,8 +197,8 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{else}}{{template "body" .Body}}{{template "rows" .Rows}}{{end}}{{with .Assets}}{{template "assets" .}}{{end}}{{with .Diff}}{{template "diff" .}}{{end}}{{if .Replies}}<div class="thread"><div class="thread-head">Comments ({{len .Replies}})</div>
 {{range .Replies}}{{if .Depth}}<div class="comment-row"><div class="thread-rail">{{range $i := .Rail}}<span class="rail-guide"></span>{{end}}</div>{{end}}<div class="card {{.Variant}}">
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
-{{else}}<p class="meta meta-lead">{{template "glyph" .}}{{range .Chips}}{{template "chip" .}} {{end}}{{template "bits" .Meta}}</p>
-{{template "paras" .Paras}}{{end}}</div>{{if .Depth}}</div>{{end}}
+{{else}}{{if .GlyphLeads}}{{template "glyph" .}}{{end}}<p class="meta">{{if not .GlyphLeads}}{{template "glyph" .}} {{end}}{{range .Chips}}{{template "chip" .}} {{end}}{{template "bits" .Meta}}</p>
+<div>{{template "paras" .Paras}}</div>{{end}}</div>{{if .Depth}}</div>{{end}}
 {{end}}</div>
 {{end}}{{if .Omitted}}<p class="notice">{{.Omitted}} more replies not shown.</p>
 {{end}}<footer><a href="{{.Chrome.Base}}{{.ListDir}}/index.html">← {{.ListLabel}}</a> <a href="{{.Chrome.Base}}index.html">home</a></footer>
@@ -359,6 +360,9 @@ type sitePageReply struct {
 // rail guides without an index loop.
 func (r sitePageReply) Rail() []struct{} { return make([]struct{}, r.Depth) }
 
+// GlyphLeads reports whether the glyph leads the card as its mark column; a feedback card keeps it in its meta row, as feedbackCard in gs-render.js does.
+func (r sitePageReply) GlyphLeads() bool { return r.Variant == "comment" }
+
 // siteItemPageData feeds the "item" template.
 type siteItemPageData struct {
 	Chrome    sitePageChrome
@@ -407,7 +411,7 @@ type sitePageListEntry struct {
 	TailChips  []sitePageChip // chips after the subject, the app cardHead's trailing chips
 	Href       string
 	Title      string
-	BodyOnly   bool   // no head: the glyph and the marker lead the meta row (siteRowHead)
+	BodyOnly   bool   // no head: the marker leads the meta row, and the text follows it (siteRowHead)
 	Text       string // a body-only row's own text, the first line of its content (pageRowText)
 	Meta       []sitePageBit
 }
@@ -625,21 +629,31 @@ func sitePageTypeLabel(t string) string {
 var sitePageTypeGlyph = map[string]string{
 	"post": "•", "comment": "↩", "repost": "↻", "quote": "↻",
 	"milestone": "◇", "sprint": "◷", "pull-request": "⑂", "feedback": "↩",
-	"release": "⏏", "memo": "☞", "commit": "◦",
+	"release": "⏏", "memo": "☞", "commit": "•",
 }
 
 // sitePageGlyph returns a type's glyph and tint class (gs-render.js typeGlyphEl); a state-bearing type is tinted by its state.
 func sitePageGlyph(itemType, state string) (glyph, class string) {
-	if itemType == "issue" {
+	glyph = sitePageTypeGlyph[itemType]
+	switch {
+	case itemType == "issue":
 		glyph = "○"
-		if state == "closed" || state == "canceled" || state == "completed" {
+		if state == "closed" || state == "completed" {
 			glyph = "●"
+		} else if strings.HasPrefix(state, "cancel") {
+			glyph = "◌"
 		}
-	} else {
-		glyph = sitePageTypeGlyph[itemType]
+	case itemType == "milestone" && (state == "closed" || strings.HasPrefix(state, "cancel")):
+		glyph = "◆"
+	case itemType == "sprint" && state == "active":
+		glyph = "◶"
+	case itemType == "sprint" && state == "completed":
+		glyph = "◵"
+	case itemType == "sprint" && strings.HasPrefix(state, "cancel"):
+		glyph = "⊘"
 	}
 	class = itemType
-	if itemType == "issue" || itemType == "pull-request" {
+	if itemType == "issue" || itemType == "pull-request" || itemType == "milestone" || itemType == "sprint" {
 		class = sitePageStateClass(state)
 	}
 	return glyph, "tg-" + class
@@ -647,7 +661,7 @@ func sitePageGlyph(itemType, state string) (glyph, class string) {
 
 // sitePageGlyphTitle returns a glyph's title attribute: the item type, plus its state on a state-bearing type.
 func sitePageGlyphTitle(itemType, state string) string {
-	if itemType != "issue" && itemType != "pull-request" {
+	if itemType != "issue" && itemType != "pull-request" && itemType != "milestone" && itemType != "sprint" {
 		return itemType
 	}
 	if state == "" {
@@ -1109,6 +1123,10 @@ func buildSiteReply(r, root *sitePageItem, link func(ref string) string) sitePag
 		GlyphTitle: t,
 		Meta:       []sitePageBit{sitePageAuthorLink(r.Msg), sitePageTimeBit(pageEffectiveTime(r.Msg))},
 	}
+	// A comment's author line carries its hash, as metaRow in gs-render.js does; a feedback card's does not.
+	if t != "feedback" {
+		s.Meta = append(s.Meta, sitePageHashBit(r.Msg.Short, "../index.html#commit:"+r.Msg.Short+"@gitmsg/"+r.Msg.Ext))
+	}
 	if r.Edited {
 		s.Meta = append(s.Meta, sitePageEditedBit(r))
 	}
@@ -1346,17 +1364,11 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 	return d
 }
 
-// siteRowChips lists a row's head chips: the head's own chips, less the state pill a tinted glyph already carries. Mirrors rowChips in gs-core.js.
+// siteRowChips lists a row's head chips: the head's own chips, less an open or planned pill, the resting state of an item or a sprint. Mirrors rowChips in gs-core.js.
 func siteRowChips(it *sitePageItem, head string) []sitePageChip {
 	chips := siteHeadChips(it, head)
-	if len(chips) == 0 || it.Retracted {
-		return chips
-	}
-	switch pageItemType(it) {
-	case "issue", "pull-request":
-		if strings.HasPrefix(chips[0].Class, "state ") {
-			return chips[1:]
-		}
+	if len(chips) > 0 && (chips[0].Class == "state open" || chips[0].Class == "state planned") {
+		return chips[1:]
 	}
 	return chips
 }
@@ -1389,14 +1401,12 @@ func siteReleaseAssetLabel(artifacts string) string {
 
 // siteRowMeta builds a row's meta line: the author, the date, the hash, then the edited marker.
 func siteRowMeta(it *sitePageItem, href string) []sitePageBit {
-	meta := []sitePageBit{sitePageAuthorLink(it.Msg), sitePageTimeBit(pageEffectiveTime(it.Msg))}
-	// A release is named by its tag, so its row counts assets where another row links its hash.
+	meta := []sitePageBit{sitePageAuthorLink(it.Msg), sitePageTimeBit(pageEffectiveTime(it.Msg)), sitePageHashBit(it.Msg.Short, href)}
+	// A release is named by its tag, so its row counts assets after the hash.
 	if pageItemType(it) == "release" {
 		if label := siteReleaseAssetLabel(pageItemField(it, "artifacts")); label != "" {
 			meta = append(meta, sitePageTextBit(label))
 		}
-	} else {
-		meta = append(meta, sitePageHashBit(it.Msg.Short, href))
 	}
 	if it.Edited && !it.Retracted {
 		meta = append(meta, sitePageEditedBit(it))
@@ -1435,6 +1445,10 @@ func buildSiteListEntry(it *sitePageItem, defaultType string) sitePageListEntry 
 	// A list page sits one directory below the item pages.
 	href := "../i/" + it.Msg.Short + ".html"
 	meta := siteRowMeta(it, href)
+	// A repost's author line names the verb, as socialCard in gs-render.js does.
+	if t == "repost" {
+		meta = append([]sitePageBit{meta[0], {Text: "reposted", Sep: " "}}, meta[1:]...)
+	}
 	if t != defaultType {
 		meta = append(meta, sitePageTextBit(sitePageTypeLabel(t)))
 	}
@@ -1448,7 +1462,22 @@ func buildSiteListEntry(it *sitePageItem, defaultType string) sitePageListEntry 
 	row := siteRowHead(it)
 	row.Glyph, row.GlyphClass, row.GlyphTitle = glyph, glyphClass, sitePageGlyphTitle(t, state)
 	row.Href, row.Meta = href, meta
+	// A state word stands in for the edited marker, as leadMeta in gs-render.js does.
+	if row.Chip != nil {
+		row.Meta = siteBitsWithout(meta, "edited")
+	}
 	return row
+}
+
+// siteBitsWithout returns the bits less those of one class.
+func siteBitsWithout(bits []sitePageBit, class string) []sitePageBit {
+	out := bits[:0:0]
+	for _, b := range bits {
+		if b.Class != class {
+			out = append(out, b)
+		}
+	}
+	return out
 }
 
 // sitePageNavItem is one entry of the shell's sidebar: its section, route, glyph and label.

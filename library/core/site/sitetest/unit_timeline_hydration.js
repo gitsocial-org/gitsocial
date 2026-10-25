@@ -1,6 +1,7 @@
 // unit_timeline_hydration.js - DOM-free units for corpus-backed body hydration:
 // a timeline window fills its card bodies from the bodies corpus, an older shard
-// loads on demand, and a commit the corpus misses keeps its object read.
+// loads on demand, a commit the corpus misses keeps its object read, and a code
+// commit fills from bodies/code with no object read.
 const zlib = require("zlib");
 const GS = require("../assets/gs-core.js");
 let pass = 0, fail = 0;
@@ -105,6 +106,39 @@ async function main() {
   const r3 = await GS.loadTimelineWindow(ctx3, false);
   eq(r3.items.length, 2, "the window comes from the index");
   eq(countOf("objects/" + Z.slice(0, 2) + "/"), 0, "no walk from the tip reads the tip's object");
+
+  console.log("=== a code commit fills from bodies/code and never reads its object ===");
+  const K = sha("e"), L = sha("f");
+  const codeMeta = (s, subject, ts) => ({ sha: s, author: "Bob", email: "bob@example.com", ts, header: "", subject, branch: "main", parents: [] });
+  const codeIndex = {
+    ".gitsocial/site/items/code/manifest.json": JSON.stringify({ version: 5, tip: K, complete: true, shards: [] }),
+    ".gitsocial/site/items/code/head.json": JSON.stringify({ version: 5, tip: K, items: [codeMeta(L, "L subject", 500), codeMeta(K, "K subject", 600)] }),
+    ["objects/" + K.slice(0, 2) + "/" + K.slice(2)]: looseObject("K subject\n\nK body from its object", 600),
+    ["objects/" + L.slice(0, 2) + "/" + L.slice(2)]: looseObject("L subject\n\nL body from its object", 500),
+  };
+  served = Object.assign({
+    ".gitsocial/site/bodies/code/manifest.json": JSON.stringify({ version: 4, tip: K, shards: [] }),
+    ".gitsocial/site/bodies/code/head.json": doc(K, [{ sha: K, author: "Bob", ts: 600, message: "K subject\n\nK body from the corpus" }]),
+  }, codeIndex);
+  log = [];
+  const r4 = await GS.loadTimelineWindow(GS.newContext(BASE), false);
+  await r4.hydrated;
+  const by4 = new Map(r4.items.map((it) => [it.commit.hash, it]));
+  ok(by4.get(K).content.indexOf("K body from the corpus") !== -1, "a code commit fills its body from bodies/code", by4.get(K).content);
+  eq(by4.get(L).content, "L subject", "a code commit the corpus misses stays on its subject");
+  const codeObjects = () => countOf("objects/" + K.slice(0, 2) + "/") + countOf("objects/" + L.slice(0, 2) + "/");
+  eq(codeObjects(), 0, "no code commit reads its object");
+  eq(countOf(".gitsocial/site/bodies/code/"), 2, "the code corpus costs its manifest and head");
+
+  console.log("=== a bucket with no code corpus leaves each commit on its subject ===");
+  served = Object.assign({}, codeIndex);
+  log = [];
+  const r5 = await GS.loadTimelineWindow(GS.newContext(BASE), false);
+  await r5.hydrated;
+  const by5 = new Map(r5.items.map((it) => [it.commit.hash, it]));
+  eq([by5.get(K).content, by5.get(L).content], ["K subject", "L subject"], "each code commit keeps its subject");
+  eq(codeObjects(), 0, "no object is read for a code commit");
+  eq(countOf(".gitsocial/site/bodies/code/manifest.json"), 1, "the absent corpus costs one manifest probe");
 
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);

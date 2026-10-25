@@ -1385,14 +1385,14 @@
     commit.hollow = false;
   }
 
-  // hydrateFromBodies fills a batch's hollow commits from each ext's bodies corpus, a few shard reads in place of one object read per item; a commit the corpus misses keeps its object read.
+  // hydrateFromBodies fills a batch's hollow commits from each ext's bodies corpus, a few shard reads in place of one object read per item; a gitmsg commit the corpus misses keeps its object read, and a code commit keeps its subject.
   async function hydrateFromBodies(ctx, items) {
     const byExt = new Map();
     for (const it of items) {
       for (const c of itemCommits(it)) {
         if (!c.hollow) continue;
-        const ext = c.gitmsg && c.gitmsg.ext;
-        if (!ext || !EXT_BRANCHES[ext]) continue;
+        const ext = !c.gitmsg && typeof c._branch === "string" ? "code" : c.gitmsg && c.gitmsg.ext;
+        if (!ext || (ext !== "code" && !EXT_BRANCHES[ext])) continue;
         if (!byExt.has(ext)) byExt.set(ext, []);
         byExt.get(ext).push(c);
       }
@@ -1416,6 +1416,8 @@
         miss = fill(miss);
       }
     }));
+    // A code commit reads no object for its body: one the corpus missed stays on its subject.
+    for (const c of byExt.get("code") || []) c.hollow = false;
   }
 
   // hydrateItem fetches an item's version commit bodies and recomputes its displayed content; idempotent.
@@ -3077,16 +3079,10 @@
     return [{ class: "state " + chipStateClass(state), label: state }];
   }
 
-  // GLYPH_STATE_TYPES tint their glyph by state, so a row of that type drops the state pill its head would carry.
-  const GLYPH_STATE_TYPES = { issue: 1, "pull-request": 1 };
-
-  // rowChips lists a row's head chips: the head's own chips, less the state pill a tinted glyph already carries. Mirrors siteRowChips in site_pages_html.go.
+  // rowChips lists a row's head chips: the head's own chips, less an open or planned pill, the resting state of an item or a sprint. Mirrors siteRowChips in site_pages_html.go.
   function rowChips(header, ext, head, retracted) {
-    const h = header || {};
-    const chips = headChips(h, ext, head, retracted);
-    if (!chips.length || retracted || h.retracted === "true") return chips;
-    const type = h.type || EXT_DEFAULT_TYPE[ext] || ext;
-    return GLYPH_STATE_TYPES[type] && /^state /.test(chips[0].class) ? chips.slice(1) : chips;
+    const chips = headChips(header, ext, head, retracted);
+    return chips.length && (chips[0].class === "state open" || chips[0].class === "state planned") ? chips.slice(1) : chips;
   }
 
   // rowHeadChips splits a row's head chips by slot: the pill leading the subject, then the release version trailing it. Mirrors siteRowHeadChips in site_pages_html.go.
@@ -3193,7 +3189,7 @@
         for (const k of ["state", "review-state"]) if (!own[k] && prev && prev[k]) own[k] = prev[k];
         prev = own;
         if (!action) continue;
-        const target = own.type === "feedback" ? (byShort.get(refHash(own["pull-request"] || "")) || it) : it;
+        const target = own.type === "feedback" ? (byShort.get(anyRefHash(own["pull-request"] || "")) || it) : it;
         out.push({
           commit: v.commit, header: own, content: v.content, rawMessage: v.commit.rawMessage, edited: false, editorName: "",
           author: effectiveAuthor(v.commit, v.commit.gitmsg), effectiveTime: v.effectiveTime, versions: [],
@@ -3261,14 +3257,14 @@
     };
   }
 
-  // codeMetaCommit converts one code index entry into a body-less commit record carrying its subject, branch and parents.
+  // codeMetaCommit converts one code index entry into a body-less commit record carrying its subject, branch and parents, hollow until bodies/code fills it.
   function codeMetaCommit(e) {
     return {
       hash: e.sha, short: String(e.sha || "").slice(0, 12), tree: "",
       parents: Array.isArray(e.parents) ? e.parents : [],
       authorName: e.author || "", authorEmail: e.email || "", authorTime: e.ts || 0,
       content: String(e.subject || ""), rawMessage: String(e.subject || ""),
-      subject: String(e.subject || ""), gitmsg: null, refs: [], _branch: e.branch || "",
+      subject: String(e.subject || ""), gitmsg: null, refs: [], _branch: e.branch || "", hollow: true,
     };
   }
 
@@ -4003,14 +3999,18 @@
   }
 
   // TYPE_GLYPH maps a gitmsg item type to the TUI's compact leading glyph; issues vary by state and resolve in typeGlyph.
-  const TYPE_GLYPH = { post: "•", comment: "↩", repost: "↻", quote: "↻", milestone: "◇", sprint: "◷", "pull-request": "⑂", feedback: "↩", release: "⏏", memo: "☞", commit: "◦" };
+  const TYPE_GLYPH = { post: "•", comment: "↩", repost: "↻", quote: "↻", milestone: "◇", sprint: "◷", "pull-request": "⑂", feedback: "↩", release: "⏏", memo: "☞", commit: "•" };
 
-  // typeGlyph returns an item's leading type glyph, or "" when the type is unknown.
+  // STATE_GLYPH gives a done milestone the filled diamond, and a sprint one shape per state: the quadrant turns as the sprint runs. Mirrors sitePageGlyph in site_pages_html.go.
+  const STATE_GLYPH = { milestone: { closed: "◆", canceled: "◆", cancelled: "◆" }, sprint: { active: "◶", completed: "◵", canceled: "⊘", cancelled: "⊘" } };
+
+  // typeGlyph returns an item's leading type glyph, or "" when the type is unknown; an issue, a milestone and a sprint vary by state.
   function typeGlyph(item, ext) {
     const h = item.header || {};
     const t = h.type || EXT_DEFAULT_TYPE[h.ext || ext] || "";
-    if (t === "issue") return (h.state === "closed" || h.state === "canceled" || h.state === "completed") ? "●" : "○";
-    return TYPE_GLYPH[t] || "";
+    if (t === "issue") return (h.state === "canceled" || h.state === "cancelled") ? "◌" : (h.state === "closed" || h.state === "completed") ? "●" : "○";
+    const byState = STATE_GLYPH[t];
+    return (byState && byState[h.state]) || TYPE_GLYPH[t] || "";
   }
 
   // COMMIT_HASH_RE recognizes a bare commit-hash token and DATE_RE the strict after: and before: date, mirroring core/search/parse.go.

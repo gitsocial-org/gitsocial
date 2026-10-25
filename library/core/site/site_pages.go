@@ -29,7 +29,7 @@ const (
 	sitePagesManifestKey = ".gitsocial/site/pages.json"
 	// sitePagesVersion is the page layer's schema version; bump it when a page
 	// head or its sealed markup changes.
-	sitePagesVersion = 39
+	sitePagesVersion = 41
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -399,7 +399,7 @@ func readSiteFrontLatest(src *objstore.LocalCommitSource, site sitePageSite, sha
 	return &siteFrontCommit{
 		Subject: subjectOf(c.item.Message),
 		Href:    sitePageAppURL(site, "commit:"+sha[:12]+"@"+branch),
-		Meta:    []sitePageBit{sitePageAuthorBit(&sitePageMsg{Author: c.item.Author, Email: c.item.Email}), sitePageTimeBit(c.item.TS)},
+		Meta:    []sitePageBit{sitePageAuthorBit(&sitePageMsg{Author: c.item.Author, Email: c.item.Email}), sitePageTimeBit(c.item.TS), {Class: "hash", Text: sha[:12]}},
 	}
 }
 

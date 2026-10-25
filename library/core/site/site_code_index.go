@@ -177,7 +177,41 @@ func codeMetaSlice(items []walkedItem) []siteMetaEntry {
 	return meta
 }
 
-// updateSiteCodeIndex brings the single code corpus to the current code-branch tips, over the same manifest, cursor and shard machinery minus the bodies.
+// codeBodySlice projects a walked segment into bodies entries, one per indexed commit.
+func codeBodySlice(items []walkedItem) []siteBodyEntry {
+	bodies := make([]siteBodyEntry, len(items))
+	for i, w := range items {
+		bodies[i] = bodyOf(w)
+	}
+	return bodies
+}
+
+// putCodeArtifacts writes a planned code index and its bodies in the extension write order: heads, the bodies manifest, then the items manifest.
+func putCodeArtifacts(client *objstore.Client, prefix, newTip string, bodiesPlan shardPlan[siteBodyEntry], itemsPlan shardPlan[siteMetaEntry], complete bool) error {
+	if err := putBodiesHead(client, prefix, siteCodeExt, newTip, &bodiesPlan); err != nil {
+		return err
+	}
+	if err := putItemsHead(client, prefix, siteCodeExt, newTip, &itemsPlan); err != nil {
+		return err
+	}
+	total, err := putBodiesManifest(client, prefix, siteCodeExt, newTip, bodiesPlan, complete)
+	if err != nil {
+		return err
+	}
+	return putItemsManifest(client, prefix, siteCodeExt, newTip, itemsPlan, total, complete)
+}
+
+// planCodeFull seals a full rebuild of the code index and its bodies from one walk, bodies first.
+func planCodeFull(client *objstore.Client, prefix string, walked []walkedItem, sp *siteProgress) (shardPlan[siteBodyEntry], shardPlan[siteMetaEntry], error) {
+	bodiesPlan, err := planBodies(client, prefix, siteCodeExt, codeBodySlice(walked), sp)
+	if err != nil {
+		return shardPlan[siteBodyEntry]{}, shardPlan[siteMetaEntry]{}, err
+	}
+	itemsPlan, err := planItems(client, prefix, siteCodeExt, codeMetaSlice(walked), sp)
+	return bodiesPlan, itemsPlan, err
+}
+
+// updateSiteCodeIndex brings the code index and its bodies corpus to the current code-branch tips, over the same manifest, cursor and shard machinery as an extension.
 func updateSiteCodeIndex(client *objstore.Client, prefix string, tips []codeTip, defaultBranch string, sp *siteProgress) error {
 	if len(tips) == 0 {
 		return deleteCodeArtifacts(client, prefix)
@@ -200,32 +234,39 @@ func updateSiteCodeIndex(client *objstore.Client, prefix string, tips []codeTip,
 	if err != nil {
 		return err
 	}
-	switch classifyCodeState(manifest, cursor, len(head), newTip) {
+	bodies, err := readBodiesManifest(client, prefix, siteCodeExt)
+	if err != nil {
+		return err
+	}
+	bodiesHead, err := readBodyDocItems(client, prefix+bodiesHeadKey(siteCodeExt))
+	if err != nil {
+		return err
+	}
+	switch classifyCodeState(manifest, bodies, cursor, len(head), len(bodiesHead), newTip) {
 	case actionNoOp:
 		return nil
 	case actionBackfill:
 		return backfillCode(client, prefix, cursor, manifest, head, sp)
 	case actionRepair:
-		return repairCodeState(client, prefix, tips, defaultBranch, newTip, manifest, cursor, sp)
+		return repairCodeState(client, prefix, tips, defaultBranch, newTip, manifest, bodies, cursor, sp)
 	default: // actionBootstrap
 		return bootstrapCode(client, prefix, tips, defaultBranch, newTip, sp)
 	}
 }
 
-// classifyCodeState decides the code corpus's action; a changed tip takes the repair path, since the corpus can shrink as well as grow under a force-push.
-func classifyCodeState(manifest *siteShardManifest, cursor *siteItemsCursor, headCount int, newTip string) itemsAction {
+// classifyCodeState decides the code corpus's action; a changed tip, or bodies absent or behind the index, takes the repair path, since the corpus can shrink as well as grow under a force-push.
+func classifyCodeState(manifest, bodies *siteShardManifest, cursor *siteItemsCursor, headCount, bodiesHeadCount int, newTip string) itemsAction {
 	if manifest == nil {
 		return actionBootstrap
 	}
-	headsMatch := headCount == manifest.Head.Count
-	inFlight := (cursor != nil && !cursor.Complete) || !manifest.Complete
-	if inFlight && headsMatch && manifest.Tip == newTip {
+	lockstepped := bodies != nil && bodies.Tip == manifest.Tip && headCount == manifest.Head.Count && bodiesHeadCount == bodies.Head.Count
+	if !lockstepped || manifest.Tip != newTip {
+		return actionRepair
+	}
+	if (cursor != nil && !cursor.Complete) || !manifest.Complete {
 		return actionBackfill
 	}
-	if !inFlight && headsMatch && manifest.Tip == newTip {
-		return actionNoOp
-	}
-	return actionRepair
+	return actionNoOp
 }
 
 // bootstrapCode seals the first budget segment of a fresh code corpus, leaving a cursor when the merged history exceeds one push's budget.
@@ -234,18 +275,15 @@ func bootstrapCode(client *objstore.Client, prefix string, tips []codeTip, defau
 	if err != nil {
 		return err
 	}
-	plan, err := planItems(client, prefix, siteCodeExt, codeMetaSlice(walked), sp)
+	bodiesPlan, itemsPlan, err := planCodeFull(client, prefix, walked, sp)
 	if err != nil {
-		return err
-	}
-	if err := putItemsHead(client, prefix, siteCodeExt, newTip, &plan); err != nil {
 		return err
 	}
 	var pending *siteItemsCursor
 	if budgetHit {
 		pending = &siteItemsCursor{Tip: newTip, OldestIndexed: walked[len(walked)-1].SHA}
 	}
-	if err := putItemsManifest(client, prefix, siteCodeExt, newTip, plan, 0, pending == nil); err != nil {
+	if err := putCodeArtifacts(client, prefix, newTip, bodiesPlan, itemsPlan, pending == nil); err != nil {
 		return err
 	}
 	return finalizeCursor(client, prefix, siteCodeExt, pending)
@@ -275,14 +313,14 @@ func backfillCode(client *objstore.Client, prefix string, cursor *siteItemsCurso
 		return err
 	}
 	if frontier == "" {
-		return completeCodeBackfill(client, prefix)
+		return completeBackfill(client, prefix, siteCodeExt)
 	}
 	oldest, err := getCommit(sp.commitSource(), client, prefix, frontier)
 	if err != nil {
 		return err
 	}
 	if len(oldest.parents) == 0 {
-		return completeCodeBackfill(client, prefix)
+		return completeBackfill(client, prefix, siteCodeExt)
 	}
 	stop := codeIndexedShas(manifest, head)
 	stop[frontier] = true
@@ -297,7 +335,7 @@ func backfillCode(client *objstore.Client, prefix string, cursor *siteItemsCurso
 		return err
 	}
 	if len(segment) == 0 {
-		return completeCodeBackfill(client, prefix)
+		return completeBackfill(client, prefix, siteCodeExt)
 	}
 	var pending *siteItemsCursor
 	if budgetHit {
@@ -350,8 +388,20 @@ func codeFrontierBranch(client *objstore.Client, prefix string, manifest *siteSh
 	return ""
 }
 
-// prependCodeSegment seals one backfilled older code segment and prepends it to the manifest, leaving the head untouched.
+// prependCodeSegment seals one backfilled older code segment for the index and its bodies and prepends it to both manifests, bodies first, leaving the heads untouched.
 func prependCodeSegment(client *objstore.Client, prefix string, segment []walkedItem, complete bool, sp *siteProgress) error {
+	bodiesHead, err := readBodyDocItems(client, prefix+bodiesHeadKey(siteCodeExt))
+	if err != nil {
+		return err
+	}
+	bodiesPlan, bodiesTip, err := prependSegmentPlan(client, bodiesCorpus, prefix, siteCodeExt, codeBodySlice(segment), bodiesHead, sp)
+	if err != nil {
+		return err
+	}
+	bodiesBytes, err := putManifest(client, bodiesCorpus, prefix, siteCodeExt, bodiesTip, bodiesPlan, 0, complete)
+	if err != nil {
+		return err
+	}
 	head, err := readItemsHeadEntries(client, prefix+siteItemsHeadKey(siteCodeExt))
 	if err != nil {
 		return err
@@ -360,24 +410,18 @@ func prependCodeSegment(client *objstore.Client, prefix string, segment []walked
 	if err != nil {
 		return err
 	}
-	_, err = putManifest(client, itemsCorpus, prefix, siteCodeExt, tip, plan, 0, complete)
+	_, err = putManifest(client, itemsCorpus, prefix, siteCodeExt, tip, plan, bodiesBytes, complete)
 	return err
 }
 
-// completeCodeBackfill marks the code manifest complete and clears the cursor when no older history remains.
-func completeCodeBackfill(client *objstore.Client, prefix string) error {
-	if err := markManifestComplete(client, itemsCorpus, prefix, siteCodeExt); err != nil {
-		return err
-	}
-	return deleteItemsCursor(client, prefix, siteCodeExt)
-}
-
-// repairCodeState rebuilds the code corpus: a full re-walk and reseal when it is complete, the tail alone while a bootstrap is in flight. It keeps no shard by frontier reachability, since membership can shrink inside a sealed one.
-func repairCodeState(client *objstore.Client, prefix string, tips []codeTip, defaultBranch, newTip string, manifest *siteShardManifest, cursor *siteItemsCursor, sp *siteProgress) error {
-	if cursor == nil {
+// repairCodeState rebuilds the code corpus: a full re-walk and reseal when it is complete or its bodies do not share its sealed frontier, the tail alone while a bootstrap is in flight. It keeps no shard by frontier reachability, since membership can shrink inside a sealed one.
+func repairCodeState(client *objstore.Client, prefix string, tips []codeTip, defaultBranch, newTip string, manifest, bodies *siteShardManifest, cursor *siteItemsCursor, sp *siteProgress) error {
+	itemsFrontier, itemsSealed := manifest.sealedFrontier()
+	bodiesFrontier, bodiesSealed := bodies.sealedFrontier()
+	if cursor == nil || itemsFrontier != bodiesFrontier || itemsSealed != bodiesSealed {
 		return rebuildCodeFull(client, prefix, tips, defaultBranch, newTip, sp)
 	}
-	return repairCodeTail(client, prefix, tips, defaultBranch, newTip, manifest, cursor, sp)
+	return repairCodeTail(client, prefix, tips, defaultBranch, newTip, manifest, bodies, cursor, sp)
 }
 
 // rebuildCodeFull re-walks the merged corpus over all tips and reseals it, leaving a cursor when the budget stopped it short of the roots.
@@ -386,27 +430,24 @@ func rebuildCodeFull(client *objstore.Client, prefix string, tips []codeTip, def
 	if err != nil {
 		return err
 	}
-	plan, err := planItems(client, prefix, siteCodeExt, codeMetaSlice(walked), sp)
+	bodiesPlan, itemsPlan, err := planCodeFull(client, prefix, walked, sp)
 	if err != nil {
-		return err
-	}
-	if err := putItemsHead(client, prefix, siteCodeExt, newTip, &plan); err != nil {
 		return err
 	}
 	var pending *siteItemsCursor
 	if budgetHit && len(walked) > 0 {
 		pending = &siteItemsCursor{Tip: newTip, OldestIndexed: walked[len(walked)-1].SHA}
 	}
-	if err := putItemsManifest(client, prefix, siteCodeExt, newTip, plan, 0, pending == nil); err != nil {
+	if err := putCodeArtifacts(client, prefix, newTip, bodiesPlan, itemsPlan, pending == nil); err != nil {
 		return err
 	}
 	return finalizeCursor(client, prefix, siteCodeExt, pending)
 }
 
-// repairCodeTail rebuilds the code corpus above its sealed frontier, keeping the sealed shards when the frontier is still reachable.
-func repairCodeTail(client *objstore.Client, prefix string, tips []codeTip, defaultBranch, newTip string, manifest *siteShardManifest, cursor *siteItemsCursor, sp *siteProgress) error {
+// repairCodeTail rebuilds the code corpus and its bodies above their shared sealed frontier, keeping the sealed shards of each when the frontier is still reachable.
+func repairCodeTail(client *objstore.Client, prefix string, tips []codeTip, defaultBranch, newTip string, manifest, bodies *siteShardManifest, cursor *siteItemsCursor, sp *siteProgress) error {
 	var tail []walkedItem
-	var kept []siteShardEntry
+	var kept, bodiesKept []siteShardEntry
 	frontier, has := manifest.sealedFrontier()
 	if !has {
 		walked, _, _, err := walkCodeItems(client, prefix, tips, defaultBranch, nil, siteItemsWalkBudget, sp)
@@ -421,17 +462,18 @@ func repairCodeTail(client *objstore.Client, prefix string, tips []codeTip, defa
 		}
 		tail = walked
 		if met[frontier] {
-			kept = manifest.Shards
+			kept, bodiesKept = manifest.Shards, bodies.Shards
 		}
+	}
+	bodiesPlan, err := planBodiesTail(client, prefix, siteCodeExt, bodiesKept, codeBodySlice(tail), sp)
+	if err != nil {
+		return err
 	}
 	plan, err := planItemsTail(client, prefix, siteCodeExt, kept, codeMetaSlice(tail), sp)
 	if err != nil {
 		return err
 	}
-	if err := putItemsHead(client, prefix, siteCodeExt, newTip, &plan); err != nil {
-		return err
-	}
-	if err := putItemsManifest(client, prefix, siteCodeExt, newTip, plan, 0, false); err != nil {
+	if err := putCodeArtifacts(client, prefix, newTip, bodiesPlan, plan, false); err != nil {
 		return err
 	}
 	pending := &siteItemsCursor{Tip: newTip, OldestIndexed: cursor.OldestIndexed}
@@ -441,8 +483,11 @@ func repairCodeTail(client *objstore.Client, prefix string, tips []codeTip, defa
 	return finalizeCursor(client, prefix, siteCodeExt, pending)
 }
 
-// deleteCodeArtifacts removes every code-corpus artifact, for a repo that dropped its last code branch.
+// deleteCodeArtifacts removes every code-corpus artifact and its bodies, for a repo that dropped its last code branch.
 func deleteCodeArtifacts(client *objstore.Client, prefix string) error {
+	if err := deleteBodiesSharded(client, prefix, siteCodeExt); err != nil {
+		return err
+	}
 	manifest, err := readItemsManifest(client, prefix, siteCodeExt)
 	if err != nil {
 		return err

@@ -38,9 +38,9 @@ const ROUTES = [
 // carries; both are theme-independent, so one value holds in light and dark.
 const VERDICT_BORDER = { approved: "rgb(31, 157, 85)", changesRequested: "rgb(207, 34, 46)" };
 
-// checkFeedbackCard asserts the feedback variant takes a plain card's padding
-// and marks its verdict on the left border. cards is a list route's .card
-// record, feedback the pull request route's .card.feedback record.
+// checkFeedbackCard asserts the feedback variant takes a plain card's padding,
+// with a wider left side to clear the border that marks its verdict. cards is a
+// list route's .card record, feedback the pull request route's .card.feedback record.
 function checkFeedbackCard(theme, cards, feedback) {
   if (!cards || !feedback) {
     ok("feedback card " + theme + ": both records captured", false, "cards=" + !!cards + " feedback=" + !!feedback);
@@ -48,7 +48,10 @@ function checkFeedbackCard(theme, cards, feedback) {
   }
   const pads = new Set(cards.map((r) => r.padding));
   const fbPads = new Set(feedback.map((r) => r.padding));
-  ok("feedback card " + theme + ": padding is the card's own", pads.size === 1 && fbPads.size === 1 && pads.has([...fbPads][0]),
+  // sides splits a padding into [top, right, bottom, left] lengths in pixels.
+  const sides = (p) => { const v = p.split(" ").map(parseFloat); return [v[0], v[1] ?? v[0], v[2] ?? v[0], v[3] ?? v[1] ?? v[0]]; };
+  const card = pads.size === 1 ? sides([...pads][0]) : null, fb = fbPads.size === 1 ? sides([...fbPads][0]) : null;
+  ok("feedback card " + theme + ": padding is the card's own, wider on the left for the border", !!card && !!fb && card.slice(0, 3).join() === fb.slice(0, 3).join() && fb[3] > card[3],
     "cards=" + [...pads].join("|") + " feedback=" + [...fbPads].join("|"));
   const borders = new Set(feedback.map((r) => r.borderLeftColor));
   ok("feedback card " + theme + ": the verdict rides the left border", borders.has(VERDICT_BORDER.approved) && borders.has(VERDICT_BORDER.changesRequested),
@@ -111,28 +114,31 @@ function checkMetaRow(theme, metas) {
   ok("meta row " + theme + ": the author, the time and the hash in that order", led.length > 0 && led.every((s) => META_SHAPE.test(s)), led.join(" | "));
 }
 
-// checkBodyOnlyCard asserts a body-only card has no head and leads with its meta
-// row. cards is the timeline route's ".card" record.
+// checkBodyOnlyCard asserts every timeline card leads with its glyph and its
+// author line, and a body-only card has no head. cards is the timeline route's
+// ".card" record.
 function checkBodyOnlyCard(theme, cards) {
   if (!cards) {
     ok("body-only card " + theme + ": records captured", false, "no .card record");
     return;
   }
   const shapes = cards.map((r) => r.shape);
-  ok("body-only card " + theme + ": the timeline renders one with no head", shapes.some((s) => s.startsWith("span.meta.meta-lead")), shapes.join(" | "));
-  ok("body-only card " + theme + ": every other card heads with its card head", shapes.every((s) => s.startsWith("div.card-head") || s.startsWith("span.meta.meta-lead")), shapes.join(" | "));
+  ok("body-only card " + theme + ": the timeline renders one with no head", shapes.some((s) => !s.includes("div.card-head")), shapes.join(" | "));
+  ok("body-only card " + theme + ": every card leads with its glyph, then its author line", shapes.every((s) => s.startsWith("span.type-glyph > span.meta")), shapes.join(" | "));
 }
 
-// checkEditedBit asserts the edited marker is a plain meta bit, never a chip.
-// edited is a list route's ".edited" record, chips its ".chip" record.
-function checkEditedBit(theme, edited, chips) {
-  if (!edited || !chips) {
-    ok("edited marker " + theme + ": both records captured", false, "edited=" + !!edited + " chips=" + !!chips);
+// checkEditedBit asserts the edited marker and the worded state are plain meta
+// bits, never chips. edited is a list route's ".edited" record, markers its
+// ".marker" record, chips its ".chip" record.
+function checkEditedBit(theme, edited, markers, chips) {
+  const bits = (edited || []).concat(markers || []);
+  if (!bits.length || !chips) {
+    ok("edited marker " + theme + ": both records captured", false, "edited or marker=" + !!bits.length + " chips=" + !!chips);
     return;
   }
   const radii = new Set(chips.map((r) => r.borderRadius));
-  ok("edited marker " + theme + ": no pill radius, no chip fill", edited.every((r) => !radii.has(r.borderRadius) && r.backgroundColor === "rgba(0, 0, 0, 0)"),
-    edited.map((r) => r.borderRadius + " " + r.backgroundColor).join("|"));
+  ok("edited marker " + theme + ": no pill radius, no chip fill", bits.every((r) => !radii.has(r.borderRadius) && r.backgroundColor === "rgba(0, 0, 0, 0)"),
+    bits.map((r) => r.borderRadius + " " + r.backgroundColor).join("|"));
 }
 
 // ERR_STYLE pins the C.2 tokens the error notice carries: --danger text on a
@@ -312,7 +318,7 @@ async function main() {
   }
   const update = process.env.GS_STYLES_UPDATE === "1";
   if (update) fs.mkdirSync(DIR, { recursive: true });
-  const listCards = {}, listMetas = {}, listChips = {}, listEdited = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {}, errNotices = {}, timelineCards = {};
+  const listCards = {}, listMetas = {}, listChips = {}, listEdited = {}, listMarkers = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {}, errNotices = {}, timelineCards = {};
   const detailTopbars = {}, detailActions = {};
   let detailShort = "";
   for (const route of ROUTES) {
@@ -326,8 +332,8 @@ async function main() {
       const got = capture(bin, hash, flags);
       if (!got) { ok(route.name + " " + theme + ": probe returned data", false, "no data-gs-styles on " + hash); continue; }
       if (route.name === "issues") { listCards[theme] = got[".card"]; listMetas[theme] = got[".meta"]; }
-      // The timeline shows items in every state, so the edited marker is captured there, not on a list that opens on Open.
-      if (route.name === "timeline") { timelineCards[theme] = got[".card"]; listChips[theme] = got[".chip"]; listEdited[theme] = got[".edited"]; }
+      // The timeline shows items in every state, so the edited marker and the worded state are captured there, not on a list that opens on Open.
+      if (route.name === "timeline") { timelineCards[theme] = got[".card"]; listChips[theme] = got[".chip"]; listEdited[theme] = got[".edited"]; listMarkers[theme] = got[".marker"]; }
       if (route.name === "branch-missing") errNotices[theme] = got[".err"];
       if (route.name === "pr-detail") {
         feedbackCards[theme] = got[".card.feedback"];
@@ -355,7 +361,7 @@ async function main() {
   if (!update) for (const theme of Object.keys(THEMES)) {
     checkFeedbackCard(theme, listCards[theme], feedbackCards[theme]);
     checkMetaRow(theme, listMetas[theme]);
-    checkEditedBit(theme, listEdited[theme], listChips[theme]);
+    checkEditedBit(theme, listEdited[theme], listMarkers[theme], listChips[theme]);
     checkBodyOnlyCard(theme, timelineCards[theme]);
     checkErr(theme, errNotices[theme]);
     checkDetailHead(theme, detailHeads[theme], detailSubjects[theme]);

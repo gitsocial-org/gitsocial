@@ -140,16 +140,18 @@ for (const c of FIX.cardSkeleton.cases) {
   };
   const row = GS.timelineCard(it);
   const head = (row._children || []).find((n) => n && n._cls && n._cls.has("card-head"));
+  const meta = (row._children || []).find((n) => n && n._cls && n._cls.has("meta"));
+  const metaSlots = slots(meta).split(",");
+  const marker = metaSlots[metaSlots.length - 1] === "marker" ? meta._children.filter((n) => n && n.nodeType === 1).pop().textContent : "";
+  eq(marker, c.expectMarker, c.name + ": the word that ends the author line");
   if (!c.expectHead.length) {
     eq(!!head, false, c.name + ": a body-only row carries no head");
-    // The app clamps the body it shows whole, so only the meta row's lead is shared with the page's row.
-    eq(slots(row).split(",")[0], FIX.cardSkeleton.bodyOnlyParts[0], c.name + ": the meta row leads");
-    const meta = (row._children || []).find((n) => n && n._cls && n._cls.has("meta"));
-    eq(slots(meta).split(",").slice(0, c.expectLead.length).join(","), c.expectLead.join(","), c.name + ": what leads the meta row");
+    // The app clamps the body it shows whole, so only the glyph and the author line are shared with the page's row.
+    eq(slots(row).split(",").slice(0, 2).join(","), FIX.cardSkeleton.bodyOnlyParts.slice(0, 2).join(","), c.name + ": the glyph, then the author line");
     continue;
   }
   eq(slots(head), c.expectHead.join(","), c.name + ": head slots");
-  eq(slots(row).split(",").slice(0, 2).join(","), FIX.cardSkeleton.parts.slice(0, 2).join(","), c.name + ": the head, then the meta row");
+  eq(slots(row).split(",").slice(0, 3).join(","), FIX.cardSkeleton.parts.slice(0, 3).join(","), c.name + ": the glyph, the author line, then the head");
 }
 // The chip row is the app's own third part, so the full order shows on a card that fills it.
 const chipped = GS.prCard({
@@ -278,6 +280,14 @@ for (const c of FIX.metaRow.authors) {
   const bit = GS.authorEl(c.author, c.email);
   eq(bit.tagName + "|" + bit.className + "|" + bit.textContent + "|" + (bit.getAttribute("title") || "") + "|" + (bit.getAttribute("href") || ""),
     (c.expectHref ? "A" : "SPAN") + "|author|" + c.expectLabel + "|" + c.expectTitle + "|" + c.expectHref, c.name + ": bit");
+}
+{
+  // A comment of a thread takes the same author line, its hash opening the route the page links through the shell.
+  const hash = FIX.metaRow.commentHashRoute.replace(/^#commit:|@.*$/g, "");
+  const row = GS.metaRow({ commit: { hash, short: hash, authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000 }, header: { type: "comment" }, author: "Ada", effectiveTime: 1750000000 }, "gitmsg/social");
+  const bits = (row._children || []).filter((n) => n && n.nodeType === 1);
+  eq(bits.map((n) => String(n.className || "").split(/\s+/)[0]).join(","), FIX.metaRow.bits.join(","), "a comment's author line: bits");
+  eq(bits[2].getAttribute("href"), FIX.metaRow.commentHashRoute, "a comment's author line: the hash route");
 }
 
 const empties = Object.entries(GS.LIST_EMPTY).sort().map((e) => e.join("=")).join(",");
