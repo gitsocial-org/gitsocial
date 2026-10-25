@@ -3999,16 +3999,16 @@
   }
 
   // TYPE_GLYPH maps a gitmsg item type to the TUI's compact leading glyph; issues vary by state and resolve in typeGlyph.
-  const TYPE_GLYPH = { post: "•", comment: "↩", repost: "↻", quote: "↻", milestone: "◇", sprint: "◷", "pull-request": "⑂", feedback: "↩", release: "⏏", memo: "☞", commit: "•" };
+  const TYPE_GLYPH = { post: "•", comment: "↩", repost: "↻", quote: "↻", milestone: "◇", sprint: "◷", "pull-request": "△", feedback: "↩", release: "⏏", memo: "☞", commit: "•" };
 
-  // STATE_GLYPH gives a done milestone the filled diamond, and a sprint one shape per state: the quadrant turns as the sprint runs. Mirrors sitePageGlyph in site_pages_html.go.
-  const STATE_GLYPH = { milestone: { closed: "◆", canceled: "◆", cancelled: "◆" }, sprint: { active: "◶", completed: "◵", canceled: "⊘", cancelled: "⊘" } };
+  // STATE_GLYPH gives a merged pull request and a done milestone their filled shape, and a sprint one shape per state: the quadrant turns as the sprint runs. Mirrors sitePageGlyph in site_pages_html.go.
+  const STATE_GLYPH = { "pull-request": { merged: "▲" }, milestone: { closed: "◆", canceled: "◆", cancelled: "◆" }, sprint: { active: "◶", completed: "◵", canceled: "⊘", cancelled: "⊘" } };
 
   // typeGlyph returns an item's leading type glyph, or "" when the type is unknown; an issue, a milestone and a sprint vary by state.
   function typeGlyph(item, ext) {
     const h = item.header || {};
     const t = h.type || EXT_DEFAULT_TYPE[h.ext || ext] || "";
-    if (t === "issue") return (h.state === "canceled" || h.state === "cancelled") ? "◌" : (h.state === "closed" || h.state === "completed") ? "●" : "○";
+    if (t === "issue") return (h.state === "canceled" || h.state === "cancelled") ? "☒" : (h.state === "closed" || h.state === "completed") ? "☑" : "☐";
     const byState = STATE_GLYPH[t];
     return (byState && byState[h.state]) || TYPE_GLYPH[t] || "";
   }

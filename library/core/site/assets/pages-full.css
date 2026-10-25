@@ -30,20 +30,6 @@
   @font-face {
     font-family: 'IBM Plex Mono';
     font-style: normal;
-    font-weight: 500;
-    font-display: swap;
-    src: url('fonts/ibm-plex-mono-medium.woff2') format('woff2');
-  }
-  @font-face {
-    font-family: 'IBM Plex Mono';
-    font-style: normal;
-    font-weight: 600;
-    font-display: swap;
-    src: url('fonts/ibm-plex-mono-semibold.woff2') format('woff2');
-  }
-  @font-face {
-    font-family: 'IBM Plex Mono';
-    font-style: normal;
     font-weight: 700;
     font-display: swap;
     src: url('fonts/ibm-plex-mono-bold.woff2') format('woff2');
@@ -162,7 +148,8 @@
     content: "M1"; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-dense);
     margin-left: var(--sp-2); opacity: 0.8;
   }
-  .content { min-width: 0; }
+  /* On a desktop the content starts a step higher, so a view's title sits level with the repository's name in the sidebar. */
+  .content { min-width: 0; margin-top: calc(var(--sp-3) * -1); }
   /* Panel surface: the one bordered, rounded, panel-filled box every list-like
      component shares; a component's own rule below carries only its deviations
      (overflow mode, padding, margins). */
@@ -173,36 +160,59 @@
   /* Cards / items. */
   /* A card is a row of a feed: a hairline under it, no frame, no fill, as a post on Twitter or Bluesky. */
   .card { border-bottom: 1px solid var(--line); padding: var(--sp-4) 0 var(--sp-4) var(--sp-2); margin: 0; }
+  /* A card that opens its item tints on hover, the tint of a sidebar item, and takes the pointer. */
+  .card.clickable { cursor: pointer; transition: background 0.12s ease; }
+  .card.clickable:hover { background: var(--chip); }
   /* The board keeps its boxes: a lane is a stack of tiles, not a feed. */
   .card.board-card { background: var(--chip); border: 1px solid var(--line); border-radius: var(--r-panel); padding: var(--sp-3); margin-bottom: var(--sp-3); }
   /* A card is scanned, not read: it is sans at the medium size, and the detail page keeps the serif. */
   .card:not(.board-card) { font-family: var(--sans); font-size: var(--fs-md); }
   /* A quoted excerpt reads at the card's size; the meta line and the chips are set like the sidebar, small mono, and only the author keeps the card's face. */
   .card:not(.board-card) .embedded-quote { font-size: inherit; }
-  /* A card led by its type glyph is two columns: the glyph mark, then every other part. */
-  .card:has(> .type-glyph) { display: grid; grid-template-columns: var(--sp-5) minmax(0, 1fr); }
-  .card > :not(.type-glyph) { grid-column: 2; }
-  .card > .type-glyph { align-self: start; }
-  /* Whole-card navigation: the card links to its item detail, so it takes a
-     pointer cursor and a tree-row-like hover (chip tint + link-tinted border).
-     Inner anchors and text selection keep their own behavior in JS. */
-  .card.clickable { cursor: pointer; transition: background 0.12s ease; }
-  .card.clickable:hover { background: var(--chip-hover); }
-  /* Subject scale: one semantic element at weight 600, sized by context —
-     card = --fs-md in the body font, detail = --fs-h1 (it is the page title),
-     diff-head = --fs-h4, board-card = --fs-ui. The size tiers live on
-     the context rules; cards nest inside .detail views, so the card tier is
-     stated after the detail tier to win the card size back. */
-  .subject { font-weight: 600; }
-  /* A release head links its tag page in the color of the heading. */
-  h1.subject a { color: inherit; }
-  /* Card head: state chip + subject + trailing chips on one baseline row,
-     with a small gap so chips never touch. */
-  .card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); }
-  .card-head .subject { flex: 1 1 0; min-width: 0; }
-  .card-head .type-glyph { margin-right: 0; font-size: var(--fs-md); width: calc(var(--sp-5) + var(--sp-3) - var(--sp-2)); }
-  /* The mark column holds the glyph at its left edge. */
-  .card > .type-glyph { margin-right: 0; font-size: var(--fs-md); width: var(--sp-5); text-align: left; }
+  /* A card is a mark column and a content column. The marks, the avatar and the glyph under it, are one stack that
+     spans every row, so no part of the content moves them and they move no part; the six rows are a ceiling, an unused
+     row is zero high. Every part of the content auto-places down its column in source order. */
+  .card:has(> .avatar, > .type-glyph) {
+    display: grid; grid-template-columns: var(--sp-6) minmax(0, 1fr); grid-template-rows: repeat(6, auto);
+    column-gap: var(--sp-3); align-content: start;
+  }
+  .card > :not(.avatar, .type-glyph) { grid-column: 2; }
+  .card > .avatar, .card > .type-glyph { grid-column: 1; grid-row: 1 / -1; align-self: start; justify-self: center; }
+  .card > .avatar + .type-glyph { margin-top: calc(var(--sp-6) + var(--sp-1)); font-size: var(--fs-body); }
+  /* The mark column holds the glyph at its center. */
+  .card > .type-glyph { margin-right: 0; font-size: var(--fs-md); width: auto; text-align: center; }
+  /* An avatar is the author's initials in a circle of one of twelve hues, the initials in the text color of the theme. */
+  .avatar {
+    display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%;
+    color: var(--text); font-family: var(--sans); font-weight: 400; letter-spacing: 0; line-height: 1; user-select: none;
+  }
+  .card > .avatar, .detail-meta .avatar { width: var(--sp-6); height: var(--sp-6); font-size: var(--fs-md); }
+  .reply-quote-head .avatar, .embedded .avatar { width: var(--sp-5); height: var(--sp-5); font-size: var(--fs-ui); }
+  .avatar.av-0 { background: hsl(0 45% 40% / 0.5); }
+  .avatar.av-1 { background: hsl(30 45% 40% / 0.5); }
+  .avatar.av-2 { background: hsl(60 45% 40% / 0.5); }
+  .avatar.av-3 { background: hsl(90 45% 40% / 0.5); }
+  .avatar.av-4 { background: hsl(120 45% 40% / 0.5); }
+  .avatar.av-5 { background: hsl(150 45% 40% / 0.5); }
+  .avatar.av-6 { background: hsl(180 45% 40% / 0.5); }
+  .avatar.av-7 { background: hsl(210 45% 40% / 0.5); }
+  .avatar.av-8 { background: hsl(240 45% 40% / 0.5); }
+  .avatar.av-9 { background: hsl(270 45% 40% / 0.5); }
+  .avatar.av-10 { background: hsl(300 45% 40% / 0.5); }
+  .avatar.av-11 { background: hsl(330 45% 40% / 0.5); }
+  /* With the relative color syntax the twelve hues fan around the site's accent, 15° apart, so the faces share the site's palette, a little see-through so they sit in the page; the rules above are the fallback. */
+  .avatar.av-0 { background: oklch(from var(--link) 0.55 0.12 calc(h - 90) / 0.5); }
+  .avatar.av-1 { background: oklch(from var(--link) 0.55 0.12 calc(h - 75) / 0.5); }
+  .avatar.av-2 { background: oklch(from var(--link) 0.55 0.12 calc(h - 60) / 0.5); }
+  .avatar.av-3 { background: oklch(from var(--link) 0.55 0.12 calc(h - 45) / 0.5); }
+  .avatar.av-4 { background: oklch(from var(--link) 0.55 0.12 calc(h - 30) / 0.5); }
+  .avatar.av-5 { background: oklch(from var(--link) 0.55 0.12 calc(h - 15) / 0.5); }
+  .avatar.av-6 { background: oklch(from var(--link) 0.55 0.12 calc(h + 0) / 0.5); }
+  .avatar.av-7 { background: oklch(from var(--link) 0.55 0.12 calc(h + 15) / 0.5); }
+  .avatar.av-8 { background: oklch(from var(--link) 0.55 0.12 calc(h + 30) / 0.5); }
+  .avatar.av-9 { background: oklch(from var(--link) 0.55 0.12 calc(h + 45) / 0.5); }
+  .avatar.av-10 { background: oklch(from var(--link) 0.55 0.12 calc(h + 60) / 0.5); }
+  .avatar.av-11 { background: oklch(from var(--link) 0.55 0.12 calc(h + 75) / 0.5); }
   /* A detail head is a card head at page scale. */
   .card-head > h1.subject { font-size: var(--fs-h1); line-height: 1; margin: var(--sp-2) 0 var(--sp-1); }
   .card .body { white-space: pre-wrap; word-break: break-word; margin-top: var(--sp-2); }
@@ -215,7 +225,7 @@
      thumbnail, and is bounded so a single screenshot cannot own the timeline. */
   .card .body-md img { max-height: 12rem; width: auto; }
   /* A heading in a card reads at the body scale: the detail page keeps the page scale. */
-  .card .body-md :is(h1, h2, h3, h4, h5, h6) { font-size: var(--fs-md); font-weight: 600; line-height: var(--lh-body); margin: var(--sp-4) 0; padding: 0; border: 0; }
+  .card .body-md :is(h1, h2, h3, h4, h5, h6) { font-size: var(--fs-md); font-weight: 700; line-height: var(--lh-body); margin: var(--sp-4) 0; padding: 0; border: 0; }
   /* List-card body clamp: long messages cap at ~10 rendered lines (--lh-body
      em-steps, matching the base font shorthand) with a theme-independent
      mask fade over the last ~2 lines; fixed-em gradient stops keep bodies
@@ -226,10 +236,13 @@
     -webkit-mask-image: linear-gradient(to bottom, #000 calc(8 * var(--lh-body) * 1em), transparent calc(10 * var(--lh-body) * 1em));
     mask-image: linear-gradient(to bottom, #000 calc(8 * var(--lh-body) * 1em), transparent calc(10 * var(--lh-body) * 1em));
   }
-  .body-clamp-toggle { display: block; margin-top: var(--sp-1); padding: 0.15rem 0; }
+  /* The fold mark of the front page opens a clamped or folded text too; it turns when the text is open. */
+  .body-clamp-toggle { display: block; margin-top: var(--sp-1); padding: 0.15rem 0; line-height: 0; }
+  .body-clamp-toggle .gs-icon { width: 1.15rem; height: 1.15rem; color: inherit; }
+  .body-clamp-toggle.open .gs-icon { transform: rotate(180deg); }
   /* An action card shows its subject and a Show more that opens the text; the item's own card shows the same text. */
   .body-clamp-wrap.folded > .body { display: none; }
-  .body-clamp-wrap.folded > .body-clamp-toggle { margin-top: 0; }
+  .body-clamp-wrap.folded > .body-clamp-toggle { margin-top: var(--sp-2); }
   /* The compact timeline keeps the author line and the subject line of each card. */
   .timeline-compact .excerpt, .timeline-compact .reply-quote, .timeline-compact .card-head ~ .body-clamp-wrap { display: none; }
   /* It cuts the text of a post or comment to its first line, with no top space inside the cut. */
@@ -242,6 +255,8 @@
   .meta + .card-head { margin-top: var(--sp-1); }
   /* The author of a card's author line, and of a quote box, reads in the text color. */
   .meta .author { font-family: var(--sans); letter-spacing: 0; font-size: var(--fs-md); font-weight: 700; color: var(--text); }
+  /* On the front page's tip line the author is set like the rest of the line: the same mono, size and weight. */
+  .home-commit .author { font-family: inherit; letter-spacing: inherit; font-size: inherit; font-weight: 400; color: inherit; }
   /* The interaction counts close a card: icon then number, no pill. */
   /* The interaction counts lead the chip row as chips of icon and number; a review count keeps its verdict color. */
   .chip.count.review-ok { color: var(--open); }
@@ -257,7 +272,7 @@
   .chip {
     display: inline-block; background: var(--code-bg); border-radius: var(--r-pill);
     padding: 0.05rem var(--sp-3); font-size: var(--fs-ui); color: var(--muted);
-    font-family: var(--mono); letter-spacing: var(--mono-ls); font-weight: 500;
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-weight: 400;
   }
   /* In a card a chip is set like the meta line: the same face, size and weight; a hover tints it and never underlines it. */
   .card .chip { font-weight: 400; }
@@ -321,9 +336,13 @@
   .detail dt, .release-notes dt, :where(#gs-page) > dl dt { color: var(--muted); font-size: var(--fs-ui); font-family: var(--mono); letter-spacing: var(--mono-ls); }
   /* A trailer value and a release's commit row are metadata, so they read in their key's voice. */
   .detail dd, .release-notes dd, :where(#gs-page) > dl dd { margin: 0; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); word-break: break-word; }
-  .detail .subject { font-size: var(--fs-h1); }
-  /* A code commit's subject is chrome, like its rows in the commits list and the graph. */
-  .detail .subject.subject-commit { font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-h4); }
+  /* The reading surface is serif at the body size: the anchor item of a detail page, its subject, and a document. A card's text inside a detail page, a comment of the thread, stays a card. */
+  .detail .markdown:not(.card *), .detail > .body, :where(#gs-page) > p, :where(#gs-page) .readme, :where(#gs-page) .markdown:not(.card *) { font-family: var(--serif); font-size: var(--fs-body); line-height: var(--lh-body); }
+  /* A list view's title is sans at weight 700, inset like the cards under it so it lines up with their avatars; a detail page's title is mono, and the title of an item on its own page is the one serif title. */
+  #view > h1, .heading-row > h1, :where(#gs-page) > h1 { font-family: var(--sans); font-weight: 700; padding-left: var(--sp-2); text-transform: uppercase; }
+  .detail > .subject { font-family: var(--mono); letter-spacing: var(--mono-ls); font-weight: 700; }
+  .detail > .subject { font-size: var(--fs-h1); }
+  .detail h1.subject, :where(#gs-page) h1.subject { font-family: var(--serif); letter-spacing: 0; }
   /* A card subject is the first line of the message, so it reads in the body font and the text color. */
   .card:not(.board-card) .subject { font-size: var(--fs-md); font-weight: 400; color: inherit; }
   /* A branch or tag name stays in the voice of a ref. */
@@ -333,7 +352,9 @@
      on one row so neither disturbs the meta line. A list heading line takes the same shape. */
   .detail-topbar, .heading-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
   .detail-topbar .back { margin-bottom: var(--sp-4); }
-  .heading-row { margin-bottom: var(--sp-4); }
+  .heading-row { align-items: center; }
+  .heading-row .filter-bar, .heading-row .view-count, .heading-row .page-actions, .heading-row .meta-strip, .heading-row .board-controls { margin: 0; }
+  .heading-row .page-actions { align-items: center; }
   .detail-topbar .page-actions, .detail-topbar .view-modes { margin: 0; }
   .share-link {
     flex: 0 0 auto; max-width: 100%; overflow: hidden;
@@ -491,7 +512,7 @@
   .markdown .admonition p { margin: var(--sp-2) 0; }
   .markdown .admonition p.admonition-title {
     font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui);
-    font-weight: 600; color: var(--muted); margin: var(--sp-2) 0 var(--sp-1);
+    font-weight: 700; color: var(--muted); margin: var(--sp-2) 0 var(--sp-1);
   }
   .markdown .admonition-tip { border-left-color: var(--open); background: var(--open-t1); }
   .markdown .admonition-tip p.admonition-title { color: var(--open); }
@@ -508,7 +529,7 @@
   }
   .markdown table { border-collapse: collapse; margin: var(--sp-4) 0; display: block; overflow: auto; max-width: 100%; }
   .markdown th, .markdown td { border: 1px solid var(--line); padding: var(--sp-2) var(--sp-3); text-align: left; background: var(--chip); }
-  .markdown th { background: color-mix(in srgb, var(--text) 6%, var(--chip)); font-weight: 600; }
+  .markdown th { background: color-mix(in srgb, var(--text) 6%, var(--chip)); font-weight: 700; }
   .markdown li.task { list-style: none; margin-left: calc(var(--sp-5) * -1); }
   .markdown li.task input { margin-right: var(--sp-2); }
   .markdown ul ul, .markdown ol ol, .markdown ul ol, .markdown ol ul { margin: var(--sp-1) 0 var(--sp-1) var(--sp-5); }
@@ -529,7 +550,7 @@
   }
   .view-toggle { padding: var(--sp-1) var(--sp-3); }
   .view-toggle:hover { background: var(--chip); }
-  .view-toggle.active { color: var(--text); background: var(--chip); font-weight: 600; }
+  .view-toggle.active { color: var(--text); background: var(--chip); font-weight: 700; }
   /* Fullscreen affordance: copy and expand buttons on code/diff/fenced blocks, and the
      full-viewport overlay it opens. */
   .fs-btn, .copy-btn { padding: 0.15rem var(--sp-2); line-height: 1; }
@@ -639,7 +660,7 @@
   .token.number, .token.boolean, .token.constant, .token.symbol { color: color-mix(in srgb, var(--warn) 65%, var(--text)); }
   .token.deleted { color: var(--danger); }
   .token.inserted { color: var(--open); }
-  .token.bold { font-weight: 600; }
+  .token.bold { font-weight: 700; }
   .token.italic { font-style: italic; }
   .token.namespace { opacity: 0.7; }
   /* M3: release assets, filters, threads, embedded context, pm groups, contributors. */
@@ -651,7 +672,7 @@
      The sidebar's #nav .nav-section keeps its own denser voice. */
   .assets-head, .thread-head, .contrib-head, .version-history-head,
   .review-summary-head, .diff-offscreen-head, .pm-members-head, .pm-subissues-head,
-  .pm-rel-label, .board-col-head, .board-groupby-label, .board-lane-head,
+  .pm-rel-label, .board-col-head, .board-lane-head,
   .facet-label, .search-group-head, .config-head, .view-count {
     font-family: var(--mono); font-size: var(--fs-ui); color: var(--muted);
     text-transform: uppercase; letter-spacing: 0.05em;
@@ -673,7 +694,7 @@
   a.asset-row:hover { background: var(--chip); text-decoration: none; }
   .asset-signed { font-size: var(--fs-ui); margin-top: var(--sp-2); }
   .filter-bar { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-4); }
-  .filter-chip.active { color: var(--text); background: var(--chip); border-color: var(--link); font-weight: 600; }
+  .filter-chip.active { color: var(--text); background: var(--chip); border-color: var(--link); font-weight: 700; }
   /* Load-more continuation control for walk-backed lists (timeline/issues/PRs/
      releases/memos/branch log): a centered pill that walks the next history
      window and appends its resolved items. */
@@ -700,6 +721,8 @@
      right-aligned on the same line (the blob-head pattern). */
   .detail-meta { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin: 0.1rem 0; }
   .detail-meta .meta { flex: 1 1 auto; }
+  /* The author of the anchor item reads in the serif of its page, as its title does. */
+  .detail > .detail-meta .author, :where(#gs-page) > .detail-meta .author { font-family: var(--serif); }
   .detail-meta .view-modes { margin: 0; flex: 0 0 auto; }
   /* An item's excerpt of what it answers or quotes, carried by its own commit:
      .reply-quote on a card, .embedded on a detail page and under a cross-repo
@@ -729,7 +752,7 @@
      progress bars, the kanban board, and the in-bucket item search. */
   /* Member rows: flex so the leading state chip sits in a fixed-width slot and
      the subjects line up vertically no matter the chip label's width. */
-  .pm-member { margin-top: var(--sp-2); font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); padding-left: var(--sp-1); display: flex; align-items: baseline; gap: var(--sp-3); }
+  .pm-member { margin-top: var(--sp-2); font-size: var(--fs-ui); padding-left: var(--sp-1); display: flex; align-items: baseline; gap: var(--sp-3); }
   .pm-member > .chip.state { flex: 0 0 auto; min-width: 4.2rem; text-align: center; }
   .pm-members-head, .pm-subissues-head { margin: var(--sp-4) 0 var(--sp-2); }
   .pm-members, .pm-subissues { margin-top: var(--sp-3); }
@@ -787,13 +810,12 @@
   .board-col-toggle, .board-col-hide { flex: 0 0 auto; line-height: 1; padding: 0 0.1rem; }
   .board-empty { color: var(--muted); text-align: center; padding: var(--sp-3) 0; font-size: var(--fs-ui); }
   /* A board card is a tile: the sans at the UI size, set tight so a wrapped title stays one compact block in the lane; its chips keep the small mono of the sidebar. */
-  .card.board-card { margin-bottom: var(--sp-3); padding: var(--sp-3); font-family: var(--sans); line-height: 1; }
+  .card.board-card { margin-bottom: var(--sp-3); padding: var(--sp-3); font-family: var(--sans); font-size: var(--fs-ui); line-height: 1; }
   .card.board-card .subject { font-size: var(--fs-ui); font-weight: 400; }
   /* Board card title line: glyph + subject as ONE flex child so a long subject
      wraps its text under itself without the glyph splitting onto its own row in a
      narrow column (G8). The glyph hugs the first line; the subject text flows. */
   .board-card-title { display: inline; }
-  .board-card-title .type-glyph { margin-right: 0.3em; }
   .board-more {
     display: inline-block; margin-top: 0.15rem; font-size: var(--fs-dense);
     color: var(--link); padding: 0.1rem var(--sp-1);
@@ -833,7 +855,7 @@
   .search-group-head { margin: var(--sp-4) 0 var(--sp-3); }
   .search-snippet { margin-top: var(--sp-2); white-space: normal; }
   .search-help { text-align: left; padding: var(--sp-5) 0; }
-  .search-help-scope { margin-top: var(--sp-3); font-size: var(--fs-ui); color: var(--muted); }
+  .search-help-scope { margin-top: var(--sp-3); color: var(--muted); }
   mark.search-mark { background: var(--warn-t3); color: var(--text); border-radius: 2px; padding: 0 1px; }
   .contrib { margin: var(--sp-3) 0 var(--sp-4); }
   .contrib-row {
@@ -865,7 +887,7 @@
   .version-row:hover { background: var(--chip); }
   /* Selection follows the active-state doctrine (#nav): link-tinted fill +
      bolder text, no left-border indicator (which also shifted the row 3px). */
-  .version-row.active { background: var(--link-t2); font-weight: 600; }
+  .version-row.active { background: var(--link-t2); font-weight: 700; }
   .version-row-meta { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; color: var(--muted); flex: 1 1 auto; }
   .chip.version-label { color: var(--text); font-family: var(--mono); letter-spacing: var(--mono-ls); }
   .version-diff-ctl { margin-left: auto; }
@@ -932,8 +954,8 @@
     flex: 1 1 6rem; min-width: 6rem; background: var(--panel); border: 1px solid var(--line);
     border-radius: var(--r-panel); padding: var(--sp-3); text-align: center;
   }
-  .stat-value { font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-h3); font-weight: 600; }
-  .stat-value-text { font-size: var(--fs-ui); font-weight: 600; padding-top: var(--sp-2); }
+  .stat-value { font-size: var(--fs-h3); font-weight: 700; }
+  .stat-value-text { font-size: var(--fs-ui); font-weight: 700; padding-top: var(--sp-2); }
   .stat-label { font-size: var(--fs-ui); color: var(--muted); margin-top: 0.1rem; }
   .activity-plot { display: flex; align-items: flex-start; gap: var(--sp-2); }
   .activity-plot .activity-chart { flex: 1 1 0; min-width: 0; }
@@ -987,7 +1009,7 @@
   .pref-label { font-size: var(--fs-ui); }
   .pref-btn { color: var(--text); min-width: 6rem; }
   .config-ext { margin-bottom: var(--sp-3); }
-  .config-ext-head { font-weight: 600; margin-bottom: var(--sp-2); }
+  .config-ext-head { font-weight: 700; margin-bottom: var(--sp-2); }
   /* Site config section: an accent color swatch and the favicon preview. */
   .config-swatch { display: inline-flex; align-items: center; gap: var(--sp-2); }
   .config-swatch-dot { width: 0.85rem; height: 0.85rem; border-radius: 3px; border: 1px solid var(--line); }
@@ -1006,6 +1028,7 @@
   }
   .mobile-title:hover { color: var(--text); text-decoration: none; }
   @media (max-width: 720px) {
+    .content { margin-top: 0; }
     /* Compact top bar with the hamburger + repo title, sticky at the top. */
     .mobile-bar {
       display: flex; align-items: center; gap: var(--sp-3);
@@ -1068,7 +1091,9 @@
   .graph-text-col { flex: 1 1 auto; min-width: 22rem; }
   .graph-line { display: flex; align-items: center; overflow: hidden; border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, transparent); }
   .graph-row-text { display: flex; align-items: baseline; flex-wrap: nowrap; gap: var(--sp-3); min-width: 0; width: 100%; font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); }
-  .graph-subject { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* The graph row is mono data, but its subject is a line of a message, so it reads in the sans, and its author stays at the row's size. */
+  .graph-subject { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--sans); letter-spacing: 0; }
+  .graph-meta .author { font-size: inherit; font-weight: 700; }
   /* One fixed-height row must stay one line: a long branch name (dependabot/…)
      gets a single-line ellipsis cap instead of wrapping over neighboring rows,
      and chips shrink to a readable stub before they crush the subject (the

@@ -149,10 +149,9 @@
     --warn-t2: color-mix(in srgb, var(--warn) 20%, transparent);
     --warn-t3: color-mix(in srgb, var(--warn) 34%, transparent);
     background: var(--bg); color: var(--text);
-    /* --serif leads with a webfont only pages-full.css delivers; a page whose
-       full sheet never arrives keeps reading in Georgia at the same size and
-       leading, so the degraded state is a font swap, never a reflow. */
-    font: var(--fs-body)/var(--lh-body) var(--serif);
+    /* The base is the sans, to scan: lists, cards and controls. The reading surface, an item's own text and a
+       document, takes the serif in pages-full.css; the frame and the data take the mono. */
+    font: var(--fs-md)/var(--lh-body) var(--sans);
   }
   a { color: var(--link); text-decoration: none; }
   a:hover { text-decoration: underline; }
@@ -180,7 +179,7 @@
   .repo-icon { width: 18px; height: 18px; flex: 0 0 auto; border-radius: var(--r-ctl); object-fit: contain; }
   .repo-title {
     flex: 1 1 auto; min-width: 0;
-    font-family: var(--mono); letter-spacing: var(--mono-ls); font-weight: 600; font-size: var(--fs-ui);
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-weight: 700; font-size: var(--fs-ui);
     color: var(--muted); word-break: break-word;
   }
   a.repo-title { color: var(--muted); }
@@ -198,7 +197,7 @@
     font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); color: var(--muted);
   }
   #nav a:hover, .nav-list a:hover { color: var(--text); text-decoration: none; background: var(--chip); }
-  #nav a.active, .nav-list a.active { color: var(--text); font-weight: 600; background: var(--link-t2); }
+  #nav a.active, .nav-list a.active { color: var(--text); font-weight: 700; background: var(--link-t2); }
   .nav-count { margin-left: auto; padding-left: var(--sp-2); font-size: var(--fs-dense); font-weight: 400; color: var(--muted); }
   .nav-icon {
     flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
@@ -225,7 +224,8 @@
   }
   .home-head .chip { flex: 0 0 auto; }
   .home-commit { display: flex; align-items: center; gap: var(--sp-3); flex: 1 1 auto; min-width: 0; color: var(--text); }
-  .home-commit .meta { flex: 0 1 auto; min-width: 0; margin: 0; }
+  /* The tip's meta line keeps to one line and the subject gives way, cut with an ellipsis. */
+  .home-commit .meta { flex: 0 0 auto; margin: 0; white-space: nowrap; }
   .home-row {
     display: flex; align-items: center; gap: var(--sp-3); line-height: 1.6;
     font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-code); color: var(--text);
@@ -310,7 +310,7 @@
      The class vocabulary the pages share with the app (.chip, .card,
      .markdown, …) is NOT restated here — it comes from
      pages-full.css, so the pages render the app's own treatment. */
-  :where(#gs-page, #view) h1 { font-size: var(--fs-h1); line-height: 1; margin: 0 0 var(--sp-1); }
+  :where(#gs-page, #view) h1 { font-size: var(--fs-h2); font-weight: 700; line-height: 1; margin: 0 0 var(--sp-1); }
   :where(#gs-page) h2 { font-size: var(--fs-h2); line-height: 1.25; margin: var(--sp-1) 0 var(--sp-2); }
   :where(#gs-page) p { margin: var(--sp-4) 0; }
   :where(#gs-page) .card p:first-child { margin-top: var(--sp-2); }
@@ -351,6 +351,7 @@
     #gs-page { padding: var(--sp-3); }
     /* The tip's meta row is wider than a phone with its hash, so it wraps under the subject. */
     .home-commit { flex-wrap: wrap; }
+    .home-commit .meta { flex: 0 1 auto; min-width: 0; white-space: normal; }
     /* The bar and the checkbox open the sidebar without a script, and nothing leaves the document. */
     #gs-page > .page-nav { position: static; width: auto; }
     #gs-page .nav-header {

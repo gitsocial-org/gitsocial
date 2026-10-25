@@ -109,7 +109,10 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("thread inlines nested replies in order", !!thread && thread.indexOf("Thanks, appreciate it!") > thread.indexOf(REPLY_TEXT) && thread.includes("Seconded, well earned."));
   ok("nested reply carries its reply-to attribution", !!thread && /reply to /.test(thread));
   const replies = thread ? thread.split('<div class="card comment">').slice(1) : [];
-  ok("a reply card leads with its glyph, then its author line, then its body", replies.length > 0 && replies.every((r) => /^\n<span class="type-glyph tg-comment" title="comment">↩<\/span><p class="meta"><(?:a|span) class="author"[^\n]*<\/p>\n<div>/.test(r)), replies[0] && replies[0].slice(0, 300));
+  // AV is the avatar every card with an author line leads with: one of twelve hue classes, the author in its title.
+  const AV = /<span class="avatar av-(?:\d|1[01])" title="[^"]+">[^<]+<\/span>/.source;
+  const replyRe = new RegExp("^\n" + AV + /<span class="type-glyph tg-comment" title="comment">↩<\/span><p class="meta"><(?:a|span) class="author"[^\n]*<\/p>\n<div>/.source);
+  ok("a reply card leads with its avatar and its glyph, then its author line, then its body", replies.length > 0 && replies.every((r) => replyRe.test(r)), replies[0] && replies[0].slice(0, 300));
   ok("a reply's author line reads author, date, hash, the hash opening its route", replies.length > 0 && replies.every((r) => /<p class="meta"><(?:a|span) class="author"[^>]*>[^<]*<\/(?:a|span)> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="\.\.\/index\.html#commit:[0-9a-f]{12}@gitmsg\/social">[0-9a-f]{12}<\/a>/.test(r)), replies[0] && replies[0].slice(0, 400));
   // A post is the root of its own page, feed entry and OG card, and its first
   // line names it on every other surface, so it keeps that line as its heading.
@@ -118,13 +121,13 @@ const REPLY_TEXT = "Congrats, this is huge!";
   const edited = pages.find((p) => p.includes("Improve onboarding and setup docs"));
   ok("edited issue renders the resolved version", !!edited);
   ok("edited issue carries closed chip + edited marker", !!edited && /class="chip state closed">closed/.test(edited) && /<span class="edited" title="[^"]+">edited<\/span>/.test(edited));
-  // Both renderers head a detail with one card head: the h1 subject, then the
-  // head's one chip slot. The state pill lands there, never in the meta line.
+  // Both renderers head a detail with one card head holding the h1 subject alone;
+  // the state pill ends the meta line, which leads with the avatar and the author.
   // A body-only root (a quote) promotes no first line, so it heads with none.
   ok("an item page carries at most one h1, always the card head's", pages.every((p) => (p.match(/<h1/g) || []).length <= 1 && (!/<h1/.test(p) || /<div class="card-head"><h1 class="subject">/.test(p))), "a page heads with something other than one card-head h1");
-  ok("a state pill rides the detail head, not the meta line", !!edited && /<div class="card-head"><h1 class="subject">[^<]*<\/h1> <span class="chip state closed">closed<\/span><\/div>/.test(edited), edited && edited.slice(edited.indexOf('<div class="card-head">'), edited.indexOf('<div class="card-head">') + 200));
-  ok("the detail meta line leads with the author, time and hash skeleton", !!edited && /<div class="detail-meta"><span class="meta"><a class="author" href="\.\.\/index\.html#\/search\/author%3A[^"]+"[^>]*>[^<]*<\/a> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="[0-9a-f]{12}\.html">[0-9a-f]{12}<\/a>/.test(edited), edited && edited.slice(edited.indexOf('<div class="detail-meta">'), edited.indexOf('<div class="detail-meta">') + 260));
-  ok("the page layer's own further bits follow the hash", !!edited && /<a class="hash"[^>]*>[0-9a-f]{12}<\/a>(?: · <span class="edited"[^>]*>[^<]*<\/span>)? · issue<\/span>/.test(edited));
+  ok("a state pill ends the meta line, not the detail head", !!edited && /<div class="card-head"><h1 class="subject">[^<]*<\/h1><\/div>/.test(edited) && / <span class="chip state closed">closed<\/span><\/span><\/div>/.test(edited), edited && edited.slice(edited.indexOf('<div class="card-head">'), edited.indexOf('<div class="card-head">') + 200));
+  ok("the detail meta line leads with the avatar, the author and the glyph, then the time and hash", !!edited && new RegExp('<div class="detail-meta"><span class="meta">' + AV + / <a class="author" href="\.\.\/index\.html#\/search\/author%3A[^"]+"[^>]*>[^<]*<\/a> <span class="type-glyph tg-closed" title="issue · closed">☑<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="[0-9a-f]{12}\.html">[0-9a-f]{12}<\/a>/.source).test(edited), edited && edited.slice(edited.indexOf('<div class="detail-meta">'), edited.indexOf('<div class="detail-meta">') + 400));
+  ok("the page layer's own further bits follow the hash", !!edited && /<a class="hash"[^>]*>[0-9a-f]{12}<\/a>(?: · <span class="edited"[^>]*>[^<]*<\/span>)? · issue <span class="chip state closed">closed<\/span><\/span>/.test(edited));
   const pr = pages.find((p) => p.includes("Expand notes with more lines"));
   ok("PR page exists", !!pr);
   ok("PR page inlines line-anchored feedback", !!pr && pr.includes("This wording is clearer, nice.") && pr.includes("notes.txt:2"));
@@ -136,7 +139,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
   ok("PR page lists its header fields as definition rows with the app's links", !!pr && /<dl><dt>base<\/dt><dd><a href="\.\.\/index\.html#branch:main">#branch:main<\/a><\/dd>/.test(pr) && /<dt>reviewers<\/dt><dd><span><a href="\.\.\/index\.html#\/search\/reviewer%3Abob%40example\.com">bob@example\.com<\/a>, <a href="\.\.\/index\.html#\/search\/reviewer%3Acarol%40example\.com">carol@example\.com<\/a><\/span><\/dd>/.test(pr), pr && pr.slice(pr.indexOf("<dl><dt>"), pr.indexOf("<dl><dt>") + 500));
   const issue = pages.find((p) => p.includes("Static site: thread view needs live fixture"));
   ok("issue page inlines cross-extension social comments", !!issue && issue.includes("I can build the fixture this week.") && issue.includes("Great, assign it to me."));
-  ok("issue page links its labels row to the label search", !!issue && /<dt>labels<\/dt><dd><a href="\.\.\/index\.html#\/search\/label%3Akind%2Ftask">kind\/task<\/a><\/dd>/.test(issue), issue && issue.slice(issue.indexOf("<dl><dt>"), issue.indexOf("<dl><dt>") + 300));
+  ok("issue page links its label chips under the meta line to the label search, and lists no labels row", !!issue && /<\/span><\/div>\n<div class="card-chips"><a class="chip chip-label" href="\.\.\/index\.html#\/search\/label%3Akind%2Ftask">kind\/task<\/a> <\/div>/.test(issue) && !/<dt>labels<\/dt>/.test(issue), issue && issue.slice(issue.indexOf('<div class="detail-meta">'), issue.indexOf('<div class="detail-meta">') + 600));
   const quote = pages.find((p) => p.includes("Great point from upstream"));
   ok("cross-repo quote is a top-level page", !!quote);
 
@@ -152,12 +155,14 @@ const REPLY_TEXT = "Congrats, this is huge!";
   const issues = await get(TD + "issues/index.html");
   ok("issues list folds milestones/sprints in", issues.text.includes("v1.0 Launch") && issues.text.includes("Sprint 1: Foundations"));
   ok("issues list links item pages", /href="\.\.\/i\/[0-9a-f]{12}\.html"/.test(issues.text));
-  // Rows lead with the app's own glyph, then the author line, which ends on the
-  // worded state only for a state other than open, then the head.
+  // Rows lead with the avatar and the app's own glyph, then the author line,
+  // which ends on the worded state only for a state other than open, then the head.
   const issueRows = issues.text.split('<div class="card"').slice(1).filter((r) => r.includes('title="issue · '));
   const openRows = issueRows.filter((r) => r.includes('title="issue · open"')), closedRows = issueRows.filter((r) => r.includes('title="issue · closed"'));
-  ok("an open issue row leads with its glyph, then the author line with no state, then the subject", openRows.length > 0 && openRows.every((r) => /^[^>]*><span class="type-glyph tg-open" title="issue · open">○<\/span><span class="meta"><(?:a|span) class="author"(?:(?!class="marker")[^\n])*\n<div class="card-head"><a class="subject"/.test(r)), openRows[0] && openRows[0].slice(0, 400));
-  ok("a closed issue row ends its author line with the worded state, and heads with the subject", closedRows.length > 0 && closedRows.every((r) => /^[^>]*><span class="type-glyph tg-closed" title="issue · closed">●<\/span><span class="meta"><(?:a|span) class="author"[^\n]* · <span class="marker">closed<\/span><\/span>\n<div class="card-head"><a class="subject"/.test(r)), closedRows[0] && closedRows[0].slice(0, 400));
+  const openRe = new RegExp("^[^>]*>" + AV + /<span class="type-glyph tg-open" title="issue · open">☐<\/span><span class="meta"><(?:a|span) class="author"(?:(?!class="marker")[^\n])*\n<div class="card-head"><a class="subject"/.source);
+  const closedRe = new RegExp("^[^>]*>" + AV + /<span class="type-glyph tg-closed" title="issue · closed">☑<\/span><span class="meta"><(?:a|span) class="author"[^\n]* · <span class="marker">closed<\/span><\/span>\n<div class="card-head"><a class="subject"/.source);
+  ok("an open issue row leads with its avatar and its glyph, then the author line with no state, then the subject", openRows.length > 0 && openRows.every((r) => openRe.test(r)), openRows[0] && openRows[0].slice(0, 400));
+  ok("a closed issue row ends its author line with the worded state, and heads with the subject", closedRows.length > 0 && closedRows.every((r) => closedRe.test(r)), closedRows[0] && closedRows[0].slice(0, 400));
   // A milestone or sprint row follows the same rule: an open milestone and a planned sprint word no state.
   ok("an open milestone row words no state and heads with its subject alone", /<span class="type-glyph tg-open" title="milestone[^"]*">◇<\/span><span class="meta">(?:(?!class="marker")[^\n])*\n<div class="card-head"><a class="subject"/.test(issues.text));
   ok("a planned sprint row words no state and heads with its subject alone", /<span class="type-glyph tg-open" title="sprint[^"]*">◷<\/span><span class="meta">(?:(?!class="marker")[^\n])*\n<div class="card-head"><a class="subject"/.test(issues.text));
@@ -174,12 +179,12 @@ const REPLY_TEXT = "Congrats, this is huge!";
   const commits = await get(TD + "commits/index.html");
   ok("commits/index.html served", commits.status === 200);
   ok("commits page reads without JS (heading + card rows)", /<h1>Commits<\/h1>/.test(commits.text) && /<div class="card" id="c-/.test(commits.text));
-  ok("commits rows carry a citable anchor, an app link and indexable meta", /<div class="card" id="c-[0-9a-f]{12}"><span class="type-glyph tg-commit" title="commit">•<\/span><span class="meta"><span class="author"[^>]*>Ada Lovelace<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="[^"]*">[0-9a-f]{12}<\/a><\/span>\s*<div class="card-head"><a class="subject" href="\.\.\/index\.html#commit:[0-9a-f]{12}@main">[^<]+<\/a><\/div>\s*<\/div>/.test(commits.text), commits.text.slice(commits.text.indexOf('<div class="card"'), commits.text.indexOf('<div class="card"') + 300));
+  ok("commits rows carry a citable anchor, the author's avatar and no glyph, an app link and indexable meta", /<div class="card" id="c-[0-9a-f]{12}"><span class="avatar av-(?:\d|1[01])" title="Ada Lovelace">AL<\/span><span class="meta"><span class="author"[^>]*>Ada Lovelace<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="[^"]*">[0-9a-f]{12}<\/a><\/span>\s*<div class="card-head"><a class="subject" href="\.\.\/index\.html#commit:[0-9a-f]{12}@main">[^<]+<\/a><\/div>\s*<\/div>/.test(commits.text), commits.text.slice(commits.text.indexOf('<div class="card"'), commits.text.indexOf('<div class="card"') + 300));
   ok("commits page lists the default branch's commits", commits.text.includes("Add python and rust sources") && commits.text.includes("Initial commit: README"));
   // Only the DEFAULT branch: the feature branch's commit is in the code corpus
   // (the timeline interleaves it) but not in this list.
   ok("commits page is default-branch only", !commits.text.includes("Expand and edit notes"), "the feature branch's commit leaked into the list");
-  ok("commits page carries the meta line (count · branch · order)", /<p class="meta">\d+ commits · main · newest first<\/p>/.test(commits.text), commits.text.slice(commits.text.indexOf("<h1>Commits</h1>"), commits.text.indexOf("<h1>Commits</h1>") + 200));
+  ok("commits page carries the meta line (count · branch · order)", /<div class="heading-row"><h1>Commits<\/h1><span class="view-count">\d+ commits · main · newest first<\/span><\/div>/.test(commits.text), commits.text.slice(commits.text.indexOf("<h1>Commits</h1>"), commits.text.indexOf("<h1>Commits</h1>") + 200));
   ok("the fixture stays under one commits page (no dangling older link)", !/older →/.test(commits.text));
   // The list has no Atom feed of its own (the code corpus carries no bodies), but
   // it still advertises the site feed like every other page.

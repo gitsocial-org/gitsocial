@@ -61,19 +61,25 @@ function checkFeedbackCard(theme, cards, feedback) {
 // DETAIL_HEAD_SIZE is --fs-h1 at the 16px root, the size the page layer's own h1 carries.
 const DETAIL_HEAD_SIZE = "36px";
 
-// DETAIL_HEAD_SHAPE is the head's one chip slot: the h1 subject, then chips.
-const DETAIL_HEAD_SHAPE = /^h1\.subject( > span\.chip[a-z0-9.-]*)*$/;
+// DETAIL_HEAD_SHAPE is the head: the h1 subject alone, the chips ride the meta line.
+const DETAIL_HEAD_SHAPE = /^h1\.subject$/;
 
-// checkDetailHead asserts a detail head is a card head with one chip slot and an
-// h1 subject at the page layer's own heading size. head is the detail route's
-// ".detail > .card-head" record, subject its h1's.
-function checkDetailHead(theme, head, subject) {
-  if (!head || !subject) {
-    ok("detail head " + theme + ": both records captured", false, "head=" + !!head + " subject=" + !!subject);
+// DETAIL_META_SHAPE is the detail meta line the parity fixture names (pageBits): the avatar, the author, the type
+// glyph, the time and the hash, then the page's further bits, and the state chip last.
+const DETAIL_META_SHAPE = new RegExp("^" + FIX.metaRow.pageBits.map((c) => (c === "author" ? "(?:a|span)." : c === "hash" ? "a." : "span.") + c.replace("-", "\\-")).join(" > ") + "( > [a-z]+\\.[a-z0-9.-]+)* > span\\.chip\\.[a-z0-9.-]*state$");
+
+// checkDetailHead asserts a detail head holds an h1 subject at the page's heading size, and the state chip
+// ends the meta line. head, subject and meta are the detail route's ".detail > .card-head", its h1's and
+// ".detail > .detail-meta > .meta" records.
+function checkDetailHead(theme, head, subject, meta) {
+  if (!head || !subject || !meta) {
+    ok("detail head " + theme + ": the records captured", false, "head=" + !!head + " subject=" + !!subject + " meta=" + !!meta);
     return;
   }
   const shapes = head.map((r) => r.shape);
-  ok("detail head " + theme + ": the h1 subject leads, the chips follow", shapes.every((s) => DETAIL_HEAD_SHAPE.test(s)), shapes.join(" | "));
+  ok("detail head " + theme + ": the h1 subject alone", shapes.every((s) => DETAIL_HEAD_SHAPE.test(s)), shapes.join(" | "));
+  const metas = meta.map((r) => r.shape);
+  ok("detail head " + theme + ": the meta line leads with the avatar, the author and the glyph, and ends on the state chip", metas.every((s) => DETAIL_META_SHAPE.test(s)), metas.join(" | "));
   const sizes = new Set(subject.map((r) => r.fontSize));
   ok("detail head " + theme + ": the subject takes the page's h1 size", sizes.size === 1 && sizes.has(DETAIL_HEAD_SIZE), [...sizes].join("|"));
 }
@@ -114,9 +120,9 @@ function checkMetaRow(theme, metas) {
   ok("meta row " + theme + ": the author, the time and the hash in that order", led.length > 0 && led.every((s) => META_SHAPE.test(s)), led.join(" | "));
 }
 
-// checkBodyOnlyCard asserts every timeline card leads with its glyph and its
-// author line, and a body-only card has no head. cards is the timeline route's
-// ".card" record.
+// checkBodyOnlyCard asserts every timeline card leads with its avatar, its glyph
+// and its author line, a commit with no glyph, and a body-only card has no head.
+// cards is the timeline route's ".card" record.
 function checkBodyOnlyCard(theme, cards) {
   if (!cards) {
     ok("body-only card " + theme + ": records captured", false, "no .card record");
@@ -124,7 +130,7 @@ function checkBodyOnlyCard(theme, cards) {
   }
   const shapes = cards.map((r) => r.shape);
   ok("body-only card " + theme + ": the timeline renders one with no head", shapes.some((s) => !s.includes("div.card-head")), shapes.join(" | "));
-  ok("body-only card " + theme + ": every card leads with its glyph, then its author line", shapes.every((s) => s.startsWith("span.type-glyph > span.meta")), shapes.join(" | "));
+  ok("body-only card " + theme + ": every card leads with its avatar and its glyph, or a commit with no glyph, then its author line", shapes.every((s) => /^span\.avatar > (?:span\.type-glyph > )?span\.meta/.test(s)) && shapes.some((s) => s.startsWith("span.avatar > span.type-glyph > span.meta")) && shapes.some((s) => s.startsWith("span.avatar > span.meta")), shapes.join(" | "));
 }
 
 // checkEditedBit asserts the edited marker and the worded state are plain meta
@@ -318,7 +324,7 @@ async function main() {
   }
   const update = process.env.GS_STYLES_UPDATE === "1";
   if (update) fs.mkdirSync(DIR, { recursive: true });
-  const listCards = {}, listMetas = {}, listChips = {}, listEdited = {}, listMarkers = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {}, errNotices = {}, timelineCards = {};
+  const listCards = {}, listMetas = {}, listChips = {}, listEdited = {}, listMarkers = {}, feedbackCards = {}, detailHeads = {}, detailSubjects = {}, detailMetas = {}, errNotices = {}, timelineCards = {};
   const detailTopbars = {}, detailActions = {};
   let detailShort = "";
   for (const route of ROUTES) {
@@ -339,6 +345,7 @@ async function main() {
         feedbackCards[theme] = got[".card.feedback"];
         detailHeads[theme] = got[".detail > .card-head"];
         detailSubjects[theme] = got[".detail > .card-head > h1.subject"];
+        detailMetas[theme] = got[".detail > .detail-meta > .meta"];
         detailTopbars[theme] = got[".detail > .detail-topbar"];
         detailActions[theme] = got[".detail > .detail-topbar > .page-actions"];
       }
@@ -364,7 +371,7 @@ async function main() {
     checkEditedBit(theme, listEdited[theme], listMarkers[theme], listChips[theme]);
     checkBodyOnlyCard(theme, timelineCards[theme]);
     checkErr(theme, errNotices[theme]);
-    checkDetailHead(theme, detailHeads[theme], detailSubjects[theme]);
+    checkDetailHead(theme, detailHeads[theme], detailSubjects[theme], detailMetas[theme]);
     checkDetailActions(theme, detailTopbars[theme], detailActions[theme]);
   }
   if (!update) {

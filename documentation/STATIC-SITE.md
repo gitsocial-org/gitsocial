@@ -83,7 +83,7 @@ Effective when `publish`, `pages` and a valid `url` are all set. Every push then
 What a page shows:
 
 - Item bodies render as escaped plain text, with each typed ref (`#commit:`, `#branch:`, `#tag:`, `#file:`, `#list:`) and each bare URL linked; a mention stays text. Only the README and file pages, the bucket owner's own content, render as markdown, with raw HTML rebuilt against an allowlist.
-- An item page lists the header fields that no other part of the page shows, the rows of the app's trailer list, under the body. A pull request page links its head and base branches.
+- An item page leads its meta line with the avatar, puts the type glyph after the author and the state and marker chips at the end of the line, and shows the labels as a chip row under it. It lists the header fields that no other part of the page shows, the rows of the app's trailer list, under the body. A pull request page links its head and base branches.
 - A repository-relative image in the README shows as its alt text.
 - A pull request page carries a Files changed section: each changed file with its status letter, path and line counts, then the unified hunks up to a cap. Past the cap, a notice links the app for the rest. A generated file, such as a lockfile or a file under `vendor/`, shows closed with a `generated` label on the page and in the app; a click opens it, and the page leaves its hunks to the app. A range that does not resolve in the object database of the pusher shows a one-line notice in its place.
 - The pages of retracted items and very short file pages carry `noindex,follow`.
@@ -105,17 +105,18 @@ The site is the app shell, the pre-rendered pages and the two stylesheets. Five 
 
 1. Every page shows its content without JavaScript; the app adds to what the reader sees and never replaces it.
 2. The page layer and the app render a component from the same class names and the same tokens. Two markups for one component is a defect.
-3. A page body is serif, to read; a card is sans, to scan; the frame, code and metadata are small mono. Nothing is decorative.
+3. Three faces, by role: sans to scan, the base of every page, its lists, cards and controls, and the author of a meta line; serif to read, the title and the text of an item on its own page and a document; small mono for the frame and the data, the page and view titles, the sidebar, the meta lines, the chips, the fields and the code. Two weights, regular and bold. Nothing is decorative.
 4. Every rule holds on any repository: no README, no issues, a tree of thousands of files, an `.mdx` documentation site.
 5. A missing asset or a failed fetch shows a one-line notice at the position of the content, never a blank or an endless spinner.
 
 A card has the shape of a post in a feed, on both renderers:
 
-1. The type glyph, in the text color, in a mark column at the left. The shape of the glyph shows the state of an issue, a milestone or a sprint. An item with no glyph keeps the column, empty.
-2. The author line: the author, the time, the hash and the markers, such as edited. A state other than open or planned, such as closed or merged, or a marker, such as draft, prerelease or retracted, is the last word of the line, and it replaces the edited marker. An action and a repost put the verb after the author: "Ada closed", "Ada reposted".
-3. The head of a titled item (the subject, then the tail chips, such as the version of a release), or the body of a comment, quote or repost.
-4. The body or the excerpt, then the quote box of a reply, a quote or a repost, which leads with the glyph and the author line of the quoted item.
-5. One row of chips: the counts of comments, reposts, quotes and reviews, in the app only and only when one is not zero; then the head and base branches of a pull request; then bot, origin, due date, priority, assignees and labels. A card with no count and no chip has no row.
+1. The avatar, in a mark column at the left, level with the author line: the initials of the author in a circle. The hue of the circle comes from the email of the author, so each card of one author has the same hue. A branch, list, board or feedback card has no avatar; a tag card has the avatar of its tagger.
+2. The type glyph, in the text color, under the avatar in the same column, or at the top of the column when the card has no avatar. The shape of the glyph shows the state of an issue, a milestone or a sprint. A commit has no glyph: a card with a face and no mark is a commit. A board tile has no glyph and no mark column. An item with no glyph keeps the column, empty.
+3. The author line: the author, the time, the hash and the markers, such as edited. A state other than open or planned, such as closed or merged, or a marker, such as draft, prerelease or retracted, is the last word of the line, and it replaces the edited marker. An action and a repost put the verb after the author: "Ada closed", "Ada reposted".
+4. The head of a titled item (the subject, then the tail chips, such as the version of a release), or the body of a comment, quote or repost.
+5. The body or the excerpt, then the quote box of a reply, a quote or a repost, which leads with a smaller avatar, the glyph and the author line of the quoted item.
+6. One row of chips: the counts of comments, reposts, quotes and reviews, in the app only and only when one is not zero; then the head and base branches of a pull request; then bot, origin, due date, priority, assignees and labels. A card with no count and no chip has no row.
 
 The tokens are declared once, in `pages-core.css`; `site_pages_tokens_test.go` fails on a spacing value off the scale or a token declared elsewhere. `sitetest/parity_fixtures.json` records the markup and wording that the page layer and the app share. A visual change includes its golden and baseline update in the same commit.
 
@@ -130,7 +131,7 @@ go test -tags sitetest -run TestSiteShapeGoldens ./library/core/site/ -update   
 ```
 
 - The harness is `library/core/site/sitetest/`. The browser suite runs at release, and no test in `go test ./...` covers the browser side.
-- Every suite but `verify_styles.js` runs under a DOM shim. `verify_styles.js` drives a real Chrome, compares computed styles and structure on ten routes in both themes to `sitetest/styles/`, and checks that the main routes fit a 390 px viewport.
+- Every suite but `verify_styles.js` runs under a DOM shim. `verify_styles.js` drives a real Chrome, compares computed styles and structure on eleven routes in both themes to `sitetest/styles/`, and checks that the main routes fit a 390 px viewport.
 - `shapes.sh` builds six repository-shape fixtures: a non-`main` default branch, an `.mdx` docs site, an empty repository, code only, a 6,000-file tree, binary and LFS objects. `TestSiteShapeGoldens` compares their screenshots at 1280 and 390 px to `sitetest/goldens/`.
 - `chrome.js` finds Chrome from a `CHROME` override or a list of absolute paths. Without Chrome the style suite and the goldens skip; `release.sh` fails in its first step when it cannot find Chrome.
 
@@ -192,8 +193,9 @@ The shell and the pages:
 - A `#commit:<hash>` route with no branch resolves by hash through the item indexes first, so an item opens as its detail and a code commit as the raw commit page.
 - An adopted copy (GITMSG.md §1.5) shows its original author and time, and the repository it came from, on both renderers. Neither renderer lists a cross-repository edit, which is a proposal.
 - A list row of a comment, feedback, repost or quote shows the first line of its content, read from its index entry on both page passes. `rowText` in `parity_fixtures.json` pins that line on both renderers.
+- The avatar of an author is the same on both renderers: the first code point of the first two words of the name, uppercased, else the first letter of the local part of the email, else `?`, and the class `av-<n>`, where n is FNV-1a 32 of the lowercase email, or of the name without an email, modulo 12. `authorAvatar` in `gs-render.js` and `sitePageAvatar` in `site_pages_html.go` build it, and `avatars` in `parity_fixtures.json` pins the two.
 - The timeline of the app shows [timeline actions](SOCIAL.md#timeline-actions). The app derives them in the browser from the edits and reviews that the item shards hold, so the artifacts do not change. `headerAction` has one definition in two places, `gs-core.js` and `core/cache/actions.go`, asserted equal on `sitetest/action_fixtures.json`. The timeline of the page layer lists posts only.
-- The timeline of the app shows the body of a commit, an issue or a pull request as an excerpt under its head, with the clamp of a post; an action folds its text behind Show more. A commit gets its body from `bodies/code/` and reads no object, so a commit that the corpus does not hold shows its subject only. The glyph button at the right of the Timeline heading switches the list to compact cards, the author line and the subject line of each, and back; the browser keeps the choice.
+- The timeline of the app shows the body of a commit, an issue or a pull request as an excerpt under its head, with the clamp of a post; an action folds its text behind Show more. The git trailers of a message, `Closes:` and the like, show as chips under the text, each a link to what it names, and the Raw view keeps the lines. A commit gets its body from `bodies/code/` and reads no object, so a commit that the corpus does not hold shows its subject only. The glyph button at the right of the Timeline heading switches the list to compact cards, the author line and the subject line of each, and back; the browser keeps the choice.
 - File discovery reads the default branch's tree from the local object database of the pusher and, when it cannot read the tree, keeps the published set.
 - A changed default branch rewrites every page.
 - The Tags page shows each tag's date and author, its commit count since the previous tag, and a release chip for a tag that a release names.

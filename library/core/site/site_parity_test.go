@@ -95,10 +95,12 @@ type parityAuthorCase struct {
 	ExpectHref  string `json:"expectHref"`
 }
 
-// parityMetaRow pins the meta row skeleton: its bit classes in order, the route of a comment's hash, the edited row's, and its author cases.
+// parityMetaRow pins the meta row skeleton: its bit classes in order, a detail page's, the route of a comment's hash, the edited rows', and its author cases.
 type parityMetaRow struct {
 	Bits             []string           `json:"bits"`
 	EditedBits       []string           `json:"editedBits"`
+	PageBits         []string           `json:"pageBits"`
+	PageEditedBits   []string           `json:"pageEditedBits"`
 	CommentHashRoute string             `json:"commentHashRoute"`
 	Authors          []parityAuthorCase `json:"authors"`
 }
@@ -142,6 +144,15 @@ type parityCardSkeleton struct {
 	Head          []string                 `json:"head"`
 	BodyOnlyParts []string                 `json:"bodyOnlyParts"`
 	Cases         []parityCardSkeletonCase `json:"cases"`
+}
+
+// parityAvatarCase pins the hue class and the initials both renderers give one author.
+type parityAvatarCase struct {
+	Name           string `json:"name"`
+	Author         string `json:"author"`
+	Email          string `json:"email"`
+	ExpectClass    string `json:"expectClass"`
+	ExpectInitials string `json:"expectInitials"`
 }
 
 // parityItemCounts pins the sidebar count per list for a set of top-level items.
@@ -312,12 +323,13 @@ type parityItemRow struct {
 	Bits []parityRowBit `json:"bits"`
 }
 
-// parityItemPageMetaCase pins the definition rows one item's header yields on the page and in the app.
+// parityItemPageMetaCase pins the definition rows and the label chips one item's header yields on the page and in the app.
 type parityItemPageMetaCase struct {
-	Name       string            `json:"name"`
-	Ext        string            `json:"ext"`
-	Header     map[string]string `json:"header"`
-	ExpectRows []parityItemRow   `json:"expectRows"`
+	Name         string            `json:"name"`
+	Ext          string            `json:"ext"`
+	Header       map[string]string `json:"header"`
+	ExpectRows   []parityItemRow   `json:"expectRows"`
+	ExpectLabels []parityRowBit    `json:"expectLabels"`
 }
 
 // parityFixtures is the shared fixture file shape.
@@ -341,6 +353,7 @@ type parityFixtures struct {
 	ReleaseNotes   []parityReleaseNotesCase  `json:"releaseNotes"`
 	ReleaseAssets  []parityReleaseAssetsCase `json:"releaseAssets"`
 	CardSkeleton   parityCardSkeleton        `json:"cardSkeleton"`
+	Avatars        []parityAvatarCase        `json:"avatars"`
 	HomeRows       parityHomeRows            `json:"homeRows"`
 	Adopted        parityAdopted             `json:"adopted"`
 	ItemCounts     parityItemCounts          `json:"itemCounts"`
@@ -396,7 +409,7 @@ func TestParitySubjectHeader(t *testing.T) {
 }
 
 // TestParityListHeadings pins every list page's heading to the fixture the app's
-// LIST_HEADINGS is checked against (unit_parity.js); the app heads two more routes.
+// LIST_HEADINGS is checked against (unit_parity.js); the app heads more routes than the page layer lists.
 func TestParityListHeadings(t *testing.T) {
 	f := loadParityFixtures(t)
 	lists := append(append([]sitePageList(nil), sitePageLists...), siteCommitsList)
@@ -408,11 +421,11 @@ func TestParityListHeadings(t *testing.T) {
 	}
 }
 
-// parityBitClasses lists a meta row's leading bit classes, the form both halves compare.
+// parityBitClasses lists the first class of a meta row's leading bits, the form both halves compare.
 func parityBitClasses(bits []sitePageBit, n int) []string {
 	out := make([]string, 0, n)
 	for _, b := range bits[:min(n, len(bits))] {
-		out = append(out, b.Class)
+		out = append(out, strings.SplitN(b.Class, " ", 2)[0])
 	}
 	return out
 }
@@ -421,7 +434,7 @@ func parityBitClasses(bits []sitePageBit, n int) []string {
 // unit_parity.js and verify_styles.js pin on the app's own side.
 func TestParityMetaRow(t *testing.T) {
 	f := loadParityFixtures(t)
-	if len(f.MetaRow.Bits) == 0 || len(f.MetaRow.Authors) == 0 {
+	if len(f.MetaRow.Bits) == 0 || len(f.MetaRow.PageBits) == 0 || len(f.MetaRow.Authors) == 0 {
 		t.Fatal("no meta row case in parity fixtures")
 	}
 	for _, c := range f.MetaRow.Authors {
@@ -442,8 +455,8 @@ func TestParityMetaRow(t *testing.T) {
 	msg := &sitePageMsg{Ext: "pm", SHA: strings.Repeat("b", 40), Short: strings.Repeat("b", 12), Message: "An issue", Header: &protocol.Header{Ext: "pm", Fields: map[string]string{"type": "issue"}}}
 	it := &sitePageItem{Msg: msg, Resolved: msg}
 	want := strings.Join(f.MetaRow.Bits, ",")
-	if got := strings.Join(parityBitClasses(siteItemPageMeta(it), len(f.MetaRow.Bits)), ","); got != want {
-		t.Errorf("item page meta bits = %q, want %q", got, want)
+	if got, page := strings.Join(parityBitClasses(siteItemPageMeta(it), len(f.MetaRow.PageBits)), ","), strings.Join(f.MetaRow.PageBits, ","); got != page {
+		t.Errorf("item page meta bits = %q, want %q", got, page)
 	}
 	row := buildSiteListEntry(it, "issue")
 	if got := strings.Join(parityBitClasses(row.Meta, len(f.MetaRow.Bits)), ","); got != want {
@@ -466,16 +479,18 @@ func TestParityMetaRow(t *testing.T) {
 // after the hash, on its item page and on its list row alike.
 func TestParityEditedMetaRow(t *testing.T) {
 	f := loadParityFixtures(t)
-	if len(f.MetaRow.EditedBits) == 0 {
+	if len(f.MetaRow.EditedBits) == 0 || len(f.MetaRow.PageEditedBits) == 0 {
 		t.Fatal("no edited meta row case in parity fixtures")
 	}
 	header := &protocol.Header{Ext: "pm", Fields: map[string]string{"type": "issue"}}
 	msg := &sitePageMsg{Ext: "pm", SHA: strings.Repeat("c", 40), Short: strings.Repeat("c", 12), Message: "An issue", TS: 1700000000, Header: header}
 	edit := &sitePageMsg{Ext: "pm", SHA: strings.Repeat("d", 40), Short: strings.Repeat("d", 12), Message: "An issue, edited", TS: 1700003600, Author: "Bob", Email: "bob@example.com", Header: header}
 	it := &sitePageItem{Msg: msg, Resolved: edit, Edited: true}
-	want := strings.Join(f.MetaRow.EditedBits, ",")
-	for name, bits := range map[string][]sitePageBit{"item page": siteItemPageMeta(it), "list row": buildSiteListEntry(it, "issue").Meta} {
-		if got := strings.Join(parityBitClasses(bits, len(f.MetaRow.EditedBits)), ","); got != want {
+	for name, c := range map[string]struct{ bits, want []string }{
+		"item page": {parityBitClasses(siteItemPageMeta(it), len(f.MetaRow.PageEditedBits)), f.MetaRow.PageEditedBits},
+		"list row":  {parityBitClasses(buildSiteListEntry(it, "issue").Meta, len(f.MetaRow.EditedBits)), f.MetaRow.EditedBits},
+	} {
+		if got, want := strings.Join(c.bits, ","), strings.Join(c.want, ","); got != want {
 			t.Errorf("%s meta bits = %q, want %q", name, got, want)
 		}
 	}
@@ -622,7 +637,7 @@ func parityHeadedCard(t *testing.T, card string, c parityCardSkeletonCase, parts
 	if got := parityCardSlots(card[open:end]); strings.Join(got, ",") != strings.Join(c.ExpectHead, ",") {
 		t.Errorf("head slots = %v, want %v", got, c.ExpectHead)
 	}
-	for i, part := range parts[:3] {
+	for i, part := range parts[:4] {
 		at := strings.Index(card, `class="`+part)
 		if at < 0 {
 			t.Fatalf("no %s in %s", part, card)
@@ -633,21 +648,21 @@ func parityHeadedCard(t *testing.T, card string, c parityCardSkeletonCase, parts
 	}
 }
 
-// parityBodyOnlyCard asserts a body-only row takes no head, leads with the glyph and the author line, and stands on its first line.
+// parityBodyOnlyCard asserts a body-only row takes no head, leads with the avatar, the glyph and the author line, and stands on its first line.
 func parityBodyOnlyCard(t *testing.T, card string, c parityCardSkeletonCase, parts []string) {
 	t.Helper()
 	if strings.Contains(card, `class="card-head"`) {
 		t.Errorf("a body-only row carries a card head: %s", card)
 	}
-	want := []string{parts[0], parts[1]}
+	want := parts[:3]
 	got := parityCardSlots(card)
 	if len(got) < len(want) || strings.Join(got[:len(want)], ",") != strings.Join(want, ",") {
 		t.Errorf("row slots = %v, want them to lead with %v", got, want)
 	}
-	meta := strings.Index(card, `<span class="`+parts[1]+`">`)
-	body := strings.Index(card, `<div class="`+parts[2]+`">`+c.FirstLine+`</div>`)
+	meta := strings.Index(card, `<span class="`+parts[2]+`">`)
+	body := strings.Index(card, `<div class="`+parts[3]+`">`+c.FirstLine+`</div>`)
 	if meta < 0 || body < meta {
-		t.Errorf("want the meta row then the %s carrying %q: %s", parts[2], c.FirstLine, card)
+		t.Errorf("want the meta row then the %s carrying %q: %s", parts[3], c.FirstLine, card)
 	}
 }
 
@@ -682,6 +697,42 @@ func TestParityCardSkeleton(t *testing.T) {
 			}
 			parityHeadedCard(t, string(page), c, f.CardSkeleton.Parts)
 		})
+	}
+}
+
+// TestParityAvatar asserts the page layer gives each author of the fixture the
+// hue class and the initials unit_parity.js asserts on the app's own avatar,
+// and that a list row and a reply card carry it before the glyph.
+func TestParityAvatar(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.Avatars) == 0 {
+		t.Fatal("no avatar cases in parity fixtures")
+	}
+	for _, c := range f.Avatars {
+		t.Run(c.Name, func(t *testing.T) {
+			a := sitePageAvatar(c.Author, c.Email)
+			if a.Class != c.ExpectClass || a.Initials != c.ExpectInitials || a.Title != sitePageAuthorLabel(c.Author, c.Email) {
+				t.Errorf("avatar = %+v, want class %q, initials %q", *a, c.ExpectClass, c.ExpectInitials)
+			}
+		})
+	}
+	msg := &sitePageMsg{Ext: "pm", SHA: strings.Repeat("b", 40), Short: strings.Repeat("b", 12), Author: "Ada Lovelace", Email: "ada@example.com", Message: "An issue", Header: &protocol.Header{Ext: "pm", Fields: map[string]string{"type": "issue"}}}
+	it := &sitePageItem{Msg: msg, Resolved: msg}
+	lead := `<span class="avatar av-6" title="Ada Lovelace">AL</span><span class="type-glyph`
+	row, err := renderSitePage("entries", []sitePageListEntry{buildSiteListEntry(it, "issue")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(row), `<div class="card">`+lead) {
+		t.Errorf("a list row leads with the avatar, then the glyph: %s", row)
+	}
+	comment := &sitePageMsg{Ext: "social", SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Author: "Ada Lovelace", Email: "ada@example.com", Message: "A comment", Header: &protocol.Header{Ext: "social", Fields: map[string]string{"type": "comment"}}}
+	feedback := &sitePageMsg{Ext: "review", SHA: strings.Repeat("c", 40), Short: strings.Repeat("c", 12), Author: "Ada Lovelace", Email: "ada@example.com", Message: "Looks right", Header: &protocol.Header{Ext: "review", Fields: map[string]string{"type": "feedback"}}}
+	if reply := buildSiteReply(&sitePageItem{Msg: comment, Resolved: comment}, it, parityRefAsHref); reply.Avatar == nil || *reply.Avatar != *sitePageAvatar("Ada Lovelace", "ada@example.com") {
+		t.Errorf("a comment reply carries the author's avatar: %+v", reply.Avatar)
+	}
+	if reply := buildSiteReply(&sitePageItem{Msg: feedback, Resolved: feedback}, it, parityRefAsHref); reply.Avatar != nil {
+		t.Errorf("a feedback reply keeps its look and carries no avatar: %+v", reply.Avatar)
 	}
 }
 
@@ -1082,7 +1133,7 @@ func TestParityRowHead(t *testing.T) {
 	}
 }
 
-// TestParityDetailHeadMarkup asserts the rendered detail head is one card head: an h1 subject, then the chip slot.
+// TestParityDetailHeadMarkup asserts the rendered detail head is one card head holding the h1 subject alone, and the state chip ends the meta line.
 func TestParityDetailHeadMarkup(t *testing.T) {
 	fields := map[string]string{"type": "pull-request", "state": "merged"}
 	msg := &sitePageMsg{Ext: "review", SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: "Expand notes with more lines", Header: &protocol.Header{Ext: "review", Fields: fields}}
@@ -1091,9 +1142,13 @@ func TestParityDetailHeadMarkup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render item page: %v", err)
 	}
-	want := `<div class="card-head"><h1 class="subject">Expand notes with more lines</h1> <span class="chip state merged">merged</span></div>`
-	if !strings.Contains(string(page), want) {
-		t.Errorf("detail head markup missing:\nwant %s\ngot %.900s", want, page)
+	for _, want := range []string{
+		`<div class="card-head"><h1 class="subject">Expand notes with more lines</h1></div>`,
+		` <span class="chip state merged">merged</span></span></div>`,
+	} {
+		if !strings.Contains(string(page), want) {
+			t.Errorf("detail head markup missing:\nwant %s\ngot %s", want, page)
+		}
 	}
 	if strings.Count(string(page), "<h1") != 1 {
 		t.Errorf("an item page carries one h1, got %d", strings.Count(string(page), "<h1"))
@@ -1380,7 +1435,7 @@ func parityRowShape(key string, bits []sitePageBit) string {
 	return key + "=" + strings.Join(parts, "|")
 }
 
-// TestParityItemPageMeta asserts an item page lists the definition rows the app's trailerRows builds, with the same keys, order, text and link targets; the JS half is in unit_parity.js.
+// TestParityItemPageMeta asserts an item page lists the definition rows the app's trailerRows builds, with the same keys, order, text and link targets, and the label chips the app puts under its meta line; the JS half is in unit_parity.js.
 func TestParityItemPageMeta(t *testing.T) {
 	f := loadParityFixtures(t)
 	if len(f.ItemPageMeta) == 0 {
@@ -1403,6 +1458,16 @@ func TestParityItemPageMeta(t *testing.T) {
 			}
 			if !slices.Equal(got, want) {
 				t.Errorf("rows = %q, want %q", got, want)
+			}
+			var gotLabels, wantLabels []string
+			for _, chip := range siteItemLabels(&sitePageItem{Msg: msg, Resolved: msg}) {
+				gotLabels = append(gotLabels, chip.Label+"@"+strings.TrimPrefix(chip.Href, "../index.html"))
+			}
+			for _, b := range c.ExpectLabels {
+				wantLabels = append(wantLabels, b.Text+"@"+b.Href)
+			}
+			if !slices.Equal(gotLabels, wantLabels) {
+				t.Errorf("label chips = %q, want %q", gotLabels, wantLabels)
 			}
 			page, err := renderSitePage("rows", rows)
 			if err != nil {

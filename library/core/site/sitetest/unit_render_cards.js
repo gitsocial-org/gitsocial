@@ -1,6 +1,6 @@
 // unit_render_cards.js - shim-rendered units for the card vocabulary:
-// the chip row a header produces, the per-extension card dispatch, the reply
-// quote block, and the paged and auto-scrolling list wrappers.
+// the chip row a header produces, the per-extension card dispatch, the avatar,
+// the reply quote block, and the paged and auto-scrolling list wrappers.
 require("./shim.js");
 require("../assets/icons.js");
 const GS = require("../assets/gs-render.js");
@@ -130,7 +130,7 @@ fire(codeCard, "click");
 eq(global.location.hash, "#/", "a click that ends a text selection does not navigate");
 global.__selection = { isCollapsed: true };
 
-console.log("=== every card leads with its glyph, then its author line ===");
+console.log("=== every card leads with its avatar and its glyph, then its author line; a commit has no glyph ===");
 const parts = (node) => elems(node).map(firstClass);
 const shapes = [
   ["an issue", GS.timelineCard(Object.assign(item("1", { type: "issue", state: "open" }, "An issue"), { _ext: "pm" })), "card-head"],
@@ -138,32 +138,41 @@ const shapes = [
   ["a release", GS.releaseCard(item("3", { type: "release", tag: "v1.2" }, "v1.2")), "card-head"],
   ["a memo", GS.memoCard(item("4", { type: "memo" }, "A memo")), "card-head"],
   ["a titled post", GS.timelineCard(Object.assign(item("5", { type: "post" }, "A post\n\nIts body"), { _ext: "social" })), "card-head"],
-  ["a commit", GS.timelineCard({ _ext: "code", _branch: "trunk", commit: { hash: sha40("6"), short: H("6"), content: "Fix the walk", authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000 } }), "card-head"],
+  ["a commit", GS.timelineCard({ _ext: "code", _branch: "trunk", commit: { hash: sha40("6"), short: H("6"), content: "Fix the walk", authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000 } }), "card-head", false],
   ["a comment", GS.timelineCard(Object.assign(item("7", { type: "comment" }, "A reply"), { _ext: "social" })), "body-clamp-wrap"],
   ["a milestone", findClass(GS.milestonesBody([item("m", { type: "milestone", state: "open", due: "2026-09-01" }, "v1.0 Launch")])[0], "card")[0], "card-head"],
   ["a sprint", findClass(GS.sprintsBody([item("n", { type: "sprint", state: "active", start: "2026-07-01", end: "2026-07-14" }, "Sprint 1")])[0], "card")[0], "card-head"],
   ["a search result", GS.searchResultCard(item("o", { type: "issue", state: "open" }, "Found it"), { ext: "pm", branch: "gitmsg/pm" }, "found"), "card-head"],
-  ["a commit of the commits page", GS.commitCard({ hash: sha40("p"), short: H("p"), content: "Fix the walk", authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000 }, "trunk", { id: "c-" + H("p"), time: "2025-06-15", refSha: H("p") }), "card-head"],
+  ["a commit of the commits page", GS.commitCard({ hash: sha40("p"), short: H("p"), content: "Fix the walk", authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000 }, "trunk", { id: "c-" + H("p"), time: "2025-06-15", refSha: H("p") }), "card-head", false],
 ];
-for (const [name, node, third] of shapes) eq(parts(node).slice(0, 3), ["type-glyph", "meta", third], name + ": the glyph, the author line, then the " + (third === "card-head" ? "head" : "body"));
+for (const [name, node, third, glyph] of shapes) {
+  const want = glyph === false ? ["avatar", "meta", third] : ["avatar", "type-glyph", "meta", third];
+  eq(parts(node).slice(0, want.length), want, name + ": the avatar, " + (glyph === false ? "no glyph" : "the glyph") + ", the author line, then the " + (third === "card-head" ? "head" : "body"));
+}
 const typeless = GS.timelineCard(Object.assign(item("8", { type: "proposal" }, "An unknown type"), { _ext: "pm" }));
-eq([firstClass(elems(typeless)[0]), textOf(elems(typeless)[0])], ["type-glyph", ""], "a type with no glyph keeps the mark column, empty");
+eq([firstClass(elems(typeless)[1]), textOf(elems(typeless)[1])], ["type-glyph", ""], "a type with no glyph keeps the mark column, empty");
 eq(GS.metaRow(item("9", { type: "post" }, "x"), "gitmsg/social")._children.filter((c) => c && c.nodeType === 1).map(firstClass)[0], "author", "the author line opens on the author");
-const groupMeta = textOf(elems(shapes.find((s) => s[0] === "a milestone")[1])[1]);
+const groupMeta = textOf(elems(shapes.find((s) => s[0] === "a milestone")[1])[2]);
 eq(groupMeta.split(" · ").filter((b, i) => i !== 1), ["Ada", H("m"), "due 2026-09-01", "0 issues"], "a milestone's author line carries the due date and the issue count after the hash");
 
 console.log("=== a timeline action is the actor line, the head and the folded text ===");
 const target = item("t", { type: "issue", state: "closed" }, "Fix the parser");
 const action = (header, content) => Object.assign(item("u", header, content), { _ext: "pm", _branch: "gitmsg/pm", _action: "closed", _target: target, _subject: "Fix the parser" });
 const closed = GS.timelineCard(action({ edits: "#commit:" + H("t") + "@gitmsg/pm", state: "closed" }, "Fix the parser\n\nThe parser drops a line"));
-eq(parts(closed), ["type-glyph", "meta", "card-head", "excerpt"], "an action card is the glyph, the actor line, the head and the excerpt");
-ok(/^Ada closed · /.test(textOf(elems(closed)[1])), "the actor line names the actor and the verb", textOf(elems(closed)[1]));
+eq(parts(closed), ["avatar", "type-glyph", "meta", "card-head", "excerpt"], "an action card is the avatar, the glyph, the actor line, the head and the excerpt");
+ok(/^Ada closed · /.test(textOf(elems(closed)[2])), "the actor line names the actor and the verb", textOf(elems(closed)[2]));
+const byBob = action({ edits: "#commit:" + H("t") + "@gitmsg/pm", state: "closed" }, "Fix the parser");
+byBob.author = "Bob Stone";
+byBob.commit.authorEmail = "bob@example.com";
+eq(textOf(elems(GS.timelineCard(byBob))[0]), "BS", "an action card's avatar is its actor's, not the item author's");
 ok(textOf(findClass(closed, "excerpt")[0]).indexOf("The parser drops a line") !== -1, "the excerpt is the body of the edit", textOf(closed));
 const fold = findClass(closed, "body-clamp-wrap")[0];
 const foldToggle = findClass(closed, "body-clamp-toggle")[0];
-eq([fold._cls.has("folded"), textOf(foldToggle)], [true, "Show more"], "the text is folded behind Show more");
+const foldState = () => [fold._cls.has("folded"), foldToggle.getAttribute("aria-label"), foldToggle.getAttribute("title"), foldToggle._cls.has("open")];
+eq([foldToggle.tagName, findClass(foldToggle, "chevron").length], ["BUTTON", 1], "the fold toggle is a chevron button");
+eq(foldState(), [true, "Show more", "Show more", false], "the text is folded behind Show more");
 fire(foldToggle, "click");
-eq([fold._cls.has("folded"), textOf(foldToggle)], [false, "Show less"], "a click opens the text");
+eq(foldState(), [false, "Show less", "Show less", true], "a click opens the text and turns the chevron");
 eq(findClass(GS.timelineCard(action({ state: "closed" }, "Fix the parser")), "excerpt").length, 0, "an edit with no body carries no excerpt");
 const review = Object.assign(item("v", { type: "feedback", "review-state": "changes-requested" }, "Split this function"), { _ext: "review", _branch: "gitmsg/review", _action: "changes-requested", _target: target, _subject: "A PR" });
 ok(textOf(findClass(GS.timelineCard(review), "excerpt")[0]).indexOf("Split this function") !== -1, "a review's excerpt is its whole text");
@@ -192,11 +201,29 @@ global.location.hash = "#/";
 fire(quote, "click");
 eq(global.location.hash, "#commit:" + H("1") + "@gitmsg/social", "clicking the excerpt opens what the comment answers");
 const quoteHead = elems(quote)[0];
-eq([firstClass(quoteHead), elems(quoteHead).map(firstClass).slice(0, 2)], ["reply-quote-head", ["type-glyph", "author"]], "the quote box leads with the glyph of the quoted item and its author line");
+eq([firstClass(quoteHead), elems(quoteHead).map(firstClass).slice(0, 3)], ["reply-quote-head", ["avatar", "type-glyph", "author"]], "the quote box leads with the avatar and the glyph of the quoted item, then its author line");
+eq(textOf(elems(quoteHead)[0]), "B", "the quote box's avatar is the quoted author's");
 const repost = GS.timelineCard(Object.assign(item("g", { type: "repost", original: "#commit:" + H("1") + "@gitmsg/social" }, "# Bob: the original post", [{ ref: "#commit:" + H("1") + "@gitmsg/social", quoted: "> the original post", author: "Bob", type: "post" }]), { _ext: "social" }));
 ok(!findClass(repost, "reply-quote")[0]._cls.has("dimmed"), "a repost shows the original undimmed");
 ok(/^Ada reposted · /.test(textOf(findClass(repost, "meta")[0])), "a repost's author line reads Name reposted", textOf(findClass(repost, "meta")[0]));
-eq(parts(repost), ["type-glyph", "meta", "reply-quote"], "a repost shows the original in the quote box in place of its own text");
+eq(parts(repost), ["avatar", "type-glyph", "meta", "reply-quote"], "a repost shows the original in the quote box in place of its own text");
+
+console.log("=== an avatar is the author's initials in one of twelve hues ===");
+const avatar = (name, email) => GS.authorAvatar(name, email);
+const hueOf = (name, email) => Array.from(avatar(name, email)._cls).filter((c) => c !== "avatar");
+eq([textOf(avatar("Ada Lovelace", "ada@example.com")), avatar("Ada Lovelace", "ada@example.com").getAttribute("title")], ["AL", "Ada Lovelace"], "a two-word name gives two initials, the name in the title");
+eq(textOf(avatar("ada augusta king", "")), "AA", "the first two words count, uppercased");
+eq(textOf(avatar("Linus", "linus@example.com")), "L", "a one-word name gives one letter");
+eq(textOf(avatar("Иван Петров", "")), "ИП", "a Cyrillic name gives its own letters");
+eq(textOf(avatar("𝓐da 𝓑yron", "")), "𝓐𝓑", "an astral letter stays one whole code point");
+eq(textOf(avatar("李小龍", "")), "李", "a name with no space gives its first character");
+eq([textOf(avatar("", "grace@example.com")), avatar("", "grace@example.com").getAttribute("title")], ["G", "grace@example.com"], "an email alone gives the first letter of its local part");
+eq(textOf(avatar("", "")), "?", "no name and no email give a question mark");
+eq(hueOf("Ada Lovelace", "ada@example.com"), hueOf("Someone Else", "ADA@example.com"), "the hue depends on the email only, its case aside");
+const hues = new Set(Array.from({ length: 200 }, (_, i) => hueOf("Ada", "author" + i + "@example.com")[0]));
+ok(Array.from(hues).every((c) => /^av-(\d|1[01])$/.test(c)) && hues.size === GS.AVATAR_HUES, "every hue class is one of twelve, and two hundred authors use them all", Array.from(hues).join(" "));
+const gitAuthored = GS.commitCard({ hash: sha40("q"), short: H("q"), content: "Import the tree", authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000, gitmsg: { "origin-author-name": "Grace Hopper", "origin-author-email": "grace@example.com" } }, "trunk", {});
+eq([textOf(elems(gitAuthored)[0]), hueOf("", "grace@example.com")[0]], ["GH", Array.from(elems(gitAuthored)[0]._cls)[1]], "a commit card's avatar is the author its author line names");
 
 console.log("=== a list member ===");
 const memberOf = (ref) => findTag(GS.listMemberRow(ref), "a").map((a) => a.getAttribute("href")).concat(findClass(GS.listMemberRow(ref), "selectable").map(textOf));
@@ -275,8 +302,11 @@ async function rest() {
   eq(branchCards.map((c) => parts(c)), [["type-glyph", "card-head"], ["type-glyph", "card-head"]], "a branch card is the glyph, then its head, since a branch has no author line");
   eq(branchCards.map((c) => textOf(elems(c)[0])), ["⎇", "⎇"], "the branch glyph is the sidebar's");
   const tagCards = (await GS.tagsView(refsCtx)).flatMap((n) => findClass(n, "card"));
-  eq(tagCards.map((c) => parts(c)), [["type-glyph", "meta", "card-head"]], "a tag card is the glyph, the author line, then its head");
-  eq(tagCards.map((c) => textOf(elems(c)[0])), ["⌗"], "the tag glyph is the sidebar's");
+  eq(tagCards.map((c) => parts(c)), [["avatar", "type-glyph", "meta", "card-head"]], "a tag card is the tagger's avatar, the glyph, the author line, then its head");
+  eq(tagCards.map((c) => textOf(elems(c)[1])), ["⌗"], "the tag glyph is the sidebar's");
+  const listsCtx = { base: "http://bucket.test/repo/", walks: {}, manifest: Promise.resolve({ "refs/gitmsg/social/lists/friends/items/aaaaaaaaaaaa": sha40("4") }) };
+  const listCards = (await GS.listsView(listsCtx)).flatMap((n) => findClass(n, "card"));
+  eq(listCards.map((c) => parts(c)), [["type-glyph", "card-head", "meta"]], "a list card is the glyph alone in its mark column, with no avatar");
 
   console.log("=== the state filter bar ===");
   const many = Array.from({ length: 150 }, (_, i) => item("h", { type: "pull-request", state: i < 40 ? "merged" : "open" }, "PR " + i));

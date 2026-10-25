@@ -5,6 +5,7 @@ package site
 import (
 	"bytes"
 	"fmt"
+	"hash/fnv"
 	"html/template"
 	"maps"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 
@@ -164,7 +166,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <nav class="nav-list">{{range .Nav}}{{if .Section}}<div class="nav-group"><div class="nav-section">{{.Section}}</div>{{end}}{{range .Links}}<a href="{{.Href}}"{{if .Current}} class="active"{{end}}><span class="nav-icon">{{.Glyph}}</span>{{.Label}}</a>{{end}}{{if .Section}}</div>{{end}}{{end}}</nav>
 <div class="nav-footer"><a class="foot-brand" href="https://gitsocial.org"><svg class="logo-small" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" /></svg><span>Built with GitSocial</span></a></div>
 </aside>
-{{end}}{{define "chip"}}{{if .Href}}<a class="chip{{if .Class}} {{.Class}}{{end}}" href="{{.Href}}">{{.Label}}</a>{{else}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{if .HeadingHref}}<a href="{{.HeadingHref}}">{{.Heading}}</a>{{else}}{{.Heading}}{{end}}</h1>{{range .Chips}} {{template "chip" .}}{{end}}</div>{{end}}{{define "link"}}{{if .Href}}<a{{if .Class}} class="{{.Class}}"{{end}} href="{{.Href}}"{{if .Title}} title="{{.Title}}"{{end}}{{if .Rel}} rel="{{.Rel}}"{{end}}>{{.Text}}</a>{{else}}{{.Text}}{{end}}{{end}}{{define "bits"}}{{range $i, $b := .}}{{if $i}}{{if $b.Sep}}{{$b.Sep}}{{else}} · {{end}}{{end}}{{if $b.Href}}{{template "link" $b}}{{else if $b.Class}}<span class="{{$b.Class}}"{{if $b.Title}} title="{{$b.Title}}"{{end}}>{{$b.Text}}</span>{{else}}{{$b.Text}}{{end}}{{end}}{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{range $l}}{{template "link" .}}{{end}}{{end}}</p>
+{{end}}{{define "chip"}}{{if .Href}}<a class="chip{{if .Class}} {{.Class}}{{end}}" href="{{.Href}}">{{.Label}}</a>{{else}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{if .HeadingHref}}<a href="{{.HeadingHref}}">{{.Heading}}</a>{{else}}{{.Heading}}{{end}}</h1></div>{{end}}{{define "link"}}{{if .Href}}<a{{if .Class}} class="{{.Class}}"{{end}} href="{{.Href}}"{{if .Title}} title="{{.Title}}"{{end}}{{if .Rel}} rel="{{.Rel}}"{{end}}>{{.Text}}</a>{{else}}{{.Text}}{{end}}{{end}}{{define "bits"}}{{range $i, $b := .}}{{if $i}}{{if $b.Sep}}{{$b.Sep}}{{else}} · {{end}}{{end}}{{if $b.Href}}{{template "link" $b}}{{else if $b.Class}}<span class="{{$b.Class}}"{{if $b.Title}} title="{{$b.Title}}"{{end}}>{{$b.Text}}</span>{{else}}{{$b.Text}}{{end}}{{end}}{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{range $l}}{{template "link" .}}{{end}}{{end}}</p>
 {{end}}{{end}}{{define "body"}}{{range .}}{{if .Notes}}<dl class="release-notes">{{range .Notes}}<dt><a class="hash" href="{{.Href}}">{{.Hash}}</a></dt><dd>{{.Text}}</dd>{{end}}</dl>
 {{else}}<p>{{range $i, $l := .Lines}}{{if $i}}<br>{{end}}{{range $l}}{{template "link" .}}{{end}}{{end}}</p>
 {{end}}{{end}}{{end}}{{define "rows"}}{{if .}}<dl>{{range .}}<dt>{{.Key}}</dt><dd>{{if gt (len .Bits) 1}}<span>{{end}}{{range $i, $b := .Bits}}{{if $i}}, {{end}}{{template "link" $b}}{{end}}{{if gt (len .Bits) 1}}</span>{{end}}</dd>{{end}}</dl>
@@ -183,29 +185,30 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{if .Omitted}}<div class="notice">{{.Omitted}} more not shown.</div>
 {{end}}{{if .More}}<div class="notice">The page shows the first {{lineCap}} changed lines. <a href="{{.AppHref}}">The app shows the rest.</a></div>
 {{end}}</div>
-{{end}}{{define "glyph"}}<span class="type-glyph{{if .GlyphClass}} {{.GlyphClass}}{{end}}"{{if .GlyphTitle}} title="{{.GlyphTitle}}"{{end}}>{{.Glyph}}</span>{{end}}{{define "hometoggle"}}<summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></summary>
+{{end}}{{define "avatar"}}{{with .Avatar}}<span class="avatar {{.Class}}" title="{{.Title}}">{{.Initials}}</span>{{end}}{{end}}{{define "glyph"}}{{if .Glyph}}<span class="type-glyph{{if .GlyphClass}} {{.GlyphClass}}{{end}}"{{if .GlyphTitle}} title="{{.GlyphTitle}}"{{end}}>{{.Glyph}}</span>{{end}}{{end}}{{define "hometoggle"}}<summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></summary>
 {{end}}{{define "filerow"}}<a class="home-row" href="{{.Href}}">{{.Icon}}<span class="home-row-subject">{{.Name}}</span></a>
-{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}>{{template "glyph" .}}{{if or .Meta .BodyOnly}}<span class="meta">{{template "bits" .Meta}}{{if .Chip}} · <span class="marker">{{.Chip.Label}}</span>{{end}}</span>
+{{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}>{{template "avatar" .}}{{template "glyph" .}}{{if or .Meta .BodyOnly}}<span class="meta">{{template "bits" .Meta}}{{if .Chip}} · <span class="marker">{{.Chip.Label}}</span>{{end}}</span>
 {{end}}{{if .BodyOnly}}{{if .Text}}<div class="body">{{.Text}}</div>
 {{end}}{{else}}<div class="card-head"><a class="subject" href="{{.Href}}">{{.Title}}</a>{{range .TailChips}} {{template "chip" .}}{{end}}</div>
 {{end}}</div>
 {{end}}{{end}}{{define "item"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
 {{if .Heading}}{{template "detailhead" .}}
-{{end}}<div class="detail-meta"><span class="meta">{{template "bits" .Meta}}</span></div>
+{{end}}<div class="detail-meta"><span class="meta">{{template "bits" .Meta}}{{range .Chips}} {{template "chip" .}}{{end}}</span></div>
+{{if .Labels}}<div class="card-chips">{{range .Labels}}{{template "chip" .}} {{end}}</div>
+{{end}}
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
 {{else}}{{template "body" .Body}}{{template "rows" .Rows}}{{end}}{{with .Assets}}{{template "assets" .}}{{end}}{{with .Diff}}{{template "diff" .}}{{end}}{{if .Replies}}<div class="thread"><div class="thread-head">Comments ({{len .Replies}})</div>
 {{range .Replies}}{{if .Depth}}<div class="comment-row"><div class="thread-rail">{{range $i := .Rail}}<span class="rail-guide"></span>{{end}}</div>{{end}}<div class="card {{.Variant}}">
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
-{{else}}{{if .GlyphLeads}}{{template "glyph" .}}{{end}}<p class="meta">{{if not .GlyphLeads}}{{template "glyph" .}} {{end}}{{range .Chips}}{{template "chip" .}} {{end}}{{template "bits" .Meta}}</p>
+{{else}}{{if .GlyphLeads}}{{template "avatar" .}}{{template "glyph" .}}{{end}}<p class="meta">{{if not .GlyphLeads}}{{template "glyph" .}} {{end}}{{range .Chips}}{{template "chip" .}} {{end}}{{template "bits" .Meta}}</p>
 <div>{{template "paras" .Paras}}</div>{{end}}</div>{{if .Depth}}</div>{{end}}
 {{end}}</div>
 {{end}}{{if .Omitted}}<p class="notice">{{.Omitted}} more replies not shown.</p>
 {{end}}<footer><a href="{{.Chrome.Base}}{{.ListDir}}/index.html">← {{.ListLabel}}</a> <a href="{{.Chrome.Base}}index.html">home</a></footer>
 {{template "foot"}}{{end}}{{define "list"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
-<h1>{{.Heading}}</h1>
-<p class="meta">{{range $i, $b := .MetaBits}}{{if $i}} · {{end}}{{$b}}{{end}}</p>
+<div class="heading-row"><h1>{{.Heading}}</h1><span class="view-count">{{range $i, $b := .MetaBits}}{{if $i}} · {{end}}{{$b}}{{end}}</span></div>
 {{if .Entries}}{{template "entries" .Entries}}{{else}}<p class="empty">{{.Empty}}</p>
 {{end}}<footer>{{if .NewerHref}}<a href="{{.NewerHref}}">← newer</a> {{end}}{{if .OlderHref}}<a href="{{.OlderHref}}">older →</a> {{end}}<a href="{{.Chrome.Base}}index.html">home</a></footer>
 {{template "foot"}}{{end}}{{define "file"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
@@ -343,9 +346,13 @@ type sitePageAssets struct {
 	SignedBy  string
 }
 
+// siteAvatar is the initials circle that leads a card with an author line.
+type siteAvatar struct{ Class, Initials, Title string }
+
 // sitePageReply is one thread reply, rendered as the app's comment or feedback card.
 type sitePageReply struct {
-	Variant    string // card variant classes ("comment", "feedback verdict-approved")
+	Variant    string      // card variant classes ("comment", "feedback verdict-approved")
+	Avatar     *siteAvatar // nil on a feedback card, which keeps its glyph in its meta row
 	Chips      []sitePageChip
 	Glyph      string
 	GlyphClass string
@@ -372,7 +379,8 @@ type siteItemPageData struct {
 	Subject     string
 	Heading     string
 	HeadingHref string         // a release head links its tag page (siteHeadingHref)
-	Chips       []sitePageChip // the detail head's one chip slot, after the subject (siteHeadChips)
+	Chips       []sitePageChip // the state and marker chips of the meta line (siteHeadChips)
+	Labels      []sitePageChip // the label chips under the meta line, as on a card (siteItemLabels)
 	Meta        []sitePageBit
 	Body        []sitePageBodyBlock
 	Rows        []sitePageRow // the header fields no other part of the page carries (siteItemPageRows)
@@ -404,9 +412,10 @@ type sitePageNavGroup struct {
 // sitePageListEntry is one row on a list or front page; ID, when set, is the row's own anchor.
 type sitePageListEntry struct {
 	ID         string
-	Glyph      string // leading type glyph ("" — this type has none)
-	GlyphClass string // its tint class (tg-open/tg-closed/tg-merged, else tg-<class type>)
-	GlyphTitle string // the glyph's title attribute (sitePageGlyphTitle)
+	Avatar     *siteAvatar // nil on a row with no author line
+	Glyph      string      // leading type glyph ("" — this type has none)
+	GlyphClass string      // its tint class (tg-open/tg-closed/tg-merged, else tg-<class type>)
+	GlyphTitle string      // the glyph's title attribute (sitePageGlyphTitle)
 	Chip       *sitePageChip
 	TailChips  []sitePageChip // chips after the subject, the app cardHead's trailing chips
 	Href       string
@@ -486,8 +495,8 @@ type sitePageList struct {
 
 // sitePageLists orders the five type directories; the routes match gs-core.js parseRoute's INDEX_TABS.
 var sitePageLists = []sitePageList{
-	{Ext: "pm", Dir: "issues", Label: "issues", Route: "/issues", NavLabel: "Issues", Glyph: "○"},
-	{Ext: "review", Dir: "prs", Label: "pull requests", Route: "/prs", NavLabel: "Pull Requests", Glyph: "⑂"},
+	{Ext: "pm", Dir: "issues", Label: "issues", Route: "/issues", NavLabel: "Issues", Glyph: "☐"},
+	{Ext: "review", Dir: "prs", Label: "pull requests", Route: "/prs", NavLabel: "Pull Requests", Glyph: "△"},
 	{Ext: "social", Dir: "posts", Label: "posts", Route: "/timeline", NavLabel: "Timeline", Glyph: "⏱"},
 	{Ext: "release", Dir: "releases", Label: "releases", Route: "/releases", NavLabel: "Releases", Glyph: "⏏"},
 	{Ext: "memo", Dir: "memos", Label: "memos", Route: "/memos", NavLabel: "Memos", Glyph: "☞"},
@@ -628,7 +637,7 @@ func sitePageTypeLabel(t string) string {
 // sitePageTypeGlyph maps an item type to the app's leading card glyph (gs-core.js TYPE_GLYPH).
 var sitePageTypeGlyph = map[string]string{
 	"post": "•", "comment": "↩", "repost": "↻", "quote": "↻",
-	"milestone": "◇", "sprint": "◷", "pull-request": "⑂", "feedback": "↩",
+	"milestone": "◇", "sprint": "◷", "pull-request": "△", "feedback": "↩",
 	"release": "⏏", "memo": "☞", "commit": "•",
 }
 
@@ -637,14 +646,16 @@ func sitePageGlyph(itemType, state string) (glyph, class string) {
 	glyph = sitePageTypeGlyph[itemType]
 	switch {
 	case itemType == "issue":
-		glyph = "○"
+		glyph = "☐"
 		if state == "closed" || state == "completed" {
-			glyph = "●"
+			glyph = "☑"
 		} else if strings.HasPrefix(state, "cancel") {
-			glyph = "◌"
+			glyph = "☒"
 		}
 	case itemType == "milestone" && (state == "closed" || strings.HasPrefix(state, "cancel")):
 		glyph = "◆"
+	case itemType == "pull-request" && state == "merged":
+		glyph = "▲"
 	case itemType == "sprint" && state == "active":
 		glyph = "◶"
 	case itemType == "sprint" && state == "completed":
@@ -780,6 +791,46 @@ func sitePageAuthorLabel(name, email string) string {
 	return "unknown"
 }
 
+// siteAvatarHues is the count of avatar hue classes, av-0 to av-11. Mirrors AVATAR_HUES in gs-render.js.
+const siteAvatarHues = 12
+
+// siteAvatarInitials gives the first code point of the first two words of the name, else of the email's local part, else "?". Mirrors avatarInitials in gs-render.js.
+func siteAvatarInitials(name, email string) string {
+	letter := func(word string) string {
+		r, _ := utf8.DecodeRuneInString(word)
+		return strings.ToUpper(string(r))
+	}
+	// A login shown as @login gives its letter, not the @.
+	words := strings.Fields(strings.TrimPrefix(strings.TrimSpace(name), "@"))
+	if len(words) > 0 {
+		var b strings.Builder
+		for _, word := range words[:min(len(words), 2)] {
+			b.WriteString(letter(word))
+		}
+		return b.String()
+	}
+	if local, _, _ := strings.Cut(strings.TrimSpace(email), "@"); local != "" {
+		return letter(local)
+	}
+	return "?"
+}
+
+// siteAvatarHue returns FNV-1a 32 of the lowercase email, else of the name, modulo siteAvatarHues. Mirrors avatarHue in gs-render.js.
+func siteAvatarHue(name, email string) int {
+	key := strings.TrimSpace(email)
+	if key == "" {
+		key = strings.TrimSpace(name)
+	}
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(strings.ToLower(key))) // a hash write never fails
+	return int(hash.Sum32() % siteAvatarHues)
+}
+
+// sitePageAvatar builds an author's initials circle, its hue class from the email. Mirrors authorAvatar in gs-render.js.
+func sitePageAvatar(name, email string) *siteAvatar {
+	return &siteAvatar{Class: "av-" + strconv.Itoa(siteAvatarHue(name, email)), Initials: siteAvatarInitials(name, email), Title: sitePageAuthorLabel(name, email)}
+}
+
 // sitePageAuthorBit builds a message's author bit, the email in its title when it is not the label.
 func sitePageAuthorBit(m *sitePageMsg) sitePageBit {
 	name, email := pageDisplayAuthor(m)
@@ -887,8 +938,16 @@ func sitePageBranchBit(ref string) sitePageBit {
 // siteItemPageMeta builds an item page's meta-line bits: the author, time and hash skeleton, the edited marker, then the page layer's own further bits.
 func siteItemPageMeta(it *sitePageItem) []sitePageBit {
 	t := pageItemType(it)
+	// The page has no mark column, so the face leads the line and the glyph follows the name, as versionMetaRow in gs-render.js does.
+	av := sitePageAvatar(pageDisplayAuthor(it.Msg))
+	state := pageItemField(it, "state")
+	glyph, glyphClass := sitePageGlyph(t, state)
+	author := sitePageAuthorLink(it.Msg)
+	author.Sep = " "
 	bits := []sitePageBit{
-		sitePageAuthorLink(it.Msg),
+		{Class: "avatar " + av.Class, Text: av.Initials, Title: av.Title},
+		author,
+		{Class: "type-glyph " + glyphClass, Text: glyph, Title: sitePageGlyphTitle(t, state), Sep: " "},
 		sitePageTimeBit(pageEffectiveTime(it.Msg)),
 		sitePageHashBit(it.Msg.Short, it.Msg.Short+".html"),
 	}
@@ -923,7 +982,7 @@ func siteItemPageMeta(it *sitePageItem) []sitePageBit {
 
 // sitePageTrailerSkip are the header fields another part of an item page carries: the route, the chips of the head and the meta row. Mirrors TRAILER_SKIP in gs-render.js.
 var sitePageTrailerSkip = map[string]bool{
-	"v": true, "ext": true, "type": true, "state": true, "draft": true, "retracted": true, "tag": true, "version": true, "prerelease": true, "adopts": true,
+	"v": true, "ext": true, "type": true, "state": true, "draft": true, "retracted": true, "tag": true, "version": true, "prerelease": true, "adopts": true, "labels": true,
 	"origin-author-name": true, "origin-author-email": true, "origin-time": true, "origin-platform": true, "origin-url": true,
 }
 
@@ -932,6 +991,24 @@ var sitePageReleaseSkip = map[string]bool{"artifacts": true, "artifact-url": tru
 
 // sitePageTipKeys are the header fields that carry a bare commit hash. Mirrors TIP_KEYS in gs-render.js.
 var sitePageTipKeys = map[string]bool{"base-tip": true, "head-tip": true, "merge-base": true, "merge-head": true, "commit": true}
+
+// siteItemLabels renders an item's labels as chips, a priority label with its tint, each linked to its search. Mirrors the label chips of headerChips in gs-render.js.
+func siteItemLabels(it *sitePageItem) []sitePageChip {
+	var chips []sitePageChip
+	for _, l := range strings.Split(pageItemField(it, "labels"), ",") {
+		if l = strings.TrimSpace(l); l == "" || strings.HasPrefix(l, "status/") {
+			continue
+		}
+		class, label := "chip-label", l
+		// A priority chip shows the value alone, as headerChips in gs-render.js does.
+		if strings.HasPrefix(l, "priority/") {
+			label = strings.TrimPrefix(l, "priority/")
+			class = "chip-priority prio-" + label
+		}
+		chips = append(chips, sitePageChip{Class: class, Label: label, Href: sitePageSearchHref("label", l)})
+	}
+	return chips
+}
 
 // sitePageFacetKeys maps a header field of emails or labels to the search facet that lists the items carrying one. Mirrors FACET_KEYS in gs-render.js.
 var sitePageFacetKeys = map[string]string{"assignees": "assignee", "reviewers": "reviewer", "labels": "label"}
@@ -1117,6 +1194,7 @@ func buildSiteReply(r, root *sitePageItem, link func(ref string) string) sitePag
 	glyph, glyphClass := sitePageGlyph(t, "")
 	s := sitePageReply{
 		Variant:    "comment",
+		Avatar:     sitePageAvatar(pageDisplayAuthor(r.Msg)),
 		Depth:      r.Depth,
 		Glyph:      glyph,
 		GlyphClass: glyphClass,
@@ -1131,7 +1209,7 @@ func buildSiteReply(r, root *sitePageItem, link func(ref string) string) sitePag
 		s.Meta = append(s.Meta, sitePageEditedBit(r))
 	}
 	if t == "feedback" {
-		s.Variant = "feedback"
+		s.Variant, s.Avatar = "feedback", nil
 		if verdict := sitePageFeedbackVerdict(r); verdict != "" {
 			s.Variant += " verdict-" + verdict
 			s.Chips = append(s.Chips, sitePageChip{Class: "verdict-" + verdict, Label: strings.ReplaceAll(verdict, "-", " ")})
@@ -1330,6 +1408,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		d.Rows = siteItemPageRows(it)
 	}
 	d.Chips = siteHeadChips(it, d.Heading)
+	d.Labels = siteItemLabels(it)
 	d.HeadingHref = siteHeadingHref(it, d.Heading)
 	icon, repoIcon := sitePageIcons(site.Favicon, "../")
 	d.Chrome = sitePageChrome{
@@ -1460,6 +1539,7 @@ func buildSiteListEntry(it *sitePageItem, defaultType string) sitePageListEntry 
 	state := pageItemField(it, "state")
 	glyph, glyphClass := sitePageGlyph(t, state)
 	row := siteRowHead(it)
+	row.Avatar = sitePageAvatar(pageDisplayAuthor(it.Msg))
 	row.Glyph, row.GlyphClass, row.GlyphTitle = glyph, glyphClass, sitePageGlyphTitle(t, state)
 	row.Href, row.Meta = href, meta
 	// A state word stands in for the edited marker, as leadMeta in gs-render.js does.

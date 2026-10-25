@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadForkPulls, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, timelineHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadForkPulls, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, headingRow, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, timelineHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -93,7 +93,6 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     // Remember the last in-app hash so a detail page's "back" returns to where the
     // user came from (a board/milestone/sprint/search list), not a fixed default.
     // Updated AFTER a detail render reads it (see recordRoute at the end).
-    ctx.backFrom = ctx.lastHash || "";
     let activeTab = "";
     if (r.type === "index") activeTab = r.tab;
     else if (r.type === "commit" && COMMIT_VIEW[r.branch]) activeTab = COMMIT_VIEW[r.branch].tab;
@@ -178,16 +177,16 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
         // Full pm set (metadata-only, cheap and refreshed on every push) so the
         // state-filter counts are exact on first paint; the list paginates client-side.
         const [pm, counts] = await Promise.all([loadExtItemsAll(ctx, "pm"), loadInteractionCounts(ctx)]);
-        setView([listHeading("issues"), ...issuesBody(pm, counts)]);
+        setView(issuesBody(pm, counts));
       } else if (r.type === "index" && r.tab === "milestones") {
-        setView([listHeading("milestones"), ...milestonesBody(await loadExtItemsAll(ctx, "pm"))]);
+        setView(milestonesBody(await loadExtItemsAll(ctx, "pm")));
       } else if (r.type === "index" && r.tab === "sprints") {
-        setView([listHeading("sprints"), ...sprintsBody(await loadExtItemsAll(ctx, "pm"))]);
+        setView(sprintsBody(await loadExtItemsAll(ctx, "pm")));
       } else if (r.type === "index" && r.tab === "prs") {
         // The fork area's pull requests join the repository's own, newest first.
         const [all, forks, counts] = await Promise.all([loadExtItemsAll(ctx, "review"), loadForkPulls(ctx), loadInteractionCounts(ctx)]);
         const pulls = all.filter((i) => (i.header.type || "") === "pull-request").concat(forks).sort((a, b) => b.effectiveTime - a.effectiveTime);
-        setView([listHeading("prs"), ...filteredListView(pulls, (it) => prCard(it, countsFor(counts, it.commit.short)), "prs", PR_STATES, LIST_EMPTY.prs)]);
+        setView(filteredListView(pulls, (it) => prCard(it, countsFor(counts, it.commit.short)), "prs", PR_STATES, LIST_EMPTY.prs));
       } else if (r.type === "index" && r.tab === "releases") {
         const relsOf = (items) => items.filter((i) => (i.header.type || "") === "release");
         const first = await loadExtItemsWindow(ctx, "release", false);
@@ -199,7 +198,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
           const n = relsOf(all).length;
           if (n) count.textContent = n + (n === 1 ? " release" : " releases");
         }).catch(() => {});
-        setView([listHeading("releases"), count, ...pagedListView(first,
+        setView([headingRow("releases", count), ...pagedListView(first,
           (items, box) => box.replaceChildren(...renderList(relsOf(items), releaseCard, LIST_EMPTY.releases)),
           () => loadExtItemsWindow(ctx, "release", true))]);
       } else if (r.type === "commit") {
@@ -268,7 +267,6 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     }
     // Record this hash as the "came from" for the NEXT navigation's back link.
     // Detail routes are excluded so back never bounces detail→detail.
-    if (r.type !== "commit" && r.type !== "tag") ctx.lastHash = hashAtEntry;
     // Content is rendered (cache warmed); reflect the code-context sidebar tree.
     await updateCodeSidebar(ctx, r);
     // Honor a deferred magnifier focus once the Code tree (and its search) exist.

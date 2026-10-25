@@ -4,8 +4,9 @@
   var SELECTORS = [
     ".card", ".card.comment", ".card.board-card", ".card-head", ".card-chips",
     ".meta", ".edited", ".marker", ".chip", ".chip.state", ".subject", ".thread", ".thread-head",
-    ".card.feedback", ".type-glyph", ".empty", ".err", ".view-count", ".filter-chip",
-    ".detail > .card-head", ".detail > .card-head > h1.subject",
+    ".card.feedback", ".avatar", ".type-glyph", ".empty", ".err", ".view-count", ".filter-chip",
+    ".detail > .card-head", ".detail > .card-head > h1.subject", ".detail > .detail-meta > .meta",
+    ".heading-row", ".body-clamp-toggle",
     ".detail > .detail-topbar", ".detail > .detail-topbar > .page-actions",
     ".home-head", ".home-commit", ".home-row", ".home-toggle",
   ];
@@ -31,8 +32,9 @@
       var cls = String(c.className || "").trim().split(/\s+/).filter(function (n) {
         // tg-* names the item TYPE, and which types land in a list depends on
         // fixture timestamps. The tint those classes carry still shows up as a
-        // colour on its own variant, so dropping the name loses no coverage.
-        return n && !/^tg-/.test(n);
+        // colour on its own variant, so dropping the name loses no coverage; an
+        // av-* hue names the author, and the same holds for it.
+        return n && !/^(?:tg|av)-/.test(n);
       }).sort();
       return c.tagName.toLowerCase() + (cls.length ? "." + cls.join(".") : "");
     }).join(" > ");

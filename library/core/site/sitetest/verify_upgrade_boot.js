@@ -763,8 +763,8 @@ async function main() {
     const page = await get(base + "commits/index.html");
     ok("commits/index.html served + readable without JS", page.status === 200 && /<h1>Commits<\/h1>/.test(page.text));
     ok("commits page carries gs-route(/commits) + data-base(../) + upgrade script", /name="gs-route" content="\/commits"/.test(page.text) && /data-base="\.\.\/"/.test(page.text) && new RegExp('<script defer src="\\.\\./' + SHELL_RE + 'gs-upgrade\\.js">').test(page.text));
-    // The row leads with the commit glyph, the same one the app's code card paints, then the author line and the head.
-    const rows = [...page.text.matchAll(/<div class="card" id="(c-[0-9a-f]{12})"><span class="type-glyph tg-commit" title="commit">•<\/span><span class="meta">([\s\S]*?)<\/span>\s*<div class="card-head"><a class="subject" href="([^"]+)">([\s\S]*?)<\/a><\/div>\s*<\/div>/g)]
+    // The row leads with the author's avatar and no glyph, as the app's code card does, then the author line and the head.
+    const rows = [...page.text.matchAll(/<div class="card" id="(c-[0-9a-f]{12})"><span class="avatar av-(?:\d|1[01])" title="[^"]*">[^<]+<\/span><span class="meta">([\s\S]*?)<\/span>\s*<div class="card-head"><a class="subject" href="([^"]+)">([\s\S]*?)<\/a><\/div>\s*<\/div>/g)]
       .map((m) => ({ id: m[1], href: m[3], subject: unesc(m[4]), meta: unesc(m[2].replace(/<[^>]*>/g, "")) }));
     ok("commits page lists rows", rows.length > 0, "rows=" + rows.length);
     // Every row is a citable place: an id a URL can name, and a subject linking
@@ -792,16 +792,17 @@ async function main() {
     // paint. Rendering them as bare text instead is what made this list read as
     // a different product from the timeline showing the very same commits.
     const cards = findClass(view, "card");
-    ok("commits rows are the app's commit card (glyph + linked subject)",
-      cards.every((c) => findClass(c, "tg-commit").length === 1 && (findClass(c, "subject")[0] || {}).tagName === "A"),
-      JSON.stringify(cards.map((c) => (findClass(c, "tg-commit").length ? "glyph" : "no-glyph") + "/" + ((findClass(c, "subject")[0] || {}).tagName || "none"))));
+    ok("commits rows are the app's commit card (avatar, no glyph, linked subject)",
+      cards.every((c) => findClass(c, "avatar").length === 1 && findClass(c, "type-glyph").length === 0 && (findClass(c, "subject")[0] || {}).tagName === "A"),
+      JSON.stringify(cards.map((c) => (findClass(c, "avatar").length ? "avatar" : "no-avatar") + "/" + (findClass(c, "type-glyph").length ? "glyph" : "no-glyph") + "/" + ((findClass(c, "subject")[0] || {}).tagName || "none"))));
     ok("the rows agree row for row (id, subject, author/date/sha)",
       rows.every((r, i) => painted[i] && painted[i].id === r.id && painted[i].subject === r.subject && painted[i].meta === r.meta),
       "page=" + JSON.stringify(rows.map((r) => r.id + "|" + r.subject + "|" + r.meta)) + " app=" + JSON.stringify(painted.map((p) => p.id + "|" + p.subject + "|" + p.meta)));
-    // The head's own meta line is part of the same agreement: the total is what
-    // the writer published, not what the reader happened to drain.
-    const pageMeta = /<p class="meta">([^<]*)<\/p>/.exec(page.text.slice(page.text.indexOf("<h1>Commits</h1>")));
-    const appMeta = global.__shim.textOf(findClass(view, "meta")[0] || null).trim();
+    // The head's own count line is part of the same agreement: the total is what
+    // the writer published, not what the reader happened to drain. The app puts
+    // it at the right of the title, in the heading row.
+    const pageMeta = /<span class="view-count">([^<]*)<\/span>/.exec(page.text.slice(page.text.indexOf("<h1>Commits</h1>")));
+    const appMeta = global.__shim.textOf(findClass(findClass(view, "heading-row")[0] || null, "view-count")[0] || null).trim();
     ok("both surfaces head the list with the same count/branch/order line", !!pageMeta && unesc(pageMeta[1]).trim() === appMeta, "page=" + (pageMeta && pageMeta[1]) + " app=" + appMeta);
 
     console.log("\n--- A row anchor survives the upgrade (the citable URL) ---");

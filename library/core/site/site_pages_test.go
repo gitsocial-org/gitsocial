@@ -1441,7 +1441,7 @@ func pageTitleOf(t *testing.T, page string) string {
 
 // TestSitePages_CrawlHygiene: tombstones and empty lists keep their pages but
 // leave the sitemap, descriptions are markdown-stripped, titles are unique.
-// TestSitePages_releaseHeadCarriesTagAndVersionChip asserts a release row and item page head with the tag and one version chip.
+// TestSitePages_releaseHeadCarriesTagAndVersionChip asserts a release row and item page head with the tag, and carry one version chip.
 func TestSitePages_releaseHeadCarriesTagAndVersionChip(t *testing.T) {
 	client, _ := testClient(t)
 	seedPagesConfig(t, client, pagesTestSite())
@@ -1466,8 +1466,8 @@ func TestSitePages_releaseHeadCarriesTagAndVersionChip(t *testing.T) {
 		t.Errorf("the version renders twice on the releases list:\n%s", list)
 	}
 	page := getKey(t, client, "i/"+rel[1][:12]+".html")
-	if !strings.Contains(page, `<div class="card-head"><h1 class="subject"><a href="../index.html#tag:nightly">nightly</a></h1> <span class="chip">v1.3.0</span></div>`) {
-		t.Errorf("a release page must head with its tag and one version chip:\n%s", page)
+	if !strings.Contains(page, `<div class="card-head"><h1 class="subject"><a href="../index.html#tag:nightly">nightly</a></h1></div>`) || strings.Count(page, `<span class="chip">v1.3.0</span></span></div>`) != 1 {
+		t.Errorf("a release page must head with its tag and carry one version chip on its meta line:\n%s", page)
 	}
 	if strings.Contains(page, "tag nightly") {
 		t.Error("the meta line must not repeat the tag the heading carries")
@@ -1787,7 +1787,7 @@ func TestSitePageSidebar_mirrorsTheShell(t *testing.T) {
 	}
 	cases := map[string]sitePageNavLink{
 		"Home":   {Href: "../index.html", Label: "Home", Glyph: "⌂"},
-		"Issues": {Href: "../issues/index.html", Label: "Issues", Glyph: "○", Current: true},
+		"Issues": {Href: "../issues/index.html", Label: "Issues", Glyph: "☐", Current: true},
 		"Code":   {Href: "../f/index.html", Label: "Code", Glyph: "❯"},
 		"Board":  {Href: "../index.html#/board", Label: "Board", Glyph: "▦", App: true},
 		"Search": {Href: "../index.html#/search", Label: "Search", Glyph: "⌕", App: true},

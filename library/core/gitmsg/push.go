@@ -308,9 +308,11 @@ func RemoteIsEmpty(workdir, remote string) bool {
 // accepted as new or moved. Runs with --porcelain so the count parses stably:
 // one ref per line, "=" marking up-to-date tags (not counted); a rejected tag
 // surfaces as a git error. --dry-run contacts the remote but updates nothing.
-// A workspace without the remote configured is a no-op, like code branches.
+// A workspace without the remote configured is a no-op, like code branches; the
+// lookup reads the config, since git remote get-url does not see a remote that
+// the environment alone defines, as the serve's remote is.
 func pushTags(workdir, remote string, dryRun, force, more bool) (int, error) {
-	if _, err := git.ExecGit(workdir, []string{"remote", "get-url", remote}); err != nil {
+	if _, err := git.ExecGit(workdir, []string{"config", "--get", "remote." + remote + ".url"}); err != nil {
 		return 0, nil
 	}
 	// No local tags: nothing can be sent, and a dry run against an empty

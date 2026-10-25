@@ -1,7 +1,7 @@
 {
   ".card": [
     {
-      "shape": "span.type-glyph > span.meta > div.body-clamp-wrap > div.clickable.dimmed.reply-quote",
+      "shape": "span.avatar > span.meta > div.card-head > div.excerpt",
       "padding": "14.4px 0px 14.4px 6.4px",
       "margin": "0px",
       "fontSize": "15.2px",
@@ -12,7 +12,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.type-glyph > span.meta > div.body-clamp-wrap > div.dimmed.reply-quote",
+      "shape": "span.avatar > span.meta > div.card-head",
       "padding": "14.4px 0px 14.4px 6.4px",
       "margin": "0px",
       "fontSize": "15.2px",
@@ -23,7 +23,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.type-glyph > span.meta > div.card-head > div.body-clamp-wrap",
+      "shape": "span.avatar > span.type-glyph > span.meta > div.body-clamp-wrap > div.clickable.dimmed.reply-quote",
       "padding": "14.4px 0px 14.4px 6.4px",
       "margin": "0px",
       "fontSize": "15.2px",
@@ -34,7 +34,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.type-glyph > span.meta > div.card-head > div.card-chips",
+      "shape": "span.avatar > span.type-glyph > span.meta > div.body-clamp-wrap > div.dimmed.reply-quote",
       "padding": "14.4px 0px 14.4px 6.4px",
       "margin": "0px",
       "fontSize": "15.2px",
@@ -45,7 +45,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.type-glyph > span.meta > div.card-head > div.excerpt",
+      "shape": "span.avatar > span.type-glyph > span.meta > div.card-head > div.body-clamp-wrap",
       "padding": "14.4px 0px 14.4px 6.4px",
       "margin": "0px",
       "fontSize": "15.2px",
@@ -56,7 +56,29 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.type-glyph > span.meta > div.card-head",
+      "shape": "span.avatar > span.type-glyph > span.meta > div.card-head > div.card-chips",
+      "padding": "14.4px 0px 14.4px 6.4px",
+      "margin": "0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
+      "color": "rgb(230, 233, 237)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(230, 233, 237)",
+      "borderRadius": "0px"
+    },
+    {
+      "shape": "span.avatar > span.type-glyph > span.meta > div.card-head > div.excerpt",
+      "padding": "14.4px 0px 14.4px 6.4px",
+      "margin": "0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
+      "color": "rgb(230, 233, 237)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(230, 233, 237)",
+      "borderRadius": "0px"
+    },
+    {
+      "shape": "span.avatar > span.type-glyph > span.meta > div.card-head",
       "padding": "14.4px 0px 14.4px 6.4px",
       "margin": "0px",
       "fontSize": "15.2px",
@@ -172,7 +194,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.type-glyph > a.author > span.reltime > a.hash",
+      "shape": "span.avatar > span.type-glyph > a.author > span.reltime > a.hash",
       "padding": "0px",
       "margin": "0px 0px 3.2px",
       "fontSize": "12.8px",
@@ -183,7 +205,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "span.type-glyph > a.author > span.reltime",
+      "shape": "span.avatar > span.type-glyph > a.author > span.reltime",
       "padding": "0px",
       "margin": "0px 0px 3.2px",
       "fontSize": "12.8px",
@@ -277,6 +299,63 @@
       "borderRadius": "0px"
     }
   ],
+  ".avatar": [
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
+      "color": "rgb(230, 233, 237)",
+      "backgroundColor": "oklch(0.55 0.12 134.77 / 0.5)",
+      "borderLeftColor": "rgb(230, 233, 237)",
+      "borderRadius": "50%"
+    },
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "12.8px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
+      "color": "rgb(230, 233, 237)",
+      "backgroundColor": "oklch(0.55 0.12 194.77 / 0.5)",
+      "borderLeftColor": "rgb(230, 233, 237)",
+      "borderRadius": "50%"
+    },
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
+      "color": "rgb(230, 233, 237)",
+      "backgroundColor": "oklch(0.55 0.12 194.77 / 0.5)",
+      "borderLeftColor": "rgb(230, 233, 237)",
+      "borderRadius": "50%"
+    },
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
+      "color": "rgb(230, 233, 237)",
+      "backgroundColor": "oklch(0.55 0.12 209.77 / 0.5)",
+      "borderLeftColor": "rgb(230, 233, 237)",
+      "borderRadius": "50%"
+    },
+    {
+      "shape": "",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
+      "color": "rgb(230, 233, 237)",
+      "backgroundColor": "oklch(0.55 0.12 239.77 / 0.5)",
+      "borderLeftColor": "rgb(230, 233, 237)",
+      "borderRadius": "50%"
+    }
+  ],
   ".type-glyph": [
     {
       "shape": "",
@@ -292,12 +371,38 @@
     {
       "shape": "",
       "padding": "0px",
-      "margin": "0px",
-      "fontSize": "15.2px",
+      "margin": "43.2px 0px 0px",
+      "fontSize": "21px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
       "color": "rgb(230, 233, 237)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "borderLeftColor": "rgb(230, 233, 237)",
+      "borderRadius": "0px"
+    }
+  ],
+  ".heading-row": [
+    {
+      "shape": "h1 > button.nav-collapse",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
+      "color": "rgb(230, 233, 237)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(230, 233, 237)",
+      "borderRadius": "0px"
+    }
+  ],
+  ".body-clamp-toggle": [
+    {
+      "shape": "span.chevron.gs-icon",
+      "padding": "2.4px 0px",
+      "margin": "6.4px 0px 0px",
+      "fontSize": "12.8px",
+      "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
+      "color": "srgb(0.62 0.63 0.67)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "srgb(0.62 0.63 0.67)",
       "borderRadius": "0px"
     }
   ]

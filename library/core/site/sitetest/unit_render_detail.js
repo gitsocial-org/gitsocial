@@ -12,6 +12,7 @@ function findClass(node, cls, out) { out = out || []; for (const c of (node && n
 function fire(node, ev, props) { for (const fn of (node && node._handlers && node._handlers[ev]) || []) fn(Object.assign({ preventDefault() {}, stopPropagation() {}, key: "", target: { closest() { return null; } } }, props || {})); }
 const tick = (ms) => new Promise((r) => setTimeout(r, ms || 20));
 const text = (node) => textOf(node).replace(/\s+/g, " ").trim();
+const elems = (node) => ((node && node._children) || []).filter((c) => c && c.nodeType === 1);
 
 // Nothing is served: every bucket read misses, so only the seeded objects answer.
 global.fetch = async () => ({ ok: false, status: 404, headers: { get: () => null }, text: async () => "", arrayBuffer: async () => new ArrayBuffer(0) });
@@ -36,6 +37,7 @@ commit("e1", null, 1750000400, "Release notes", { ext: "release", type: "release
 commit("f1", null, 1750000500, "A comment on the issue", { ext: "social", type: "comment", original: ref("d1", "pm") });
 // c9 is an adopted copy, its raw message the parity fixture's, so its GitMsg-Ref names the original author and time.
 const ADOPTED = require("./parity_fixtures.json").adopted;
+const PAGE_BITS = require("./parity_fixtures.json").metaRow.pageBits;
 ctx.objects.set(sha("c9"), { type: "commit", body: enc.encode("tree " + sha("a1") + "\nparent " + sha("d4") + "\nauthor " + ADOPTED.committer + " <" + ADOPTED.committerEmail + "> 1750000600 +0000\n\n" + ADOPTED.message + "\n") });
 // ca edits the adopted copy, the usual case: every later change edits the copy.
 commit("ca", "c9", 1750000700, "Crash on startup", { ext: "pm", state: "closed", edits: ref("c9", "pm") });
@@ -49,6 +51,8 @@ async function main() {
   console.log("=== an edited item offers its version history ===");
   const issue = (await GS.itemDetail(ctx, sha("d1"), "gitmsg/pm"))[0];
   await tick(60);
+  const pageBits = elems(findClass(findClass(issue, "detail-meta")[0], "meta")[0]).map((n) => String(n.className || "").split(/\s+/)[0]);
+  eq(pageBits.slice(0, PAGE_BITS.length), PAGE_BITS, "the detail meta line leads with the avatar, the author and the glyph, then the time and the hash");
   const history = findClass(issue, "version-history")[0];
   ok(!!history, "an edited item carries a version picker");
   eq(text(findClass(history, "version-history-head")[0]), "History (2 versions)", "the picker counts the versions");
@@ -68,7 +72,7 @@ async function main() {
 
   console.log("=== the per-version diff ===");
   const diffBtn = findClass(history, "version-diff-btn")[0];
-  eq(textOf(diffBtn), "diff to previous", "the newest row offers a diff against the one before it");
+  eq([textOf(diffBtn), diffBtn.getAttribute("title")], ["diff", "diff to previous"], "the newest row offers a diff against the one before it");
   fire(diffBtn, "click");
   const pane = findClass(history, "version-diff-pane").find((p) => p._children.length);
   ok(!!pane, "clicking opens the diff pane");
@@ -78,10 +82,10 @@ async function main() {
   const diffText = findClass(pane, "diff-line").map((l) => textOf(findClass(l, "dl-sign")[0]) + textOf(findClass(l, "dl-text")[0]));
   ok(diffText.indexOf("-The first version of the body.") !== -1, "the body diff shows the old line", diffText.join(" | "));
   ok(diffText.indexOf("+The second version of the body.") !== -1, "the body diff shows the new line", diffText.join(" | "));
-  eq(textOf(diffBtn), "hide diff", "the control names what a second click does");
+  eq(textOf(diffBtn), "hide", "the control names what a second click does");
   fire(diffBtn, "click");
   eq(findClass(history, "version-diff-pane").filter((p) => p._children.length).length, 0, "the second click closes the pane");
-  eq(textOf(diffBtn), "diff to previous", "and restores the label");
+  eq(textOf(diffBtn), "diff", "and restores the label");
 
   console.log("=== the share control ===");
   const share = findClass(issue, "share-link")[0];
@@ -161,7 +165,8 @@ async function main() {
   const fresh = (await GS.itemDetail(ctx, sha("d1"), "gitmsg/pm"))[0];
   await tick(60);
   eq(keys(fresh).filter((k) => ["ext", "type", "state"].indexOf(k) !== -1), [], "the route's ext and type and the head's state stay out");
-  ok(keys(fresh).indexOf("labels") !== -1, "a field no other component carries stays", keys(fresh).join(","));
+  eq(keys(fresh).indexOf("labels"), -1, "the labels ride the chip row under the meta line, so no field row repeats them");
+  eq(keys(fresh), ["edits"], "a field no other component carries stays");
   eq(keys(release), ["origin"], "a release lists one row: its head, chips and assets section carry the rest, the origin fields fold into one");
   eq(findTag(findTag(release, "dd")[0], "a").map((a) => a.getAttribute("href")), ["https://example.com/releases/9"],
     "the origin row links to the imported item");
@@ -264,8 +269,8 @@ async function main() {
   const fbd = (await GS.itemDetail(fbCtx, sha("ba"), "gitmsg/review"))[0];
   await tick(60);
   eq(ddLinks(fbd), ["#file:notes.txt@feature:L2", "2", ref("aa", "review"), "approved"], "a feedback's file row opens its lines on the head branch, its pull-request row the pull request");
-  const labelDd = findTag(fresh, "dd").find((dd) => textOf(dd) === "kind/bug");
-  eq(labelDd ? findTag(labelDd, "a").map((a) => a.getAttribute("href")) : null, ["#/search/label%3Akind%2Fbug"], "a labels row links each label to the label search");
+  const labelRow = findClass(fresh, "card-chips")[0];
+  eq(labelRow ? findClass(labelRow, "chip-label").map((a) => a.tagName + " " + textOf(a) + "@" + a.getAttribute("href")) : null, ["A kind/bug@#/search/label%3Akind%2Fbug"], "the label chip row links each label to the label search");
 
   commit("ad", "af", 1750001300, "Merged long ago", { ext: "review", type: "pull-request", state: "merged", base: "#branch:main", "merge-base": "0000abc", "merge-head": "0000def" });
   const mCtx = Object.assign({}, prCtx, { walks: {}, refMisses: new Set(), manifest: Promise.resolve({

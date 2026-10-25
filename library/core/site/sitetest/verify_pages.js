@@ -213,8 +213,9 @@ async function item8() {
   // toggle in view-modes) ABOVE the clamped content pane, and the pane keeps
   // body-clamp at build even though itemDetail builds the cards detached (the
   // measure polls until layout, no 0-height misread).
-  const c0kids = cards.length ? cards[0]._children.filter((c) => c && c.nodeType === 1).slice(1) : [];
-  ok("context card leads with its glyph", !!cards[0] && cards[0]._children.filter((c) => c && c.nodeType === 1)[0]._cls.has("type-glyph"));
+  const c0kids = cards.length ? cards[0]._children.filter((c) => c && c.nodeType === 1).slice(2) : [];
+  const c0lead = cards.length ? cards[0]._children.filter((c) => c && c.nodeType === 1).slice(0, 2) : [];
+  ok("context card leads with its avatar, then its glyph", c0lead.length === 2 && c0lead[0]._cls.has("avatar") && c0lead[1]._cls.has("type-glyph"));
   ok("context card renders detail-meta row after the glyph (above content)", !!c0kids[0] && c0kids[0]._cls.has("detail-meta") && findClass(c0kids[0], "meta").length >= 1, c0kids[0] && c0kids[0].className);
   ok("context card meta row carries the right-aligned Raw toggle", !!c0kids[0] && findClass(c0kids[0], "view-modes").length === 1 && findClass(c0kids[0], "view-toggle").length === 1);
   ok("clamp wrap follows the meta row", !!c0kids[1] && c0kids[1]._cls.has("body-clamp-wrap"), c0kids[1] && c0kids[1].className);
@@ -249,7 +250,7 @@ async function item8() {
   ok("cross-repo quote keeps embedded block, no reply-context head", /from s3:\/\/fake\.example\.com\/other-demo/.test(textOf(viewNode)) && !/In reply to/.test(textOf(viewNode)), textOf(viewNode).slice(0, 120));
   const embHead = (findClass(viewNode, "embedded")[0] || { _children: [] })._children.filter((c) => c && c.nodeType === 1)[0];
   const embHeadKids = embHead ? embHead._children.filter((c) => c && c.nodeType === 1).map((c) => String(c.className).split(" ")[0]) : [];
-  ok("the embedded quote box leads with the glyph of the quoted item and its author line", !!embHead && embHead._cls.has("meta") && embHeadKids[0] === "type-glyph" && embHeadKids[1] === "author", embHeadKids.join(","));
+  ok("the embedded quote box leads with the avatar and the glyph of the quoted item, then its author line", !!embHead && embHead._cls.has("meta") && embHeadKids[0] === "avatar" && embHeadKids[1] === "type-glyph" && embHeadKids[2] === "author", embHeadKids.join(","));
   // A branchless commit route resolves by hash: an item opens as its detail, a code commit as the raw commit page.
   await render(TD, "#commit:" + quote.commit.short);
   ok("a branchless route to an item opens the item detail", findClass(viewNode, "detail-topbar").length === 1 && findClass(viewNode, "subject-commit").length === 0, textOf(viewNode).slice(0, 80));
@@ -273,14 +274,15 @@ async function item9() {
   await wait(20);
   ok("overflowing body keeps the clamp after measure", lb._cls.has("body-clamp"));
   const btn = findClass(long, "body-clamp-toggle")[0];
-  ok("overflowing body gets a Show more toggle", !!btn && textOf(btn) === "Show more", btn && textOf(btn));
+  const label = (b) => b && b.getAttribute("aria-label") + "|" + b.getAttribute("title") + "|" + b._cls.has("open");
+  ok("overflowing body gets a Show more chevron toggle", !!btn && btn.tagName === "BUTTON" && findClass(btn, "chevron").length === 1 && label(btn) === "Show more|Show more|false", label(btn));
   let stopped = false;
   fire(btn, "click", { stopPropagation() { stopped = true; } });
   ok("toggle expands (clamp class removed)", !lb._cls.has("body-clamp"));
-  ok("toggle text flips to Show less", textOf(btn) === "Show less", textOf(btn));
+  ok("toggle label flips to Show less and the chevron turns", label(btn) === "Show less|Show less|true", label(btn));
   ok("toggle stops propagation (cardNav untriggered)", stopped);
   fire(btn, "click");
-  ok("second click re-clamps and flips back to Show more", lb._cls.has("body-clamp") && textOf(btn) === "Show more");
+  ok("second click re-clamps and flips back to Show more", lb._cls.has("body-clamp") && label(btn) === "Show more|Show more|false", label(btn));
   // A body that fits loses the clamp entirely and gets no toggle.
   const short = GS.timelineCard({ commit: mkCommit("bbbbbbbbbbbb", 1000), header: { type: "post" }, content: "Hi\n\nshort body", author: "Ada", effectiveTime: 1000 });
   const sb = findClass(short, "body-clamp")[0];

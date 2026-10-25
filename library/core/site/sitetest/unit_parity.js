@@ -146,12 +146,12 @@ for (const c of FIX.cardSkeleton.cases) {
   eq(marker, c.expectMarker, c.name + ": the word that ends the author line");
   if (!c.expectHead.length) {
     eq(!!head, false, c.name + ": a body-only row carries no head");
-    // The app clamps the body it shows whole, so only the glyph and the author line are shared with the page's row.
-    eq(slots(row).split(",").slice(0, 2).join(","), FIX.cardSkeleton.bodyOnlyParts.slice(0, 2).join(","), c.name + ": the glyph, then the author line");
+    // The app clamps the body it shows whole, so only the avatar, the glyph and the author line are shared with the page's row.
+    eq(slots(row).split(",").slice(0, 3).join(","), FIX.cardSkeleton.bodyOnlyParts.slice(0, 3).join(","), c.name + ": the avatar, the glyph, then the author line");
     continue;
   }
   eq(slots(head), c.expectHead.join(","), c.name + ": head slots");
-  eq(slots(row).split(",").slice(0, 3).join(","), FIX.cardSkeleton.parts.slice(0, 3).join(","), c.name + ": the glyph, the author line, then the head");
+  eq(slots(row).split(",").slice(0, 4).join(","), FIX.cardSkeleton.parts.slice(0, 4).join(","), c.name + ": the avatar, the glyph, the author line, then the head");
 }
 // The chip row is the app's own third part, so the full order shows on a card that fills it.
 const chipped = GS.prCard({
@@ -160,6 +160,12 @@ const chipped = GS.prCard({
   content: "Rework the walk", author: "Ada", effectiveTime: 1750000000,
 });
 eq(slots(chipped), FIX.cardSkeleton.parts.join(","), "a card that fills every part keeps the fixture's order");
+
+console.log("=== parity invariant: the avatar of an author ===");
+for (const c of FIX.avatars) {
+  const node = GS.authorAvatar(c.author, c.email);
+  eq(node.className + "|" + node.textContent, "avatar " + c.expectClass + "|" + c.expectInitials, c.name);
+}
 
 console.log("=== parity invariant: an adopted copy's row and a cross-repository edit ===");
 {
@@ -334,6 +340,10 @@ const metaRowShape = (rows) => rows.map((r) => r.key + "=" + r.bits.map((b) => b
 for (const c of FIX.itemPageMeta) {
   const rows = GS.trailerRows(c.header, c.ext === "release" ? GS.RELEASE_DETAIL_SKIP : [], null);
   eq(metaRowShape(rows.map((r) => ({ key: r.key, bits: rowBits(r.value) }))), metaRowShape(c.expectRows), c.name + ": rows");
+  // The detail's label row is the label and priority chips of the card's chip row.
+  const card = GS.timelineCard({ commit: { hash: "a".repeat(40), short: "a".repeat(12), authorName: "Ada", authorTime: 1750000000, refs: [] }, header: c.header, content: "Subject", author: "Ada", effectiveTime: 1750000000, _ext: c.ext, _branch: "gitmsg/" + c.ext });
+  const labels = findCls(card, "chip").filter((n) => n._cls.has("chip-label") || n._cls.has("chip-priority")).map((n) => n.textContent + "@" + n.getAttribute("href"));
+  eq(labels.join("|"), (c.expectLabels || []).map((b) => b.text + "@" + b.href).join("|"), c.name + ": label chips");
 }
 
 console.log("=== parity invariant: tag display order ===");

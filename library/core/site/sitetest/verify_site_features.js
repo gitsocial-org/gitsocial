@@ -2,7 +2,7 @@
 //   board honors the pushed .gitsocial/site/pm-config.json
 //   issue/PR cards carry enrichment chips (counts/labels/assignee/priority/origin)
 //   search deep-link (#/search/<q>) initializes AND executes the query
-//   a detail page's back link returns to where the user came from
+//   a detail page links its list by name, wherever the user came from
 //   the Tags page lists tags with the pushed tags.json values; a tag route resolves to the commit (annotated peeled)
 //   the board group-by control renders swimlane lanes
 //   the shell ships lazy-loaded grammars/prism-<lang>.js; the old bundle is gone
@@ -16,7 +16,7 @@
 //   the config forks section caps at 10 with a "Show all N forks" expand + filter
 //   memo and release cards carry the shared enrichment chip row (labels/origin)
 //   board columns collapse/hide, swimlanes collapse + lane index, per-cell item cap
-//   board card glyph renders inline with the subject (one title line, not its own row)
+//   a board card is its subject alone on one title line, with no glyph
 require("./shim.js");
 const SHELL = require("./shellrev.js");
 require("../assets/icons.js");
@@ -30,8 +30,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 function findClass(node, cls, out) { out = out || []; for (const c of (node && node._children) || []) { if (c && c.nodeType === 1) { if (c._cls && c._cls.has(cls)) out.push(c); findClass(c, cls, out); } } return out; }
 function findTag(node, tag, out) { out = out || []; for (const c of (node && node._children) || []) { if (c && c.nodeType === 1) { if (c.tagName.toLowerCase() === tag) out.push(c); findTag(c, tag, out); } } return out; }
 function fire(node, ev, props) { (node && node._handlers && node._handlers[ev] || []).forEach((fn) => fn(Object.assign({ preventDefault() {}, stopPropagation() {}, key: "", button: 0, target: { closest() { return null; } } }, props || {}))); }
-// route drives the app router with a shared ctx (so ctx.lastHash/backFrom persist
-// across navigations, as they do in a real session).
+// route drives the app router with a shared ctx, as a real session does across navigations.
 let ctx = null;
 async function route(hash, fresh) { if (fresh || !ctx) ctx = GS.newContext(BASE); setHash(hash); await GS.route(ctx); await settle(); }
 
@@ -62,19 +61,17 @@ async function main() {
   const prCounts = findClass(viewNode, "card-chips").flatMap((r) => findClass(r, "count").map(textOf));
   ok("PR card shows a review summary (✓/✗) from cross-branch feedback as count chips", prCounts.some((t) => /[✓✗]/.test(t)), prCounts.join(" | "));
 
-  // ---- history-aware back link ----
-  // Come from the board, open an issue, the back link points to the board.
+  // ---- the named list link ----
+  // A detail page links the list its item lives in, by name; the browser's own Back is the return trip.
+  const listLinkOf = () => { const a = findClass(viewNode, "back")[0]; return a ? textOf(a) + "@" + a.getAttribute("href") : "none"; };
   await route("#/board");
   const pm = await GS.loadExtItemsUpTo(GS.newContext(BASE), "pm", 800);
   const issue = pm.find((i) => ((i.header && i.header.type) || "issue") === "issue");
   await route("#commit:" + issue.commit.hash + "@gitmsg/pm");
-  const back = findClass(viewNode, "back")[0];
-  ok("back link returns to the board the user came from", back && (back.getAttribute("href") || "") === "#/board", back && back.getAttribute("href"));
-  // Coming from the issues list instead, back points to the issues tab.
+  ok("an issue opened from the board links the issues list by name", listLinkOf() === "← Issues@#/issues", listLinkOf());
   await route("#/issues");
   await route("#commit:" + issue.commit.hash + "@gitmsg/pm");
-  const back2 = findClass(viewNode, "back")[0];
-  ok("back link returns to the issues list when arriving from there", back2 && (back2.getAttribute("href") || "") === "#/issues", back2 && back2.getAttribute("href"));
+  ok("an issue opened from its list links the same list", listLinkOf() === "← Issues@#/issues", listLinkOf());
 
   // ---- Tags page + tag detail (annotated peel) ----
   await route("#/tags");
@@ -85,6 +82,7 @@ async function main() {
   ok("tags page rows carry the artifact's commit counts", /\d+ commits?/.test(textOf(viewNode)), textOf(viewNode).slice(0, 160));
   await route("#tag:v1.0");
   ok("annotated tag v1.0 peels to its commit (detail renders, not 'unreachable')", findClass(viewNode, "detail").length > 0 && !/unreachable|not found/i.test(textOf(viewNode)), textOf(viewNode).slice(0, 80));
+  ok("a tag page links the tags list by name in its top bar", listLinkOf() === "← Tags@#/tags" && findClass(findClass(viewNode, "detail-topbar")[0] || null, "back").length === 1, listLinkOf());
   ok("annotated tag shows its annotation message", /First public release/.test(textOf(viewNode)) || findClass(viewNode, "tag-annotation").length > 0, textOf(viewNode).slice(0, 80));
   // v1.0's previous tag (version order) is v1.0-light at the same commit: the
   // commits-since section renders with its empty state and a compare link.
@@ -346,11 +344,11 @@ async function main() {
     ok("'show more' expands the capped cell", findClass(bb, "board-card").filter((c) => true).length > cards || /show less/.test(textOf(findClass(bb, "board-more")[0] || { _children: [] })), textOf(findClass(bb, "board-more")[0] || { _children: [] }));
   } else ok("boardBody exported for cap test", false, "boardBody not exported");
 
-  // ---- board card glyph is inline with the subject (one title line) ----
+  // ---- a board card is its subject alone on one title line ----
   const bcard = GS.boardBody ? findClass(GS.boardBody([{ commit: { hash: "c".repeat(40), short: "cc" }, header: { type: "issue", state: "open" }, content: "A very long issue subject that would wrap in a narrow board column", author: "Ada", effectiveTime: 1, versions: [] }], null), "board-card")[0] : null;
   const titleLine = bcard && findClass(bcard, "board-card-title")[0];
-  ok("board card wraps glyph + subject in one title line", !!titleLine, "titleLine=" + !!titleLine);
-  ok("the glyph and subject live inside that single title line", titleLine && findClass(titleLine, "type-glyph").length === 1 && findClass(titleLine, "subject").length === 1);
+  ok("board card wraps its subject in one title line", !!titleLine, "titleLine=" + !!titleLine);
+  ok("the title line holds the subject alone, and the tile has no glyph", !!titleLine && findClass(titleLine, "subject").length === 1 && findClass(bcard, "type-glyph").length === 0);
 
   // ---- merged timeline includes plain code commits (CLI/TUI parity) ----
   // thread-demo's code branches (main + feature/notes-expand) carry plain
@@ -383,7 +381,7 @@ async function main() {
   // ---- code-commit timeline card renders subject/author/hash to commit route ----
   const cc = GS.timelineCard(code[0], null);
   ok("code timeline card renders the commit subject", findClass(cc, "subject").length > 0 && textOf(findClass(cc, "subject")[0]).length > 0, textOf(findClass(cc, "subject")[0] || { _children: [] }));
-  ok("code timeline card carries a commit glyph", findClass(cc, "type-glyph").some((g) => g._cls.has("tg-commit")));
+  ok("code timeline card leads with the author's avatar and carries no glyph", findClass(cc, "avatar").length === 1 && findClass(cc, "type-glyph").length === 0);
   ok("code timeline card links its hash to #commit:", findClass(cc, "hash").some((h) => (h.getAttribute("href") || "").indexOf("#commit:") === 0), findClass(cc, "hash").map((h) => h.getAttribute("href")).join(" | "));
   ok("code timeline card has no state/enrichment chip row (no header)", findClass(cc, "card-chips").length === 0);
 
@@ -455,12 +453,14 @@ async function main() {
     ok("prFeedback ignores feedback for another pull request", other.all.length === 0, "matched " + other.all.length);
   }
 
+  // A heading key that is not its own route: the configuration page is #/config, and compare needs two refs.
+  const HEADING_ROUTES = { configuration: "#/config", compare: "#/compare:main...feature%2Fnotes-expand" };
   for (const [tab, label] of Object.entries(GS.LIST_HEADINGS)) {
-    await route("#/" + tab, true);
-    // The timeline's h1 shares its heading line with the toggle.
-    const lead = (viewNode._children || [])[0];
-    const first = lead && lead._cls && lead._cls.has("heading-row") ? lead._children.find((c) => c && c.nodeType === 1) : lead;
-    ok("/" + tab + " opens with its nav label as the h1", !!first && first.tagName === "H1" && textOf(first) === label, first ? first.tagName + ":" + textOf(first) : "empty view");
+    await route(HEADING_ROUTES[tab] || "#/" + tab, true);
+    // The h1 shares its heading line with the view's control, so the view's first text is the h1's.
+    const row = findClass(viewNode, "heading-row")[0];
+    const first = row ? row._children.find((c) => c && c.nodeType === 1) : (viewNode._children || [])[0];
+    ok("/" + tab + " opens with its nav label as the h1 of its heading line", !!first && first.tagName === "H1" && textOf(first) === label && textOf(viewNode).indexOf(label) === 0, first ? first.tagName + ":" + textOf(first) + " :: " + textOf(viewNode).slice(0, 60) : "empty view");
   }
   await route("#/", true);
   ok("home renders no h1 of its own (the README's stand)", (viewNode._children || []).every((c) => c.tagName !== "H1"));

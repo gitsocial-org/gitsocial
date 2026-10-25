@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card, and feedbackFileRefs the file route the anchor chip opens through the branches of the pull request; the page prefixes it with its path to the shell. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject and the head chips both renderers put on a detail head, and the tag route a release head links to; the page prefixes it with its path to the shell. rowHeads pins the same for a list or activity row, which drops an open pill, since open is the default state. metaRow pins the meta row skeleton: the bit classes in order, which a list row, an item page and a comment of a thread share, the route the hash of a comment opens, the same row once the item is edited, and the author label, its email title and the author search route both renderers derive; the page prefixes the route with its path to the shell. defaultTitles pins the name both renderers give a site with no configured title. listEmpty pins each list route\u0027s empty sentence, which both renderers show. rowGlyphs pins the type glyph class and title both renderers give a row, the extension default standing in for a header that names no type. releaseRows pins the asset count both renderers put on a release row after its hash. releaseNotes pins the blocks a release body splits into, so the commit rows and their hashes read the same on both surfaces, and releaseAssets pins the artifact, checksum and SBOM rows and which of them carry a link. markdownPaths pins the extensions both renderers render as prose and mdxStrip the MDX blocks both drop before parsing, and frontMatter the YAML block both drop from any prose document first. admonitions pins the ::: component both renderers build from one class set: the block's classes, its title line's class and text, a body word that must stay visible, and the openers that degrade to visible text (expectClass empty). cardSkeleton pins the one card shape: the type glyph as the first part, the author line after it, then the head or the body; the head slot order both renderers build, per item type; and the headless shape a body-only type takes, where the marker leads the author line and the first line stands as the card's text. homeRows pins how many root entries the home section shows on both renderers before its chevron. adopted pins an adopted copy's row on both renderers: its original author and time from the GitMsg-Ref (origin-time over both, the git time when the snapshot's does not parse), the adopted-from bit after the hash on a row and on the detail head, no adopts field row, the index entry fields the page layer writes and the app reads, and a list that sorts the copy by its original time below a plain issue created between it and the copy's commit, and that neither lists a cross-repository edit. itemCounts pins the sidebar count per list: the open items the page layer writes to its manifest and the rows the app's lists show under their default Open filter, duplicate milestones and sprints merged by origin URL, else subject. prDiff pins the Files changed section of a pull request on both renderers: its head, the file cap, the slots of a file row that both share, the status letters, the form of a hunk head, the parts of the notice variant, the wording of each notice, and the label and the cases of a generated file, which both renderers show closed. refTokens pins the refs and mentions one free text carries on both renderers, and pageBodyRefs the ref anchors and the bare URL links a page body carries, the same a.hash anchors the app body carries. itemPageMeta pins the definition rows an item page lists against the trailer rows of the app detail: the keys in order, the text of each value and the link each bit carries; the page prefixes a route with its path to the shell. rowText pins the first line of a comment, feedback, repost or quote, as written: the text the items index writes for its list row and the line the app renders its card from. treeIcons pins the icon key and the hue class both renderers give a root entry of the home section, by its name or its kind.",
+  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card, and feedbackFileRefs the file route the anchor chip opens through the branches of the pull request; the page prefixes it with its path to the shell. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject both renderers put on a detail head, the state and marker chips both put on its meta line, and the tag route a release head links to; the page prefixes it with its path to the shell. rowHeads pins the same for a list or activity row, which drops an open pill, since open is the default state. metaRow pins the meta row skeleton: the bit classes in order, which a list row and a comment of a thread share, the same skeleton on a detail page, which has no mark column and so leads with the avatar and puts the type glyph after the author (pageBits), the route the hash of a comment opens, the same rows once the item is edited, and the author label, its email title and the author search route both renderers derive; the page prefixes the route with its path to the shell. defaultTitles pins the name both renderers give a site with no configured title. listEmpty pins each list route\u0027s empty sentence, which both renderers show. rowGlyphs pins the type glyph class and title both renderers give a row, the extension default standing in for a header that names no type. releaseRows pins the asset count both renderers put on a release row after its hash. releaseNotes pins the blocks a release body splits into, so the commit rows and their hashes read the same on both surfaces, and releaseAssets pins the artifact, checksum and SBOM rows and which of them carry a link. markdownPaths pins the extensions both renderers render as prose and mdxStrip the MDX blocks both drop before parsing, and frontMatter the YAML block both drop from any prose document first. admonitions pins the ::: component both renderers build from one class set: the block's classes, its title line's class and text, a body word that must stay visible, and the openers that degrade to visible text (expectClass empty). cardSkeleton pins the one card shape: the avatar and the type glyph as the first parts, the author line after them, then the head or the body; the head slot order both renderers build, per item type; and the headless shape a body-only type takes, where the marker leads the author line and the first line stands as the card's text. avatars pins the hue class and the initials both renderers give an author from its name and email. homeRows pins how many root entries the home section shows on both renderers before its chevron. adopted pins an adopted copy's row on both renderers: its original author and time from the GitMsg-Ref (origin-time over both, the git time when the snapshot's does not parse), the adopted-from bit after the hash on a row and on the detail head, no adopts field row, the index entry fields the page layer writes and the app reads, and a list that sorts the copy by its original time below a plain issue created between it and the copy's commit, and that neither lists a cross-repository edit. itemCounts pins the sidebar count per list: the open items the page layer writes to its manifest and the rows the app's lists show under their default Open filter, duplicate milestones and sprints merged by origin URL, else subject. prDiff pins the Files changed section of a pull request on both renderers: its head, the file cap, the slots of a file row that both share, the status letters, the form of a hunk head, the parts of the notice variant, the wording of each notice, and the label and the cases of a generated file, which both renderers show closed. refTokens pins the refs and mentions one free text carries on both renderers, and pageBodyRefs the ref anchors and the bare URL links a page body carries, the same a.hash anchors the app body carries. itemPageMeta pins the definition rows an item page lists against the trailer rows of the app detail: the keys in order, the text of each value and the link each bit carries; and the label chips both renderers put under the meta line in place of a labels row (expectLabels); the page prefixes a route with its path to the shell. listHeadings pins the heading of each list route, the nav label, which the named list link of a detail page reads too. rowText pins the first line of a comment, feedback, repost or quote, as written: the text the items index writes for its list row and the line the app renders its card from. treeIcons pins the icon key and the hue class both renderers give a root entry of the home section, by its name or its kind.",
   "messageCases": [
     {
       "name": "gpgsig-message-body",
@@ -392,6 +392,8 @@
   "metaRow": {
     "bits": ["author", "reltime", "hash"],
     "editedBits": ["author", "reltime", "hash", "edited"],
+    "pageBits": ["avatar", "author", "type-glyph", "reltime", "hash"],
+    "pageEditedBits": ["avatar", "author", "type-glyph", "reltime", "hash", "edited"],
     "commentHashRoute": "#commit:aaaaaaaaaaaa@gitmsg/social",
     "authors": [
       { "name": "a display name over its email", "author": "Ada Lovelace", "email": "ada@example.com", "expectLabel": "Ada Lovelace", "expectTitle": "ada@example.com", "expectHref": "#/search/author%3Aada%40example.com" },
@@ -425,9 +427,9 @@
     { "name": "separators alone drop the bit", "artifacts": " , ", "expectLabel": "" }
   ],
   "cardSkeleton": {
-    "parts": ["type-glyph", "meta", "card-head", "card-chips"],
+    "parts": ["avatar", "type-glyph", "meta", "card-head", "card-chips"],
     "head": ["subject", "chip"],
-    "bodyOnlyParts": ["type-glyph", "meta", "body"],
+    "bodyOnlyParts": ["avatar", "type-glyph", "meta", "body"],
     "cases": [
       { "name": "an open issue heads with its subject alone", "ext": "pm", "header": { "type": "issue", "state": "open", "labels": "kind/bug" }, "firstLine": "Fix the parser", "expectHead": ["subject"], "expectMarker": "" },
       { "name": "a closed issue words its state at the end of its author line", "ext": "pm", "header": { "type": "issue", "state": "closed" }, "firstLine": "Fix the parser", "expectHead": ["subject"], "expectMarker": "closed" },
@@ -438,6 +440,18 @@
       { "name": "a retracted quote row ends its author line with the marker", "ext": "social", "header": { "type": "quote", "original": "#commit:aaaaaaaaaaaa", "retracted": "true" }, "firstLine": "Quoting the upstream post", "expectHead": [], "expectMarker": "retracted" }
     ]
   },
+  "avatars": [
+    { "name": "a two-word name gives two initials, the hue from the email", "author": "Ada Lovelace", "email": "ada@example.com", "expectClass": "av-6", "expectInitials": "AL" },
+    { "name": "the hue ignores the case of the email", "author": "Linus", "email": "Linus@Example.com", "expectClass": "av-9", "expectInitials": "L" },
+    { "name": "a Cyrillic name gives its own letters", "author": "Иван Петров", "email": "ivan@example.com", "expectClass": "av-0", "expectInitials": "ИП" },
+    { "name": "an astral letter stays one whole code point, the hue from the name", "author": "𝓐da 𝓑yron", "email": "", "expectClass": "av-3", "expectInitials": "𝓐𝓑" },
+    { "name": "a name with no space gives its first character", "author": "李小龍", "email": "li@example.com", "expectClass": "av-7", "expectInitials": "李" },
+    { "name": "an email alone gives the first letter of its local part", "author": "", "email": "grace@example.com", "expectClass": "av-2", "expectInitials": "G" },
+    { "name": "a name alone takes the hue of its lowercase form", "author": "Grace Hopper", "email": "", "expectClass": "av-3", "expectInitials": "GH" },
+    { "name": "no name and no email give a question mark", "author": "", "email": "", "expectClass": "av-1", "expectInitials": "?" },
+    { "name": "spaces around the name and the email do not count", "author": "  Ada   Lovelace  ", "email": "  ada@example.com ", "expectClass": "av-6", "expectInitials": "AL" },
+    { "name": "a login shown as @login gives its letter", "author": "@octocat", "email": "", "expectClass": "av-8", "expectInitials": "O" }
+  ],
   "homeRows": { "limit": 2 },
   "adopted": {"message": "Crash on startup\n\nGitMsg: ext=\"pm\"; type=\"issue\"; adopts=\"https://codeberg.org/alice/fork#commit:def456789abc@gitmsg/pm\"; state=\"open\"; v=\"0.1.0\"\nGitMsg-Ref: ext=\"pm\"; type=\"issue\"; author=\"Alice\"; email=\"alice@example.com\"; time=\"2025-01-20T10:00:00Z\"; ref=\"https://codeberg.org/alice/fork#commit:def456789abc@gitmsg/pm\"; v=\"0.1.0\"\n > Crash on startup", "committer": "Maintainer", "committerEmail": "maint@example.com", "expectAuthor": "Alice", "expectBits": ["author", "reltime", "hash", "adopted"], "expectAdopted": "adopted from https://codeberg.org/alice/fork", "expectHref": "https://codeberg.org/alice/fork", "expectTime": 1737367200, "expectEntry": {"adoptedAuthor": "Alice", "adoptedEmail": "alice@example.com", "adoptedTime": "2025-01-20T10:00:00Z"}, "plainIssueTime": 1740000000, "messageOriginTime": "Crash on startup\n\nGitMsg: ext=\"pm\"; type=\"issue\"; adopts=\"https://codeberg.org/alice/fork#commit:def456789abc@gitmsg/pm\"; state=\"open\"; origin-time=\"2024-06-01T00:00:00Z\"; v=\"0.1.0\"\nGitMsg-Ref: ext=\"pm\"; type=\"issue\"; author=\"Alice\"; email=\"alice@example.com\"; time=\"2025-01-20T10:00:00Z\"; ref=\"https://codeberg.org/alice/fork#commit:def456789abc@gitmsg/pm\"; v=\"0.1.0\"\n > Crash on startup", "expectOriginTime": 1717200000, "messageBadTime": "Crash on startup\n\nGitMsg: ext=\"pm\"; type=\"issue\"; adopts=\"https://codeberg.org/alice/fork#commit:def456789abc@gitmsg/pm\"; state=\"open\"; v=\"0.1.0\"\nGitMsg-Ref: ext=\"pm\"; type=\"issue\"; author=\"Alice\"; email=\"alice@example.com\"; time=\"bad\"; ref=\"https://codeberg.org/alice/fork#commit:def456789abc@gitmsg/pm\"; v=\"0.1.0\"\n > Crash on startup", "crossRepoEdit": "Closed there\n\nGitMsg: ext=\"pm\"; type=\"issue\"; edits=\"https://codeberg.org/alice/fork#commit:def456789abc@gitmsg/pm\"; state=\"closed\"; v=\"0.1.0\"", "messageNoEmail": "Crash on startup\n\nGitMsg: ext=\"pm\"; type=\"issue\"; adopts=\"https://codeberg.org/alice/fork#commit:def456789abc@gitmsg/pm\"; state=\"open\"; v=\"0.1.0\"\nGitMsg-Ref: ext=\"pm\"; type=\"issue\"; author=\"Alice\"; email=\"\"; time=\"2025-01-20T10:00:00Z\"; ref=\"https://codeberg.org/alice/fork#commit:def456789abc@gitmsg/pm\"; v=\"0.1.0\"\n > Crash on startup"},  "itemCounts": {
     "items": [
@@ -604,7 +618,15 @@
     "timeline": "Timeline",
     "releases": "Releases",
     "memos": "Memos",
-    "commits": "Commits"
+    "commits": "Commits",
+    "branches": "Branches",
+    "tags": "Tags",
+    "analytics": "Analytics",
+    "lists": "Lists",
+    "configuration": "Configuration",
+    "compare": "Compare",
+    "graph": "Commit graph",
+    "board": "Board"
   },
   "tagOrder": [
     { "name": "hash suffixes tie and sort by date", "tags": [{ "name": "v3.1.0.7a1b2c3", "time": 100 }, { "name": "v3.1.0.41f0e9d", "time": 200 }, { "name": "v3.0.9.aa11bb2", "time": 50 }], "expect": ["v3.1.0.41f0e9d", "v3.1.0.7a1b2c3", "v3.0.9.aa11bb2"] },
@@ -640,7 +662,7 @@
   ],
   "itemPageMeta": [
     {
-      "name": "a pull request links its branches, tips, reviewers, labels and refs",
+      "name": "a pull request links its branches, tips, reviewers and refs, and its labels as chips",
       "ext": "review",
       "header": { "type": "pull-request", "state": "open", "base": "#branch:main", "base-tip": "abc123def456", "head": "#branch:feature", "head-tip": "123456abcdef", "reviewers": "bob@example.com, carol@example.com", "labels": "kind/bug", "closes": "#commit:aaaaaaaaaaaa@gitmsg/pm, #commit:bbbbbbbbbbbb@gitmsg/pm", "depends-on": "#commit:cccccccccccc@gitmsg/review" },
       "expectRows": [
@@ -650,22 +672,22 @@
         { "key": "depends-on", "bits": [{ "text": "#commit:cccccccccccc@gitmsg/review", "href": "#commit:cccccccccccc@gitmsg/review" }] },
         { "key": "head", "bits": [{ "text": "#branch:feature", "href": "#branch:feature" }] },
         { "key": "head-tip", "bits": [{ "text": "123456abcdef", "href": "#commit:123456abcdef@feature" }] },
-        { "key": "labels", "bits": [{ "text": "kind/bug", "href": "#/search/label%3Akind%2Fbug" }] },
         { "key": "reviewers", "bits": [{ "text": "bob@example.com", "href": "#/search/reviewer%3Abob%40example.com" }, { "text": "carol@example.com", "href": "#/search/reviewer%3Acarol%40example.com" }] }
-      ]
+      ],
+      "expectLabels": [{ "text": "kind/bug", "href": "#/search/label%3Akind%2Fbug" }]
     },
     {
-      "name": "an issue links its assignees, labels and relations, and folds the origin into one row",
+      "name": "an issue links its assignees and relations, folds the origin into one row, and drops a status label from its chips",
       "ext": "pm",
       "header": { "type": "issue", "state": "open", "assignees": "ada@example.com", "labels": "kind/task,status/review", "milestone": "#commit:dddddddddddd@gitmsg/pm", "parent": "#commit:eeeeeeeeeeee@gitmsg/pm", "due": "2026-09-01", "origin-platform": "github", "origin-url": "https://github.com/acme/widgets/issues/9", "origin-author-name": "Ada" },
       "expectRows": [
         { "key": "assignees", "bits": [{ "text": "ada@example.com", "href": "#/search/assignee%3Aada%40example.com" }] },
         { "key": "due", "bits": [{ "text": "2026-09-01" }] },
-        { "key": "labels", "bits": [{ "text": "kind/task", "href": "#/search/label%3Akind%2Ftask" }, { "text": "status/review", "href": "#/search/label%3Astatus%2Freview" }] },
         { "key": "milestone", "bits": [{ "text": "#commit:dddddddddddd@gitmsg/pm", "href": "#commit:dddddddddddd@gitmsg/pm" }] },
         { "key": "origin", "bits": [{ "text": "github", "href": "https://github.com/acme/widgets/issues/9", "rel": "noopener" }] },
         { "key": "parent", "bits": [{ "text": "#commit:eeeeeeeeeeee@gitmsg/pm", "href": "#commit:eeeeeeeeeeee@gitmsg/pm" }] }
-      ]
+      ],
+      "expectLabels": [{ "text": "kind/task", "href": "#/search/label%3Akind%2Ftask" }]
     },
     {
       "name": "a release leaves its assets to the asset block and links its commit on no branch",

@@ -47,3 +47,38 @@ func TestPushTags_noTagsSkipsEmptyRemote(t *testing.T) {
 		t.Errorf("pushTags count = %d, want 1", count)
 	}
 }
+
+// TestPushTags_environmentRemote: a remote the environment alone defines, as
+// the serve's remote is, gets its tags; git remote get-url does not see such a
+// remote, so the step must not take that answer for "no remote".
+func TestPushTags_environmentRemote(t *testing.T) {
+	remote := t.TempDir()
+	if err := git.EnsureBareRepo(remote); err != nil {
+		t.Fatalf("init remote: %v", err)
+	}
+	work := t.TempDir()
+	if err := git.Init(work, "main"); err != nil {
+		t.Fatalf("init work: %v", err)
+	}
+	for _, kv := range [][2]string{{"user.name", "Tester"}, {"user.email", "t@example.com"}} {
+		git.ExecGit(work, []string{"config", kv[0], kv[1]})
+	}
+	git.CreateCommit(work, git.CommitOptions{Message: "init", AllowEmpty: true})
+	if _, err := git.ExecGit(work, []string{"tag", "v0.0.1-test"}); err != nil {
+		t.Fatalf("tag: %v", err)
+	}
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "remote.envremote.url")
+	t.Setenv("GIT_CONFIG_VALUE_0", remote)
+
+	count, err := pushTags(work, "envremote", false, false, false)
+	if err != nil {
+		t.Fatalf("pushTags to an environment remote: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("pushTags count = %d, want 1", count)
+	}
+	if out, err := git.ExecGit(remote, []string{"for-each-ref", "refs/tags"}); err != nil || out.Stdout == "" {
+		t.Errorf("the remote holds no tag after the push: err=%v out=%q", err, out)
+	}
+}

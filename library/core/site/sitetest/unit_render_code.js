@@ -207,8 +207,9 @@ async function main() {
   eq(textOf(findClass(detail, "subject")[0]), "Rewrite the last line", "the commit subject heads the page");
   ok(textOf(detail).indexOf("The body of the commit.") !== -1, "the commit body renders");
   eq(findClass(findClass(detail, "detail-meta")[0], "hash").map((a) => a.tagName + " " + textOf(a) + "@" + a.getAttribute("href")),
-    ["A " + sha("c1") + "@#commit:" + sha("c1") + "@trunk", "A " + sha("c0").slice(0, 12) + "@#commit:" + sha("c0") + "@trunk"],
-    "the hash links its own route on the branch and each parent links its commit");
+    ["A " + sha("c1").slice(0, 12) + "@#commit:" + sha("c1") + "@trunk", "A " + sha("c0").slice(0, 12) + "@#commit:" + sha("c0") + "@trunk"],
+    "the short hash links its own route on the branch and each parent links its commit");
+  eq(findClass(findClass(detail, "detail-meta")[0], "hash")[0].getAttribute("title"), sha("c1"), "the full hash is the title of the short one");
   eq(findClass(detail, "diff-path").map(textOf), ["main.go"], "the one changed file is listed");
   eq(findClass(detail, "diff-status").map(textOf), ["M"], "a modified file is marked M");
   ok(textOf(findClass(detail, "diff-head")[0]).indexOf("Changes (1)") !== -1, "the section counts the changed files");
