@@ -13,7 +13,7 @@ import (
 func newReleaseHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:   tuicore.ReleaseHistoryDiff,
-		TitleIcon: "⏏",
+		TitleIcon: tuicore.TypeGlyph("release", ""),
 		Title:     "Release Diff",
 		Load:      loadReleaseHistoryVersions,
 	})

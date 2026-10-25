@@ -300,7 +300,7 @@ func (v *releasesView) Render(state *tuicore.State) string {
 
 // Title returns the view title.
 func (v *releasesView) Title() string {
-	title := "⏏  Releases"
+	title := tuicore.TypeGlyph("release", "") + "  Releases"
 	if v.searchQuery != "" {
 		title += fmt.Sprintf(" · /%s", v.searchQuery)
 	}

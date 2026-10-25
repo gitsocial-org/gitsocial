@@ -15,7 +15,7 @@ import (
 func newPostHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:   tuicore.HistoryDiff,
-		TitleIcon: "◉",
+		TitleIcon: tuicore.TypeGlyph("post", ""),
 		Title:     "Post Diff",
 		Load:      loadPostHistoryVersions,
 	})

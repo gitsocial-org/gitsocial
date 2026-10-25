@@ -479,10 +479,7 @@ func (v *sprintDetailView) renderIssueRow(issue pm.Issue, width int, selected bo
 	if selected {
 		selectionBar = tuicore.Title.Render("▏")
 	}
-	stateIcon := "○"
-	if issue.State == pm.StateClosed {
-		stateIcon = "●"
-	}
+	stateIcon := tuicore.TypeGlyph("issue", string(issue.State))
 	var labelStr string
 	if len(issue.Labels) > 0 {
 		var labels []string
@@ -513,7 +510,7 @@ func (v *sprintDetailView) ShowRawView() tea.Cmd {
 // Title returns the view title.
 func (v *sprintDetailView) Title() string {
 	if v.sprint == nil {
-		return "◷  Sprint"
+		return tuicore.TypeGlyph("sprint", "") + "  Sprint"
 	}
 	author := v.sprint.Author.Name
 	if v.showEmail && v.sprint.Author.Email != "" {
@@ -529,7 +526,7 @@ func (v *sprintDetailView) Title() string {
 		timestamp = tuicore.FormatOriginTime(v.sprint.Origin.Time)
 	}
 	id := protocol.FormatShortRef(v.sprint.ID, v.workspaceURL)
-	icon := "◷"
+	icon := tuicore.TypeGlyph("sprint", string(v.sprint.State))
 	if v.sprint.IsUnpushed {
 		icon += "  ⇡"
 	}

@@ -119,7 +119,7 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 			Title:            name,
 			TitleLink:        titleLink,
 			Subtitle:         subtitleParts,
-			Icon:             "•",
+			Icon:             postGlyph(post),
 			IsEdited:         post.IsEdited,
 			HasProposedEdits: post.HasProposedEdits,
 			EditedBy:         post.EditorName,
@@ -137,10 +137,9 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 		card.Stats = append(card.Stats, tuicore.CardStat{Text: l, Link: &loc})
 	}
 
-	// Handle post type-specific icons and nested content
+	// Handle post type-specific nested content
 	switch post.Type {
 	case social.PostTypeRepost:
-		card.Header.Icon = "↻"
 		card.Content.Text = "" // Reposts have no content of their own
 		if !cardOpts.SkipNested && resolver != nil && post.OriginalPostID != "" {
 			if original, ok := resolver(post.OriginalPostID); ok {
@@ -153,7 +152,6 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 		}
 
 	case social.PostTypeQuote:
-		card.Header.Icon = "↻"
 		if !cardOpts.SkipNested && resolver != nil && post.OriginalPostID != "" {
 			if original, ok := resolver(post.OriginalPostID); ok {
 				originalCard := PostToCardWithOptions(original, nil, PostToCardOptions{UserEmail: cardOpts.UserEmail, ShowEmail: cardOpts.ShowEmail})
@@ -166,7 +164,6 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 		}
 
 	case social.PostTypeComment:
-		card.Header.Icon = "↩"
 		if !cardOpts.SkipNested && resolver != nil {
 			parentID := post.ParentCommentID
 			if parentID == "" {
@@ -185,36 +182,13 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 		}
 	}
 
-	// Set icon for cross-extension items in social cache
-	if post.HeaderExt == "pm" {
-		switch post.HeaderType {
-		case "issue":
-			if post.HeaderState == "closed" || post.HeaderState == "canceled" {
-				card.Header.Icon = "●"
+	if post.HeaderExt == "review" && post.HeaderType == "pull-request" && cardOpts.Workdir != "" {
+		if prRes := review.GetPR(post.ID); prRes.Success && review.IsHeadUnpushed(cardOpts.Workdir, prRes.Data) {
+			if card.Header.Badge != "" {
+				card.Header.Badge += " · ⚠ unpushed head"
 			} else {
-				card.Header.Icon = "○"
+				card.Header.Badge = "⚠ unpushed head"
 			}
-		case "milestone":
-			card.Header.Icon = "◇"
-		case "sprint":
-			card.Header.Icon = "◷"
-		}
-	}
-	if post.HeaderExt == "review" {
-		switch post.HeaderType {
-		case "pull-request":
-			card.Header.Icon = "⑂"
-			if cardOpts.Workdir != "" {
-				if prRes := review.GetPR(post.ID); prRes.Success && review.IsHeadUnpushed(cardOpts.Workdir, prRes.Data) {
-					if card.Header.Badge != "" {
-						card.Header.Badge += " · ⚠ unpushed head"
-					} else {
-						card.Header.Badge = "⚠ unpushed head"
-					}
-				}
-			}
-		case "feedback":
-			card.Header.Icon = "↩"
 		}
 	}
 	switch post.Action {
@@ -222,12 +196,6 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 		card.Header.Icon = "✓"
 	case "changes-requested":
 		card.Header.Icon = "✗"
-	}
-	if post.HeaderExt == "release" {
-		card.Header.Icon = "⏏"
-	}
-	if post.HeaderExt == "memo" {
-		card.Header.Icon = "☞"
 	}
 
 	// Custom badge from Display (e.g., email for follow notifications)
@@ -264,6 +232,22 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 	card.Header.IsEditorVerified = post.Display.IsEditorVerified
 
 	return card
+}
+
+// postGlyph returns the glyph of the item a post carries: a pm, review, release or memo header, else the post type.
+func postGlyph(post social.Post) string {
+	switch post.HeaderExt {
+	case "pm", "review":
+		if g := tuicore.TypeGlyph(post.HeaderType, post.HeaderState); g != "" {
+			return g
+		}
+	case "release", "memo":
+		return tuicore.TypeGlyph(post.HeaderExt, "")
+	}
+	if g := tuicore.TypeGlyph(string(post.Type), ""); g != "" {
+		return g
+	}
+	return tuicore.TypeGlyph("post", "")
 }
 
 // RenderCommentCard renders a social comment as an indented card with depth-based nesting.

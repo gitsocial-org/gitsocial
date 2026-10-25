@@ -255,7 +255,7 @@ func (t tagRow) sinceLabel() string {
 // Title returns the view title for the header.
 func (v *tagsView) Title() string {
 	if v.name == "" {
-		return "⌂  Tags"
+		return tuicore.TypeGlyph("tag", "") + "  Tags"
 	}
-	return "⌂  " + v.name + " tags"
+	return tuicore.TypeGlyph("tag", "") + "  " + v.name + " tags"
 }

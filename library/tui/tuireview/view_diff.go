@@ -141,10 +141,10 @@ func (v *diffView) Render(state *tuicore.State) string {
 // Title returns the view title.
 func (v *diffView) Title() string {
 	if v.pr == nil {
-		return "⑂  Files Changed"
+		return tuicore.TypeGlyph("pull-request", "") + "  Files Changed"
 	}
 	s := v.core.Stats()
-	return fmt.Sprintf("⑂  Files Changed · %s · %s", tuicore.TruncateToWidth(v.pr.Subject, 30), tuicore.RenderDiffStatsBadge(s.Added, s.Removed))
+	return fmt.Sprintf("%s  Files Changed · %s · %s", tuicore.TypeGlyph("pull-request", ""), tuicore.TruncateToWidth(v.pr.Subject, 30), tuicore.RenderDiffStatsBadge(s.Added, s.Removed))
 }
 
 // Bindings returns keybindings for this view: the shared diff bindings

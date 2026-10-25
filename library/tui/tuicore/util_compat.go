@@ -13,9 +13,11 @@ var NeedsWidthMargin bool
 // render at single-width in Terminal.app and are left unchanged.
 var ambiguousFallbacks = map[rune]string{
 	'※': "*", // REFERENCE MARK (config/core)
-	'○': "o", // WHITE CIRCLE (issues)
+	'△': "^", // WHITE UP-POINTING TRIANGLE (pull requests)
+	'▲': "^", // BLACK UP-POINTING TRIANGLE (merged pull requests)
 	'◇': "~", // WHITE DIAMOND (milestones)
-	'◉': "@", // FISHEYE (post detail)
+	'◆': "~", // BLACK DIAMOND (closed milestones)
+	'•': "*", // BULLET (posts)
 	'▦': "#", // SQUARE WITH CROSSHATCH (board)
 	'⚿': "=", // SQUARED KEY (identity/verified)
 	'⛨': "+", // BLACK CROSS ON SHIELD (security)

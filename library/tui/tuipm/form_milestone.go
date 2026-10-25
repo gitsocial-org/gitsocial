@@ -194,7 +194,9 @@ func (v *milestoneFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *milestoneFormView) Title() string { return "◇  New Milestone" }
+func (v *milestoneFormView) Title() string {
+	return tuicore.TypeGlyph("milestone", "") + "  New Milestone"
+}
 
 // updateMilestoneFromForm updates an existing milestone from form data.
 func (f *milestoneForm) updateMilestoneFromForm() tea.Cmd {
@@ -316,7 +318,7 @@ func (v *milestoneEditFormView) Render(state *tuicore.State) string {
 // Title returns the view title.
 func (v *milestoneEditFormView) Title() string {
 	if v.milestone != nil {
-		return fmt.Sprintf("◇  Edit: %s", v.milestone.Title)
+		return fmt.Sprintf("%s  Edit: %s", tuicore.TypeGlyph("milestone", ""), v.milestone.Title)
 	}
-	return "◇  Edit Milestone"
+	return tuicore.TypeGlyph("milestone", "") + "  Edit Milestone"
 }

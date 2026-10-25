@@ -9,7 +9,7 @@ import (
 func newMilestoneHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:   tuicore.PMMilestoneHistoryDiff,
-		TitleIcon: "◇",
+		TitleIcon: tuicore.TypeGlyph("milestone", ""),
 		Title:     "Milestone Diff",
 		Load:      loadPMHistoryVersionsKey("milestoneID"),
 	})

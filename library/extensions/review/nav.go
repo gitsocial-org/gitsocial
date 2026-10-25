@@ -8,14 +8,14 @@ func RegisterNavItems(r *tuinav.NavRegistry) {
 	r.Register(tuinav.NavItem{
 		ID:      "review",
 		Label:   "Review",
-		Icon:    "⑂",
+		Icon:    "△",
 		Order:   2,
 		Enabled: true,
 	})
 	r.Register(tuinav.NavItem{
 		ID:      "review.prs",
 		Label:   "Pull Requests",
-		Icon:    "⑂",
+		Icon:    "△",
 		Parent:  "review",
 		Order:   0,
 		Enabled: true,

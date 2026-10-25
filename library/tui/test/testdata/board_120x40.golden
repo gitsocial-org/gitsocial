@@ -2,22 +2,22 @@
 │                              ││                                                                                      │
 │  ⌕  Search  ············  /  ││   Backlog (2)       │  In Progress (0)   │  Review (0)        │  Done (1)            │
 │  ⚑  Notifications  ·····  @  ││  ─────────────────────────────────────────────────────────────────────────────────   │
-│  ◧  Analytics  ·········  %  ││   ○ Implement ...   │                    │                    │  ● Add keyboa...     │
-│ ──────────────────────────── ││   ○ Add dark m...   │                    │                    │                      │
+│  ◧  Analytics  ·········  %  ││   ☒ Implement ...   │                    │                    │  ☑ Add keyboa...     │
+│ ──────────────────────────── ││   ☐ Add dark m...   │                    │                    │                      │
 │  ⌘  Social  ············  S  ││                     │                    │                    │                      │
 │     ⏱  Timeline              ││                     │                    │                    │                      │
 │     ⊡  My Repository         ││                     │                    │                    │                      │
 │     ⎇  My Branches           ││                     │                    │                    │                      │
-│     ⌂  My Tags               ││                     │                    │                    │                      │
+│     ⌗  My Tags               ││                     │                    │                    │                      │
 │     ☷ My Lists              ││                     │                    │                    │                      │
 │        • Memo Inherits (au...││                     │                    │                    │                      │
 │     ㋡ My Followers          ││                     │                    │                    │                      │
 │     ➼  Explore               ││                     │                    │                    │                      │
-│  ▢  PM  ················  P  ││                     │                    │                    │                      │
+│  ☐  PM  ················  P  ││                     │                    │                    │                      │
 │     ▦  Boards                ││                     │                    │                    │                      │
-│     ○  Issues                ││                     │                    │                    │                      │
+│     ☐  Issues                ││                     │                    │                    │                      │
 │     ◇  Milestones            ││                     │                    │                    │                      │
-│  ⑂  Review  ············  R  ││                     │                    │                    │                      │
+│  △  Review  ············  R  ││                     │                    │                    │                      │
 │  ⏏  Release  ···········  V  ││                     │                    │                    │                      │
 │  ☞  Memos  ·············  M  ││                     │                    │                    │                      │
 │                              ││                     │                    │                    │                      │

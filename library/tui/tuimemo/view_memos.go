@@ -261,25 +261,25 @@ func (v *memosView) SetSourceCursor(index int) {
 
 // Title returns the view's title with current selection info.
 func (v *memosView) Title() string {
-	title := "☞  Memos"
+	title := tuicore.TypeGlyph("memo", "") + "  Memos"
 	switch v.variant {
 	case variantProject:
-		title = "☞  Project Memos"
+		title = tuicore.TypeGlyph("memo", "") + "  Project Memos"
 	case variantInherited:
-		title = "☞  Inherited Memos"
+		title = tuicore.TypeGlyph("memo", "") + "  Inherited Memos"
 	case variantPersonal:
-		title = "☞  Personal Memos"
+		title = tuicore.TypeGlyph("memo", "") + "  Personal Memos"
 		if path, err := settings.PersonalRepoPath(); err == nil && path != "" {
 			title += " · " + tildePath(path)
 		}
 	case variantSessionItems:
 		if v.sessionID != "" {
-			title = "☞  Session · " + v.sessionID
+			title = tuicore.TypeGlyph("memo", "") + "  Session · " + v.sessionID
 			if path, err := memo.SessionRepoPath(v.sessionID); err == nil && path != "" {
 				title += " · " + tildePath(path)
 			}
 		} else {
-			title = "☞  Session"
+			title = tuicore.TypeGlyph("memo", "") + "  Session"
 		}
 	}
 	items := v.cardList.Items()

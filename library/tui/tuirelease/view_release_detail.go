@@ -563,11 +563,11 @@ func (v *releaseDetailView) ShowRawView() tea.Cmd {
 // Title returns the view title.
 func (v *releaseDetailView) Title() string {
 	if v.rel == nil {
-		return "⏏  Release"
+		return tuicore.TypeGlyph("release", "") + "  Release"
 	}
 	rel := v.rel
 	id := protocol.FormatShortRef(rel.ID, v.workspaceURL)
-	icon := "⏏"
+	icon := tuicore.TypeGlyph("release", "")
 	if rel.IsUnpushed {
 		icon += "  ⇡"
 	}

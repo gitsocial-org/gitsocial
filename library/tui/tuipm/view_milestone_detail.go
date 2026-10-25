@@ -471,10 +471,7 @@ func (v *milestoneDetailView) renderIssueRow(issue pm.Issue, width int, selected
 	if selected {
 		selectionBar = tuicore.Title.Render("▏")
 	}
-	stateIcon := "○"
-	if issue.State == pm.StateClosed {
-		stateIcon = "●"
-	}
+	stateIcon := tuicore.TypeGlyph("issue", string(issue.State))
 	var labelStr string
 	if len(issue.Labels) > 0 {
 		var labels []string
@@ -505,7 +502,7 @@ func (v *milestoneDetailView) ShowRawView() tea.Cmd {
 // Title returns the view title.
 func (v *milestoneDetailView) Title() string {
 	if v.milestone == nil {
-		return "◇  Milestone"
+		return tuicore.TypeGlyph("milestone", "") + "  Milestone"
 	}
 	author := v.milestone.Author.Name
 	if v.showEmail && v.milestone.Author.Email != "" {
@@ -521,7 +518,7 @@ func (v *milestoneDetailView) Title() string {
 		timestamp = tuicore.FormatOriginTime(v.milestone.Origin.Time)
 	}
 	id := protocol.FormatShortRef(v.milestone.ID, v.workspaceURL)
-	icon := "◇"
+	icon := tuicore.TypeGlyph("milestone", string(v.milestone.State))
 	if v.milestone.IsUnpushed {
 		icon += "  ⇡"
 	}

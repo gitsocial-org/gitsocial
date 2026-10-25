@@ -428,7 +428,7 @@ func (v *milestonesView) Title() string {
 	if v.showAll {
 		filter = "All"
 	}
-	title := fmt.Sprintf("◇  %s Milestones", filter)
+	title := fmt.Sprintf("%s  %s Milestones", tuicore.TypeGlyph("milestone", ""), filter)
 	if v.assigneeFilter == "me" {
 		title += " · Mine"
 	}

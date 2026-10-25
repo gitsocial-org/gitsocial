@@ -102,7 +102,7 @@ func newMemoHistoryView(workdir string) *tuicore.HistoryView {
 	return tuicore.NewHistoryView(workdir, tuicore.HistoryConfig{
 		ParamName:  "memoID",
 		Context:    tuicore.MemoHistory,
-		TitleLabel: "☞  History",
+		TitleLabel: tuicore.TypeGlyph("memo", "") + "  History",
 		Load:       loadMemoHistory,
 		DiffLoc:    tuicore.LocMemoHistoryDiff,
 	})

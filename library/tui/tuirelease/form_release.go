@@ -280,7 +280,7 @@ func (v *releaseFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *releaseFormView) Title() string { return "⏏  New Release" }
+func (v *releaseFormView) Title() string { return tuicore.TypeGlyph("release", "") + "  New Release" }
 
 // releaseEditFormView wraps the form for editing an existing release.
 type releaseEditFormView struct {
@@ -368,7 +368,7 @@ func (v *releaseEditFormView) Render(state *tuicore.State) string {
 // Title returns the view title.
 func (v *releaseEditFormView) Title() string {
 	if v.rel != nil {
-		return fmt.Sprintf("⏏  Edit: %s", v.rel.Subject)
+		return fmt.Sprintf("%s  Edit: %s", tuicore.TypeGlyph("release", ""), v.rel.Subject)
 	}
-	return "⏏  Edit Release"
+	return tuicore.TypeGlyph("release", "") + "  Edit Release"
 }

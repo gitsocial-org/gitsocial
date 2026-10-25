@@ -132,7 +132,7 @@ My Branches in the navigation, or `b` on a repository, opens its branches. The f
 My Tags in the navigation, or `t` on a repository or on a branch, opens the tags of the local clone, highest version first. A row shows the commits since the previous tag, the date and the author, and a release mark when a release names the tag. Enter opens that release, else the diff of the tagged commit; `c` opens the code at the tag.
 
 ```
-╭─ ⌂  user/repo tags ────────────────────────────────────────────────────╮
+╭─ ⌗  user/repo tags ────────────────────────────────────────────────────╮
 │                                                                         │
 │  ▸ v1.0.0 · 4 commits since v0.9.0 · 1h ago · Alice · release           │
 │    v0.9.0 · 12 commits · 1d ago · Bob                                   │
@@ -223,13 +223,13 @@ The view shows the posts from each repository in a list.
 Issue cards have MaxLines 1. `n` opens the issue form.
 
 ```
-╭─ ○  Open Issues · (3) ─────────────────────────────────────────────────╮
+╭─ ☐  Open Issues · (3) ─────────────────────────────────────────────────╮
 │                                                                        │
-│ ▏○  Add dark mode support · Alice · 2h ago · kind/feature              │
+│ ▏☐  Add dark mode support · Alice · 2h ago · kind/feature              │
 │  ─────────────────────────────────────────────────────────────         │
-│  ○  Add dashboard analytics · Bob · 1d ago · kind/feature              │
+│  ☐  Add dashboard analytics · Bob · 1d ago · kind/feature              │
 │  ─────────────────────────────────────────────────────────────         │
-│  ●  Add keyboard shortcuts · Alice · 3d ago · kind/task                │
+│  ☑  Add keyboard shortcuts · Alice · 3d ago · kind/task                │
 │                                                                        │
 ╰────────────────────────────────────────────────────────────────────────╯
 ```
@@ -251,7 +251,7 @@ Issue cards have MaxLines 1. `n` opens the issue form.
 ```
 ╭─ ◷  Active Sprints · (2) ──────────────────────────────────────────────╮
 │                                                                        │
-│ ▏◷  Sprint 23: UX Polish · Alice · Feb 1-14 · ████░░░░  2/5 · 8d       │
+│ ▏◶  Sprint 23: UX Polish · Alice · Feb 1-14 · ████░░░░  2/5 · 8d       │
 │  ─────────────────────────────────────────────────────────────         │
 │  ◷  Sprint 24 · Bob · Feb 14-28 · ░░░░░░░░░░░░  0/3 · planned          │
 │                                                                        │
@@ -281,14 +281,14 @@ Release cards have MaxLines 2.
 Pull request cards have MaxLines 2.
 
 ```
-╭─ ⑂  Pull Requests (2) ─────────────────────────────────────────────────╮
+╭─ △  Pull Requests (2) ─────────────────────────────────────────────────╮
 │                                                                        │
-│ ▏⑂  Add dark mode support · Alice · 3h ago · open                      │
+│ ▏△  Add dark mode support · Alice · 3h ago · open                      │
 │ ▏   main ← dark-mode · ✓1 ✗0 · +120 -45                                │
 │                                                                        │
 │  ─────────────────────────────────────────────────────────────         │
 │                                                                        │
-│  ⑂  Add keyboard shortcuts · Bob · 1d ago · open                       │
+│  △  Add keyboard shortcuts · Bob · 1d ago · open                       │
 │     main ← feature/shortcuts · +42 -8                                  │
 │                                                                        │
 ╰────────────────────────────────────────────────────────────────────────╯
@@ -309,7 +309,7 @@ The input is at the top, and the results are cards under it, with the matches hi
 │                                                                         │
 │  ─────────────────────────────────────────────────────────────          │
 │                                                                         │
-│  ○  Add [dark] [mode] support · Alice · 3d ago · kind/feature           │
+│  ☐  Add [dark] [mode] support · Alice · 3d ago · kind/feature           │
 │  Users can toggle between light and [dark] themes...                    │
 │                                                                         │
 ╰─────────────────────────────────────────────────────────────────────────╯
@@ -372,7 +372,7 @@ The view shows a thread: the parent (dimmed), the post, then the replies, indent
 ### Issue detail
 
 ```
-╭─ ○  Add dark mode support · Alice · 2h ago · #abc123456789 ─────────────╮
+╭─ ☐  Add dark mode support · Alice · 2h ago · #abc123456789 ─────────────╮
 │                                                                         │
 │ ▏Add dark mode support                                                  │
 │ ▏─────────────────────────────────────────────────────────────          │
@@ -418,9 +418,9 @@ The view shows a thread: the parent (dimmed), the post, then the replies, indent
 │                                                                         │
 │  Linked Issues (3)                                                      │
 │  ─────────────────────────────────────────────────────────────          │
-│ ▏○  Add dark mode support  kind/feature                                 │
-│  ○  Add dashboard analytics  kind/feature                               │
-│  ●  Add keyboard shortcuts  kind/task                                   │
+│ ▏☐  Add dark mode support  kind/feature                                 │
+│  ☐  Add dashboard analytics  kind/feature                               │
+│  ☑  Add keyboard shortcuts  kind/task                                   │
 │                                                                         │
 │ ═══════════════════════════════════════════════════════════             │
 │                                                                         │
@@ -436,7 +436,7 @@ The view shows a thread: the parent (dimmed), the post, then the replies, indent
 ### Sprint detail
 
 ```
-╭─ ◷  Sprint 23: UX Polish · Alice · 5d ago · #abc123456789 ──────────────╮
+╭─ ◶  Sprint 23: UX Polish · Alice · 5d ago · #abc123456789 ──────────────╮
 │                                                                         │
 │ ▏Sprint 23: UX Polish                                                   │
 │ ▏─────────────────────────────────────────────────────────────          │
@@ -451,9 +451,9 @@ The view shows a thread: the parent (dimmed), the post, then the replies, indent
 │                                                                         │
 │  Sprint Backlog (3)                                                     │
 │  ─────────────────────────────────────────────────────────────          │
-│  ○  Add dark mode support  kind/feature                                 │
-│  ●  Add keyboard shortcuts  kind/task                                   │
-│  ○  Add dashboard analytics  kind/feature                               │
+│  ☐  Add dark mode support  kind/feature                                 │
+│  ☑  Add keyboard shortcuts  kind/task                                   │
+│  ☐  Add dashboard analytics  kind/feature                               │
 │                                                                         │
 │ ═══════════════════════════════════════════════════════════             │
 │                                                                         │
@@ -525,7 +525,7 @@ The view shows a thread: the parent (dimmed), the post, then the replies, indent
 `d` opens the diff, and `i` opens the interdiff between versions.
 
 ```
-╭─ ⑂  Add dark mode support · Alice · 3h ago · #abc123456789 ─────────────╮
+╭─ △  Add dark mode support · Alice · 3h ago · #abc123456789 ─────────────╮
 │                                                                         │
 │ ▏Add dark mode support                                                  │
 │ ▏─────────────────────────────────────────────────────────────          │

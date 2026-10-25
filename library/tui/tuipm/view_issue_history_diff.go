@@ -9,7 +9,7 @@ import (
 func newIssueHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:   tuicore.PMIssueHistoryDiff,
-		TitleIcon: "○",
+		TitleIcon: tuicore.TypeGlyph("issue", ""),
 		Title:     "Issue Diff",
 		Load:      loadPMHistoryVersionsKey("issueID"),
 	})

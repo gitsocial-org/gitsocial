@@ -8,13 +8,13 @@
 │     ⏱  Timeline              ││                                                                                      │
 │     ⊡  My Repository         ││   ────────────────────────────────────────────────────────────────────────────────   │
 │     ⎇  My Branches           ││                                                                                      │
-│     ⌂  My Tags               ││   •  Bob · TIME   · https://github.com/bob/repo#commit:c6d0fad79532@main             │
+│     ⌗  My Tags               ││   •  Bob · TIME   · https://github.com/bob/repo#commit:c6d0fad79532@main             │
 │     ☷ My Lists              ││      Initial commit                                                                  │
 │        • Memo Inherits (au...││                                                                                      │
 │     ㋡ My Followers          ││   ────────────────────────────────────────────────────────────────────────────────   │
 │     ➼  Explore               ││                                                                                      │
-│  ▢  PM  ················  P  ││   ⑂  Alice ⇡ · TIME   · #006ab2b6bfde@gitmsg/review                                  │
-│  ⑂  Review  ············  R  ││      merged pull request "Add theme toggle component"                                │
+│  ☐  PM  ················  P  ││   ▲  Alice ⇡ · TIME   · #006ab2b6bfde@gitmsg/review                                  │
+│  △  Review  ············  R  ││      merged pull request "Add theme toggle component"                                │
 │  ⏏  Release  ···········  V  ││                                                                                      │
 │  ☞  Memos  ·············  M  ││   ────────────────────────────────────────────────────────────────────────────────   │
 │                              ││                                                                                      │

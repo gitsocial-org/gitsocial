@@ -111,9 +111,9 @@ func (v *releaseSBOMView) Render(state *tuicore.State) string {
 // Title returns the view title.
 func (v *releaseSBOMView) Title() string {
 	if v.rel == nil {
-		return "⏏  SBOM"
+		return tuicore.TypeGlyph("release", "") + "  SBOM"
 	}
-	return fmt.Sprintf("⏏  SBOM · %s", tuicore.TruncateToWidth(v.rel.Subject, 40))
+	return fmt.Sprintf("%s  SBOM · %s", tuicore.TypeGlyph("release", ""), tuicore.TruncateToWidth(v.rel.Subject, 40))
 }
 
 // Bindings returns keybindings for this view.

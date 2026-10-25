@@ -1696,11 +1696,11 @@ func (v *prDetailView) ShowRawView() tea.Cmd {
 // Title returns the view title.
 func (v *prDetailView) Title() string {
 	if v.pr == nil {
-		return "⑂  Pull Request"
+		return tuicore.TypeGlyph("pull-request", "") + "  Pull Request"
 	}
 	pr := v.pr
 	id := protocol.FormatShortRef(pr.ID, v.workspaceURL)
-	icon := "⑂"
+	icon := tuicore.TypeGlyph("pull-request", string(pr.State))
 	if pr.IsUnpushed {
 		icon += "  ⇡"
 	}

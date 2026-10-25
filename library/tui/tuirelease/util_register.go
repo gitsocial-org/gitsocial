@@ -16,13 +16,13 @@ import (
 
 // init registers the release views, message handler, nav target and card renderer with tuicore.
 func init() {
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/list", Context: tuicore.ReleaseList, Title: "Releases", Icon: "⏏", NavItemID: "release", Component: "CardList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/detail", Context: tuicore.ReleaseDetail, Title: "Release Detail", Icon: "⏏", NavItemID: "release", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/new", Context: tuicore.ReleaseDetail, Title: "New Release", Icon: "⏏", NavItemID: "release", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/edit", Context: tuicore.ReleaseDetail, Title: "Edit Release", Icon: "⏏", NavItemID: "release", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/sbom", Context: tuicore.ReleaseSBOM, Title: "SBOM", Icon: "⏏", NavItemID: "release", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/history", Context: tuicore.ReleaseHistory, Title: "Release History", Icon: "⏏", NavItemID: "release", Component: "VersionPicker"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/history/diff", Context: tuicore.ReleaseHistoryDiff, Title: "Release Diff", Icon: "⏏", NavItemID: "release"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/list", Context: tuicore.ReleaseList, Title: "Releases", Icon: tuicore.TypeGlyph("release", ""), NavItemID: "release", Component: "CardList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/detail", Context: tuicore.ReleaseDetail, Title: "Release Detail", Icon: tuicore.TypeGlyph("release", ""), NavItemID: "release", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/new", Context: tuicore.ReleaseDetail, Title: "New Release", Icon: tuicore.TypeGlyph("release", ""), NavItemID: "release", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/edit", Context: tuicore.ReleaseDetail, Title: "Edit Release", Icon: tuicore.TypeGlyph("release", ""), NavItemID: "release", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/sbom", Context: tuicore.ReleaseSBOM, Title: "SBOM", Icon: tuicore.TypeGlyph("release", ""), NavItemID: "release", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/history", Context: tuicore.ReleaseHistory, Title: "Release History", Icon: tuicore.TypeGlyph("release", ""), NavItemID: "release", Component: "VersionPicker"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/release/history/diff", Context: tuicore.ReleaseHistoryDiff, Title: "Release Diff", Icon: tuicore.TypeGlyph("release", ""), NavItemID: "release"})
 	tuicore.RegisterMessageHandler(handleReleaseMessages)
 	tuicore.RegisterNavTarget(
 		tuicore.ItemType{Extension: "release", Type: "release"},
@@ -98,7 +98,7 @@ func releaseNotificationCardRenderer(data any, _ tuicore.ItemResolver) tuicore.C
 	}
 	return tuicore.Card{
 		Header: tuicore.CardHeader{
-			Icon:     "⏏",
+			Icon:     tuicore.TypeGlyph("release", ""),
 			Title:    rn.ActorName,
 			Subtitle: subtitleParts,
 			Badge:    badge,
@@ -116,7 +116,7 @@ type releaseToCardOptions struct {
 
 // releaseToCardWithOptions converts a Release to a Card with configuration options.
 func releaseToCardWithOptions(rel release.Release, opts releaseToCardOptions) tuicore.Card {
-	icon := "⏏"
+	icon := tuicore.TypeGlyph("release", "")
 	title := rel.Subject
 	if rel.Version != "" {
 		title = rel.Version + " " + title

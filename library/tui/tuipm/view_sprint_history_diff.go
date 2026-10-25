@@ -9,7 +9,7 @@ import (
 func newSprintHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:   tuicore.PMSprintHistoryDiff,
-		TitleIcon: "⟳",
+		TitleIcon: tuicore.TypeGlyph("sprint", ""),
 		Title:     "Sprint Diff",
 		Load:      loadPMHistoryVersionsKey("sprintID"),
 	})

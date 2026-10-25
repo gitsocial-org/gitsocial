@@ -20,7 +20,7 @@ func init() {
 		Path:      "/memo/list",
 		Context:   tuicore.MemoList,
 		Title:     "Memos",
-		Icon:      "☞",
+		Icon:      tuicore.TypeGlyph("memo", ""),
 		NavItemID: "memo",
 		Component: "CardList",
 	})
@@ -28,7 +28,7 @@ func init() {
 		Path:      "/memo/project",
 		Context:   tuicore.MemoList,
 		Title:     "Project Memos",
-		Icon:      "☞",
+		Icon:      tuicore.TypeGlyph("memo", ""),
 		NavItemID: "memo.project",
 		Component: "CardList",
 	})
@@ -36,7 +36,7 @@ func init() {
 		Path:      "/memo/inherited",
 		Context:   tuicore.MemoInheritedList,
 		Title:     "Inherited Memos",
-		Icon:      "☞",
+		Icon:      tuicore.TypeGlyph("memo", ""),
 		NavItemID: "memo.inherited",
 		Component: "CardList",
 	})
@@ -44,7 +44,7 @@ func init() {
 		Path:      "/memo/personal",
 		Context:   tuicore.MemoPersonalList,
 		Title:     "Personal Memos",
-		Icon:      "☞",
+		Icon:      tuicore.TypeGlyph("memo", ""),
 		NavItemID: "memo.personal",
 		Component: "CardList",
 	})
@@ -52,14 +52,14 @@ func init() {
 		Path:      "/memo/session",
 		Context:   tuicore.MemoSessions,
 		Title:     "Sessions",
-		Icon:      "☞",
+		Icon:      tuicore.TypeGlyph("memo", ""),
 		NavItemID: "memo.session",
 	})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{
 		Path:      "/memo/session/items",
 		Context:   tuicore.MemoList,
 		Title:     "Session Memos",
-		Icon:      "☞",
+		Icon:      tuicore.TypeGlyph("memo", ""),
 		NavItemID: "memo.session",
 		Component: "CardList",
 	})
@@ -67,14 +67,14 @@ func init() {
 		Path:      "/memo/inherits",
 		Context:   tuicore.MemoInherits,
 		Title:     "Inherited Sources",
-		Icon:      "☞",
+		Icon:      tuicore.TypeGlyph("memo", ""),
 		NavItemID: "memo.inherited",
 	})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{
 		Path:      "/memo/detail",
 		Context:   tuicore.MemoDetail,
 		Title:     "Memo Detail",
-		Icon:      "☞",
+		Icon:      tuicore.TypeGlyph("memo", ""),
 		NavItemID: "memo",
 		Component: "SectionList",
 	})
@@ -82,7 +82,7 @@ func init() {
 		Path:      "/memo/history",
 		Context:   tuicore.MemoHistory,
 		Title:     "Memo History",
-		Icon:      "☞",
+		Icon:      tuicore.TypeGlyph("memo", ""),
 		NavItemID: "memo",
 		Component: "VersionPicker",
 	})
@@ -90,21 +90,21 @@ func init() {
 		Path:      "/memo/history/diff",
 		Context:   tuicore.MemoHistoryDiff,
 		Title:     "Memo Diff",
-		Icon:      "☞",
+		Icon:      tuicore.TypeGlyph("memo", ""),
 		NavItemID: "memo",
 	})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{
 		Path:      "/memo/edit",
 		Context:   tuicore.MemoDetail,
 		Title:     "Edit Memo",
-		Icon:      "☞",
+		Icon:      tuicore.TypeGlyph("memo", ""),
 		NavItemID: "memo",
 	})
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{
 		Path:      "/memo/new",
 		Context:   tuicore.MemoDetail,
 		Title:     "New Memo",
-		Icon:      "☞",
+		Icon:      tuicore.TypeGlyph("memo", ""),
 		NavItemID: "memo",
 	})
 	tuicore.RegisterMessageHandler(handleMemoMessages)
@@ -213,7 +213,7 @@ func memoToCard(d memoItemData) tuicore.Card {
 
 	card := tuicore.Card{
 		Header: tuicore.CardHeader{
-			Icon:        "☞",
+			Icon:        tuicore.TypeGlyph("memo", ""),
 			Title:       m.Subject,
 			Subtitle:    subtitle,
 			Badge:       badge,

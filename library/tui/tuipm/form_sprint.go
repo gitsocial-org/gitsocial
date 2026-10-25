@@ -216,7 +216,7 @@ func (v *sprintFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *sprintFormView) Title() string { return "◷  New Sprint" }
+func (v *sprintFormView) Title() string { return tuicore.TypeGlyph("sprint", "") + "  New Sprint" }
 
 // updateSprintFromForm updates an existing sprint from form data.
 func (f *sprintForm) updateSprintFromForm() tea.Cmd {
@@ -343,7 +343,7 @@ func (v *sprintEditFormView) Render(state *tuicore.State) string {
 // Title returns the view title.
 func (v *sprintEditFormView) Title() string {
 	if v.sprint != nil {
-		return fmt.Sprintf("◷  Edit: %s", v.sprint.Title)
+		return fmt.Sprintf("%s  Edit: %s", tuicore.TypeGlyph("sprint", ""), v.sprint.Title)
 	}
-	return "◷  Edit Sprint"
+	return tuicore.TypeGlyph("sprint", "") + "  Edit Sprint"
 }

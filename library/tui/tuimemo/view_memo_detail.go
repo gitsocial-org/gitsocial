@@ -65,7 +65,7 @@ func (v *memoDetailView) Title() string {
 	if v.showEmail && m.Author.Email != "" {
 		name += " <" + m.Author.Email + ">"
 	}
-	title := "☞  " + name
+	title := tuicore.TypeGlyph("memo", "") + "  " + name
 	if !m.Timestamp.IsZero() {
 		title += " · " + tuicore.FormatFullTime(m.Timestamp)
 	}

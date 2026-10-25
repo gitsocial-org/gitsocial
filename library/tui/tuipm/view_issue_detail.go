@@ -699,9 +699,9 @@ func renderChildRow(issue pm.Issue, selected bool, searchQuery string) []string 
 	if selected {
 		selectionBar = tuicore.Title.Render("▏")
 	}
-	icon, style := "○", tuicore.Title
+	icon, style := tuicore.TypeGlyph("issue", string(issue.State)), tuicore.Title
 	if issue.State == pm.StateClosed {
-		icon, style = "●", tuicore.Dim
+		style = tuicore.Dim
 	}
 	subject := issue.Subject
 	if searchQuery != "" {
@@ -751,7 +751,7 @@ func (v *issueDetailView) ShowRawView() tea.Cmd {
 // Title returns the view title.
 func (v *issueDetailView) Title() string {
 	if v.issue == nil {
-		return "○  Issue"
+		return tuicore.TypeGlyph("issue", "") + "  Issue"
 	}
 	// An adopted copy names its original author, and an import origin names the author on the source platform.
 	displayAuthor, displayTime := v.issue.Author, v.issue.Timestamp
@@ -775,7 +775,7 @@ func (v *issueDetailView) Title() string {
 		timestamp = tuicore.FormatOriginTime(v.issue.Origin.Time)
 	}
 	id := protocol.FormatShortRef(v.issue.ID, v.workspaceURL)
-	icon := "○"
+	icon := tuicore.TypeGlyph("issue", string(v.issue.State))
 	if v.issue.IsUnpushed {
 		icon += "  ⇡"
 	}

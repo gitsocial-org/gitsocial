@@ -113,7 +113,7 @@ func (v *listPickerView) SetSize(width, height int) {
 
 // Title returns the view header. The picker always shows the workspace's own lists.
 func (v *listPickerView) Title() string {
-	return "☷  My Lists"
+	return tuicore.TypeGlyph("list", "") + "  My Lists"
 }
 
 // Activate loads lists when the view becomes active.

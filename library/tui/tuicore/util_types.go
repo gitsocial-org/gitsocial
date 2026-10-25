@@ -291,7 +291,7 @@ type CardHeader struct {
 	TitleLink        *Location    // Navigation target when title is clicked
 	Subtitle         []HeaderPart // Structured subtitle parts joined with " · "
 	Badge            string       // Optional: "reposted", "replied", "closed", etc.
-	Icon             string       // Type indicator: "○" issue, "◇" milestone, "◷" sprint, "⏏" release, "↩" comment, "↻" repost
+	Icon             string       // TypeGlyph of the item, or a notification mark: "@", "*", "!"
 	IsMe             bool         // True if authored by current user (cyan title)
 	IsMutualFollow   bool         // True if mutual follow (gold title)
 	IsOwnRepo        bool         // True if item is from the workspace repository (cyan title)

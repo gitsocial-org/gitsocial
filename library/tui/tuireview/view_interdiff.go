@@ -259,11 +259,11 @@ func (v *interdiffView) IsInputActive() bool {
 // Title returns the view title.
 func (v *interdiffView) Title() string {
 	if !v.loaded || len(v.versions) < 2 {
-		return "⑂  Interdiff"
+		return tuicore.TypeGlyph("pull-request", "") + "  Interdiff"
 	}
 	fromLabel := v.versions[v.fromVersion].Label
 	toLabel := v.versions[v.toVersion].Label
-	return fmt.Sprintf("⑂  Interdiff · %s → %s", fromLabel, toLabel)
+	return fmt.Sprintf("%s  Interdiff · %s → %s", tuicore.TypeGlyph("pull-request", ""), fromLabel, toLabel)
 }
 
 // Bindings returns keybindings for this view.

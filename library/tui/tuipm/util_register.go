@@ -17,25 +17,25 @@ import (
 func init() {
 	// Register view metadata for PM paths (enables ESC→GoBack and correct keybinding context)
 	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/board", Context: tuicore.PMBoard, Title: "Board", Icon: "▦", NavItemID: "pm.board"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/issues", Context: tuicore.PMIssues, Title: "Issues", Icon: "○", NavItemID: "pm.issues", Component: "CardList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/issue", Context: tuicore.PMIssueDetail, Title: "Issue Detail", Icon: "○", NavItemID: "pm.issues", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/issue/history", Context: tuicore.PMIssueHistory, Title: "Issue History", Icon: "○", NavItemID: "pm.issues", Component: "VersionPicker"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/issue/history/diff", Context: tuicore.PMIssueHistoryDiff, Title: "Issue Diff", Icon: "○", NavItemID: "pm.issues"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/new-issue", Context: tuicore.PMIssueDetail, Title: "New Issue", Icon: "○", NavItemID: "pm.issues", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/edit-issue", Context: tuicore.PMIssueDetail, Title: "Edit Issue", Icon: "○", NavItemID: "pm.issues", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/milestones", Context: tuicore.PMMilestones, Title: "Milestones", Icon: "◇", NavItemID: "pm.milestones", Component: "CardList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/milestone", Context: tuicore.PMMilestoneDetail, Title: "Milestone Detail", Icon: "◇", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/milestone/history", Context: tuicore.PMMilestoneHistory, Title: "Milestone History", Icon: "◇", NavItemID: "pm.milestones", Component: "VersionPicker"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/milestone/history/diff", Context: tuicore.PMMilestoneHistoryDiff, Title: "Milestone Diff", Icon: "◇", NavItemID: "pm.milestones"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/new-milestone", Context: tuicore.PMMilestoneDetail, Title: "New Milestone", Icon: "◇", NavItemID: "pm.milestones", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/edit-milestone", Context: tuicore.PMMilestoneDetail, Title: "Edit Milestone", Icon: "◇", NavItemID: "pm.milestones", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/sprints", Context: tuicore.PMSprints, Title: "Sprints", Icon: "⟳", NavItemID: "pm.sprints", Component: "CardList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/sprint", Context: tuicore.PMSprintDetail, Title: "Sprint Detail", Icon: "⟳", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/sprint/history", Context: tuicore.PMSprintHistory, Title: "Sprint History", Icon: "⟳", NavItemID: "pm.sprints", Component: "VersionPicker"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/sprint/history/diff", Context: tuicore.PMSprintHistoryDiff, Title: "Sprint Diff", Icon: "⟳", NavItemID: "pm.sprints"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/new-sprint", Context: tuicore.PMSprintDetail, Title: "New Sprint", Icon: "⟳", NavItemID: "pm.sprints", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/edit-sprint", Context: tuicore.PMSprintDetail, Title: "Edit Sprint", Icon: "⟳", NavItemID: "pm.sprints", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/config", Context: tuicore.PMConfig, Title: "PM Config", Icon: "▢"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/issues", Context: tuicore.PMIssues, Title: "Issues", Icon: tuicore.TypeGlyph("issue", ""), NavItemID: "pm.issues", Component: "CardList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/issue", Context: tuicore.PMIssueDetail, Title: "Issue Detail", Icon: tuicore.TypeGlyph("issue", ""), NavItemID: "pm.issues", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/issue/history", Context: tuicore.PMIssueHistory, Title: "Issue History", Icon: tuicore.TypeGlyph("issue", ""), NavItemID: "pm.issues", Component: "VersionPicker"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/issue/history/diff", Context: tuicore.PMIssueHistoryDiff, Title: "Issue Diff", Icon: tuicore.TypeGlyph("issue", ""), NavItemID: "pm.issues"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/new-issue", Context: tuicore.PMIssueDetail, Title: "New Issue", Icon: tuicore.TypeGlyph("issue", ""), NavItemID: "pm.issues", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/edit-issue", Context: tuicore.PMIssueDetail, Title: "Edit Issue", Icon: tuicore.TypeGlyph("issue", ""), NavItemID: "pm.issues", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/milestones", Context: tuicore.PMMilestones, Title: "Milestones", Icon: tuicore.TypeGlyph("milestone", ""), NavItemID: "pm.milestones", Component: "CardList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/milestone", Context: tuicore.PMMilestoneDetail, Title: "Milestone Detail", Icon: tuicore.TypeGlyph("milestone", ""), Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/milestone/history", Context: tuicore.PMMilestoneHistory, Title: "Milestone History", Icon: tuicore.TypeGlyph("milestone", ""), NavItemID: "pm.milestones", Component: "VersionPicker"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/milestone/history/diff", Context: tuicore.PMMilestoneHistoryDiff, Title: "Milestone Diff", Icon: tuicore.TypeGlyph("milestone", ""), NavItemID: "pm.milestones"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/new-milestone", Context: tuicore.PMMilestoneDetail, Title: "New Milestone", Icon: tuicore.TypeGlyph("milestone", ""), NavItemID: "pm.milestones", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/edit-milestone", Context: tuicore.PMMilestoneDetail, Title: "Edit Milestone", Icon: tuicore.TypeGlyph("milestone", ""), NavItemID: "pm.milestones", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/sprints", Context: tuicore.PMSprints, Title: "Sprints", Icon: tuicore.TypeGlyph("sprint", ""), NavItemID: "pm.sprints", Component: "CardList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/sprint", Context: tuicore.PMSprintDetail, Title: "Sprint Detail", Icon: tuicore.TypeGlyph("sprint", ""), Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/sprint/history", Context: tuicore.PMSprintHistory, Title: "Sprint History", Icon: tuicore.TypeGlyph("sprint", ""), NavItemID: "pm.sprints", Component: "VersionPicker"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/sprint/history/diff", Context: tuicore.PMSprintHistoryDiff, Title: "Sprint Diff", Icon: tuicore.TypeGlyph("sprint", ""), NavItemID: "pm.sprints"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/new-sprint", Context: tuicore.PMSprintDetail, Title: "New Sprint", Icon: tuicore.TypeGlyph("sprint", ""), NavItemID: "pm.sprints", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/edit-sprint", Context: tuicore.PMSprintDetail, Title: "Edit Sprint", Icon: tuicore.TypeGlyph("sprint", ""), NavItemID: "pm.sprints", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/pm/config", Context: tuicore.PMConfig, Title: "PM Config", Icon: tuicore.TypeGlyph("issue", "")})
 
 	tuicore.RegisterMessageHandler(handlePMMessages)
 	// Register nav targets for PM types
@@ -180,7 +180,7 @@ func pmNotificationCardRenderer(data any, _ tuicore.ItemResolver) tuicore.Card {
 	}
 	return tuicore.Card{
 		Header: tuicore.CardHeader{
-			Icon:     "○",
+			Icon:     tuicore.TypeGlyph("issue", pn.State),
 			Title:    pn.ActorName,
 			Subtitle: subtitleParts,
 			Badge:    badge,

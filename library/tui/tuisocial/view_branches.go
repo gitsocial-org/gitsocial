@@ -245,7 +245,7 @@ func commitsLabel(n int) string {
 // Title returns the view title for the header.
 func (v *branchesView) Title() string {
 	if v.name == "" {
-		return "⎇  Branches"
+		return tuicore.TypeGlyph("branch", "") + "  Branches"
 	}
-	return "⎇  " + v.name + " branches"
+	return tuicore.TypeGlyph("branch", "") + "  " + v.name + " branches"
 }

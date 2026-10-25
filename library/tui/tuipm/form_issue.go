@@ -552,9 +552,9 @@ func (v *issueFormView) Render(state *tuicore.State) string {
 // Title returns the view title.
 func (v *issueFormView) Title() string {
 	if v.isSubIssue {
-		return "○  New Sub-issue"
+		return tuicore.TypeGlyph("issue", "") + "  New Sub-issue"
 	}
-	return "○  New Issue"
+	return tuicore.TypeGlyph("issue", "") + "  New Issue"
 }
 
 // issueEditFormView wraps the form for editing an existing issue.
@@ -644,9 +644,9 @@ func (v *issueEditFormView) Render(state *tuicore.State) string {
 // Title returns the view title.
 func (v *issueEditFormView) Title() string {
 	if v.issue != nil {
-		return fmt.Sprintf("○  Edit: %s", v.issue.Subject)
+		return fmt.Sprintf("%s  Edit: %s", tuicore.TypeGlyph("issue", ""), v.issue.Subject)
 	}
-	return "○  Edit Issue"
+	return tuicore.TypeGlyph("issue", "") + "  Edit Issue"
 }
 
 // buildIssueLabelsFromForm assembles the full label slice from the form data:

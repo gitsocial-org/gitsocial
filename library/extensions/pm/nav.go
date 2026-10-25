@@ -9,7 +9,7 @@ func RegisterNavItems(r *tuinav.NavRegistry, workdir string) {
 	r.Register(tuinav.NavItem{
 		ID:      "pm",
 		Label:   "PM",
-		Icon:    "▢",
+		Icon:    "☐",
 		Order:   1,
 		Enabled: true,
 	})
@@ -28,7 +28,7 @@ func RegisterNavItems(r *tuinav.NavRegistry, workdir string) {
 	r.Register(tuinav.NavItem{
 		ID:      "pm.issues",
 		Label:   "Issues",
-		Icon:    "○",
+		Icon:    "☐",
 		Parent:  "pm",
 		Order:   1,
 		Enabled: true,

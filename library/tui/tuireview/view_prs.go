@@ -342,7 +342,7 @@ func (v *prsView) Title() string {
 	if v.showAll {
 		stateFilter = "All"
 	}
-	title := fmt.Sprintf("⑂  %s Pull Requests", stateFilter)
+	title := fmt.Sprintf("%s  %s Pull Requests", tuicore.TypeGlyph("pull-request", ""), stateFilter)
 	if v.assigneeFilter == "me" {
 		title += " · Mine"
 	}

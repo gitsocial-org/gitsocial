@@ -48,7 +48,7 @@ func RegisterNavItems(r *tuinav.NavRegistry) {
 	r.Register(tuinav.NavItem{
 		ID:      "social.tags",
 		Label:   "My Tags",
-		Icon:    "⌂",
+		Icon:    "⌗",
 		Parent:  "social",
 		Order:   3,
 		Enabled: true,

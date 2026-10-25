@@ -70,10 +70,6 @@ func issueToCardWithOptions(issue pm.Issue, opts issueToCardOptions) tuicore.Car
 		loc := tuicore.LocPMIssueDetail(issue.ID)
 		stats = append(stats, tuicore.CardStat{Text: fmt.Sprintf("↩ %d", issue.Comments), Link: &loc})
 	}
-	icon := "○"
-	if issue.State == pm.StateClosed || issue.State == pm.StateCancelled {
-		icon = "●"
-	}
 	if issue.IsUnpushed {
 		if badge != "" {
 			badge += " · ⇡"
@@ -111,7 +107,7 @@ func issueToCardWithOptions(issue pm.Issue, opts issueToCardOptions) tuicore.Car
 			Title:            issue.Subject,
 			Subtitle:         subtitleParts,
 			Badge:            badge,
-			Icon:             icon,
+			Icon:             tuicore.TypeGlyph("issue", string(issue.State)),
 			IsAssigned:       isAssigned,
 			IsEdited:         issue.IsEdited,
 			HasProposedEdits: issue.HasProposedEdits,
@@ -230,7 +226,7 @@ func milestoneToCardWithOptions(milestone pm.Milestone, opts milestoneToCardOpti
 			TitleLink:        titleLink,
 			Subtitle:         subtitleParts,
 			Badge:            badge,
-			Icon:             "◇",
+			Icon:             tuicore.TypeGlyph("milestone", string(milestone.State)),
 			IsEdited:         milestone.IsEdited,
 			HasProposedEdits: milestone.HasProposedEdits,
 			IsRetracted:      milestone.IsRetracted,
@@ -366,7 +362,7 @@ func sprintToCardWithOptions(sprint pm.Sprint, opts sprintToCardOptions) tuicore
 			TitleLink:        titleLink,
 			Subtitle:         subtitleParts,
 			Badge:            badge,
-			Icon:             "◷",
+			Icon:             tuicore.TypeGlyph("sprint", string(sprint.State)),
 			IsEdited:         sprint.IsEdited,
 			HasProposedEdits: sprint.HasProposedEdits,
 			IsRetracted:      sprint.IsRetracted,

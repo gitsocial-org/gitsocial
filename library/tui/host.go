@@ -276,16 +276,16 @@ func (h *Host) currentTitleFor(view tuicore.View) string {
 			icon = "⌘"
 			extName = "Social"
 		case "pm":
-			icon = "▢"
+			icon = tuicore.TypeGlyph("issue", "")
 			extName = "PM"
 		case "release":
-			icon = "⏏"
+			icon = tuicore.TypeGlyph("release", "")
 			extName = "Release"
 		case "review":
-			icon = "⑂"
+			icon = tuicore.TypeGlyph("pull-request", "")
 			extName = "Review"
 		case "memo":
-			icon = "☞"
+			icon = tuicore.TypeGlyph("memo", "")
 			extName = "Memo"
 		}
 		return tuicore.SafeIcon(icon) + "  " + extName + " Configuration"

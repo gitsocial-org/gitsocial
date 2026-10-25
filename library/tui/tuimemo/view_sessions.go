@@ -36,7 +36,7 @@ func newSessionsView(workdir string) *sessionsView {
 
 // Title returns the panel header.
 func (v *sessionsView) Title() string {
-	return fmt.Sprintf("☞  Sessions · %d", len(v.sessions))
+	return fmt.Sprintf("%s  Sessions · %d", tuicore.TypeGlyph("memo", ""), len(v.sessions))
 }
 
 // HeaderInfo returns the position indicator for the title bar.

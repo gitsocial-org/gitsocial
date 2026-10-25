@@ -273,8 +273,8 @@ func TestFlows(t *testing.T) {
 	})
 	t.Run("PostTitlesAndSources", func(t *testing.T) {
 		for _, item := range []struct{ id, title string }{
-			{f.IssueID, "○  ⇡  Alice"}, {f.MilestoneID, "◇  ⇡  Alice"}, {f.SprintID, "◷  ⇡  Alice"},
-			{f.PRID, "⑂  ⇡  Alice"}, {f.ReleaseID, "⏏  ⇡  Alice"}, {f.MemoID, "☞  ⇡  Alice"},
+			{f.IssueID, "☐  ⇡  Alice"}, {f.MilestoneID, "◇  ⇡  Alice"}, {f.SprintID, "◷  ⇡  Alice"},
+			{f.PRID, "△  ⇡  Alice"}, {f.ReleaseID, "⏏  ⇡  Alice"}, {f.MemoID, "☞  ⇡  Alice"},
 		} {
 			assertRendersItem(t, h, tuicore.LocDetail(item.id), item.title)
 		}
@@ -458,7 +458,7 @@ func TestFlows(t *testing.T) {
 		}
 		ih := New(t, iso.Workdir, iso.CacheDir)
 		assertRendersItem(t, ih, tuicore.LocPMIssueDetail(child.Data.ID), "Parent", f.IssueSubject, f.MilestoneTitle, f.SprintTitle,
-			"Mar 4, 2030", "Alice  alice@example.com", "carol@example.com", "Blocked by", "Add keyboard shortcuts [closed]", "Related", "priority/high", "kind/bug", "Comments (1)", "Dana · via Github", "○  Theme tokens · Dana")
+			"Mar 4, 2030", "Alice  alice@example.com", "carol@example.com", "Blocked by", "Add keyboard shortcuts [closed]", "Related", "priority/high", "kind/bug", "Comments (1)", "Dana · via Github", "☐  Theme tokens · Dana")
 		ih.SendKey("m")
 		if got := ih.CurrentPath(); got != "/pm/milestone" {
 			t.Errorf("m on the issue: path = %q, want /pm/milestone", got)

@@ -1072,38 +1072,7 @@ func (v *postView) Title() string {
 	if v.post.ID == "" {
 		return "Thread"
 	}
-	icon := "•"
-	switch v.post.Type {
-	case social.PostTypeRepost:
-		icon = "↻"
-	case social.PostTypeQuote:
-		icon = "↻"
-	case social.PostTypeComment:
-		icon = "↩"
-	}
-	switch v.post.HeaderExt {
-	case "pm":
-		switch v.post.HeaderType {
-		case "issue":
-			if v.post.HeaderState == "closed" || v.post.HeaderState == "canceled" {
-				icon = "●"
-			} else {
-				icon = "○"
-			}
-		case "milestone":
-			icon = "◇"
-		case "sprint":
-			icon = "◷"
-		}
-	case "review":
-		if v.post.HeaderType == "pull-request" {
-			icon = "⑂"
-		}
-	case "release":
-		icon = "⏏"
-	case "memo":
-		icon = "☞"
-	}
+	icon := postGlyph(v.post)
 	if v.post.Display.IsUnpushed {
 		icon += "  ⇡"
 	}

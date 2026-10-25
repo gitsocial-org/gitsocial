@@ -708,10 +708,7 @@ func (v *boardView) renderWithSwimlanes(colWidth, availableHeight, totalWidth in
 
 // renderIssueCell renders a single issue cell.
 func (v *boardView) renderIssueCell(issue pm.Issue, width int, isSelected bool) string {
-	stateIcon := "○"
-	if issue.State == pm.StateClosed {
-		stateIcon = "●"
-	}
+	stateIcon := tuicore.TypeGlyph("issue", string(issue.State))
 	cell := tuicore.TruncateToWidth(fmt.Sprintf(" %s %s", stateIcon, issue.Subject), width-2)
 	style := lipgloss.NewStyle().Width(width)
 	if isSelected {

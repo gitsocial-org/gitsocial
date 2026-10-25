@@ -219,4 +219,6 @@ func (v *feedbackFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *feedbackFormView) Title() string { return "⑂  Review Feedback" }
+func (v *feedbackFormView) Title() string {
+	return tuicore.TypeGlyph("pull-request", "") + "  Review Feedback"
+}

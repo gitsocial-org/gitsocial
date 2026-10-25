@@ -237,7 +237,7 @@ func (v *memoFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the panel header.
-func (v *memoFormView) Title() string { return "☞  Edit Memo" }
+func (v *memoFormView) Title() string { return tuicore.TypeGlyph("memo", "") + "  Edit Memo" }
 
 // memoEditedMsg is dispatched after submitting an edit.
 type memoEditedMsg struct {
@@ -290,4 +290,4 @@ func (v *memoCreateFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the panel header.
-func (v *memoCreateFormView) Title() string { return "☞  New Memo" }
+func (v *memoCreateFormView) Title() string { return tuicore.TypeGlyph("memo", "") + "  New Memo" }

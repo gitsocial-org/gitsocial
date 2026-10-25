@@ -34,7 +34,7 @@ func newInheritsView(workdir string) *inheritsView {
 
 // Title returns the panel header for the view.
 func (v *inheritsView) Title() string {
-	return fmt.Sprintf("☞  Inherited Sources · %d", len(v.urls))
+	return fmt.Sprintf("%s  Inherited Sources · %d", tuicore.TypeGlyph("memo", ""), len(v.urls))
 }
 
 // HeaderInfo returns the position indicator for the title bar.

@@ -93,8 +93,8 @@ func TestPRToCard_basic(t *testing.T) {
 		Timestamp: time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC),
 	}
 	card := prToCardWithOptions(pr, prToCardOptions{})
-	if card.Header.Icon != "⑂" {
-		t.Errorf("Icon = %q, want ⑂", card.Header.Icon)
+	if card.Header.Icon != "△" {
+		t.Errorf("Icon = %q, want △", card.Header.Icon)
 	}
 	if card.Header.Title != "Add auth" {
 		t.Errorf("Title = %q, want 'Add auth'", card.Header.Title)
@@ -303,7 +303,8 @@ func TestReviewNotificationCardRenderer(t *testing.T) {
 		notif    review.ReviewNotification
 		wantIcon string
 	}{
-		{"fork-pr", review.ReviewNotification{Type: "fork-pr", ActorName: "User", PRSubject: "PR"}, "⑂"},
+		{"fork-pr", review.ReviewNotification{Type: "fork-pr", ActorName: "User", PRSubject: "PR"}, "△"},
+		{"pr-merged", review.ReviewNotification{Type: "pr-merged", ActorName: "User", PRSubject: "PR"}, "▲"},
 		{"approved", review.ReviewNotification{Type: "approved", ActorName: "User", Content: "LGTM"}, "✓"},
 		{"changes-requested", review.ReviewNotification{Type: "changes-requested", ActorName: "User", Content: "Fix"}, "✗"},
 		{"feedback", review.ReviewNotification{Type: "feedback", ActorName: "User", Content: "Note"}, "↩"},

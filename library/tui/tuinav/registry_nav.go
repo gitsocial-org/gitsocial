@@ -155,9 +155,9 @@ func RegisterCoreNavItems(r *NavRegistry) {
 	r.Register(NavItem{ID: "config.forks", Label: "Forks", Icon: "⑂", Parent: "config", Order: 1, Enabled: true})
 	r.Register(NavItem{ID: "config.site", Label: "Site", Icon: "◱", Parent: "config", Order: 7, Enabled: true})
 	r.Register(NavItem{ID: "config.social", Label: "Social", Icon: "⌘", Parent: "config", Order: 2, Enabled: true})
-	r.Register(NavItem{ID: "config.pm", Label: "PM", Icon: "▢", Parent: "config", Order: 3, Enabled: true})
+	r.Register(NavItem{ID: "config.pm", Label: "PM", Icon: "☐", Parent: "config", Order: 3, Enabled: true})
 	r.Register(NavItem{ID: "config.release", Label: "Release", Icon: "⏏", Parent: "config", Order: 4, Enabled: true})
-	r.Register(NavItem{ID: "config.review", Label: "Review", Icon: "⑂", Parent: "config", Order: 5, Enabled: true})
+	r.Register(NavItem{ID: "config.review", Label: "Review", Icon: "△", Parent: "config", Order: 5, Enabled: true})
 	r.Register(NavItem{ID: "config.memo", Label: "Memo", Icon: "☞", Parent: "config", Order: 6, Enabled: true})
 
 	// Order 11 is intentionally reserved for the planned DM extension so its
