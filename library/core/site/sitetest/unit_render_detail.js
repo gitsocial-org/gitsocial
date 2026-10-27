@@ -132,12 +132,13 @@ async function main() {
   const assets = findClass(release, "assets")[0];
   ok(!!assets, "a release detail carries an assets section");
   eq(findClass(assets, "asset-row").map((r) => textOf(r)),
-    ["gitsocial-linux.tar.gz", "gitsocial-mac.tar.gz", "SHA256SUMSchecksums", "sbom.jsonSBOM"],
-    "each artifact, the checksum file and the SBOM get a row, the last two tagged");
+    ["gitsocial-linux.tar.gz", "gitsocial-mac.tar.gz", "SHA256SUMS⏏ checksums", "sbom.json⏏ SBOM"],
+    "each artifact, the checksum file and the SBOM get a row, the last two with a reference chip of the release glyph");
+  eq(findClass(assets, "chip").map((c) => c.className), ["chip chip-ref", "chip chip-ref", "chip chip-prov chip-signed"], "the checksum and SBOM chips are references, the signature a provenance chip");
   eq(findClass(assets, "asset-row").map((r) => r.getAttribute("href")),
     ["https://example.com/dl/gitsocial-linux.tar.gz", "https://example.com/dl/gitsocial-mac.tar.gz", "https://example.com/dl/SHA256SUMS", "https://example.com/dl/sbom.json"],
     "a row with a resolvable URL is a link under the artifact base");
-  ok(text(assets).indexOf("signed-by ada@example.com") !== -1, "the signing identity is shown", text(assets));
+  ok(text(assets).indexOf("✓ signed ada@example.com") !== -1, "the signing identity is shown after its signed chip", text(assets));
   const bare = GS.releaseCard({ commit: { hash: sha("e2"), short: short("e2"), authorTime: 1, refs: [] }, header: { type: "release", tag: "v9" }, content: "v9", effectiveTime: 1, author: "Ada" });
   ok(!!bare, "a release with no assets still renders its card");
 
@@ -166,10 +167,10 @@ async function main() {
   await tick(60);
   eq(keys(fresh).filter((k) => ["ext", "type", "state"].indexOf(k) !== -1), [], "the route's ext and type and the head's state stay out");
   eq(keys(fresh).indexOf("labels"), -1, "the labels ride the chip row under the meta line, so no field row repeats them");
-  eq(keys(fresh), ["edits"], "a field no other component carries stays");
-  eq(keys(release), ["origin"], "a release lists one row: its head, chips and assets section carry the rest, the origin fields fold into one");
-  eq(findTag(findTag(release, "dd")[0], "a").map((a) => a.getAttribute("href")), ["https://example.com/releases/9"],
-    "the origin row links to the imported item");
+  eq(keys(fresh), [], "the edited marker carries edits, so no row repeats it");
+  eq(keys(release), [], "a release lists no row: its head, chips and assets section carry every field");
+  eq(findClass(findClass(release, "detail-meta")[0], "chip-origin").map((a) => a.tagName + " " + textOf(a) + "@" + a.getAttribute("href")), ["A ↗ github@https://example.com/releases/9"],
+    "the origin chip links to the imported item");
 
   console.log("=== the embedded context of a cross-repository reply ===");
   // f2 answers a post of another repository; its GitMsg-Ref carries the context the detail embeds.
@@ -187,7 +188,8 @@ async function main() {
   eq(findClass(meta, "author").map((n) => textOf(n) + " " + n.getAttribute("title")), [ADOPTED.expectAuthor + " alice@example.com"], "the edited copy names the original author and their email, not the editor's");
   eq(findClass(meta, "adopted").map(textOf), [ADOPTED.expectAdopted], "the detail names the repository it came from, as a row does");
   fire(findClass(adopted, "version-row")[1], "click");
-  const when = findClass(meta, "reltime").map((n) => n.getAttribute("title")).join();
+  // A version click paints a new meta block, so the test reads it again.
+  const when = findClass(findClass(adopted, "detail-meta")[0], "reltime").map((n) => n.getAttribute("title")).join();
   ok(when.startsWith("2025-01-"), "the detail shows the original time, not the copy's June commit", when);
   eq(keys(adopted).indexOf("adopts"), -1, "the meta row carries adopts, so no field row repeats it");
 
@@ -262,13 +264,18 @@ async function main() {
 
   console.log("=== the trailer rows link their refs ===");
   const ddLinks = (node) => findTag(findTag(node, "dl")[0], "dd").map((dd) => findTag(dd, "a").map((a) => a.getAttribute("href")).join(",") || textOf(dd));
-  eq(ddLinks(pr), ["#branch:main", "#commit:" + short("ab") + "@main", "#branch:feature", "#commit:" + short("ac") + "@feature"], "a pull request's base, head and tips link to the branch and commit routes, each tip on its branch");
-  eq(ddLinks(fpr).slice(2), ["https://example.com/fork#branch:feature", "#commit:" + short("ac") + "@"], "a cross-repository head links to its URL, and its tip takes a branchless route");
-  const dues = findTag(findTag((await GS.itemDetail(ctx, sha("d2"), "gitmsg/pm"))[0], "dl")[0], "dd").map((dd) => findTag(dd, "a").length + ":" + textOf(dd));
-  ok(dues.indexOf("0:2026-09-01") !== -1, "a value that is no ref stays as written", dues.join(" | "));
+  const flowLinks = (node) => findTag(findClass(findClass(node, "detail-meta")[0], "card-chips")[0], "a").map((a) => a.getAttribute("href"));
+  eq(findTag(pr, "dt").map(textOf), [], "a pull request with its branches and tips has no field rows");
+  eq(flowLinks(pr), ["#branch:feature", "#branch:main", "#commit:" + short("ac") + "@feature", "#commit:" + short("ab") + "@main"], "its branch pair links each branch log, then its tip pair, head first, each tip on its branch");
+  eq(flowLinks(fpr), ["https://example.com/fork#branch:feature", "#branch:main", "#commit:" + short("ac") + "@", "#commit:" + short("ab") + "@main"], "a cross-repository head links to its URL, and its tip takes a branchless route");
+  const dueDetail = (await GS.itemDetail(ctx, sha("d2"), "gitmsg/pm"))[0];
+  eq(findClass(dueDetail, "chip-due").map((c) => c.tagName + " " + textOf(c)), ["SPAN due 2026-09-01"], "a due date is a chip of the detail's chip row, as text");
+  eq(findTag(dueDetail, "dt").map(textOf).indexOf("due"), -1, "and not a field row");
   const fbd = (await GS.itemDetail(fbCtx, sha("ba"), "gitmsg/review"))[0];
   await tick(60);
-  eq(ddLinks(fbd), ["#file:notes.txt@feature:L2", "2", ref("aa", "review"), "approved"], "a feedback's file row opens its lines on the head branch, its pull-request row the pull request");
+  eq(keys(fbd), [], "a feedback lists no row: its verdict, anchor and pull request are chips");
+  eq(findClass(findClass(findClass(fbd, "detail-meta")[0], "card-chips")[0], "chip").map((c) => textOf(c) + "@" + (c.getAttribute("href") || "")),
+    ["approved@", "notes.txt:2@#file:notes.txt@feature:L2", "△ " + short("aa") + "@" + ref("aa", "review")], "its chip row holds the verdict, the anchor that opens its lines on the head branch, then the pull request");
   const labelRow = findClass(fresh, "card-chips")[0];
   eq(labelRow ? findClass(labelRow, "chip-label").map((a) => a.tagName + " " + textOf(a) + "@" + a.getAttribute("href")) : null, ["A kind/bug@#/search/label%3Akind%2Fbug"], "the label chip row links each label to the label search");
 
@@ -433,8 +440,9 @@ async function main() {
   };
   const pending = await forkDetail("f5");
   ok(pending.text.indexOf("Pending head") !== -1, "a pending entry shows the pull request from the manifest", pending.text.slice(0, 120));
-  ok(findClass(pending.node, "detail-meta")[0] && findClass(findClass(pending.node, "detail-meta")[0], "chip").map(textOf).indexOf("fork") !== -1, "the detail meta carries the fork chip");
-  ok(pending.text.indexOf("https://example.com/fork") !== -1, "and names the fork URL");
+  const forkChip = findClass(findClass(pending.node, "detail-meta")[0] || GS.el("div"), "chip").find((c) => textOf(c) === "⑂ fork");
+  ok(!!forkChip, "the chip row under the meta line carries the fork chip");
+  eq(forkChip ? forkChip.getAttribute("href") : null, "https://example.com/fork", "and links the fork URL");
   ok(!!pending.section && text(pending.section).indexOf(GS.FORK_DIFF_NOTICE.pending) !== -1, "a pending head gets its notice in place of the diff", pending.section && text(pending.section));
   const large = await forkDetail("f6");
   ok(!!large.section && text(large.section).indexOf(GS.FORK_DIFF_NOTICE.tooLarge) !== -1, "a too large head gets its notice in place of the diff", large.section && text(large.section));

@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, loadForkPulls, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, listHeading, headingRow, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, timelineHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, hydrateItems, loadForkPulls, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, setRefContext, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -85,6 +85,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     // caller that drives route() directly (headless tests) still lazy-loads
     // grammars from the right place without going through init().
     if (ctx && ctx.base) setGrammarBase(ctx.base + (window.GS_SHELL || ""));
+    setRefContext(ctx);
     // Capture the hash NOW: on an upgraded page, gs-upgrade's syncURL rewrites
     // the URL to a clean (hashless) page URL right after this handler's
     // synchronous prefix, so location.hash is unreliable after the first await.
@@ -125,6 +126,8 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     // routeSettled marks the route resolved and clears the watchdog — called on
     // every render exit (success, handled error, or the catch below).
     const routeSettled = () => { settled = true; if (watchdog && typeof clearTimeout === "function") clearTimeout(watchdog); };
+    // hydrateList fills the bodies of a list's drawn cards for their excerpts; a fork pull request has no body in the bucket.
+    const hydrateList = (items) => hydrateItems(ctx, items.filter((it) => !it.fork));
     try {
       if (ctx.refMode === undefined) {
         // Virtually every route consults the refs manifest right after this
@@ -165,31 +168,44 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
         const list = autoScrollListView(first,
           (items, box) => { lastRedraw = () => box.replaceChildren(...renderList(items, (it) => timelineCard(it, countsFor(counts, it.commit.short)), LIST_EMPTY.timeline)); lastRedraw(); },
           async () => { const next = await loadTimelineWindow(ctx, true); next.hydrated.then(redraw); return next; });
-        setView([...timelineHeading(list[0]), ...list]);
+        setView([cardsHeading("timeline", list[0]), ...list]);
         ctx.viewSettled = first.hydrated.then(redraw);
         loadInteractionCounts(ctx).then((c) => { counts = c; redraw(); }).catch(() => {});
       } else if (r.type === "index" && r.tab === "memos") {
+        // The counts load behind the first paint, as on the timeline, and redraw the cards when they land.
         const first = await loadExtItemsWindow(ctx, "memo", false);
-        setView([listHeading("memos"), ...pagedListView(first,
-          (items, box) => box.replaceChildren(...renderList(items, memoCard, LIST_EMPTY.memos)),
-          () => loadExtItemsWindow(ctx, "memo", true))]);
+        let counts = null, redraw = null;
+        const list = pagedListView(first,
+          (items, box) => { redraw = () => box.replaceChildren(...renderList(items, (it) => memoCard(it, countsFor(counts, it.commit.short)), LIST_EMPTY.memos)); redraw(); },
+          () => loadExtItemsWindow(ctx, "memo", true));
+        setView([cardsHeading("memos", list[0]), ...list]);
+        loadInteractionCounts(ctx).then((c) => { counts = c; if (redraw) redraw(); }).catch(() => {});
       } else if (r.type === "index" && r.tab === "issues") {
         // Full pm set (metadata-only, cheap and refreshed on every push) so the
         // state-filter counts are exact on first paint; the list paginates client-side.
         const [pm, counts] = await Promise.all([loadExtItemsAll(ctx, "pm"), loadInteractionCounts(ctx)]);
-        setView(issuesBody(pm, counts));
-      } else if (r.type === "index" && r.tab === "milestones") {
-        setView(milestonesBody(await loadExtItemsAll(ctx, "pm")));
-      } else if (r.type === "index" && r.tab === "sprints") {
-        setView(sprintsBody(await loadExtItemsAll(ctx, "pm")));
+        const view = issuesBody(pm, counts, hydrateList);
+        ctx.viewSettled = view[0].__hydrated;
+        setView(view);
+      } else if (r.type === "index" && (r.tab === "milestones" || r.tab === "sprints")) {
+        // The excerpts fill after the paint, as on the issues list; the counts redraw the cards when they land.
+        const body = r.tab === "milestones" ? milestonesBody : sprintsBody;
+        const pm = await loadExtItemsAll(ctx, "pm");
+        const view = body(pm, null, hydrateList);
+        ctx.viewSettled = view[0].__hydrated;
+        setView(view);
+        loadInteractionCounts(ctx).then((c) => setView(body(pm, c, hydrateList))).catch(() => {});
       } else if (r.type === "index" && r.tab === "prs") {
         // The fork area's pull requests join the repository's own, newest first.
         const [all, forks, counts] = await Promise.all([loadExtItemsAll(ctx, "review"), loadForkPulls(ctx), loadInteractionCounts(ctx)]);
         const pulls = all.filter((i) => (i.header.type || "") === "pull-request").concat(forks).sort((a, b) => b.effectiveTime - a.effectiveTime);
-        setView(filteredListView(pulls, (it) => prCard(it, countsFor(counts, it.commit.short)), "prs", PR_STATES, LIST_EMPTY.prs));
+        const view = filteredListView(pulls, (it) => prCard(it, countsFor(counts, it.commit.short)), "prs", PR_STATES, LIST_EMPTY.prs, hydrateList);
+        ctx.viewSettled = view[0].__hydrated;
+        setView(view);
       } else if (r.type === "index" && r.tab === "releases") {
         const relsOf = (items) => items.filter((i) => (i.header.type || "") === "release");
         const first = await loadExtItemsWindow(ctx, "release", false);
+        let counts = null, redraw = null;
         // The total-count line (the branches/tags treatment) fills in once the
         // full metadata index is resident; the windowed list never waits on it,
         // and the drained shards are the same ones "Load more" would fetch.
@@ -198,9 +214,11 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
           const n = relsOf(all).length;
           if (n) count.textContent = n + (n === 1 ? " release" : " releases");
         }).catch(() => {});
-        setView([headingRow("releases", count), ...pagedListView(first,
-          (items, box) => box.replaceChildren(...renderList(relsOf(items), releaseCard, LIST_EMPTY.releases)),
-          () => loadExtItemsWindow(ctx, "release", true))]);
+        const list = pagedListView(first,
+          (items, box) => { redraw = () => box.replaceChildren(...renderList(relsOf(items), (it) => releaseCard(it, countsFor(counts, it.commit.short)), LIST_EMPTY.releases)); redraw(); },
+          () => loadExtItemsWindow(ctx, "release", true));
+        setView([cardsHeading("releases", list[0], count), ...list]);
+        loadInteractionCounts(ctx).then((c) => { counts = c; if (redraw) redraw(); }).catch(() => {});
       } else if (r.type === "commit") {
         // A branchless route resolves by hash through the item indexes and the fork area first, so an item opens as an item and a code commit as its page.
         const found = r.branch ? null : (await findRefItem(ctx, "#commit:" + r.hash, "")) || (await findForkPull(ctx, r.hash) ? { branch: "gitmsg/review" } : null);

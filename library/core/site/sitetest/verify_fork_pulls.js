@@ -98,8 +98,8 @@ async function main() {
   const cards = findClass(viewNode, "card");
   ok("the list shows the fork pull request", cards.length === 1 && text(cards[0]).indexOf("Add a third note") !== -1, text(viewNode).slice(0, 160));
   const chips = findClass(cards[0] || viewNode, "chip").map(textOf);
-  ok("the row carries the fork chip", chips.indexOf("fork") !== -1, chips.join(" | "));
-  ok("the row meta names the fork URL", text(findClass(cards[0] || viewNode, "meta")[0]).indexOf(FORK_URL) !== -1, text(cards[0]));
+  ok("the row carries the fork chip", chips.indexOf("⑂ fork") !== -1, chips.join(" | "));
+  ok("the fork chip links the fork URL", findClass(cards[0] || viewNode, "chip-prov").some((c) => c.getAttribute("href") === FORK_URL), text(cards[0]));
   ok("the Open filter counts it", findClass(viewNode, "filter-chip").map(textOf).indexOf("Open 1") !== -1, findClass(viewNode, "filter-chip").map(textOf).join(" | "));
   ok("the list reads no pack", !log.some((u) => u.indexOf(fx.packName) !== -1), log.filter((u) => u.indexOf(base) === 0).join(" | "));
 
@@ -123,7 +123,7 @@ async function main() {
   ok("the head reads from the fork pack", reads.some((u) => u.indexOf(".gitsocial/forks/pack/" + fx.packName) !== -1), reads.join(" | "));
   ok("the base reads from the bucket, not the fork area", reads.some((u) => /\/objects\/[0-9a-f]{2}\/[0-9a-f]{38}$/.test(u)) && !reads.some((u) => u.indexOf("objects/pack/" + fx.packName) !== -1), reads.join(" | "));
   const metaChips = findClass(findClass(viewNode, "detail-meta")[0] || viewNode, "chip").map(textOf);
-  ok("the detail meta carries the fork chip", metaChips.indexOf("fork") !== -1, metaChips.join(" | "));
+  ok("the detail meta carries the fork chip", metaChips.indexOf("⑂ fork") !== -1, metaChips.join(" | "));
   // A branchless route to the fork pull request resolves through the fork area.
   ctx = GS.newContext(base);
   setHash("#commit:" + fx.pr);

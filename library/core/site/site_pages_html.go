@@ -4,6 +4,7 @@ package site
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"hash/fnv"
 	"html/template"
@@ -166,14 +167,15 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 <nav class="nav-list">{{range .Nav}}{{if .Section}}<div class="nav-group"><div class="nav-section">{{.Section}}</div>{{end}}{{range .Links}}<a href="{{.Href}}"{{if .Current}} class="active"{{end}}><span class="nav-icon">{{.Glyph}}</span>{{.Label}}</a>{{end}}{{if .Section}}</div>{{end}}{{end}}</nav>
 <div class="nav-footer"><a class="foot-brand" href="https://gitsocial.org"><svg class="logo-small" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m 191,100 c 0,3 -0.1,5 -0.3,8 C 187,148 158,181 118,189 75,198 33,175 16,135 -1,95 13,49 49,25 85,0 133,5 164,35 M 109,10 C 92,9 67,17 55,34 37,59 45,98 85,100 h 26 l 79,0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="round" /></svg><span>Built with GitSocial</span></a></div>
 </aside>
-{{end}}{{define "chip"}}{{if .Href}}<a class="chip{{if .Class}} {{.Class}}{{end}}" href="{{.Href}}">{{.Label}}</a>{{else}}<span class="chip{{if .Class}} {{.Class}}{{end}}">{{.Label}}</span>{{end}}{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{if .HeadingHref}}<a href="{{.HeadingHref}}">{{.Heading}}</a>{{else}}{{.Heading}}{{end}}</h1></div>{{end}}{{define "link"}}{{if .Href}}<a{{if .Class}} class="{{.Class}}"{{end}} href="{{.Href}}"{{if .Title}} title="{{.Title}}"{{end}}{{if .Rel}} rel="{{.Rel}}"{{end}}>{{.Text}}</a>{{else}}{{.Text}}{{end}}{{end}}{{define "bits"}}{{range $i, $b := .}}{{if $i}}{{if $b.Sep}}{{$b.Sep}}{{else}} · {{end}}{{end}}{{if $b.Href}}{{template "link" $b}}{{else if $b.Class}}<span class="{{$b.Class}}"{{if $b.Title}} title="{{$b.Title}}"{{end}}>{{$b.Text}}</span>{{else}}{{$b.Text}}{{end}}{{end}}{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{range $l}}{{template "link" .}}{{end}}{{end}}</p>
+{{end}}{{define "chip"}}{{if .Parts}}<span class="{{chipClass .}}">{{with chipLead .}}{{.}} {{end}}{{range $i, $p := .Parts}}{{if $i}} → {{end}}{{template "link" $p}}{{end}}</span>{{else if .Href}}<a class="{{chipClass .}}" href="{{.Href}}"{{if .Title}} title="{{.Title}}"{{end}}{{if .Rel}} rel="{{.Rel}}"{{end}}>{{with chipLead .}}{{.}} {{end}}{{.Label}}</a>{{else}}<span class="{{chipClass .}}"{{if .Title}} title="{{.Title}}"{{end}}>{{with chipLead .}}{{.}} {{end}}{{.Label}}</span>{{end}}{{end}}{{define "chiprow"}}{{if .}}<div class="card-chips">{{range .}}{{template "chip" .}} {{end}}</div>
+{{end}}{{end}}{{define "detailhead"}}<div class="card-head"><h1 class="subject">{{if .HeadingHref}}<a href="{{.HeadingHref}}">{{.Heading}}</a>{{else}}{{.Heading}}{{end}}</h1></div>{{end}}{{define "link"}}{{if .Href}}<a{{if .Class}} class="{{.Class}}"{{end}} href="{{.Href}}"{{if .Title}} title="{{.Title}}"{{end}}{{if .Rel}} rel="{{.Rel}}"{{end}}>{{.Text}}</a>{{else}}{{.Text}}{{end}}{{end}}{{define "bits"}}{{range $i, $b := .}}{{if $i}}{{if $b.Sep}}{{$b.Sep}}{{else}} · {{end}}{{end}}{{if $b.Href}}{{template "link" $b}}{{else if $b.Class}}<span class="{{$b.Class}}"{{if $b.Title}} title="{{$b.Title}}"{{end}}>{{$b.Text}}</span>{{else}}{{$b.Text}}{{end}}{{end}}{{end}}{{define "paras"}}{{range .}}<p>{{range $i, $l := .}}{{if $i}}<br>{{end}}{{range $l}}{{template "link" .}}{{end}}{{end}}</p>
 {{end}}{{end}}{{define "body"}}{{range .}}{{if .Notes}}<dl class="release-notes">{{range .Notes}}<dt><a class="hash" href="{{.Href}}">{{.Hash}}</a></dt><dd>{{.Text}}</dd>{{end}}</dl>
 {{else}}<p>{{range $i, $l := .Lines}}{{if $i}}<br>{{end}}{{range $l}}{{template "link" .}}{{end}}{{end}}</p>
 {{end}}{{end}}{{end}}{{define "rows"}}{{if .}}<dl>{{range .}}<dt>{{.Key}}</dt><dd>{{if gt (len .Bits) 1}}<span>{{end}}{{range $i, $b := .Bits}}{{if $i}}, {{end}}{{template "link" $b}}{{end}}{{if gt (len .Bits) 1}}</span>{{end}}</dd>{{end}}</dl>
-{{end}}{{end}}{{define "assetrow"}}{{if .Href}}<a class="asset-row" href="{{.Href}}" rel="noopener"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</a>{{else}}<div class="asset-row"><span class="mono selectable">{{.Name}}</span>{{if .Chip}}<span class="chip">{{.Chip}}</span>{{end}}</div>{{end}}{{end}}{{define "assets"}}<div class="assets"><div class="assets-head">Assets</div>
+{{end}}{{end}}{{define "assetchip"}}{{if .Chip}}<span class="chip chip-ref">⏏ {{.Chip}}</span>{{end}}{{end}}{{define "assetrow"}}{{if .Href}}<a class="asset-row" href="{{.Href}}" rel="noopener"><span class="mono selectable">{{.Name}}</span>{{template "assetchip" .}}</a>{{else}}<div class="asset-row"><span class="mono selectable">{{.Name}}</span>{{template "assetchip" .}}</div>{{end}}{{end}}{{define "assets"}}<div class="assets"><div class="assets-head">Assets</div>
 {{if .Artifacts}}<div class="asset-list">{{range .Artifacts}}{{template "assetrow" .}}{{end}}</div>
 {{end}}{{if .Extra}}<div class="asset-list">{{range .Extra}}{{template "assetrow" .}}{{end}}</div>
-{{end}}{{if .SignedBy}}<div class="asset-signed"><span class="meta">signed-by </span><span class="mono selectable">{{.SignedBy}}</span></div>
+{{end}}{{if .SignedBy}}<div class="asset-signed"><span class="chip chip-prov chip-signed" title="{{.SignedBy}}">✓ signed</span> <span class="mono selectable">{{.SignedBy}}</span></div>
 {{end}}</div>
 {{end}}{{define "diffhead"}}<span class="diff-status s-{{.Status}}">{{.Letter}}</span><span class="mono diff-path">{{.Path}}</span>{{if .Generated}}<span class="chip">generated</span>{{end}}<span class="diff-counts mono">{{if .Binary}}binary{{else}}<span class="cnt-add">+{{.Adds}}</span><span class="cnt-del">-{{.Dels}}</span>{{end}}</span>{{end}}{{define "diff"}}<div class="diff-section"><div class="diff-head"><span class="subject">Files changed{{if not .Notice}} ({{.Count}}){{end}}</span></div>
 {{if .Notice}}<div class="notice">{{.Notice}}</div>
@@ -188,21 +190,22 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{define "avatar"}}{{with .Avatar}}<span class="avatar {{.Class}}" title="{{.Title}}">{{.Initials}}</span>{{end}}{{end}}{{define "glyph"}}{{if .Glyph}}<span class="type-glyph{{if .GlyphClass}} {{.GlyphClass}}{{end}}"{{if .GlyphTitle}} title="{{.GlyphTitle}}"{{end}}>{{.Glyph}}</span>{{end}}{{end}}{{define "hometoggle"}}<summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></summary>
 {{end}}{{define "filerow"}}<a class="home-row" href="{{.Href}}">{{.Icon}}<span class="home-row-subject">{{.Name}}</span></a>
 {{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}>{{template "avatar" .}}{{template "glyph" .}}{{if or .Meta .BodyOnly}}<span class="meta">{{template "bits" .Meta}}{{if .Chip}} · <span class="marker">{{.Chip.Label}}</span>{{end}}</span>
-{{end}}{{if .BodyOnly}}{{if .Text}}<div class="body">{{.Text}}</div>
-{{end}}{{else}}<div class="card-head"><a class="subject" href="{{.Href}}">{{.Title}}</a>{{range .TailChips}} {{template "chip" .}}{{end}}</div>
-{{end}}</div>
+{{end}}{{template "chiprow" .Chips}}{{if .BodyOnly}}{{if .Text}}<div class="body body-clamp">{{.Text}}</div>
+{{end}}{{else}}<div class="card-head"><a class="subject" href="{{.Href}}">{{.Title}}</a></div>
+{{if .Excerpt}}<div class="excerpt"><div class="body body-clamp">{{.Excerpt}}</div></div>
+{{end}}{{end}}</div>
 {{end}}{{end}}{{define "item"}}{{template "head" .Chrome}}{{template "sidebar" .Chrome}}
 
 {{if .Heading}}{{template "detailhead" .}}
-{{end}}<div class="detail-meta"><span class="meta">{{template "bits" .Meta}}{{range .Chips}} {{template "chip" .}}{{end}}</span></div>
-{{if .Labels}}<div class="card-chips">{{range .Labels}}{{template "chip" .}} {{end}}</div>
-{{end}}
+{{end}}<div class="detail-meta">{{template "avatar" .}}<span class="meta">{{template "bits" .Meta}}{{range .MetaChips}} {{template "chip" .}}{{end}}</span>{{if .Chips}}<div class="card-chips">{{range .Chips}}{{template "chip" .}} {{end}}</div>{{end}}</div>
+
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
-{{else}}{{template "body" .Body}}{{template "rows" .Rows}}{{end}}{{with .Assets}}{{template "assets" .}}{{end}}{{with .Diff}}{{template "diff" .}}{{end}}{{if .Replies}}<div class="thread"><div class="thread-head">Comments ({{len .Replies}})</div>
+{{else}}{{template "rows" .Rows}}{{template "body" .Body}}{{end}}{{with .Quote}}<div class="{{.Variant}}"><div class="reply-quote-head meta">{{template "avatar" .}}{{template "glyph" .}}{{template "bits" .Meta}}</div><div class="body reply-quote-body body-clamp">{{template "paras" .Paras}}</div></div>
+{{end}}{{with .Assets}}{{template "assets" .}}{{end}}{{with .Diff}}{{template "diff" .}}{{end}}{{if .Replies}}<div class="thread"><div class="thread-head">Comments ({{len .Replies}})</div>
 {{range .Replies}}{{if .Depth}}<div class="comment-row"><div class="thread-rail">{{range $i := .Rail}}<span class="rail-guide"></span>{{end}}</div>{{end}}<div class="card {{.Variant}}">
 {{if .Tomb}}<p class="tomb meta">{{.Tomb}}</p>
-{{else}}{{if .GlyphLeads}}{{template "avatar" .}}{{template "glyph" .}}{{end}}<p class="meta">{{if not .GlyphLeads}}{{template "glyph" .}} {{end}}{{range .Chips}}{{template "chip" .}} {{end}}{{template "bits" .Meta}}</p>
-<div>{{template "paras" .Paras}}</div>{{end}}</div>{{if .Depth}}</div>{{end}}
+{{else}}{{template "avatar" .}}{{template "glyph" .}}<p class="meta">{{template "bits" .Meta}}</p>
+{{template "chiprow" .Chips}}<div class="body body-clamp">{{template "paras" .Paras}}</div>{{end}}</div>{{if .Depth}}</div>{{end}}
 {{end}}</div>
 {{end}}{{if .Omitted}}<p class="notice">{{.Omitted}} more replies not shown.</p>
 {{end}}<footer><a href="{{.Chrome.Base}}{{.ListDir}}/index.html">← {{.ListLabel}}</a> <a href="{{.Chrome.Base}}index.html">home</a></footer>
@@ -248,9 +251,11 @@ func sitePagesReadShellDir() string {
 var sitePagesShellScript = template.HTML(`<script>window.GS_SHELL="` + sitePagesShellDir + `";</script>`)
 
 var sitePageTemplates = template.Must(template.New("pages").Funcs(template.FuncMap{
-	"shellDir": func() string { return sitePagesShellDir },
-	"shellTag": func() template.HTML { return sitePagesShellScript },
-	"lineCap":  func() int { return sitePRDiffLineCap },
+	"shellDir":  func() string { return sitePagesShellDir },
+	"shellTag":  func() template.HTML { return sitePagesShellScript },
+	"lineCap":   func() int { return sitePRDiffLineCap },
+	"chipClass": sitePageChipClass,
+	"chipLead":  sitePageChipLead,
 }).Parse(
 	strings.NewReplacer("@CORE@", sitePagesCoreCSS, "@BOOT@", sitePagesBootScript).Replace(sitePageTemplateText)))
 
@@ -305,10 +310,14 @@ type sitePageChrome struct {
 	Nav           []sitePageNavGroup // the sidebar, with this page's own destination current (sitePageSidebar)
 }
 
-// sitePageChip is one state/type chip.
+// sitePageChip is one chip: a span, a link when it has an href, or the two linked sides of a branch pair.
 type sitePageChip struct {
+	Kind         string // state, count, reference, facet, date or provenance; "" on a head chip, whose class carries its look
 	Class, Label string
-	Href         string // a feedback's file chip links the app's file route (sitePageFeedbackFileRef)
+	Word, Icon   string // the relation word and the glyph before the label
+	Href, Rel    string
+	Title        string
+	Parts        []sitePageBit // the two sides of a pull request's branch or tip pair (siteBranchPart, siteTipPart)
 }
 
 // sitePageBit is one meta-row or body bit: plain text, or a classed span carrying a title, or a link.
@@ -336,7 +345,7 @@ type sitePageBodyBlock struct {
 	Notes []sitePageNoteRow
 }
 
-// sitePageAsset is one release asset row: its name, its download link when the release gives it one, and its kind chip.
+// sitePageAsset is one release asset row: its name, its download link when the release gives it one, and the label of its reference chip.
 type sitePageAsset struct{ Name, Href, Chip string }
 
 // sitePageAssets is a release's asset block: the artifacts, then the checksums and the SBOM, then the signing key.
@@ -351,9 +360,9 @@ type siteAvatar struct{ Class, Initials, Title string }
 
 // sitePageReply is one thread reply, rendered as the app's comment or feedback card.
 type sitePageReply struct {
-	Variant    string      // card variant classes ("comment", "feedback verdict-approved")
-	Avatar     *siteAvatar // nil on a feedback card, which keeps its glyph in its meta row
-	Chips      []sitePageChip
+	Variant    string         // card variant classes ("comment", "feedback verdict-approved")
+	Avatar     *siteAvatar    // nil on a feedback card
+	Chips      []sitePageChip // a feedback's verdict, suggestion mark and anchor, the chip row before its text
 	Glyph      string
 	GlyphClass string
 	GlyphTitle string
@@ -367,9 +376,6 @@ type sitePageReply struct {
 // rail guides without an index loop.
 func (r sitePageReply) Rail() []struct{} { return make([]struct{}, r.Depth) }
 
-// GlyphLeads reports whether the glyph leads the card as its mark column; a feedback card keeps it in its meta row, as feedbackCard in gs-render.js does.
-func (r sitePageReply) GlyphLeads() bool { return r.Variant == "comment" }
-
 // siteItemPageData feeds the "item" template.
 type siteItemPageData struct {
 	Chrome    sitePageChrome
@@ -379,12 +385,14 @@ type siteItemPageData struct {
 	Subject     string
 	Heading     string
 	HeadingHref string         // a release head links its tag page (siteHeadingHref)
-	Chips       []sitePageChip // the state and marker chips of the meta line (siteHeadChips)
-	Labels      []sitePageChip // the label chips under the meta line, as on a card (siteItemLabels)
+	MetaChips   []sitePageChip // the state pill and the marker chips that end the meta line (sitePageHeadChips)
+	Chips       []sitePageChip // the chip row under the meta line, as on a card: the version of a release, then siteItemChips
+	Avatar      *siteAvatar    // the author's face, the column of the meta block (sitePageAvatar)
 	Meta        []sitePageBit
 	Body        []sitePageBodyBlock
 	Rows        []sitePageRow // the header fields no other part of the page carries (siteItemPageRows)
 	Tomb        string
+	Quote       *sitePageReply  // the quote box of a reply, a quote or a repost, nil when its message quotes nothing (buildSiteQuote)
 	Assets      *sitePageAssets // a release's asset block, nil on every other type
 	Diff        *sitePageDiff   // a pull request's Files changed section, nil on every other type
 	Replies     []sitePageReply
@@ -417,11 +425,12 @@ type sitePageListEntry struct {
 	GlyphClass string      // its tint class (tg-open/tg-closed/tg-merged, else tg-<class type>)
 	GlyphTitle string      // the glyph's title attribute (sitePageGlyphTitle)
 	Chip       *sitePageChip
-	TailChips  []sitePageChip // chips after the subject, the app cardHead's trailing chips
+	Chips      []sitePageChip // the chip row before the title or the text: the identity chips, the reply count, then siteItemChips
 	Href       string
 	Title      string
 	BodyOnly   bool   // no head: the marker leads the meta row, and the text follows it (siteRowHead)
 	Text       string // a body-only row's own text, the first line of its content (pageRowText)
+	Excerpt    string // a titled row's excerpt, under the clamp with no toggle, since the row links its page (pageRowExcerpt)
 	Meta       []sitePageBit
 }
 
@@ -780,6 +789,19 @@ func siteHeadChips(it *sitePageItem, head string) []sitePageChip {
 	return append(chips, siteReleaseVersionChips(it, head)...)
 }
 
+// sitePageHeadChips splits a page's head chips by slot: the pills that end the meta line, open included, and the version that leads the chip row. Mirrors pageHeadChips in gs-core.js.
+func sitePageHeadChips(it *sitePageItem, head string) (pills, identity []sitePageChip) {
+	version := siteReleaseVersionChip(pageItemField(it, "version"), head)
+	for _, c := range siteHeadChips(it, head) {
+		if c.Label == version {
+			identity = append(identity, c)
+		} else {
+			pills = append(pills, c)
+		}
+	}
+	return pills, identity
+}
+
 // sitePageAuthorLabel picks a meta row's author label: the display name, else the email, else "unknown". Mirrors authorLabel in gs-core.js.
 func sitePageAuthorLabel(name, email string) string {
 	if name != "" {
@@ -915,38 +937,256 @@ func sitePageEditedBit(it *sitePageItem) sitePageBit {
 	return sitePageBit{Class: "edited", Text: text, Title: sitePagePreciseTime(pageEffectiveTime(it.Resolved))}
 }
 
-// sitePageBranchBit builds one side of a pull request's branch pair: a branch of this repository linked to its log, a browsable fork branch to its URL as written, anything else as text. Mirrors branchChipPart in gs-render.js.
-func sitePageBranchBit(ref string) sitePageBit {
-	if ref == "" {
+// siteBranchPart builds one side of a pull request's branch pair: a branch of this repository linked to its log, a browsable fork branch as owner/repo:branch linked to its URL, anything else as written. Mirrors branchPart in gs-core.js.
+func siteBranchPart(field string) sitePageBit {
+	repo, rest, found := strings.Cut(field, "#")
+	if !found {
+		repo, rest = "", field
+	}
+	name, isBranch := strings.CutPrefix(rest, "branch:")
+	if !isBranch {
+		name = ""
+	}
+	if repo == "" && name != "" {
+		return sitePageBit{Text: name, Href: "../index.html#branch:" + name}
+	}
+	if strings.HasPrefix(repo, "https://") {
+		segs := strings.FieldsFunc(strings.TrimSuffix(repo, ".git"), func(r rune) bool { return r == '/' })
+		owner := strings.Join(segs[max(len(segs)-2, 0):], "/")
+		return sitePageBit{Text: owner + ":" + name, Href: field, Rel: "noopener", Title: field}
+	}
+	if field == "" {
 		return sitePageTextBit("?")
 	}
-	p := protocol.ParseRef(ref)
-	if p.Repository == "" {
-		bit := sitePageBit{Text: p.Value}
-		if p.Type == protocol.RefTypeBranch && p.Value != "" {
-			bit.Href = "../index.html#branch:" + p.Value
-		}
-		return bit
-	}
-	bit := sitePageBit{Text: p.Repository + "#" + p.Value}
-	if strings.HasPrefix(p.Repository, "https://") {
-		bit.Href, bit.Rel = ref, "noopener"
-	}
-	return bit
+	return sitePageTextBit(field)
 }
 
-// siteItemPageMeta builds an item page's meta-line bits: the author, time and hash skeleton, the edited marker, then the page layer's own further bits.
+// sitePageAnyRefHashRe and sitePageCommitHashRe pull the hash out of a ref of any type and out of a commit ref. Mirror anyRefHash and refHash in gs-core.js.
+var (
+	sitePageAnyRefHashRe = regexp.MustCompile(`[#:]([0-9a-f]{7,40})(?:@|$)`)
+	sitePageCommitHashRe = regexp.MustCompile(`commit:([0-9a-f]{7,40})`)
+)
+
+// sitePageAnyRefHash returns the 12-character hash a relation field names, "" when it names none.
+func sitePageAnyRefHash(ref string) string {
+	m := sitePageAnyRefHashRe.FindStringSubmatch(ref)
+	if m == nil {
+		m = sitePageCommitHashRe.FindStringSubmatch(ref)
+	}
+	if m == nil {
+		return ""
+	}
+	return m[1][:min(len(m[1]), 12)]
+}
+
+// sitePageBotLoginRe and sitePageBotDomainRe match an automation in either half of the origin author email. Mirror BOT_LOGINS and BOT_DOMAINS in gs-core.js.
+var (
+	sitePageBotLoginRe  = regexp.MustCompile(`(?i)^(app/.+|.+\[bot\]|dependabot|dependabot-preview|vercel|netlify|claassistant|cla-bot|github-actions|codecov|codecov-commenter|renovate|renovate-bot|sonarcloud|sonarqubecloud|greptileai|coderabbitai|copilot|copilot-pull-request-reviewer|semantic-release-bot|allcontributors|imgbot|snyk-bot|mergify)$`)
+	sitePageBotDomainRe = regexp.MustCompile(`(?i)(^|\.)(coderabbit\.ai|dependabot\.com|renovateapp\.com|greptile\.com|codecov\.io|mergify\.com)$`)
+	sitePageGitHubIDRe  = regexp.MustCompile(`^\d+\+`)
+)
+
+// sitePageIsBotAuthor reports whether an origin author is an automation; the login drops GitHub's numeric id prefix. Mirrors isBotAuthor in gs-core.js.
+func sitePageIsBotAuthor(h map[string]string) bool {
+	login, domain, _ := strings.Cut(strings.ToLower(strings.TrimSpace(h["origin-author-email"])), "@")
+	login = sitePageGitHubIDRe.ReplaceAllString(login, "")
+	name := strings.ToLower(strings.TrimSpace(h["origin-author-name"]))
+	return (login != "" && sitePageBotLoginRe.MatchString(login)) || (domain != "" && sitePageBotDomainRe.MatchString(domain)) || strings.HasSuffix(name, "[bot]")
+}
+
+// siteChipKindClass maps a chip kind to its class; a value class such as chip-label rides beside it. Mirrors CHIP_KIND_CLASS in gs-core.js.
+var siteChipKindClass = map[string]string{"state": "state", "count": "count chip-count", "reference": "chip-ref", "facet": "chip-facet", "date": "chip-date", "provenance": "chip-prov"}
+
+// sitePageChipClass lists a chip's classes: chip, the class of its kind, then its value class. Mirrors chipClass in gs-core.js.
+func sitePageChipClass(c sitePageChip) string {
+	classes := []string{"chip"}
+	for _, class := range []string{siteChipKindClass[c.Kind], c.Class} {
+		if class != "" {
+			classes = append(classes, class)
+		}
+	}
+	return strings.Join(classes, " ")
+}
+
+// sitePageChipLead words what comes before a chip's label: the relation word, then the glyph. Mirrors chipLead in gs-core.js.
+func sitePageChipLead(c sitePageChip) string {
+	return strings.TrimSpace(c.Word + " " + c.Icon)
+}
+
+// siteItemRefs are the relation fields a chip names, in row order: the key, the word before the glyph, the glyph of the target, "" for the glyph of the type its branch holds, and whether a card caps it. Mirrors ITEM_REFS in gs-core.js.
+var siteItemRefs = []struct {
+	Key, Word, Icon string
+	Capped          bool
+}{
+	{"original", "", "", false}, {"reply-to", "", "↩", false}, {"pull-request", "", "△", false}, {"milestone", "", "◇", false}, {"sprint", "", "◷", false}, {"parent", "", "☐", false},
+	{"closes", "closes", "☐", true}, {"refs", "refs", "☐", true},
+	{"blocks", "blocks", "☐", true}, {"blocked-by", "blocked by", "☐", true}, {"related", "related", "☐", true},
+}
+
+// siteRefChipCap is the chips a card shows per capped relation before its "+n" chip. Mirrors REF_CHIP_CAP in gs-core.js.
+const siteRefChipCap = 3
+
+// siteRefGlyph names the glyph of a ref's target type, else of the type its branch holds, an issue for a pm ref. Mirrors refGlyph in gs-core.js.
+func siteRefGlyph(ref, typ string) string {
+	ext := "pm"
+	if _, branch, ok := strings.Cut(ref, "@"); ok && strings.HasPrefix(branch, "gitmsg/") {
+		ext = strings.TrimPrefix(branch, "gitmsg/")
+	}
+	typ = cmp.Or(typ, sitePageDefaultTypes[ext])
+	if typ == "issue" {
+		return "☐"
+	}
+	return sitePageTypeGlyph[typ]
+}
+
+// siteRelationChips lists the reference chips of one relation field: a ref of this repository links its route and names its target's subject, else its short hash, and takes the glyph of its target's type from types; a browsable cross-repository ref links its URL; a value that is not refs alone is one chip as written. more caps a card's list and links its "+n" chip. Mirrors relationChips in gs-core.js.
+func siteRelationChips(word, icon, val string, capped bool, subjects, types map[string]string, more string) []sitePageChip {
+	refs := sitePageListBits(val, sitePageTextBit)
+	if len(refs) == 0 {
+		return nil
+	}
+	for _, r := range refs {
+		if !sitePageHeaderRefRe.MatchString(r.Text) {
+			return []sitePageChip{{Kind: "reference", Word: word, Icon: icon, Label: val}}
+		}
+	}
+	shown := refs
+	if more != "" && capped && len(refs) > siteRefChipCap {
+		shown = refs[:siteRefChipCap]
+	}
+	chips := make([]sitePageChip, 0, len(shown)+1)
+	for _, r := range shown {
+		chip := sitePageChip{Kind: "reference", Word: word, Label: r.Text, Title: r.Text}
+		repo, _, _ := strings.Cut(r.Text, "#")
+		typ := ""
+		if repo == "" {
+			chip.Href = "../index.html" + r.Text
+		} else if strings.HasPrefix(repo, "https://") {
+			chip.Href, chip.Rel = r.Text, "noopener"
+		}
+		if m := sitePageCommitHashRe.FindStringSubmatch(r.Text); m != nil {
+			hash := m[1][:min(len(m[1]), 12)]
+			chip.Label = hash
+			if subject := subjects[hash]; repo == "" && subject != "" {
+				chip.Label = subject
+			}
+			if repo == "" {
+				typ = types[hash]
+			}
+		}
+		chip.Icon = cmp.Or(icon, siteRefGlyph(r.Text, typ))
+		chips = append(chips, chip)
+	}
+	if len(shown) < len(refs) {
+		chips = append(chips, sitePageChip{Kind: "reference", Label: "+" + strconv.Itoa(len(refs)-len(shown)), Href: more})
+	}
+	return chips
+}
+
+// siteDueOverdue reports a due date before today on an item that is open, or has no state; today is the UTC date. Mirrors dueOverdue in gs-core.js.
+func siteDueOverdue(due, state string) bool {
+	if len(due) < 10 || !siteDateRe.MatchString(due[:10]) || (state != "" && state != "open") {
+		return false
+	}
+	return due[:10] < time.Now().UTC().Format(time.DateOnly)
+}
+
+// siteDateRe matches a YYYY-MM-DD date.
+var siteDateRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
+// siteTipPart builds one side of a pull request's tip pair: a hash by its short, linked to its commit on the branch of this repository it points into, else the value as written, "?" when absent. Mirrors tipPart in gs-core.js.
+func siteTipPart(key string, h map[string]string) sitePageBit {
+	val := h[key]
+	if !sitePageTipRe.MatchString(val) {
+		return sitePageTextBit(cmp.Or(val, "?"))
+	}
+	return sitePageBit{Text: val[:min(len(val), 12)], Href: "../index.html#commit:" + val + "@" + sitePageTipBranch(key, h)}
+}
+
+// siteItemChips lists an item's chip row in kind order: the sprint dates first; the issue count, none at zero, and the asset count; the branch pair, the tip pair, stacked and the relations; the due date; priority, assignees, reviewers and labels; origin and bot. subjects names a reference target by its short hash and types its type, more is the page a card's "+n" chip opens, "" on a page, which shows every chip, and issues the member issues of a milestone or sprint entry. Mirrors itemChips in gs-core.js.
+func siteItemChips(it *sitePageItem, subjects, types map[string]string, more string, issues int) []sitePageChip {
+	h := sitePageItemHeader(it)
+	t := pageItemType(it)
+	var chips []sitePageChip
+	if start, end := h["start"], h["end"]; t == "sprint" && (start != "" || end != "") {
+		chips = append(chips, sitePageChip{Kind: "date", Label: cmp.Or(start, "?") + " → " + cmp.Or(end, "?")})
+	}
+	if issues > 0 {
+		chips = append(chips, sitePageChip{Kind: "count", Icon: "☐", Label: siteCountLabel(issues, "issue", "issues")})
+	}
+	if t == "release" {
+		if label := siteReleaseAssetLabel(h["artifacts"]); label != "" {
+			chips = append(chips, sitePageChip{Kind: "count", Icon: sitePageTypeGlyph["release"], Label: label})
+		}
+	}
+	if t == "pull-request" && (h["head"] != "" || h["base"] != "") {
+		head, base := siteBranchPart(h["head"]), siteBranchPart(h["base"])
+		chips = append(chips, sitePageChip{Kind: "reference", Icon: "⎇", Label: head.Text + " → " + base.Text, Parts: []sitePageBit{head, base}})
+	}
+	if t == "pull-request" && (h["base-tip"] != "" || h["head-tip"] != "") {
+		head, base := siteTipPart("head-tip", h), siteTipPart("base-tip", h)
+		chips = append(chips, sitePageChip{Kind: "reference", Icon: sitePageTypeGlyph["commit"], Label: head.Text + " → " + base.Text, Parts: []sitePageBit{head, base}})
+	}
+	if deps := h["depends-on"]; deps != "" {
+		chip := sitePageChip{Kind: "reference", Icon: sitePageTypeGlyph["pull-request"], Label: "stacked"}
+		if under := sitePageAnyRefHash(strings.Split(deps, ",")[0]); under != "" {
+			chip.Href = "../index.html#commit:" + under + "@gitmsg/review"
+		}
+		chips = append(chips, chip)
+	}
+	for _, rel := range siteItemRefs {
+		if val := h[rel.Key]; val != "" {
+			chips = append(chips, siteRelationChips(rel.Word, rel.Icon, val, rel.Capped, subjects, types, more)...)
+		}
+	}
+	if due := h["due"]; due != "" {
+		class := "chip-due"
+		if siteDueOverdue(due, h["state"]) {
+			class += " overdue"
+		}
+		chips = append(chips, sitePageChip{Kind: "date", Class: class, Label: "due " + due})
+	}
+	labels := sitePageListBits(h["labels"], sitePageTextBit)
+	for _, l := range labels {
+		if level, ok := strings.CutPrefix(l.Text, "priority/"); ok {
+			chips = append(chips, sitePageChip{Kind: "facet", Class: "chip-priority prio-" + level, Label: level, Href: sitePageSearchHref("label", l.Text)})
+		}
+	}
+	for _, a := range sitePageListBits(h["assignees"], sitePageTextBit) {
+		local, _, _ := strings.Cut(a.Text, "@")
+		chips = append(chips, sitePageChip{Kind: "facet", Class: "chip-assignee", Icon: "☛", Label: cmp.Or(local, a.Text), Href: sitePageSearchHref("assignee", a.Text)})
+	}
+	for _, r := range sitePageListBits(h["reviewers"], sitePageTextBit) {
+		local, _, _ := strings.Cut(r.Text, "@")
+		chips = append(chips, sitePageChip{Kind: "facet", Icon: "✎", Label: cmp.Or(local, r.Text), Href: sitePageSearchHref("reviewer", r.Text)})
+	}
+	for _, l := range labels {
+		if !strings.HasPrefix(l.Text, "priority/") && !strings.HasPrefix(l.Text, "status/") {
+			chips = append(chips, sitePageChip{Kind: "facet", Class: "chip-label", Label: l.Text, Href: sitePageSearchHref("label", l.Text)})
+		}
+	}
+	if h["origin-platform"] != "" || h["origin-url"] != "" || h["origin-author-name"] != "" {
+		platform, u := cmp.Or(h["origin-platform"], "imported"), h["origin-url"]
+		chip := sitePageChip{Kind: "provenance", Class: "chip-origin", Icon: "↗", Label: platform, Title: cmp.Or(u, platform)}
+		if lower := strings.ToLower(u); strings.HasPrefix(lower, "http:") || strings.HasPrefix(lower, "https:") {
+			chip.Href, chip.Rel = u, "noopener"
+		}
+		chips = append(chips, chip)
+	}
+	if sitePageIsBotAuthor(h) {
+		chips = append(chips, sitePageChip{Kind: "provenance", Class: "chip-bot", Icon: "⚙", Label: "bot", Title: cmp.Or(h["origin-author-email"], "automated author")})
+	}
+	return chips
+}
+
+// siteItemPageMeta builds an item page's meta-line bits: the author, the glyph, the time and the hash, then the edited and adopted markers.
 func siteItemPageMeta(it *sitePageItem) []sitePageBit {
 	t := pageItemType(it)
 	// The page has no mark column, so the face leads the line and the glyph follows the name, as versionMetaRow in gs-render.js does.
-	av := sitePageAvatar(pageDisplayAuthor(it.Msg))
 	state := pageItemField(it, "state")
 	glyph, glyphClass := sitePageGlyph(t, state)
-	author := sitePageAuthorLink(it.Msg)
-	author.Sep = " "
 	bits := []sitePageBit{
-		{Class: "avatar " + av.Class, Text: av.Initials, Title: av.Title},
-		author,
+		sitePageAuthorLink(it.Msg),
 		{Class: "type-glyph " + glyphClass, Text: glyph, Title: sitePageGlyphTitle(t, state), Sep: " "},
 		sitePageTimeBit(pageEffectiveTime(it.Msg)),
 		sitePageHashBit(it.Msg.Short, it.Msg.Short+".html"),
@@ -957,32 +1197,16 @@ func siteItemPageMeta(it *sitePageItem) []sitePageBit {
 	if bit, ok := sitePageAdoptedBit(it); ok {
 		bits = append(bits, bit)
 	}
-	bits = append(bits, sitePageTextBit(sitePageTypeLabel(t)))
-	switch t {
-	case "pull-request":
-		if base, head := pageItemField(it, "base"), pageItemField(it, "head"); base != "" || head != "" {
-			baseBit := sitePageBranchBit(base)
-			baseBit.Sep = " → "
-			bits = append(bits, sitePageBranchBit(head), baseBit)
-		}
-	case "milestone":
-		if due := pageItemField(it, "due"); due != "" {
-			bits = append(bits, sitePageTextBit("due "+due))
-		}
-	case "sprint":
-		if start, end := pageItemField(it, "start"), pageItemField(it, "end"); start != "" || end != "" {
-			bits = append(bits, sitePageTextBit(start+" → "+end))
-		}
-	}
-	if t == "release" && pageItemField(it, "signed-by") != "" {
-		bits = append(bits, sitePageTextBit("signed"))
-	}
 	return bits
 }
 
-// sitePageTrailerSkip are the header fields another part of an item page carries: the route, the chips of the head and the meta row. Mirrors TRAILER_SKIP in gs-render.js.
+// sitePageTrailerSkip are the header fields another part of an item page carries: the route, the chips of the head, the meta row and the chip row; the edited marker carries edits and the thread root. Mirrors TRAILER_SKIP in gs-render.js.
 var sitePageTrailerSkip = map[string]bool{
 	"v": true, "ext": true, "type": true, "state": true, "draft": true, "retracted": true, "tag": true, "version": true, "prerelease": true, "adopts": true, "labels": true,
+	"base": true, "head": true, "base-tip": true, "head-tip": true, "depends-on": true, "due": true, "start": true, "end": true, "assignees": true, "reviewers": true,
+	"milestone": true, "sprint": true, "parent": true, "closes": true, "refs": true, "blocks": true, "blocked-by": true, "related": true,
+	"original": true, "reply-to": true, "pull-request": true, "edits": true, "root": true,
+	"review-state": true, "file": true, "old-line": true, "new-line": true, "old-line-end": true, "new-line-end": true,
 	"origin-author-name": true, "origin-author-email": true, "origin-time": true, "origin-platform": true, "origin-url": true,
 }
 
@@ -991,24 +1215,6 @@ var sitePageReleaseSkip = map[string]bool{"artifacts": true, "artifact-url": tru
 
 // sitePageTipKeys are the header fields that carry a bare commit hash. Mirrors TIP_KEYS in gs-render.js.
 var sitePageTipKeys = map[string]bool{"base-tip": true, "head-tip": true, "merge-base": true, "merge-head": true, "commit": true}
-
-// siteItemLabels renders an item's labels as chips, a priority label with its tint, each linked to its search. Mirrors the label chips of headerChips in gs-render.js.
-func siteItemLabels(it *sitePageItem) []sitePageChip {
-	var chips []sitePageChip
-	for _, l := range strings.Split(pageItemField(it, "labels"), ",") {
-		if l = strings.TrimSpace(l); l == "" || strings.HasPrefix(l, "status/") {
-			continue
-		}
-		class, label := "chip-label", l
-		// A priority chip shows the value alone, as headerChips in gs-render.js does.
-		if strings.HasPrefix(l, "priority/") {
-			label = strings.TrimPrefix(l, "priority/")
-			class = "chip-priority prio-" + label
-		}
-		chips = append(chips, sitePageChip{Class: class, Label: label, Href: sitePageSearchHref("label", l)})
-	}
-	return chips
-}
 
 // sitePageFacetKeys maps a header field of emails or labels to the search facet that lists the items carrying one. Mirrors FACET_KEYS in gs-render.js.
 var sitePageFacetKeys = map[string]string{"assignees": "assignee", "reviewers": "reviewer", "labels": "label"}
@@ -1106,7 +1312,7 @@ func sitePageTrailerBits(key, val string, h map[string]string) []sitePageBit {
 	return sitePageRefListBits(val)
 }
 
-// siteItemPageRows lists an item page's definition rows in key order: each header field no other part of the page carries, and the origin fields folded into one linked row. Mirrors trailerRows in gs-render.js, pinned by TestParityItemPageMeta.
+// siteItemPageRows lists an item page's definition rows in key order: each header field no other part of the page carries. Mirrors trailerRows in gs-render.js, pinned by TestParityItemPageMeta.
 func siteItemPageRows(it *sitePageItem) []sitePageRow {
 	h := sitePageItemHeader(it)
 	values := map[string][]sitePageBit{}
@@ -1115,16 +1321,6 @@ func siteItemPageRows(it *sitePageItem) []sitePageRow {
 			continue
 		}
 		values[key] = sitePageTrailerBits(key, val, h)
-	}
-	if platform, u := h["origin-platform"], h["origin-url"]; platform != "" || u != "" {
-		bit := sitePageTextBit(platform)
-		if platform == "" {
-			bit.Text = u
-		}
-		if lower := strings.ToLower(u); strings.HasPrefix(lower, "http:") || strings.HasPrefix(lower, "https:") {
-			bit.Href, bit.Rel = u, "noopener"
-		}
-		values["origin"] = []sitePageBit{bit}
 	}
 	rows := make([]sitePageRow, 0, len(values))
 	for _, key := range slices.Sorted(maps.Keys(values)) {
@@ -1212,19 +1408,69 @@ func buildSiteReply(r, root *sitePageItem, link func(ref string) string) sitePag
 		s.Variant, s.Avatar = "feedback", nil
 		if verdict := sitePageFeedbackVerdict(r); verdict != "" {
 			s.Variant += " verdict-" + verdict
-			s.Chips = append(s.Chips, sitePageChip{Class: "verdict-" + verdict, Label: strings.ReplaceAll(verdict, "-", " ")})
-		}
-		if anchor := sitePageFeedbackAnchor(r); anchor != "" {
-			s.Chips = append(s.Chips, sitePageChip{Label: anchor, Href: sitePageFeedbackFileRef(r, root)})
+			s.Chips = append(s.Chips, sitePageChip{Kind: "state", Class: "verdict-" + verdict, Label: strings.ReplaceAll(verdict, "-", " ")})
 		}
 		if pageItemField(r, "suggestion") == "true" {
-			s.Meta = append(s.Meta, sitePageTextBit("suggestion"))
+			s.Chips = append(s.Chips, sitePageChip{Kind: "state", Class: "chip-suggestion", Label: "suggestion"})
 		}
-	} else if r.InReplyTo != "" {
-		s.Meta = append(s.Meta, sitePageTextBit("reply to "+r.InReplyTo))
+		if anchor := sitePageFeedbackAnchor(r); anchor != "" {
+			s.Chips = append(s.Chips, sitePageChip{Kind: "reference", Label: anchor, Href: sitePageFeedbackFileRef(r, root)})
+		}
 	}
 	s.Paras = sitePageParas(pageItemBody(r), link)
 	return s
+}
+
+// siteQuotedText reads the quoted lines of a GitMsg-Ref, each without its quote marker, up to the first line that is not quoted. Mirrors parseRefs in gs-core.js.
+func siteQuotedText(metadata string) string {
+	var lines []string
+	for _, line := range strings.Split(metadata, "\n") {
+		rest, ok := strings.CutPrefix(strings.TrimLeft(line, " "), ">")
+		if !ok {
+			break
+		}
+		lines = append(lines, strings.TrimPrefix(rest, " "))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// buildSiteQuote builds the quote box of a reply, a quote or a repost from the GitMsg-Ref its message carries for what it answers, reply-to before original; nil when the message quotes nothing. Mirrors replyQuoteBlock in gs-render.js.
+func buildSiteQuote(it *sitePageItem, link func(ref string) string) *sitePageReply {
+	t := pageItemType(it)
+	if t != "comment" && t != "quote" && t != "repost" {
+		return nil
+	}
+	msg := protocol.ParseMessage(it.Msg.Message)
+	if msg == nil {
+		return nil
+	}
+	for _, key := range []string{"reply-to", "original"} {
+		val := pageItemField(it, key)
+		if val == "" {
+			continue
+		}
+		for _, ref := range msg.References {
+			quoted := siteQuotedText(ref.Metadata)
+			if quoted == "" || (ref.Ref != val && (sitePageAnyRefHash(ref.Ref) == "" || sitePageAnyRefHash(ref.Ref) != sitePageAnyRefHash(val))) {
+				continue
+			}
+			author := &sitePageMsg{Author: ref.Author, Email: ref.Email}
+			glyph, glyphClass := sitePageGlyph(ref.Fields["type"], "")
+			q := &sitePageReply{Variant: "reply-quote dimmed", Avatar: sitePageAvatar(ref.Author, ref.Email), Glyph: glyph, GlyphClass: glyphClass, GlyphTitle: ref.Fields["type"], Meta: []sitePageBit{sitePageAuthorLink(author)}, Paras: sitePageParas(quoted, link)}
+			if t == "repost" {
+				q.Variant = "reply-quote"
+			}
+			if at, err := time.Parse(time.RFC3339, ref.Time); err == nil {
+				q.Meta = append(q.Meta, sitePageTimeBit(at.Unix()))
+			}
+			if hash := pageLocalCommitHash(ref.Ref); hash != "" {
+				_, branch, _ := strings.Cut(ref.Ref, "@")
+				q.Meta = append(q.Meta, sitePageHashBit(hash, "../index.html#commit:"+hash+"@"+branch))
+			}
+			return q
+		}
+	}
+	return nil
 }
 
 // siteReleaseAssetHref builds an asset's download link from the release's artifact-url base, "" when it has none or the result is not a fetchable target. Mirrors assetRow's gate in gs-render.js.
@@ -1377,7 +1623,7 @@ func siteItemPageDatedTitle(it *sitePageItem, subject string) string {
 }
 
 // buildSiteItemPage assembles one root's item-page data: chrome, meta line, body or tombstone, release extras, a pull request's diff and the capped thread; titles names every root that has a page.
-func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, titles map[string]string, src *objstore.LocalCommitSource, refs map[string]string) siteItemPageData {
+func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, titles, types map[string]string, src *objstore.LocalCommitSource, refs map[string]string) siteItemPageData {
 	route := "commit:" + it.Msg.Short + "@gitmsg/" + list.Ext
 	link := sitePageRefHref(site, titles)
 	subject, body := protocol.SplitSubjectBody(pageItemBody(it))
@@ -1407,8 +1653,10 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		siteLinkNoteRows(d.Body, site)
 		d.Rows = siteItemPageRows(it)
 	}
-	d.Chips = siteHeadChips(it, d.Heading)
-	d.Labels = siteItemLabels(it)
+	pills, identity := sitePageHeadChips(it, d.Heading)
+	d.MetaChips = pills
+	d.Chips = append(identity, siteItemChips(it, titles, types, "", 0)...)
+	d.Avatar = sitePageAvatar(pageDisplayAuthor(it.Msg))
 	d.HeadingHref = siteHeadingHref(it, d.Heading)
 	icon, repoIcon := sitePageIcons(site.Favicon, "../")
 	d.Chrome = sitePageChrome{
@@ -1429,6 +1677,9 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 	}
 	if pageItemType(it) == "release" {
 		d.Assets = buildSiteReleaseAssets(it)
+	}
+	if !it.Retracted {
+		d.Quote = buildSiteQuote(it, link)
 	}
 	d.Diff = buildSitePRDiff(it, site, src, refs)
 	threadBytes := 0
@@ -1452,7 +1703,7 @@ func siteRowChips(it *sitePageItem, head string) []sitePageChip {
 	return chips
 }
 
-// siteRowHeadChips splits a row's head chips by slot: the pill leading the subject, then the release version trailing it.
+// siteRowHeadChips splits a row's head chips by slot: the pill the author line words, then the release version that leads the chip row.
 func siteRowHeadChips(it *sitePageItem, head string) (*sitePageChip, []sitePageChip) {
 	chips := siteRowChips(it, head)
 	if len(chips) == 0 || chips[0].Label == siteReleaseVersionChip(pageItemField(it, "version"), head) {
@@ -1481,12 +1732,6 @@ func siteReleaseAssetLabel(artifacts string) string {
 // siteRowMeta builds a row's meta line: the author, the date, the hash, then the edited marker.
 func siteRowMeta(it *sitePageItem, href string) []sitePageBit {
 	meta := []sitePageBit{sitePageAuthorLink(it.Msg), sitePageTimeBit(pageEffectiveTime(it.Msg)), sitePageHashBit(it.Msg.Short, href)}
-	// A release is named by its tag, so its row counts assets after the hash.
-	if pageItemType(it) == "release" {
-		if label := siteReleaseAssetLabel(pageItemField(it, "artifacts")); label != "" {
-			meta = append(meta, sitePageTextBit(label))
-		}
-	}
 	if it.Edited && !it.Retracted {
 		meta = append(meta, sitePageEditedBit(it))
 	}
@@ -1509,17 +1754,99 @@ func siteRowHead(it *sitePageItem) sitePageListEntry {
 	t := pageItemType(it)
 	if sitePageBodyOnly(t) {
 		text := pageRowText(it)
-		chip, _ := siteRowHeadChips(it, text)
-		return sitePageListEntry{BodyOnly: true, Chip: chip, Text: text}
+		chip, identity := siteRowHeadChips(it, text)
+		return sitePageListEntry{BodyOnly: true, Chip: chip, Chips: identity, Text: text}
 	}
 	subject, _ := protocol.SplitSubjectBody(pageItemBody(it))
 	head := siteHeadSubject(t, pageItemField(it, "tag"), pageItemField(it, "version"), subject)
-	chip, tail := siteRowHeadChips(it, head)
-	return sitePageListEntry{Chip: chip, TailChips: tail, Title: head}
+	chip, identity := siteRowHeadChips(it, head)
+	excerpt := pageRowExcerpt(it)
+	// A release headed by its tag leads its excerpt with its subject, as releaseCard in gs-render.js does.
+	if lead := siteSubjectText(subject); t == "release" && lead != "" && lead != head && !it.Retracted {
+		excerpt = strings.TrimSpace(lead + "\n" + excerpt)
+	}
+	return sitePageListEntry{Chip: chip, Chips: identity, Title: head, Excerpt: excerpt}
 }
 
-// buildSiteListEntry renders one root as a list page's row; defaultType suppresses the type bit on a type's own list.
-func buildSiteListEntry(it *sitePageItem, defaultType string) sitePageListEntry {
+// siteEntryCounts are the count chips of one list entry: its replies, the reposts and quotes that name it, the latest verdict of each reviewer, its sub-issues and the member issues of a milestone or sprint.
+type siteEntryCounts struct{ Replies, Reposts, Quotes, Approved, ChangesRequested, Sub, Issues int }
+
+// siteCountLabel words a count with its noun, singular for one.
+func siteCountLabel(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return strconv.Itoa(n) + " " + many
+}
+
+// siteCountChips lists an entry's interaction counts as count chips of glyph and number, none for a zero count. Mirrors countChips in gs-render.js.
+func siteCountChips(c siteEntryCounts) []sitePageChip {
+	var chips []sitePageChip
+	for _, p := range []struct {
+		icon, class string
+		n           int
+	}{{"↩", "", c.Replies}, {"↻", "", c.Reposts}, {"❞", "", c.Quotes}, {"✓", "review-ok", c.Approved}, {"✗", "review-no", c.ChangesRequested}} {
+		if p.n > 0 {
+			chips = append(chips, sitePageChip{Kind: "count", Class: p.class, Icon: p.icon, Label: strconv.Itoa(p.n)})
+		}
+	}
+	return chips
+}
+
+// siteVerdicts counts the latest verdict of each reviewer among a pull request's replies. Mirrors loadInteractionCounts in gs-core.js.
+func siteVerdicts(replies []*sitePageItem) (approved, changes int) {
+	latest := map[string]*sitePageItem{}
+	for _, r := range replies {
+		if r.Retracted || sitePageFeedbackVerdict(r) == "" {
+			continue
+		}
+		_, email := pageDisplayAuthor(r.Msg)
+		if prev := latest[strings.ToLower(email)]; prev == nil || pageEffectiveTime(r.Msg) >= pageEffectiveTime(prev.Msg) {
+			latest[strings.ToLower(email)] = r
+		}
+	}
+	for _, r := range latest {
+		if sitePageFeedbackVerdict(r) == "approved" {
+			approved++
+		} else {
+			changes++
+		}
+	}
+	return approved, changes
+}
+
+// siteEntryTallies counts, by the short hash of each target, the reposts and quotes that name it, the sub-issues of an issue and the member issues of a milestone or sprint, from the index alone. Mirrors loadInteractionCounts and groupPM in gs-core.js.
+func siteEntryTallies(roots map[string][]*sitePageItem) map[string]siteEntryCounts {
+	tallies := map[string]siteEntryCounts{}
+	tally := func(ref string, bump func(c *siteEntryCounts)) {
+		if hash := pageLocalCommitHash(ref); hash != "" {
+			c := tallies[hash]
+			bump(&c)
+			tallies[hash] = c
+		}
+	}
+	for ext, rs := range roots {
+		for _, it := range rs {
+			if it.Retracted {
+				continue
+			}
+			switch t := pageItemType(it); {
+			case t == "repost":
+				tally(pageItemField(it, "original"), func(c *siteEntryCounts) { c.Reposts++ })
+			case t == "quote":
+				tally(pageItemField(it, "original"), func(c *siteEntryCounts) { c.Quotes++ })
+			case ext == "pm" && t == "issue":
+				tally(pageItemField(it, "parent"), func(c *siteEntryCounts) { c.Sub++ })
+				tally(pageItemField(it, "milestone"), func(c *siteEntryCounts) { c.Issues++ })
+				tally(pageItemField(it, "sprint"), func(c *siteEntryCounts) { c.Issues++ })
+			}
+		}
+	}
+	return tallies
+}
+
+// buildSiteListEntry renders one root as a list page's row: the author line, the chip row led by the identity chips, the sub-issue count and the interaction counts, then the title or the text; subjects names the items its chips reference, and counts holds what other entries add to it.
+func buildSiteListEntry(it *sitePageItem, subjects, types map[string]string, counts siteEntryCounts) sitePageListEntry {
 	t := pageItemType(it)
 	// A list page sits one directory below the item pages.
 	href := "../i/" + it.Msg.Short + ".html"
@@ -1528,25 +1855,47 @@ func buildSiteListEntry(it *sitePageItem, defaultType string) sitePageListEntry 
 	if t == "repost" {
 		meta = append([]sitePageBit{meta[0], {Text: "reposted", Sep: " "}}, meta[1:]...)
 	}
-	if t != defaultType {
-		meta = append(meta, sitePageTextBit(sitePageTypeLabel(t)))
-	}
-	if n := len(it.Replies); n == 1 {
-		meta = append(meta, sitePageTextBit("1 comment"))
-	} else if n > 0 || t == "issue" || t == "pull-request" {
-		meta = append(meta, sitePageTextBit(fmt.Sprintf("%d comments", n)))
-	}
 	state := pageItemField(it, "state")
 	glyph, glyphClass := sitePageGlyph(t, state)
 	row := siteRowHead(it)
 	row.Avatar = sitePageAvatar(pageDisplayAuthor(it.Msg))
 	row.Glyph, row.GlyphClass, row.GlyphTitle = glyph, glyphClass, sitePageGlyphTitle(t, state)
 	row.Href, row.Meta = href, meta
+	// The sub-issue count and the interaction counts follow the identity chips, as issueCard and chipRow in gs-render.js do.
+	if counts.Sub > 0 {
+		row.Chips = append(row.Chips, sitePageChip{Kind: "count", Class: "pm-sub-chip", Icon: "☐", Label: strconv.Itoa(counts.Sub) + " sub"})
+	}
+	counts.Replies = len(it.Replies)
+	counts.Approved, counts.ChangesRequested = siteVerdicts(it.Replies)
+	row.Chips = append(row.Chips, siteCountChips(counts)...)
+	row.Chips = append(row.Chips, siteItemChips(it, subjects, types, href, counts.Issues)...)
 	// A state word stands in for the edited marker, as leadMeta in gs-render.js does.
 	if row.Chip != nil {
 		row.Meta = siteBitsWithout(meta, "edited")
 	}
 	return row
+}
+
+// siteListSubjects names each standing root of a list by the subject of its newest version from its index entry, so both page passes name a reference alike. Mirrors indexSubject in gs-core.js.
+func siteListSubjects(items []*sitePageItem) map[string]string {
+	subjects := make(map[string]string, len(items))
+	for _, it := range items {
+		if subject := siteSubjectText(it.Resolved.Subject); subject != "" && !it.Retracted {
+			subjects[it.Msg.Short] = subject
+		}
+	}
+	return subjects
+}
+
+// siteRefTypes names the type of every root by its short hash, so a reference chip shows the glyph of its target. Mirrors indexType in gs-core.js.
+func siteRefTypes(roots map[string][]*sitePageItem) map[string]string {
+	types := map[string]string{}
+	for _, list := range sitePageLists {
+		for _, it := range roots[list.Ext] {
+			types[it.Msg.Short] = pageItemType(it)
+		}
+	}
+	return types
 }
 
 // siteBitsWithout returns the bits less those of one class.

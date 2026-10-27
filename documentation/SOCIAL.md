@@ -75,7 +75,7 @@ gitsocial social followers [--json]
 - Where social messages are stored is specified in [GITMSG.md §3.4](../specs/GITMSG.md#34-content-branch).
 - Lists are at `refs/gitmsg/social/lists/<name>/`, one ref per member and metadata at `_meta` ([ARCHITECTURE.md](ARCHITECTURE.md#refs-and-keys)).
 - The timeline excludes retracted posts ([GITMSG.md §1.5](../specs/GITMSG.md#15-versioning)) and stale commits ([ARCHITECTURE.md](ARCHITECTURE.md#cache)). It sorts by effective timestamp, newest first, and imported content sorts by its origin time.
-- The timeline shows an action as an entry at the time of the action; see [Timeline actions](#timeline-actions). The TUI words the entry as one line. The site shows the glyph of the item, the actor and the verb on the author line, then the subject of the item, with its text folded behind Show more, so the entry does not repeat the card of the item.
+- The timeline shows an action as an entry at the time of the action; see [Timeline actions](#timeline-actions). The TUI words the entry as one line. The site shows the glyph of the item, the actor and the verb on the author line, then the subject of the item, with its text as the excerpt.
 - The comment, repost and quote counts of a card include only the items that are not retracted, so retracting a comment decreases the comment count.
 - A comment names the branch that its commit was on. After a merge moves the commit to another branch, its thread and its counts follow the commit, and a new comment names the branch that the commit is on now ([ARCHITECTURE.md](ARCHITECTURE.md#workspace-home-branch)).
 - `gitsocial social log` lists an item by its own type: a comment on a post is a comment, not a post.

@@ -236,18 +236,19 @@ async function item8() {
   // The context card IS the parent, which has a page of its own: clicking it
   // opens that page rather than doing nothing on the reply already on screen.
   ok("reply-context cards open the parent's own page", cards.length > 0 && cards.every((c) => c._cls.has("clickable")), "classes=" + cards.map((c) => c.className).join(" | "));
-  // Trailer table: same-repo original/reply-to values are commit-route links.
-  const links = [];
-  for (const dd of findTag(detail || viewNode, "dd")) for (const a of findTag(dd, "a")) links.push(a.getAttribute("href"));
-  ok("trailer original/reply-to link to commit routes", links.length === 2 && links.every((h) => h && h.startsWith("#commit:") && h.endsWith("@gitmsg/social")), JSON.stringify(links));
+  // Same-repo original/reply-to values are reference chips that link their commit routes, and no field row repeats them.
+  const metaChips = findClass(findClass(detail || viewNode, "detail-meta").pop() || { _children: [] }, "chip-ref");
+  const links = metaChips.map((a) => a.getAttribute("href"));
+  ok("original/reply-to chips link to commit routes", links.length === 2 && links.every((h) => h && h.startsWith("#commit:") && h.endsWith("@gitmsg/social")) && findTag(detail || viewNode, "dd").length === 0, JSON.stringify(links));
   // Cross-repo quote keeps its current behavior: plain trailer value + embedded block.
   const quote = social.find((i) => (i.content || "").startsWith("Great point from upstream"));
   ok("fixture cross-repo quote present", !!quote, "no quote item");
   if (!quote) return;
   await render(TD, "#commit:" + quote.commit.hash + "@gitmsg/social");
-  const origDd = findTag(viewNode, "dd").find((dd) => /other-demo#commit:/.test(textOf(dd)));
-  ok("cross-repo original stays plain text (no link)", !!origDd && findTag(origDd, "a").length === 0, origDd ? "links=" + findTag(origDd, "a").length : "no dd");
+  const origChip = findClass(viewNode, "chip-ref").find((c) => /other-demo#commit:/.test(c.getAttribute("title") || ""));
+  ok("cross-repo original stays a chip with no link", !!origChip && origChip.tagName === "SPAN", origChip ? origChip.tagName : "no chip");
   ok("cross-repo quote keeps embedded block, no reply-context head", /from s3:\/\/fake\.example\.com\/other-demo/.test(textOf(viewNode)) && !/In reply to/.test(textOf(viewNode)), textOf(viewNode).slice(0, 120));
+  ok("the embedded quote of a page sits under the clamp", findClass(findClass(viewNode, "embedded")[0] || { _children: [] }, "body-clamp").length === 1);
   const embHead = (findClass(viewNode, "embedded")[0] || { _children: [] })._children.filter((c) => c && c.nodeType === 1)[0];
   const embHeadKids = embHead ? embHead._children.filter((c) => c && c.nodeType === 1).map((c) => String(c.className).split(" ")[0]) : [];
   ok("the embedded quote box leads with the avatar and the glyph of the quoted item, then its author line", !!embHead && embHead._cls.has("meta") && embHeadKids[0] === "avatar" && embHeadKids[1] === "type-glyph" && embHeadKids[2] === "author", embHeadKids.join(","));
@@ -315,20 +316,32 @@ async function item9() {
   ok("timeline cards render clamp-wrapped bodies", findClass(viewNode, "body-clamp-wrap").length > 0, "wraps=" + findClass(viewNode, "body-clamp-wrap").length);
   const excerpts = findClass(viewNode, "excerpt").map(textOf);
   ok("a commit with a body shows its excerpt from bodies/code", excerpts.some((t) => t.indexOf("A third line, so the notes count to three.") !== -1), excerpts.length + " excerpts");
+  const commitsCtx = await render(TD, "#/commits");
+  await commitsCtx.viewSettled;
+  ok("the commits list shows a commit's body as its excerpt, and carries the compact toggle", findClass(viewNode, "excerpt").some((e) => textOf(e).indexOf("A third line, so the notes count to three.") !== -1) && findClass(findClass(viewNode, "heading-row")[0], "nav-collapse").length === 1, findClass(viewNode, "excerpt").length + " excerpts");
+  await render(TD, "#/timeline");
   const headRow = findClass(viewNode, "heading-row")[0];
   const toggle = headRow && findTag(headRow, "button")[0];
   ok("the timeline toggle is a glyph button on the heading line", !!toggle && textOf(findTag(headRow, "h1")[0]) === "Timeline" && findClass(viewNode, "page-actions").length === 0, headRow && textOf(headRow));
-  ok("the timeline opens on excerpts with a compact toggle", !!toggle && textOf(toggle) === "≡" && toggle.getAttribute("title") === "Compact" && findClass(viewNode, "timeline-compact").length === 0, toggle && textOf(toggle));
+  ok("the timeline opens on excerpts with a compact toggle", !!toggle && textOf(toggle) === "≡" && toggle.getAttribute("title") === "Compact" && findClass(viewNode, "cards-compact").length === 0, toggle && textOf(toggle));
   fire(toggle, "click");
-  ok("the toggle sets the list to compact cards", findClass(viewNode, "timeline-compact").length === 1 && textOf(toggle) === "▤" && toggle.getAttribute("title") === "Excerpts", toggle && textOf(toggle));
-  ok("the choice is remembered", global.localStorage.getItem("timeline") === "line", global.localStorage.getItem("timeline"));
+  ok("the toggle sets the list to compact cards", findClass(viewNode, "cards-compact").length === 1 && textOf(toggle) === "▤" && toggle.getAttribute("title") === "Excerpts", toggle && textOf(toggle));
+  ok("the choice is remembered under the one cards preference", global.localStorage.getItem("cards") === "compact", global.localStorage.getItem("cards"));
   await render(TD, "#/timeline");
-  ok("a new render keeps the remembered choice", findClass(viewNode, "timeline-compact").length === 1);
-  global.localStorage.removeItem("timeline");
+  ok("a new render keeps the remembered choice", findClass(viewNode, "cards-compact").length === 1);
+  const issuesCtx = await render(TD, "#/issues");
+  ok("another list of cards opens compact under the same preference", findClass(viewNode, "cards-compact").length === 1);
+  await issuesCtx.viewSettled;
+  fire(findClass(viewNode, "filter-chip")[0], "click");
+  await settle();
+  ok("the issues list fills its excerpts from the bodies corpus", findClass(viewNode, "excerpt").length > 0, findClass(viewNode, "card").length + " cards, " + findClass(viewNode, "excerpt").length + " excerpts");
+  fire(findClass(viewNode, "filter-chip")[1], "click");
+  global.localStorage.removeItem("cards");
   const social = await GS.loadExtItems(GS.newContext(TD), "social");
   const rootPost = social.find((i) => (i.content || "").startsWith("Shipping the S3 static site reader"));
   await render(TD, "#commit:" + rootPost.commit.hash + "@gitmsg/social");
-  ok("non-reply detail view has no clamp anywhere (unclamped)", findClass(viewNode, "body-clamp-wrap").length === 0 && findClass(viewNode, "body-clamp").length === 0);
+  const threadClamps = findClass(viewNode, "thread").reduce((n, t) => n + findClass(t, "body-clamp-wrap").length, 0);
+  ok("a non-reply detail view clamps no body outside its thread", findClass(viewNode, "body-clamp-wrap").length === threadClamps, findClass(viewNode, "body-clamp-wrap").length + " clamps, " + threadClamps + " in the thread");
 }
 
 (async () => {

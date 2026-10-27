@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict and the file:line anchor label both renderers put on a feedback card, and feedbackFileRefs the file route the anchor chip opens through the branches of the pull request; the page prefixes it with its path to the shell. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject both renderers put on a detail head, the state and marker chips both put on its meta line, and the tag route a release head links to; the page prefixes it with its path to the shell. rowHeads pins the same for a list or activity row, which drops an open pill, since open is the default state. metaRow pins the meta row skeleton: the bit classes in order, which a list row and a comment of a thread share, the same skeleton on a detail page, which has no mark column and so leads with the avatar and puts the type glyph after the author (pageBits), the route the hash of a comment opens, the same rows once the item is edited, and the author label, its email title and the author search route both renderers derive; the page prefixes the route with its path to the shell. defaultTitles pins the name both renderers give a site with no configured title. listEmpty pins each list route\u0027s empty sentence, which both renderers show. rowGlyphs pins the type glyph class and title both renderers give a row, the extension default standing in for a header that names no type. releaseRows pins the asset count both renderers put on a release row after its hash. releaseNotes pins the blocks a release body splits into, so the commit rows and their hashes read the same on both surfaces, and releaseAssets pins the artifact, checksum and SBOM rows and which of them carry a link. markdownPaths pins the extensions both renderers render as prose and mdxStrip the MDX blocks both drop before parsing, and frontMatter the YAML block both drop from any prose document first. admonitions pins the ::: component both renderers build from one class set: the block's classes, its title line's class and text, a body word that must stay visible, and the openers that degrade to visible text (expectClass empty). cardSkeleton pins the one card shape: the avatar and the type glyph as the first parts, the author line after them, then the head or the body; the head slot order both renderers build, per item type; and the headless shape a body-only type takes, where the marker leads the author line and the first line stands as the card's text. avatars pins the hue class and the initials both renderers give an author from its name and email. homeRows pins how many root entries the home section shows on both renderers before its chevron. adopted pins an adopted copy's row on both renderers: its original author and time from the GitMsg-Ref (origin-time over both, the git time when the snapshot's does not parse), the adopted-from bit after the hash on a row and on the detail head, no adopts field row, the index entry fields the page layer writes and the app reads, and a list that sorts the copy by its original time below a plain issue created between it and the copy's commit, and that neither lists a cross-repository edit. itemCounts pins the sidebar count per list: the open items the page layer writes to its manifest and the rows the app's lists show under their default Open filter, duplicate milestones and sprints merged by origin URL, else subject. prDiff pins the Files changed section of a pull request on both renderers: its head, the file cap, the slots of a file row that both share, the status letters, the form of a hunk head, the parts of the notice variant, the wording of each notice, and the label and the cases of a generated file, which both renderers show closed. refTokens pins the refs and mentions one free text carries on both renderers, and pageBodyRefs the ref anchors and the bare URL links a page body carries, the same a.hash anchors the app body carries. itemPageMeta pins the definition rows an item page lists against the trailer rows of the app detail: the keys in order, the text of each value and the link each bit carries; and the label chips both renderers put under the meta line in place of a labels row (expectLabels); the page prefixes a route with its path to the shell. listHeadings pins the heading of each list route, the nav label, which the named list link of a detail page reads too. rowText pins the first line of a comment, feedback, repost or quote, as written: the text the items index writes for its list row and the line the app renders its card from. treeIcons pins the icon key and the hue class both renderers give a root entry of the home section, by its name or its kind.",
+  "_comment": "Shared writer/reader parity fixtures for the subject/header parity invariant. Each case pins a raw commit MESSAGE (the body after the git header/message split) and the subject + GitMsg header line that BOTH the Go writer (subjectOf / extractHeaderLine in site_items.go) and the JS reader (cleanContent + first line / parseGitmsg in gs-core.js) must derive from it identically. rawObject cases additionally pin the full loose-object commit text so the header/message split parity (gpgsig blocks, CRLF) is covered end to end. feedbackCards pins the review verdict, the suggestion mark and the file:line anchor label both renderers put in the chip row of a feedback card, before its text and off its author line, and feedbackFileRefs the file route the anchor chip opens through the branches of the pull request; the page prefixes it with its path to the shell. releaseHeads pins the subject and the version chip both renderers put on a release head. detailHeads pins the subject both renderers put on a detail head, the state and marker chips both put at the end of its meta line, the version of a release at the front of its chip row, and the tag route a release head links to; the page prefixes it with its path to the shell. rowHeads pins the same for a list or activity row, which drops an open pill, since open is the default state. metaRow pins the meta row skeleton: the bit classes in order, which a list row and a comment of a thread share, the same skeleton on a detail page, which has no mark column and so leads with the avatar and puts the type glyph after the author (pageBits), the route the hash of a comment opens, the same rows once the item is edited, and the author label, its email title and the author search route both renderers derive; the page prefixes the route with its path to the shell. defaultTitles pins the name both renderers give a site with no configured title. listEmpty pins each list route\u0027s empty sentence, which both renderers show. rowGlyphs pins the type glyph class and title both renderers give a row, the extension default standing in for a header that names no type. releaseRows pins the asset count both renderers put on a release row as the label of a count chip, the last chip of its chip row, not on its author line. releaseNotes pins the blocks a release body splits into, so the commit rows and their hashes read the same on both surfaces, and releaseAssets pins the artifact, checksum and SBOM rows and which of them carry a link. markdownPaths pins the extensions both renderers render as prose and mdxStrip the MDX blocks both drop before parsing, and frontMatter the YAML block both drop from any prose document first. admonitions pins the ::: component both renderers build from one class set: the block's classes, its title line's class and text, a body word that must stay visible, and the openers that degrade to visible text (expectClass empty). cardSkeleton pins the one card shape: the avatar and the type glyph as the first parts, the author line after them, then the chip row, then the title and the excerpt, the first paragraph after the title, which a static entry carries as written, led by the subject of a release whose tag is its title; the title alone in the head, per item type, its identity chips leading the chip row; and the headless shape a body-only type takes, where the marker ends the author line and the first line stands as the card's text under the clamp after the chip row. avatars pins the hue class and the initials both renderers give an author from its name and email. homeRows pins how many root entries the home section shows on both renderers before its chevron. adopted pins an adopted copy's row on both renderers: its original author and time from the GitMsg-Ref (origin-time over both, the git time when the snapshot's does not parse), the adopted-from bit after the hash on a row and on the detail head, no adopts field row, the index entry fields the page layer writes and the app reads, and a list that sorts the copy by its original time below a plain issue created between it and the copy's commit, and that neither lists a cross-repository edit. itemCounts pins the sidebar count per list: the open items the page layer writes to its manifest and the rows the app's lists show under their default Open filter, duplicate milestones and sprints merged by origin URL, else subject. prDiff pins the Files changed section of a pull request on both renderers: its head, the file cap, the slots of a file row that both share, the status letters, the form of a hunk head, the parts of the notice variant, the wording of each notice, and the label and the cases of a generated file, which both renderers show closed. refTokens pins the refs and mentions one free text carries on both renderers, and pageBodyRefs the ref anchors and the bare URL links a page body carries, the same a.hash anchors the app body carries. itemPageMeta pins the definition rows an item page lists against the trailer rows of the app detail: the keys in order, the text of each value and the link each bit carries; and the chip row both renderers build from the header, the same on a card and under the meta line of a detail, in place of the rows of the fields it carries (expectChips: kind, value class, relation word, glyph, label, link and rel, and the linked sides of a branch pair or a tip pair, head first); the page prefixes a route with its path to the shell. chipKinds pins, for one header per chip kind, the kind, the rendered class, the glyph and the rendered text of the first chip of that kind both renderers build, a feedback verdict for the state kind. listHeadings pins the heading of each list route, the nav label, which the named list link of a detail page reads too. rowText pins the first line of a comment, feedback, repost or quote, as written: the text the items index writes for its list row and the line the app renders its card from. treeIcons pins the icon key and the hue class both renderers give a root entry of the home section, by its name or its kind. countChips pins the count chips of a card and a static entry: the sub-issue count of an issue, then the comments, reposts, quotes and the latest verdict of each reviewer, then the dates of a sprint and the issue count of a milestone or sprint, each hidden at zero.",
   "messageCases": [
     {
       "name": "gpgsig-message-body",
@@ -136,6 +136,13 @@
       "header": { "review-state": "approved", "file": "notes.txt", "new-line": "9", "new-line-end": "9" },
       "expectVerdict": "approved",
       "expectAnchor": "notes.txt:9"
+    },
+    {
+      "name": "a suggestion is a state chip between the verdict and the anchor",
+      "header": { "review-state": "changes-requested", "suggestion": "true", "file": "notes.txt", "new-line": "4" },
+      "expectVerdict": "changes-requested",
+      "expectSuggestion": true,
+      "expectAnchor": "notes.txt:4"
     }
   ],
   "feedbackFileRefs": [
@@ -392,8 +399,8 @@
   "metaRow": {
     "bits": ["author", "reltime", "hash"],
     "editedBits": ["author", "reltime", "hash", "edited"],
-    "pageBits": ["avatar", "author", "type-glyph", "reltime", "hash"],
-    "pageEditedBits": ["avatar", "author", "type-glyph", "reltime", "hash", "edited"],
+    "pageBits": ["author", "type-glyph", "reltime", "hash"],
+    "pageEditedBits": ["author", "type-glyph", "reltime", "hash", "edited"],
     "commentHashRoute": "#commit:aaaaaaaaaaaa@gitmsg/social",
     "authors": [
       { "name": "a display name over its email", "author": "Ada Lovelace", "email": "ada@example.com", "expectLabel": "Ada Lovelace", "expectTitle": "ada@example.com", "expectHref": "#/search/author%3Aada%40example.com" },
@@ -427,14 +434,16 @@
     { "name": "separators alone drop the bit", "artifacts": " , ", "expectLabel": "" }
   ],
   "cardSkeleton": {
-    "parts": ["avatar", "type-glyph", "meta", "card-head", "card-chips"],
-    "head": ["subject", "chip"],
-    "bodyOnlyParts": ["avatar", "type-glyph", "meta", "body"],
+    "parts": ["avatar", "type-glyph", "meta", "card-chips", "card-head", "excerpt"],
+    "head": ["subject"],
+    "bodyOnlyParts": ["avatar", "type-glyph", "meta", "card-chips", "body body-clamp"],
     "cases": [
+      { "name": "an issue with a body shows the first paragraph after its title as the excerpt", "ext": "pm", "header": { "type": "issue", "state": "open" }, "firstLine": "Fix the parser\n\nThe parser drops a **line**.\n\nA second paragraph.", "expectHead": ["subject"], "expectMarker": "", "expectExcerpt": "The parser drops a **line**." },
       { "name": "an open issue heads with its subject alone", "ext": "pm", "header": { "type": "issue", "state": "open", "labels": "kind/bug" }, "firstLine": "Fix the parser", "expectHead": ["subject"], "expectMarker": "" },
       { "name": "a closed issue words its state at the end of its author line", "ext": "pm", "header": { "type": "issue", "state": "closed" }, "firstLine": "Fix the parser", "expectHead": ["subject"], "expectMarker": "closed" },
       { "name": "a draft pull request words the draft marker at the end of its author line", "ext": "review", "header": { "type": "pull-request", "draft": "true", "head": "feature", "base": "trunk" }, "firstLine": "Rework the walk", "expectHead": ["subject"], "expectMarker": "draft" },
-      { "name": "a release trails its subject with the version chip", "ext": "release", "header": { "type": "release", "tag": "v1.0", "version": "1.0.1" }, "firstLine": "Ship the rewrite", "expectHead": ["subject", "chip"], "expectMarker": "" },
+      { "name": "a release heads with its tag alone, its version chip leading the chip row and its subject the excerpt", "ext": "release", "header": { "type": "release", "tag": "v1.0", "version": "1.0.1" }, "firstLine": "Ship the rewrite", "expectHead": ["subject"], "expectMarker": "", "expectExcerpt": "Ship the rewrite" },
+      { "name": "a release whose subject is its tag shows the notes after it as the excerpt", "ext": "release", "header": { "type": "release", "tag": "v1.1" }, "firstLine": "v1.1\n\nThe walk stops at the first tip.", "expectHead": ["subject"], "expectMarker": "", "expectExcerpt": "The walk stops at the first tip." },
       { "name": "a post heads with its subject under its author line", "ext": "social", "header": { "type": "post" }, "firstLine": "The tree carries sources only", "expectHead": ["subject"], "expectMarker": "" },
       { "name": "a comment row takes no head, its first line standing as the card's text", "ext": "social", "header": { "type": "comment", "original": "#commit:aaaaaaaaaaaa" }, "firstLine": "A comment on the issue", "expectHead": [], "expectMarker": "" },
       { "name": "a retracted quote row ends its author line with the marker", "ext": "social", "header": { "type": "quote", "original": "#commit:aaaaaaaaaaaa", "retracted": "true" }, "firstLine": "Quoting the upstream post", "expectHead": [], "expectMarker": "retracted" }
@@ -662,59 +671,111 @@
   ],
   "itemPageMeta": [
     {
-      "name": "a pull request links its branches, tips, reviewers and refs, and its labels as chips",
+      "name": "a pull request has no rows: its branches, tips, stack, closed issues, reviewers and labels are chips, each tip linked on its branch",
       "ext": "review",
       "header": { "type": "pull-request", "state": "open", "base": "#branch:main", "base-tip": "abc123def456", "head": "#branch:feature", "head-tip": "123456abcdef", "reviewers": "bob@example.com, carol@example.com", "labels": "kind/bug", "closes": "#commit:aaaaaaaaaaaa@gitmsg/pm, #commit:bbbbbbbbbbbb@gitmsg/pm", "depends-on": "#commit:cccccccccccc@gitmsg/review" },
-      "expectRows": [
-        { "key": "base", "bits": [{ "text": "#branch:main", "href": "#branch:main" }] },
-        { "key": "base-tip", "bits": [{ "text": "abc123def456", "href": "#commit:abc123def456@main" }] },
-        { "key": "closes", "bits": [{ "text": "#commit:aaaaaaaaaaaa@gitmsg/pm", "href": "#commit:aaaaaaaaaaaa@gitmsg/pm" }, { "text": "#commit:bbbbbbbbbbbb@gitmsg/pm", "href": "#commit:bbbbbbbbbbbb@gitmsg/pm" }] },
-        { "key": "depends-on", "bits": [{ "text": "#commit:cccccccccccc@gitmsg/review", "href": "#commit:cccccccccccc@gitmsg/review" }] },
-        { "key": "head", "bits": [{ "text": "#branch:feature", "href": "#branch:feature" }] },
-        { "key": "head-tip", "bits": [{ "text": "123456abcdef", "href": "#commit:123456abcdef@feature" }] },
-        { "key": "reviewers", "bits": [{ "text": "bob@example.com", "href": "#/search/reviewer%3Abob%40example.com" }, { "text": "carol@example.com", "href": "#/search/reviewer%3Acarol%40example.com" }] }
-      ],
-      "expectLabels": [{ "text": "kind/bug", "href": "#/search/label%3Akind%2Fbug" }]
+      "expectRows": [],
+      "expectChips": [
+        { "kind": "reference", "class": "", "glyph": "⎇", "text": "feature → main", "parts": [{ "text": "feature", "href": "#branch:feature" }, { "text": "main", "href": "#branch:main" }] },
+        { "kind": "reference", "class": "", "glyph": "•", "text": "123456abcdef → abc123def456", "parts": [{ "text": "123456abcdef", "href": "#commit:123456abcdef@feature" }, { "text": "abc123def456", "href": "#commit:abc123def456@main" }] },
+        { "kind": "reference", "class": "", "glyph": "△", "text": "stacked", "href": "#commit:cccccccccccc@gitmsg/review" },
+        { "kind": "reference", "class": "", "word": "closes", "glyph": "☐", "text": "aaaaaaaaaaaa", "href": "#commit:aaaaaaaaaaaa@gitmsg/pm" },
+        { "kind": "reference", "class": "", "word": "closes", "glyph": "☐", "text": "bbbbbbbbbbbb", "href": "#commit:bbbbbbbbbbbb@gitmsg/pm" },
+        { "kind": "facet", "class": "", "glyph": "✎", "text": "bob", "href": "#/search/reviewer%3Abob%40example.com" },
+        { "kind": "facet", "class": "", "glyph": "✎", "text": "carol", "href": "#/search/reviewer%3Acarol%40example.com" },
+        { "kind": "facet", "class": "chip-label", "text": "kind/bug", "href": "#/search/label%3Akind%2Fbug" }
+      ]
     },
     {
-      "name": "an issue links its assignees and relations, folds the origin into one row, and drops a status label from its chips",
+      "name": "a merged pull request keeps its merge hashes as rows, and one tip alone makes the tip chip with ? for the other side",
+      "ext": "review",
+      "header": { "type": "pull-request", "state": "merged", "base": "#branch:main", "head-tip": "123456abcdef", "merge-base": "abc123def456", "merge-head": "fedcba654321" },
+      "expectRows": [
+        { "key": "merge-base", "bits": [{ "text": "abc123def456", "href": "#commit:abc123def456@main" }] },
+        { "key": "merge-head", "bits": [{ "text": "fedcba654321", "href": "#commit:fedcba654321@main" }] }
+      ],
+      "expectChips": [
+        { "kind": "reference", "class": "", "glyph": "⎇", "text": "? → main", "parts": [{ "text": "?" }, { "text": "main", "href": "#branch:main" }] },
+        { "kind": "reference", "class": "", "glyph": "•", "text": "123456abcdef → ?", "parts": [{ "text": "123456abcdef", "href": "#commit:123456abcdef@" }, { "text": "?" }] }
+      ]
+    },
+    {
+      "name": "an issue has no rows: its milestone, parent, overdue date, assignee, labels but no status label, and linked origin are chips",
       "ext": "pm",
       "header": { "type": "issue", "state": "open", "assignees": "ada@example.com", "labels": "kind/task,status/review", "milestone": "#commit:dddddddddddd@gitmsg/pm", "parent": "#commit:eeeeeeeeeeee@gitmsg/pm", "due": "2026-09-01", "origin-platform": "github", "origin-url": "https://github.com/acme/widgets/issues/9", "origin-author-name": "Ada" },
-      "expectRows": [
-        { "key": "assignees", "bits": [{ "text": "ada@example.com", "href": "#/search/assignee%3Aada%40example.com" }] },
-        { "key": "due", "bits": [{ "text": "2026-09-01" }] },
-        { "key": "milestone", "bits": [{ "text": "#commit:dddddddddddd@gitmsg/pm", "href": "#commit:dddddddddddd@gitmsg/pm" }] },
-        { "key": "origin", "bits": [{ "text": "github", "href": "https://github.com/acme/widgets/issues/9", "rel": "noopener" }] },
-        { "key": "parent", "bits": [{ "text": "#commit:eeeeeeeeeeee@gitmsg/pm", "href": "#commit:eeeeeeeeeeee@gitmsg/pm" }] }
-      ],
-      "expectLabels": [{ "text": "kind/task", "href": "#/search/label%3Akind%2Ftask" }]
+      "expectRows": [],
+      "expectChips": [
+        { "kind": "reference", "class": "", "glyph": "◇", "text": "dddddddddddd", "href": "#commit:dddddddddddd@gitmsg/pm" },
+        { "kind": "reference", "class": "", "glyph": "☐", "text": "eeeeeeeeeeee", "href": "#commit:eeeeeeeeeeee@gitmsg/pm" },
+        { "kind": "date", "class": "chip-due overdue", "text": "due 2026-09-01" },
+        { "kind": "facet", "class": "chip-assignee", "glyph": "☛", "text": "ada", "href": "#/search/assignee%3Aada%40example.com" },
+        { "kind": "facet", "class": "chip-label", "text": "kind/task", "href": "#/search/label%3Akind%2Ftask" },
+        { "kind": "provenance", "class": "chip-origin", "glyph": "↗", "text": "github", "href": "https://github.com/acme/widgets/issues/9", "rel": "noopener" }
+      ]
     },
     {
-      "name": "a release leaves its assets to the asset block and links its commit on no branch",
+      "name": "a release leaves its assets to the asset block and its count to the chips, and links its commit on no branch",
       "ext": "release",
       "header": { "type": "release", "tag": "v1.0", "version": "1.0.0", "artifacts": "a.tar.gz", "artifact-url": "https://dl.example.com", "signed-by": "ABCD1234", "commit": "0123456789ab" },
       "expectRows": [
         { "key": "commit", "bits": [{ "text": "0123456789ab", "href": "#commit:0123456789ab@" }] }
-      ]
+      ],
+      "expectChips": [{ "kind": "count", "class": "", "glyph": "⏏", "text": "1 asset" }]
     },
     {
-      "name": "a cross-repository ref links its URL when browsable and stays text otherwise",
+      "name": "a cross-repository original and reply-to are reference chips with the glyph of the target, a browsable one linked to its URL, and no rows",
       "ext": "social",
       "header": { "type": "comment", "original": "https://example.com/upstream#commit:abc123def456@gitmsg/social", "reply-to": "s3://fake.example.com/other-demo#commit:abc123def456@gitmsg/social" },
-      "expectRows": [
-        { "key": "original", "bits": [{ "text": "https://example.com/upstream#commit:abc123def456@gitmsg/social", "href": "https://example.com/upstream#commit:abc123def456@gitmsg/social", "rel": "noopener" }] },
-        { "key": "reply-to", "bits": [{ "text": "s3://fake.example.com/other-demo#commit:abc123def456@gitmsg/social" }] }
+      "expectRows": [],
+      "expectChips": [
+        { "kind": "reference", "class": "", "glyph": "•", "text": "abc123def456", "href": "https://example.com/upstream#commit:abc123def456@gitmsg/social", "rel": "noopener" },
+        { "kind": "reference", "class": "", "glyph": "↩", "text": "abc123def456" }
       ]
     },
     {
-      "name": "a value that is not refs alone stays as written",
+      "name": "a comment names what it answers in reference chips, the original by the glyph of its branch, and edits and root leave the rows",
+      "ext": "social",
+      "header": { "type": "comment", "original": "#commit:cccccccccccc@gitmsg/pm", "reply-to": "#commit:dddddddddddd@gitmsg/social", "edits": "#commit:eeeeeeeeeeee@gitmsg/social", "root": "#commit:cccccccccccc@gitmsg/pm" },
+      "expectRows": [],
+      "expectChips": [
+        { "kind": "reference", "class": "", "glyph": "☐", "text": "cccccccccccc", "href": "#commit:cccccccccccc@gitmsg/pm" },
+        { "kind": "reference", "class": "", "glyph": "↩", "text": "dddddddddddd", "href": "#commit:dddddddddddd@gitmsg/social" }
+      ]
+    },
+    {
+      "name": "a feedback lists no row: its verdict and anchor ride the chip row of its detail, and its pull request is a reference chip",
+      "ext": "review",
+      "header": { "type": "feedback", "review-state": "approved", "file": "notes.txt", "new-line": "2", "new-line-end": "3", "pull-request": "#commit:aaaaaaaaaaaa@gitmsg/review" },
+      "expectRows": [],
+      "expectChips": [
+        { "kind": "reference", "class": "", "glyph": "△", "text": "aaaaaaaaaaaa", "href": "#commit:aaaaaaaaaaaa@gitmsg/review" }
+      ]
+    },
+    {
+      "name": "a relation that is not refs alone is one chip as written, and a cross-repository relation links its URL with its short hash",
       "ext": "pm",
-      "header": { "type": "issue", "related": "#commit:aaaaaaaaaaaa@gitmsg/pm, see the thread", "blocks": "" },
-      "expectRows": [
-        { "key": "blocks", "bits": [{ "text": "" }] },
-        { "key": "related", "bits": [{ "text": "#commit:aaaaaaaaaaaa@gitmsg/pm, see the thread" }] }
+      "header": { "type": "issue", "related": "#commit:aaaaaaaaaaaa@gitmsg/pm, see the thread", "blocks": "", "blocked-by": "https://example.com/upstream#commit:abc123def456@gitmsg/pm" },
+      "expectRows": [],
+      "expectChips": [
+        { "kind": "reference", "class": "", "word": "blocked by", "glyph": "☐", "text": "abc123def456", "href": "https://example.com/upstream#commit:abc123def456@gitmsg/pm", "rel": "noopener" },
+        { "kind": "reference", "class": "", "word": "related", "glyph": "☐", "text": "#commit:aaaaaaaaaaaa@gitmsg/pm, see the thread" }
       ]
     }
+  ],
+  "countChips": [
+    { "name": "an issue leads with its sub count, then every interaction count", "ext": "pm", "header": { "type": "issue", "state": "open", "labels": "kind/bug" }, "sub": 2, "issues": 0, "counts": { "comments": 4, "reposts": 3, "quotes": 1, "approved": 2, "changesRequested": 1 }, "expectChips": ["☐ 2 sub", "↩ 4", "↻ 3", "❞ 1", "✓ 2", "✗ 1", "kind/bug"] },
+    { "name": "a sprint puts its dates after its counts and before its issue count", "ext": "pm", "header": { "type": "sprint", "state": "active", "start": "2026-07-01", "end": "2026-07-14" }, "sub": 0, "issues": 3, "counts": { "comments": 1, "reposts": 0, "quotes": 0, "approved": 0, "changesRequested": 0 }, "expectChips": ["↩ 1", "2026-07-01 → 2026-07-14", "☐ 3 issues"] },
+    { "name": "a count of zero hides, the issue count of an empty milestone included", "ext": "pm", "header": { "type": "milestone", "state": "open", "due": "2026-09-01" }, "sub": 0, "issues": 0, "counts": { "comments": 0, "reposts": 0, "quotes": 0, "approved": 0, "changesRequested": 0 }, "expectChips": ["due 2026-09-01"] },
+    { "name": "a milestone with one member reads singular", "ext": "pm", "header": { "type": "milestone", "state": "open" }, "sub": 0, "issues": 1, "counts": { "comments": 0, "reposts": 0, "quotes": 2, "approved": 0, "changesRequested": 0 }, "expectChips": ["❞ 2", "☐ 1 issue"] },
+    { "name": "a release carries its counts before its asset count", "ext": "release", "header": { "type": "release", "tag": "v1.0", "artifacts": "a.tar.gz" }, "sub": 0, "issues": 0, "counts": { "comments": 0, "reposts": 2, "quotes": 0, "approved": 0, "changesRequested": 0 }, "expectChips": ["↻ 2", "⏏ 1 asset"] }
+  ],
+  "chipKinds": [
+    { "name": "a feedback verdict is the state kind", "source": "feedback", "ext": "review", "header": { "type": "feedback", "review-state": "approved" }, "kind": "state", "class": "chip state verdict-approved", "glyph": "", "label": "approved" },
+    { "name": "an asset count is the count kind, with the release glyph", "source": "row", "ext": "release", "header": { "type": "release", "tag": "v1.0", "artifacts": "a.tar.gz, b.tar.gz" }, "kind": "count", "class": "chip count chip-count", "glyph": "⏏", "label": "⏏ 2 assets" },
+    { "name": "a milestone is the reference kind, with the milestone glyph", "source": "row", "ext": "pm", "header": { "type": "issue", "milestone": "#commit:dddddddddddd@gitmsg/pm" }, "kind": "reference", "class": "chip chip-ref", "glyph": "◇", "label": "◇ dddddddddddd" },
+    { "name": "a reviewer is the facet kind, with the reviewer glyph", "source": "row", "ext": "review", "header": { "type": "pull-request", "reviewers": "bob@example.com" }, "kind": "facet", "class": "chip chip-facet", "glyph": "✎", "label": "✎ bob" },
+    { "name": "a past due date on an open issue is the date kind, with the overdue tint and no glyph", "source": "row", "ext": "pm", "header": { "type": "issue", "state": "open", "due": "2020-01-01" }, "kind": "date", "class": "chip chip-date chip-due overdue", "glyph": "", "label": "due 2020-01-01" },
+    { "name": "an origin is the provenance kind, with the origin glyph", "source": "row", "ext": "pm", "header": { "type": "issue", "origin-platform": "github" }, "kind": "provenance", "class": "chip chip-prov chip-origin", "glyph": "↗", "label": "↗ github" }
   ],
   "treeIcons": [
     {"name": "main.go", "kind": "", "key": "go", "color": "i-cyan"},

@@ -289,12 +289,13 @@ async function main() {
     ["#commit:" + sha("c0").slice(0, 12) + "@#commit:" + sha("c0").slice(0, 12), "@ada@example.com@#/search/author%3Aada%40example.com", "https://example.com/notes@https://example.com/notes"],
     "a tag annotation links its refs, mentions and URLs");
   eq(annotation ? findTag(annotation, "br").length : null, 1, "the annotation keeps its line breaks");
+  eq(findClass(findClass(tagPage, "detail-meta")[0], "chip").map((c) => c.className + "|" + textOf(c)), ["chip chip-ref|• " + sha("c1").slice(0, 12)], "the tagged commit is a reference chip with the commit glyph");
   eq(annotation ? findTag(annotation, "p").length : null, 0, "and renders no markdown block");
 
   const log = (await GS.branchLogView(ctx, "trunk"))[0];
   const logCards = findClass(log, "card");
-  eq(logCards.map(tagChips), [["v0.2@#tag:v0.2"], ["v0.1@#tag:v0.1", "v0.0.3@#tag:v0.0.3", "v0.0.2@#tag:v0.0.2", "+1"]],
-    "each log row carries its own tag chips, linked and capped with a +N fold");
+  eq(logCards.map(tagChips), [["⌗ v0.2@#tag:v0.2"], ["⌗ v0.1@#tag:v0.1", "⌗ v0.0.3@#tag:v0.0.3", "⌗ v0.0.2@#tag:v0.0.2", "+1@#/tags"]],
+    "each log row carries its own tag chips after the tag glyph, linked and capped with a +N fold that opens the tags list");
 
   const bwrap = document.createElement("div");
   bwrap.append(...(await GS.branchesView(ctx)));

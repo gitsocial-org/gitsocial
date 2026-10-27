@@ -1,7 +1,7 @@
 {
   ".card": [
     {
-      "shape": "span.avatar > span.type-glyph > span.meta > div.card-head > div.card-chips",
+      "shape": "span.avatar > span.type-glyph > span.meta > div.card-chips > div.card-head",
       "padding": "14.4px 0px 14.4px 6.4px",
       "margin": "0px",
       "fontSize": "15.2px",
@@ -16,7 +16,7 @@
     {
       "shape": "a.subject",
       "padding": "0px",
-      "margin": "3.2px 0px 0px",
+      "margin": "6.4px 0px 0px",
       "fontSize": "15.2px",
       "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
       "color": "rgb(0, 0, 0)",
@@ -27,7 +27,7 @@
   ],
   ".card-chips": [
     {
-      "shape": "a.chip.chip-label > a.chip.chip-label",
+      "shape": "a.chip.chip-facet.chip-label > a.chip.chip-facet.chip-label",
       "padding": "0px",
       "margin": "6.4px 0px 0px",
       "fontSize": "15.2px",
@@ -38,7 +38,7 @@
       "borderRadius": "0px"
     },
     {
-      "shape": "a.chip.chip-label",
+      "shape": "a.chip.chip-facet.chip-label",
       "padding": "0px",
       "margin": "6.4px 0px 0px",
       "fontSize": "15.2px",
@@ -108,6 +108,19 @@
       "margin": "43.2px 0px 0px",
       "fontSize": "21px",
       "fontFamily": "\"IBM Plex Mono\", \"SF Mono\", Consolas, monospace",
+      "color": "rgb(0, 0, 0)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderLeftColor": "rgb(0, 0, 0)",
+      "borderRadius": "0px"
+    }
+  ],
+  ".heading-row": [
+    {
+      "shape": "h1 > button.nav-collapse",
+      "padding": "0px",
+      "margin": "0px",
+      "fontSize": "15.2px",
+      "fontFamily": "-apple-system, \"Segoe UI\", Roboto, Inter, sans-serif",
       "color": "rgb(0, 0, 0)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "borderLeftColor": "rgb(0, 0, 0)",

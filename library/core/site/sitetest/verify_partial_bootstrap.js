@@ -40,11 +40,11 @@ function prefixContiguous(m) {
 
 async function checkPartialServable(base, label) {
   const manifest = await fetchJSON(base, ".gitsocial/site/items/social/manifest.json");
-  ok(label + ": items manifest present (v5)", manifest && manifest.version === 5, JSON.stringify(manifest && { v: manifest.version }));
+  ok(label + ": items manifest present (v6)", manifest && manifest.version === 6, JSON.stringify(manifest && { v: manifest.version }));
   ok(label + ": manifest incomplete (bootstrap in progress)", manifest && manifest.complete === false, "complete=" + (manifest && manifest.complete));
   ok(label + ": manifest is a valid newest-first prefix", manifest && prefixContiguous(manifest));
   const cursor = await fetchJSON(base, ".gitsocial/site/items/social/cursor.json");
-  ok(label + ": a bootstrap cursor is present", cursor && cursor.version === 5 && /^[0-9a-f]{40}$/.test(cursor.oldestIndexed || ""), JSON.stringify(cursor && { v: cursor.version }));
+  ok(label + ": a bootstrap cursor is present", cursor && cursor.version === 6 && /^[0-9a-f]{40}$/.test(cursor.oldestIndexed || ""), JSON.stringify(cursor && { v: cursor.version }));
   const refs = await fetchJSON(base, ".gitsocial/refs.json");
   const tip = refs && refs["refs/heads/gitmsg/social"];
   ok(label + ": manifest tip = branch tip", manifest && tip && manifest.tip === tip, "manifest=" + (manifest && manifest.tip) + " ref=" + tip);
@@ -55,7 +55,7 @@ async function checkPartialServable(base, label) {
   // index as incomplete, so recent items resolve without any older-shard fetch.
   const ctx = GS.newContext(base);
   const idx = await GS.loadItemsIndex(ctx, "social");
-  ok(label + ": loadItemsIndex returns an incomplete v5 index", idx && idx.version === 5 && idx.complete === false, JSON.stringify(idx && { v: idx.version, c: idx.complete }));
+  ok(label + ": loadItemsIndex returns an incomplete v6 index", idx && idx.version === 6 && idx.complete === false, JSON.stringify(idx && { v: idx.version, c: idx.complete }));
   ok(label + ": eager set carries the recent items", idx && idx.items.length > 0, "eager=" + (idx && idx.items.length));
   const items = await GS.loadExtItems(ctx, "social");
   ok(label + ": timeline renders recent posts from the prefix", items.length > 0, "items=" + items.length);

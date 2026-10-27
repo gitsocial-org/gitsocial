@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -1441,7 +1442,7 @@ func pageTitleOf(t *testing.T, page string) string {
 
 // TestSitePages_CrawlHygiene: tombstones and empty lists keep their pages but
 // leave the sitemap, descriptions are markdown-stripped, titles are unique.
-// TestSitePages_releaseHeadCarriesTagAndVersionChip asserts a release row and item page head with the tag, and carry one version chip.
+// TestSitePages_releaseHeadCarriesTagAndVersionChip asserts a release row and item page head with the tag alone, and carry one version chip at the front of their chip row.
 func TestSitePages_releaseHeadCarriesTagAndVersionChip(t *testing.T) {
 	client, _ := testClient(t)
 	seedPagesConfig(t, client, pagesTestSite())
@@ -1459,15 +1460,16 @@ func TestSitePages_releaseHeadCarriesTagAndVersionChip(t *testing.T) {
 	if !strings.Contains(list, `<a class="subject" href="../i/`+rel[0][:12]+`.html">v2.0.0</a></div>`) {
 		t.Errorf("a tagged release row must head with the tag and no version chip:\n%s", list)
 	}
-	if !strings.Contains(list, `<a class="subject" href="../i/`+rel[1][:12]+`.html">nightly</a> <span class="chip">v1.3.0</span></div>`) {
-		t.Errorf("a named tag must carry the version on one trailing chip:\n%s", list)
+	if !strings.Contains(list, `<div class="card-chips"><span class="chip">v1.3.0</span> </div>
+<div class="card-head"><a class="subject" href="../i/`+rel[1][:12]+`.html">nightly</a></div>`) {
+		t.Errorf("a named tag must lead its chip row with the version, the title alone after it:\n%s", list)
 	}
 	if strings.Count(list, "v2.0.0") != 1 || strings.Count(list, "2.0.0") != 1 {
 		t.Errorf("the version renders twice on the releases list:\n%s", list)
 	}
 	page := getKey(t, client, "i/"+rel[1][:12]+".html")
-	if !strings.Contains(page, `<div class="card-head"><h1 class="subject"><a href="../index.html#tag:nightly">nightly</a></h1></div>`) || strings.Count(page, `<span class="chip">v1.3.0</span></span></div>`) != 1 {
-		t.Errorf("a release page must head with its tag and carry one version chip on its meta line:\n%s", page)
+	if strings.Count(page, `<div class="card-head"><h1 class="subject"><a href="../index.html#tag:nightly">nightly</a></h1></div>`) != 1 || !strings.Contains(page, `<div class="card-chips"><span class="chip">v1.3.0</span>`) || strings.Count(page, "v1.3.0") != 1 {
+		t.Errorf("a release page must head with its tag alone and lead its chip row with one version chip:\n%s", page)
 	}
 	if strings.Contains(page, "tag nightly") {
 		t.Error("the meta line must not repeat the tag the heading carries")
@@ -1594,7 +1596,7 @@ func pagesTestRoot(ext, digit, message string, fields map[string]string) *sitePa
 // pagesTestRender renders one root's item page; titles names the roots that have a page.
 func pagesTestRender(t *testing.T, it *sitePageItem, list sitePageList, titles map[string]string) string {
 	t.Helper()
-	page, err := renderSitePage("item", buildSiteItemPage(it, list, sitePageSite{URL: "https://example.com/"}, titles, nil, nil))
+	page, err := renderSitePage("item", buildSiteItemPage(it, list, sitePageSite{URL: "https://example.com/"}, titles, nil, nil, nil))
 	if err != nil {
 		t.Fatalf("render item page: %v", err)
 	}
@@ -1659,13 +1661,13 @@ func TestSitePages_externalURLNofollow(t *testing.T) {
 	}
 }
 
-// TestSitePages_branchPairLinks asserts the head and base bits of a pull request page link the branch log of this repository, a browsable fork head its URL, and any other head stays text.
+// TestSitePages_branchPairLinks asserts the branch pair chip of a pull request page links the branch log of this repository, a browsable fork head its URL as owner/repo:branch, and any other head stays as written.
 func TestSitePages_branchPairLinks(t *testing.T) {
 	for _, c := range []struct{ name, head, want string }{
-		{"a branch of this repository", "#branch:feature/x", `pull request · <a href="../index.html#branch:feature/x">feature/x</a> → <a href="../index.html#branch:main">main</a>`},
-		{"a browsable fork head", "https://example.com/fork#branch:feature", `<a href="https://example.com/fork#branch:feature" rel="noopener">https://example.com/fork#feature</a> → <a href="../index.html#branch:main">main</a>`},
-		{"a fork head that is no URL", "s3://fake.example.com/other-demo#branch:feature", `s3://fake.example.com/other-demo#feature → <a href="../index.html#branch:main">main</a>`},
-		{"no head", "", `pull request · ? → <a href="../index.html#branch:main">main</a>`},
+		{"a branch of this repository", "#branch:feature/x", `<span class="chip chip-ref">⎇ <a href="../index.html#branch:feature/x">feature/x</a> → <a href="../index.html#branch:main">main</a></span>`},
+		{"a browsable fork head", "https://example.com/fork#branch:feature", `<span class="chip chip-ref">⎇ <a href="https://example.com/fork#branch:feature" title="https://example.com/fork#branch:feature" rel="noopener">example.com/fork:feature</a> → <a href="../index.html#branch:main">main</a></span>`},
+		{"a fork head that is no URL", "s3://fake.example.com/other-demo#branch:feature", `<span class="chip chip-ref">⎇ s3://fake.example.com/other-demo#branch:feature → <a href="../index.html#branch:main">main</a></span>`},
+		{"no head", "", `<span class="chip chip-ref">⎇ ? → <a href="../index.html#branch:main">main</a></span>`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			it := pagesTestRoot("review", "a", "Rework the walk", map[string]string{"type": "pull-request", "base": "#branch:main", "head": c.head})
@@ -1677,6 +1679,66 @@ func TestSitePages_branchPairLinks(t *testing.T) {
 	}
 }
 
+// TestSitePages_relationChips asserts an item page names each closed issue by the subject of its page, a list row caps the relation at three chips and a "+n" chip that opens the page, and the page shows every chip.
+func TestSitePages_relationChips(t *testing.T) {
+	refs := make([]string, 0, 5)
+	for _, c := range "bcdef" {
+		refs = append(refs, "#commit:"+strings.Repeat(string(c), 12)+"@gitmsg/pm")
+	}
+	it := pagesTestRoot("review", "a", "Close five", map[string]string{"type": "pull-request", "closes": strings.Join(refs, ", ")})
+	page := pagesTestRender(t, it, sitePageLists[1], map[string]string{it.Msg.Short: "Close five", strings.Repeat("b", 12): "Fix the walk"})
+	if want := `<a class="chip chip-ref" href="../index.html#commit:bbbbbbbbbbbb@gitmsg/pm" title="#commit:bbbbbbbbbbbb@gitmsg/pm">closes ☐ Fix the walk</a>`; !strings.Contains(page, want) || strings.Count(page, "closes ☐") != 5 || strings.Contains(page, ">+2<") {
+		t.Errorf("want five closes chips, the first named by its page subject:\n%s", page[strings.Index(page, `<div class="detail-meta">`):][:1200])
+	}
+	labels := make([]string, 0, 4)
+	for _, chip := range buildSiteListEntry(it, nil, nil, siteEntryCounts{}).Chips {
+		labels = append(labels, chipLabelText(chip))
+	}
+	want := []string{"closes ☐ bbbbbbbbbbbb", "closes ☐ cccccccccccc", "closes ☐ dddddddddddd", "+2"}
+	if strings.Join(labels, ",") != strings.Join(want, ",") {
+		t.Errorf("row chips = %q, want %q", labels, want)
+	}
+	if more := buildSiteListEntry(it, nil, nil, siteEntryCounts{}).Chips[3].Href; more != "../i/"+it.Msg.Short+".html" {
+		t.Errorf("the +n chip opens %q, want the item page", more)
+	}
+}
+
+// TestSiteListSubjects_entryNamesItsListItems asserts a list row names a reference to a standing item of its own list by the indexed subject, and any other by its short hash.
+func TestSiteListSubjects_entryNamesItsListItems(t *testing.T) {
+	parent := pagesTestRoot("pm", "b", "", map[string]string{"type": "issue"})
+	parent.Msg.Subject = "Fix the **walk**"
+	gone := pagesTestRoot("pm", "c", "", map[string]string{"type": "issue", "retracted": "true"})
+	gone.Msg.Subject, gone.Retracted = "Gone", true
+	child := pagesTestRoot("pm", "a", "Child", map[string]string{"type": "issue", "parent": "#commit:bbbbbbbbbbbb@gitmsg/pm", "blocks": "#commit:cccccccccccc@gitmsg/pm"})
+	labels := make([]string, 0, 2)
+	for _, chip := range buildSiteListEntry(child, siteListSubjects([]*sitePageItem{child, parent, gone}), nil, siteEntryCounts{}).Chips {
+		labels = append(labels, chipLabelText(chip))
+	}
+	if want := "☐ Fix the walk,blocks ☐ cccccccccccc"; strings.Join(labels, ",") != want {
+		t.Errorf("row chips = %q, want %q", labels, want)
+	}
+}
+
+// TestSiteRefTypes_chipTakesTheTypeGlyph asserts a reference to a pm item shows the glyph of its target's type, and the issue glyph when the type is not known.
+func TestSiteRefTypes_chipTakesTheTypeGlyph(t *testing.T) {
+	sprint := pagesTestRoot("pm", "b", "Sprint 1", map[string]string{"type": "sprint"})
+	comment := pagesTestRoot("social", "a", "On the sprint", map[string]string{"type": "comment", "original": "#commit:bbbbbbbbbbbb@gitmsg/pm"})
+	types := siteRefTypes(map[string][]*sitePageItem{"pm": {sprint}, "social": {comment}})
+	for _, c := range []struct {
+		types map[string]string
+		want  string
+	}{{types, "◷"}, {nil, "☐"}} {
+		if chips := siteItemChips(comment, nil, c.types, "", 0); len(chips) != 1 || chips[0].Icon != c.want {
+			t.Errorf("chips = %+v, want one chip with %q", chips, c.want)
+		}
+	}
+}
+
+// chipLabelText words a chip as the reader sees it: its lead, then its label.
+func chipLabelText(c sitePageChip) string {
+	return strings.TrimSpace(sitePageChipLead(c) + " " + c.Label)
+}
+
 // TestSiteRowHead_bodyOnlyQuote asserts a quote whose first line is a quote block renders its row with that line from its index entry, the same row an attached body gives.
 func TestSiteRowHead_bodyOnlyQuote(t *testing.T) {
 	message := "> quoted\n\nMy take on it\n\nGitMsg: ext=\"social\"; type=\"quote\"; original=\"#commit:bbbbbbbbbbbb@gitmsg/social\"; v=\"0.1.0\""
@@ -1686,7 +1748,7 @@ func TestSiteRowHead_bodyOnlyQuote(t *testing.T) {
 	attached := *indexed
 	attached.Message = message
 	for name, msg := range map[string]*sitePageMsg{"index entry": indexed, "attached body": &attached} {
-		row := buildSiteListEntry(&sitePageItem{Msg: msg, Resolved: msg}, "post")
+		row := buildSiteListEntry(&sitePageItem{Msg: msg, Resolved: msg}, nil, nil, siteEntryCounts{})
 		if !row.BodyOnly || row.Text != "> quoted" {
 			t.Errorf("%s: row = %+v, want a body-only row carrying %q", name, row, "> quoted")
 		}
@@ -1694,7 +1756,7 @@ func TestSiteRowHead_bodyOnlyQuote(t *testing.T) {
 		if err != nil {
 			t.Fatalf("render entries: %v", err)
 		}
-		if want := `<div class="body">&gt; quoted</div>`; !strings.Contains(string(page), want) {
+		if want := `<div class="body body-clamp">&gt; quoted</div>`; !strings.Contains(string(page), want) {
 			t.Errorf("%s: row markup lacks %s:\n%s", name, want, page)
 		}
 	}
@@ -1806,5 +1868,73 @@ func TestSitePageSidebar_mirrorsTheShell(t *testing.T) {
 				t.Error("the front page's Home is not current")
 			}
 		}
+	}
+}
+
+// TestSiteEntryTallies_countsFromTheIndex asserts the counts other entries add to a row: the reposts and quotes that name it, a sub-issue, the members of a milestone or sprint, and none from a retracted entry; the latest verdict of a reviewer counts once.
+func TestSiteEntryTallies_countsFromTheIndex(t *testing.T) {
+	issue := pagesTestRoot("pm", "a", "Fix the walk", map[string]string{"type": "issue"})
+	milestone := pagesTestRoot("pm", "b", "v1.0", map[string]string{"type": "milestone"})
+	ref := func(it *sitePageItem) string { return "#commit:" + it.Msg.Short + "@gitmsg/" + it.Msg.Ext }
+	child := pagesTestRoot("pm", "c", "A child", map[string]string{"type": "issue", "parent": ref(issue), "milestone": ref(milestone), "sprint": ref(milestone)})
+	repost := pagesTestRoot("social", "d", "", map[string]string{"type": "repost", "original": ref(issue)})
+	quote := pagesTestRoot("social", "e", "", map[string]string{"type": "quote", "original": ref(issue)})
+	gone := pagesTestRoot("social", "f", "", map[string]string{"type": "repost", "original": ref(issue)})
+	gone.Retracted = true
+	tallies := siteEntryTallies(map[string][]*sitePageItem{"pm": {issue, milestone, child}, "social": {repost, quote, gone}})
+	if got, want := tallies[issue.Msg.Short], (siteEntryCounts{Reposts: 1, Quotes: 1, Sub: 1}); got != want {
+		t.Errorf("issue counts = %+v, want %+v", got, want)
+	}
+	if got := tallies[milestone.Msg.Short].Issues; got != 2 {
+		t.Errorf("milestone issues = %d, want 2", got)
+	}
+	verdict := func(digit, state string, ts int64) *sitePageItem {
+		r := pagesTestRoot("review", digit, "", map[string]string{"type": "feedback", "review-state": state})
+		r.Msg.TS = ts
+		return r
+	}
+	if approved, changes := siteVerdicts([]*sitePageItem{verdict("1", "changes-requested", 1), verdict("2", "approved", 2)}); approved != 1 || changes != 0 {
+		t.Errorf("verdicts = %d approved, %d changes requested, want the later approval alone", approved, changes)
+	}
+}
+
+// TestSitePages_threadReplyShape asserts a thread reply puts its chip row before its clamped text, a suggestion as a state chip, and no reply-to or suggestion bit on its author line.
+func TestSitePages_threadReplyShape(t *testing.T) {
+	pr := pagesTestRoot("review", "a", "Rework the walk", map[string]string{"type": "pull-request", "head": "#branch:feature", "base": "#branch:main"})
+	ref := "#commit:" + pr.Msg.Short + "@gitmsg/review"
+	fb := pagesTestRoot("review", "b", "Use the shorter form", map[string]string{"type": "feedback", "pull-request": ref, "review-state": "changes-requested", "suggestion": "true", "file": "notes.txt", "new-line": "4"})
+	answer := pagesTestRoot("social", "c", "Done", map[string]string{"type": "comment", "original": ref, "reply-to": "#commit:" + fb.Msg.Short + "@gitmsg/review"})
+	answer.Depth = 1
+	pr.Replies = []*sitePageItem{fb, answer}
+	page := pagesTestRender(t, pr, sitePageLists[1], map[string]string{pr.Msg.Short: "Rework the walk"})
+	want := `</p>
+<div class="card-chips"><span class="chip state verdict-changes-requested">changes requested</span> <span class="chip state chip-suggestion">suggestion</span> <a class="chip chip-ref" href="../index.html#file:notes.txt@feature:L4">notes.txt:4</a> </div>
+<div class="body body-clamp"><p>Use the shorter form</p>`
+	if !strings.Contains(page, want) {
+		t.Errorf("feedback reply shape missing:\nwant %s\ngot %s", want, page[strings.Index(page, `<div class="thread">`):])
+	}
+	for _, meta := range regexp.MustCompile(`<p class="meta">.*?</p>`).FindAllString(page, -1) {
+		if strings.Contains(meta, "reply to") || strings.Contains(meta, "suggestion") {
+			t.Errorf("an author line carries a reply-to or suggestion bit: %s", meta)
+		}
+	}
+	if !strings.Contains(page, `<div class="comment-row"><div class="thread-rail"><span class="rail-guide"></span></div><div class="card comment">`) {
+		t.Errorf("the nested reply sits under its parent's rail:\n%s", page)
+	}
+}
+
+// TestSitePages_quoteBox asserts the page of a quote shows the quote box its card shows, from the GitMsg-Ref its message carries: the avatar, the glyph and the author line of the quoted item, then its text under the clamp.
+func TestSitePages_quoteBox(t *testing.T) {
+	original := "#commit:bbbbbbbbbbbb@gitmsg/social"
+	message := "My take on it\n\nGitMsg: ext=\"social\"; type=\"quote\"; original=\"" + original + "\"; v=\"0.1.0\"\nGitMsg-Ref: ext=\"social\"; type=\"post\"; author=\"Bob\"; email=\"bob@example.com\"; time=\"2026-01-02T03:04:05Z\"; ref=\"" + original + "\"; v=\"0.1.0\"\n > the original post"
+	quote := pagesTestRoot("social", "a", message, map[string]string{"type": "quote", "original": original})
+	page := pagesTestRender(t, quote, sitePageLists[2], map[string]string{quote.Msg.Short: "My take on it"})
+	want := regexp.MustCompile(`<div class="reply-quote dimmed"><div class="reply-quote-head meta"><span class="avatar av-\d+" title="Bob">B</span><span class="type-glyph tg-post" title="post">•</span><a class="author" href="[^"]+" title="bob@example.com">Bob</a> · <span class="reltime" title="2026-01-02 03:04 UTC">2026-01-02</span> · <a class="hash" href="../index.html#commit:bbbbbbbbbbbb@gitmsg/social">bbbbbbbbbbbb</a></div><div class="body reply-quote-body body-clamp"><p>the original post</p>`)
+	if !want.MatchString(page) {
+		t.Errorf("quote box missing:\n%s", page)
+	}
+	plain := pagesTestRoot("social", "c", "A post", map[string]string{"type": "post"})
+	if strings.Contains(pagesTestRender(t, plain, sitePageLists[2], map[string]string{plain.Msg.Short: "A post"}), "reply-quote") {
+		t.Error("a post that quotes nothing has no quote box")
 	}
 }

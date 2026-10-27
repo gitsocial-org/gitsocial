@@ -300,10 +300,10 @@ async function main() {
   ok("memo card renders labels via the shared enrichment chip row", mchips.includes("area/cache") && mchips.includes("kind/policy"), mchips.join(" | "));
   const relItem = { commit: { hash: "b".repeat(40), short: "bbbbbbbbbbbb" }, header: { type: "release", tag: "v2.0", version: "2.0", labels: "area/build", "origin-platform": "github", "origin-url": "https://x/y" }, content: "v2.0\n\nnotes", author: "Ada", effectiveTime: 1, versions: [] };
   const rcard = GS.releaseCard(relItem);
-  const headChips = (node) => findClass(findClass(node, "card-head")[0] || { _children: [] }, "chip").map(textOf);
-  ok("release card drops the version chip its tag already names", !headChips(rcard).includes("v2.0"), headChips(rcard).join(" | "));
+  const rowChips = (node) => findClass(findClass(node, "card-chips")[0] || { _children: [] }, "chip").map(textOf);
+  ok("release card drops the version chip its tag already names", !rowChips(rcard).includes("v2.0"), rowChips(rcard).join(" | "));
   const namedTag = GS.releaseCard({ commit: relItem.commit, header: { type: "release", tag: "nightly", version: "1.3.0" }, content: "Nightly build", author: "Ada", effectiveTime: 1, versions: [] });
-  ok("release card keeps a version chip its tag does not name", headChips(namedTag).includes("v1.3.0"), headChips(namedTag).join(" | "));
+  ok("release card leads its chip row with a version chip its tag does not name", rowChips(namedTag)[0] === "v1.3.0" && findClass(findClass(namedTag, "card-head")[0], "chip").length === 0, rowChips(namedTag).join(" | "));
   const rEnrich = findClass(rcard, "card-chips").flatMap((r) => findClass(r, "chip").map(textOf));
   ok("release card renders labels + origin via the shared enrichment chip row", rEnrich.includes("area/build") && rEnrich.some((t) => /↗/.test(t)), rEnrich.join(" | "));
 
@@ -383,7 +383,8 @@ async function main() {
   ok("code timeline card renders the commit subject", findClass(cc, "subject").length > 0 && textOf(findClass(cc, "subject")[0]).length > 0, textOf(findClass(cc, "subject")[0] || { _children: [] }));
   ok("code timeline card leads with the author's avatar and carries no glyph", findClass(cc, "avatar").length === 1 && findClass(cc, "type-glyph").length === 0);
   ok("code timeline card links its hash to #commit:", findClass(cc, "hash").some((h) => (h.getAttribute("href") || "").indexOf("#commit:") === 0), findClass(cc, "hash").map((h) => h.getAttribute("href")).join(" | "));
-  ok("code timeline card has no state/enrichment chip row (no header)", findClass(cc, "card-chips").length === 0);
+  const ccChips = findClass(cc, "card-chips").flatMap((r) => findClass(r, "chip").map(textOf));
+  ok("code timeline card's chip row holds its branch chip and no enrichment (no header)", ccChips.join(",") === "⎇ " + code[0]._branch, ccChips.join(","));
 
   // ---- windowed timeline pages code commits in step (bounded, deduped) ----
   const wctx = GS.newContext(BASE);

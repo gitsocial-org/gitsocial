@@ -25,8 +25,10 @@ const (
 	siteItemsKeyPrefix = ".gitsocial/site/items/"
 	// siteBodiesKeyPrefix is the bucket namespace of the per-extension search corpora.
 	siteBodiesKeyPrefix = ".gitsocial/site/bodies/"
-	// siteItemsVersion is the items corpus's schema version; version 5 adds the text of a body-only entry.
-	siteItemsVersion = 5
+	// siteItemsVersion is the items corpus's schema version; version 5 adds the text of a body-only entry, version 6 the excerpt of a titled one.
+	siteItemsVersion = 6
+	// siteExcerptLen caps an entry's excerpt, in characters.
+	siteExcerptLen = 280
 	// siteBodiesVersion is the bodies corpus's schema version.
 	siteBodiesVersion = 4
 	// siteCodeItemsVersion is the code corpus's schema version; its entries carry parent shas.
@@ -63,6 +65,8 @@ type siteMetaEntry struct {
 	Subject string `json:"subject"`
 	// Text is the first line of a comment, feedback, repost or quote, the row text of both page passes; omitempty keeps every other entry byte-identical.
 	Text string `json:"text,omitempty"`
+	// Excerpt is the first paragraph after the subject of every other entry, the excerpt of its list row on both page passes.
+	Excerpt string `json:"excerpt,omitempty"`
 	// Branch is a code entry's attributed branch; omitempty keeps gitmsg entries byte-identical.
 	Branch string `json:"branch,omitempty"`
 	// Parents is a code entry's parent shas, which the repository graph needs.
@@ -105,11 +109,16 @@ type walkedItem struct {
 	Parents []string
 }
 
-// metaOf projects a walked commit into a metadata-index entry; a body-only type, and an edit that may omit its type, also carry the first line (TestParityRowText).
+// metaOf projects a walked commit into a metadata-index entry; a body-only type, and an edit that may omit its type, also carry the first line (TestParityRowText), and every other entry its excerpt.
 func metaOf(w walkedItem) siteMetaEntry {
 	e := siteMetaEntry{SHA: w.SHA, Author: w.Author, Email: w.Email, TS: w.TS, Header: w.Header, Subject: subjectOf(w.Message)}
-	if h := protocol.ParseHeader(w.Header); h != nil && (sitePageBodyOnly(h.Fields["type"]) || h.Fields["edits"] != "") {
+	h := protocol.ParseHeader(w.Header)
+	bodyOnly := h != nil && sitePageBodyOnly(h.Fields["type"])
+	if bodyOnly || (h != nil && h.Fields["edits"] != "") {
 		e.Text = contentFirstLine(w.Message)
+	}
+	if !bodyOnly {
+		e.Excerpt = siteExcerpt(siteCleanContent(w.Message))
 	}
 	e.AdoptedAuthor, e.AdoptedEmail, e.AdoptedTime = adoptedOf(w)
 	return e
@@ -221,6 +230,26 @@ func contentFirstLine(message string) string {
 	content = strings.TrimSpace(siteStripLinkRefDefs(strings.ReplaceAll(content, "\r", "")))
 	line, _, _ := strings.Cut(content, "\n")
 	return strings.TrimSpace(line)
+}
+
+// siteCleanContent returns a message's content as an item page reads it: the GitMsg sections and the link reference definitions dropped.
+func siteCleanContent(message string) string {
+	return siteStripLinkRefDefs(protocol.ExtractCleanContent(message))
+}
+
+// siteExcerpt returns the first paragraph after the subject of a clean content, as written, cut at siteExcerptLen characters on a word boundary.
+func siteExcerpt(content string) string {
+	_, body := protocol.SplitSubjectBody(content)
+	para, _, _ := strings.Cut(strings.ReplaceAll(body, "\r", ""), "\n\n")
+	runes := []rune(strings.TrimSpace(para))
+	if len(runes) <= siteExcerptLen {
+		return string(runes)
+	}
+	cut := string(runes[:siteExcerptLen])
+	if i := strings.LastIndexAny(cut, " \t\n"); i > 0 {
+		cut = cut[:i]
+	}
+	return strings.TrimSpace(cut)
 }
 
 // bodyOf projects a walked commit into a bodies-corpus entry.

@@ -27,7 +27,7 @@
   ],
   ".heading-row": [
     {
-      "shape": "h1 > div.view-count",
+      "shape": "h1 > div.page-actions",
       "padding": "0px",
       "margin": "0px",
       "fontSize": "15.2px",

@@ -38,7 +38,7 @@ async function main() {
   {
     const base = ORIGIN + "/healed-demo/";
     const manifest = await fetchJSON(base, ".gitsocial/site/items/social/manifest.json");
-    ok("healed: items manifest restored", manifest !== null && manifest.version === 5, JSON.stringify(manifest && { version: manifest.version }));
+    ok("healed: items manifest restored", manifest !== null && manifest.version === 6, JSON.stringify(manifest && { version: manifest.version }));
     const refs = await fetchJSON(base, ".gitsocial/refs.json");
     const tip = refs && refs["refs/heads/gitmsg/social"];
     ok("healed: manifest tip matches the branch tip", manifest && tip && manifest.tip === tip, "manifest.tip=" + (manifest && manifest.tip) + " ref=" + tip);
@@ -46,7 +46,7 @@ async function main() {
     ok("healed: bodies manifest lockstepped", bodies && bodies.tip === manifest.tip);
     const ctx = GS.newContext(base);
     const idx = await GS.loadItemsIndex(ctx, "social");
-    ok("healed: loadItemsIndex returns the v5 index", idx && idx.version === 5);
+    ok("healed: loadItemsIndex returns the v6 index", idx && idx.version === 6);
     const items = await GS.loadExtItems(ctx, "social");
     ok("healed: all posts render, including the healing push", items.length >= 3, "items=" + items.length);
     const subjects = items.map((i) => (i.content || "").split("\n")[0]);

@@ -65,6 +65,10 @@ console.log("=== parity invariant: feedback card verdict + anchor chip ===");
 for (const c of FIX.feedbackCards) {
   eq(GS.feedbackVerdict(c.header), c.expectVerdict, c.name + ": verdict");
   eq(GS.feedbackAnchorLabel(c.header), c.expectAnchor, c.name + ": anchor label");
+  const fb = GS.feedbackCard({ commit: { hash: "a".repeat(40), short: "a".repeat(12), authorTime: 1750000000 }, header: c.header, content: "A note", author: "Ada" }, false, null);
+  const want = [c.expectVerdict.replace("-", " "), c.expectSuggestion ? "suggestion" : "", c.expectAnchor].filter(Boolean);
+  eq(findCls(findCls(fb, "card-chips")[0], "chip").map((n) => n.textContent).join("|"), want.join("|"), c.name + ": the chip row holds the verdict, then the anchor");
+  eq(findCls(findCls(fb, "meta")[0], "chip").length, 0, c.name + ": the author line carries no chip");
 }
 
 console.log("=== parity invariant: the file route a feedback chip opens ===");
@@ -104,6 +108,10 @@ for (const c of FIX.treeIcons) {
 }
 for (const c of FIX.releaseRows) {
   eq(GS.releaseAssetLabel(c.artifacts), c.expectLabel, c.name + ": asset label");
+  const row = GS.releaseCard({ commit: { hash: "e".repeat(40), short: "e".repeat(12), authorTime: 1700000000 }, header: { type: "release", tag: "v1.0", artifacts: c.artifacts }, content: "v1.0", author: "unknown" });
+  const chips = findCls(findCls(row, "card-chips")[0], "chip").map((n) => n.textContent);
+  eq(chips.length ? chips[chips.length - 1] : "", c.expectLabel ? "⏏ " + c.expectLabel : "", c.name + ": the last chip of the row, the count after the release glyph");
+  eq(findCls(row, "meta")[0].textContent.indexOf("asset"), -1, c.name + ": the author line carries no count");
 }
 
 console.log("=== parity invariant: the blocks a release body splits into ===");
@@ -151,13 +159,16 @@ for (const c of FIX.cardSkeleton.cases) {
     continue;
   }
   eq(slots(head), c.expectHead.join(","), c.name + ": head slots");
-  eq(slots(row).split(",").slice(0, 4).join(","), FIX.cardSkeleton.parts.slice(0, 4).join(","), c.name + ": the avatar, the glyph, the author line, then the head");
+  const got = slots(row).split(",");
+  eq(got.join(","), FIX.cardSkeleton.parts.filter((p) => got.includes(p)).join(","), c.name + ": the parts it fills, in the fixture's order");
+  // The app clamps all of the body, so its excerpt opens on the paragraph the static entry carries.
+  if (c.expectExcerpt) eq(row._children.filter((n) => n && n._cls && n._cls.has("excerpt")).map((n) => n.textContent).join().trim().startsWith(c.expectExcerpt.replace(/\*\*/g, "")), true, c.name + ": the app's excerpt opens on the first paragraph");
 }
-// The chip row is the app's own third part, so the full order shows on a card that fills it.
+// A card with a chip row and a body fills every part, so the full order shows.
 const chipped = GS.prCard({
   commit: { hash: "b".repeat(40), short: "b".repeat(12), authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000, refs: [] },
   header: { type: "pull-request", state: "open", head: "feature", base: "trunk", labels: "kind/bug" },
-  content: "Rework the walk", author: "Ada", effectiveTime: 1750000000,
+  content: "Rework the walk\n\nThe walk stops at the first tip.", author: "Ada", effectiveTime: 1750000000,
 });
 eq(slots(chipped), FIX.cardSkeleton.parts.join(","), "a card that fills every part keeps the fixture's order");
 
@@ -329,21 +340,48 @@ for (const c of FIX.pageBodyRefs) {
   eq(urls.every((a) => a.textContent === a.getAttribute("href")), true, c.name + ": a url anchor reads as its url");
 }
 
-console.log("=== parity invariant: the definition rows of an item page ===");
+console.log("=== parity invariant: the definition rows and the chip row of an item page ===");
 // rowBits names a trailer value the way site_parity_test.go compares it: each anchor with its href and rel, each text node as text, the separators dropped.
 function rowBits(value) {
   const nodes = typeof value === "string" ? [{ nodeType: 3, nodeValue: value }] : value.tagName === "A" ? [value] : value._children;
   return nodes.filter((n) => !(n.nodeType === 3 && n.nodeValue === ", "))
     .map((n) => (n.nodeType === 3 ? { text: n.nodeValue } : { text: n.textContent, href: n.getAttribute("href") || "", rel: n.getAttribute("rel") || "" }));
 }
+// chipShape names a chip the way site_parity_test.go compares it: kind, value class, word, glyph, label, link and rel, then each side of a branch pair.
+const chipShape = (c) => [c.kind, c.class, c.word, c.glyph, c.text].map((v) => v || "").join("|") + "@" + (c.href || "") + (c.rel ? "[" + c.rel + "]" : "") + (c.parts || []).map((p) => "[" + p.text + "@" + (p.href || "") + "]").join("");
 const metaRowShape = (rows) => rows.map((r) => r.key + "=" + r.bits.map((b) => b.text + "@" + (b.href || "") + (b.rel ? "[" + b.rel + "]" : "")).join("|")).join(";");
 for (const c of FIX.itemPageMeta) {
   const rows = GS.trailerRows(c.header, c.ext === "release" ? GS.RELEASE_DETAIL_SKIP : [], null);
   eq(metaRowShape(rows.map((r) => ({ key: r.key, bits: rowBits(r.value) }))), metaRowShape(c.expectRows), c.name + ": rows");
-  // The detail's label row is the label and priority chips of the card's chip row.
-  const card = GS.timelineCard({ commit: { hash: "a".repeat(40), short: "a".repeat(12), authorName: "Ada", authorTime: 1750000000, refs: [] }, header: c.header, content: "Subject", author: "Ada", effectiveTime: 1750000000, _ext: c.ext, _branch: "gitmsg/" + c.ext });
-  const labels = findCls(card, "chip").filter((n) => n._cls.has("chip-label") || n._cls.has("chip-priority")).map((n) => n.textContent + "@" + n.getAttribute("href"));
-  eq(labels.join("|"), (c.expectLabels || []).map((b) => b.text + "@" + b.href).join("|"), c.name + ": label chips");
+  // The card and the detail render the chip row of itemChips.
+  const chips = GS.itemChips(c.header, c.ext).map((d) => ({ kind: d.kind, class: d.class, word: d.word, glyph: d.icon, text: d.label, href: d.href, rel: d.rel, parts: d.parts && d.parts.map((p) => ({ text: p.label, href: p.href })) }));
+  eq(chips.map(chipShape).join(","), (c.expectChips || []).map(chipShape).join(","), c.name + ": chips");
+}
+
+console.log("=== parity invariant: the class, glyph and text of each chip kind ===");
+for (const c of FIX.chipKinds) {
+  const row = c.source === "feedback"
+    ? findCls(GS.feedbackCard({ commit: { hash: "a".repeat(40), short: "a".repeat(12), authorTime: 1750000000 }, header: c.header, content: "A note", author: "Ada" }, false, null), "chip")
+    : GS.itemChips(c.header, c.ext).filter((d) => d.kind === c.kind).map(GS.chipEl);
+  const chip = row.find((n) => n._cls.has(GS.chipClass({ kind: c.kind }).split(" ")[1]));
+  eq(chip ? chip.className : "", c.class, c.name + ": class");
+  eq(chip ? chip.textContent : "", c.label, c.name + ": text");
+  eq(c.glyph ? (chip ? chip.textContent : "").split(" ").includes(c.glyph) : true, true, c.name + ": glyph");
+}
+
+console.log("=== parity invariant: the count chips of a card ===");
+for (const c of FIX.countChips) {
+  const at = (id, header, subject) => ({ commit: { hash: id.repeat(40), short: id.repeat(12), authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000, refs: [] }, header, content: subject, author: "Ada", effectiveTime: 1750000000 });
+  const it = at("a", c.header, "Subject");
+  const ref = "#commit:" + "a".repeat(12) + "@gitmsg/pm";
+  const subs = Array.from({ length: c.sub }, (_, i) => at(String(i + 1), { type: "issue", state: "open", parent: ref }, "Sub " + i));
+  const members = Array.from({ length: c.issues }, (_, i) => at(String(i + 5), { type: "issue", state: "open", [c.header.type]: ref }, "Member " + i));
+  const counts = new Map([["a".repeat(12), c.counts]]);
+  const type = c.header.type;
+  const view = type === "issue" ? GS.issuesBody([it].concat(subs), counts) : type === "milestone" ? GS.milestonesBody([it].concat(members), counts) : type === "sprint" ? GS.sprintsBody([it].concat(members), counts) : [GS.releaseCard(it, c.counts)];
+  const card = view.flatMap((n) => findCls(n, "card").concat(n._cls && n._cls.has("card") ? [n] : [])).find((n) => findCls(n, "subject").some((s) => s.textContent === (type === "release" ? c.header.tag : "Subject")));
+  const row = card && findCls(card, "card-chips")[0];
+  eq(row ? row._children.filter((n) => n && n.nodeType === 1).map((n) => n.textContent).join("|") : "", c.expectChips.join("|"), c.name);
 }
 
 console.log("=== parity invariant: tag display order ===");

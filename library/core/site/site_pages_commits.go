@@ -131,17 +131,18 @@ func writeSiteCommitPages(client *objstore.Client, prefix string, entries []site
 	return state, nil
 }
 
-// buildSiteCommitEntry renders one commit row: its subject linking into the app's commit view, its meta line, and the id that makes the row citable.
+// buildSiteCommitEntry renders one commit row: its subject linking into the app's commit view, its meta line, the excerpt its index entry carries, and the id that makes the row citable.
 func buildSiteCommitEntry(e siteMetaEntry, base, branch string) sitePageListEntry {
 	short := e.SHA[:12]
 	href := base + "index.html#commit:" + short + "@" + branch
 	// A commit is the default thing of a repository, so its row carries no type glyph under the face, as commitCard in gs-render.js.
 	return sitePageListEntry{
-		ID:     "c-" + short,
-		Avatar: sitePageAvatar(e.Author, e.Email),
-		Href:   href,
-		Title:  e.Subject,
-		Meta:   []sitePageBit{{Class: "author", Text: sitePageAuthorLabel(e.Author, "")}, sitePageTimeBit(e.TS), sitePageHashBit(short, href)},
+		ID:      "c-" + short,
+		Avatar:  sitePageAvatar(e.Author, e.Email),
+		Href:    href,
+		Title:   e.Subject,
+		Excerpt: e.Excerpt,
+		Meta:    []sitePageBit{{Class: "author", Text: sitePageAuthorLabel(e.Author, "")}, sitePageTimeBit(e.TS), sitePageHashBit(short, href)},
 	}
 }
 

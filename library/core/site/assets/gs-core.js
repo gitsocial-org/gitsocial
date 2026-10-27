@@ -1234,7 +1234,7 @@
     try { m = JSON.parse(mtext); } catch { return null; }
     // A manifest written before the empty list was pinned carries null for no sealed shard; the head alone is a complete index.
     const shards = m && m.shards == null ? [] : m && m.shards;
-    if (!m || (m.version !== 4 && m.version !== 5) || !/^[0-9a-f]{40}$/.test(m.tip || "") || !Array.isArray(shards)) return null;
+    if (!m || (m.version !== 4 && m.version !== 5 && m.version !== 6) || !/^[0-9a-f]{40}$/.test(m.tip || "") || !Array.isArray(shards)) return null;
     const newest = shards.length ? shards[shards.length - 1] : null;
     // Assemble oldest-first (shard, then head) before reversing to the newest-first order resolveItems expects.
     const eagerKeys = [];
@@ -1279,13 +1279,13 @@
     return idx;
   }
 
-  // metaCommit converts one metadata-index entry into a body-less commit record, marked hollow until hydrateItem fills it.
+  // metaCommit converts one metadata-index entry into a body-less commit record, marked hollow until hydrateItem fills it; a card shows its excerpt until then.
   function metaCommit(e) {
     const header = String(e.header || "");
     return {
       hash: e.sha, short: e.sha.slice(0, 12), tree: "", parents: [],
       authorName: e.author || "", authorEmail: e.email || "", authorTime: e.ts || 0,
-      content: String(e.text || ""), rawMessage: header, subject: String(e.subject || ""),
+      content: String(e.text || ""), rawMessage: header, subject: String(e.subject || ""), excerpt: String(e.excerpt || ""),
       gitmsg: parseGitmsg(header), refs: [], hollow: true,
       adoptedAuthor: e.adoptedAuthor || "", adoptedEmail: e.adoptedEmail || "", adoptedTime: e.adoptedTime || "",
     };
@@ -3079,6 +3079,13 @@
     return [{ class: "state " + chipStateClass(state), label: state }];
   }
 
+  // pageHeadChips splits a page's head chips by slot: the pills that end the meta line, open included, and the version that leads the chip row. Mirrors sitePageHeadChips in site_pages_html.go.
+  function pageHeadChips(header, ext, head, retracted) {
+    const chips = headChips(header, ext, head, retracted);
+    const version = releaseVersionChip((header || {}).version, head);
+    return { pills: chips.filter((c) => c.label !== version), identity: chips.filter((c) => c.label === version) };
+  }
+
   // rowChips lists a row's head chips: the head's own chips, less an open or planned pill, the resting state of an item or a sprint. Mirrors siteRowChips in site_pages_html.go.
   function rowChips(header, ext, head, retracted) {
     const chips = headChips(header, ext, head, retracted);
@@ -3091,6 +3098,185 @@
     const lead = chips.length && chips[0].label !== releaseVersionChip((header || {}).version, head) ? chips[0] : null;
     return { lead, tail: chips.slice(lead ? 1 : 0) };
   }
+
+  // searchHref builds a #/search link with one facet prefilled, the token encoded as the route decodes it.
+  function searchHref(facet, value) {
+    return "#/search/" + encodeURIComponent(facet + ":" + value);
+  }
+
+  // assigneeLabel shortens an assignee email to its local part.
+  function assigneeLabel(a) {
+    const at = a.indexOf("@");
+    return at > 0 ? a.slice(0, at) : a;
+  }
+
+  // branchPart describes one side of a pull request's branch pair: a branch of this repository linked to its log, a browsable fork branch as owner/repo:branch linked to its URL, anything else as written. Mirrors siteBranchPart in site_pages_html.go.
+  function branchPart(field) {
+    const { url, name } = parseBranchField(field);
+    if (!url && name) return { label: name, href: "#branch:" + name };
+    if (/^https:\/\//.test(url)) {
+      const repo = url.replace(/\.git$/, "").split("/").filter(Boolean).slice(-2).join("/");
+      return { label: repo + ":" + name, href: field, rel: "noopener", title: field };
+    }
+    return { label: field || "?" };
+  }
+
+  // BOT_LOGINS and BOT_DOMAINS match an automation in either half of the origin author email.
+  const BOT_LOGINS = /^(app\/.+|.+\[bot\]|dependabot|dependabot-preview|vercel|netlify|claassistant|cla-bot|github-actions|codecov|codecov-commenter|renovate|renovate-bot|sonarcloud|sonarqubecloud|greptileai|coderabbitai|copilot|copilot-pull-request-reviewer|semantic-release-bot|allcontributors|imgbot|snyk-bot|mergify)$/i;
+  const BOT_DOMAINS = /(^|\.)(coderabbit\.ai|dependabot\.com|renovateapp\.com|greptile\.com|codecov\.io|mergify\.com)$/i;
+
+  // isBotAuthor reports whether an origin author is an automation; the login drops GitHub's numeric id prefix.
+  function isBotAuthor(h) {
+    const email = (h["origin-author-email"] || "").trim().toLowerCase();
+    const at = email.indexOf("@");
+    const login = (at > 0 ? email.slice(0, at) : email).replace(/^\d+\+/, "");
+    const domain = at > 0 ? email.slice(at + 1) : "";
+    const name = (h["origin-author-name"] || "").trim().toLowerCase();
+    return !!((login && BOT_LOGINS.test(login)) || (domain && BOT_DOMAINS.test(domain)) || name.endsWith("[bot]"));
+  }
+
+  // CHIP_KIND_CLASS maps a chip kind to its class; a value class such as chip-label rides beside it. Mirrors siteChipKindClass in site_pages_html.go.
+  const CHIP_KIND_CLASS = { state: "state", count: "count chip-count", reference: "chip-ref", facet: "chip-facet", date: "chip-date", provenance: "chip-prov" };
+
+  // chipClass lists a chip descriptor's classes: chip, the class of its kind, then its value class. Mirrors sitePageChipClass in site_pages_html.go.
+  function chipClass(chip) {
+    return ["chip", CHIP_KIND_CLASS[chip.kind], chip.class].filter(Boolean).join(" ");
+  }
+
+  // chipLead words what comes before a chip's label: the relation word, then the glyph. Mirrors sitePageChipLead in site_pages_html.go.
+  function chipLead(chip) {
+    return [chip.word, chip.icon].filter(Boolean).join(" ");
+  }
+
+  // chipText words a chip as the reader sees it: the relation word, the glyph, then the label.
+  function chipText(chip) {
+    return [chipLead(chip), chip.label].filter(Boolean).join(" ");
+  }
+
+  // HEADER_REF_RE matches one header ref, of this repository or qualified by one.
+  const HEADER_REF_RE = /^[^#\s]*#(?:commit|branch|tag|file|list):\S+$/;
+
+  // ITEM_REFS are the relation fields a chip names, in row order: the key, the word before the glyph, the glyph of the target, "" for the glyph of the type its branch holds, and whether a card caps it. Mirrors siteItemRefs in site_pages_html.go.
+  const ITEM_REFS = [
+    ["original", "", ""], ["reply-to", "", "↩"], ["pull-request", "", "△"], ["milestone", "", "◇"], ["sprint", "", "◷"], ["parent", "", "☐"],
+    ["closes", "closes", "☐", true], ["refs", "refs", "☐", true],
+    ["blocks", "blocks", "☐", true], ["blocked-by", "blocked by", "☐", true], ["related", "related", "☐", true],
+  ];
+
+  // REF_CHIP_CAP is the chips a card shows per capped relation before its "+n" chip.
+  const REF_CHIP_CAP = 3;
+
+  // refExt names the extension a ref's branch is of, pm when it names no gitmsg branch.
+  function refExt(ref) {
+    const branch = refBranch(ref);
+    return branch.startsWith("gitmsg/") ? branch.slice(7) : "pm";
+  }
+
+  // refGlyph names the glyph of a ref's target type, else of the type its branch holds, an issue for a pm ref. Mirrors siteRefGlyph in site_pages_html.go.
+  function refGlyph(ref, type) {
+    const t = type || EXT_DEFAULT_TYPE[refExt(ref)];
+    return t === "issue" ? "☐" : TYPE_GLYPH[t] || "";
+  }
+
+  // relationChips lists the reference chips of one relation field: a ref of this repository links its route and names its target's subject, else its short hash; a browsable cross-repository ref links its URL; a value that is not refs alone is one chip as written. more caps a card's list and links its "+n" chip. Mirrors siteRelationChips in site_pages_html.go.
+  function relationChips(rel, val, subject, more, type) {
+    const [, word, icon, capped] = rel;
+    const refs = String(val).split(",").map((s) => s.trim()).filter(Boolean);
+    if (!refs.length) return [];
+    if (!refs.every((r) => HEADER_REF_RE.test(r))) return [{ kind: "reference", word, icon, label: String(val) }];
+    const shown = more && capped ? refs.slice(0, REF_CHIP_CAP) : refs;
+    const chips = shown.map((ref) => {
+      const repo = refRepoUrl(ref), hash = refHash(ref);
+      const chip = { kind: "reference", word, icon: icon || refGlyph(ref, !repo && hash && type ? type(refExt(ref), hash) : ""), label: ref, title: ref };
+      if (!repo) chip.href = ref;
+      else if (/^https:\/\//.test(repo)) Object.assign(chip, { href: ref, rel: "noopener" });
+      if (hash) chip.label = (!repo && subject && subject(refExt(ref), hash)) || hash;
+      return chip;
+    });
+    if (shown.length < refs.length) chips.push({ kind: "reference", label: "+" + (refs.length - shown.length), href: more });
+    return chips;
+  }
+
+  // dueOverdue reports a due date before today on an item that is open, or has no state; today is the UTC date. Mirrors siteDueOverdue in site_pages_html.go.
+  function dueOverdue(h) {
+    const due = String(h.due || "");
+    return /^\d{4}-\d{2}-\d{2}/.test(due) && (!h.state || h.state === "open") && due.slice(0, 10) < new Date().toISOString().slice(0, 10);
+  }
+
+  // tipPart describes one side of a pull request's tip pair: a hash by its short, linked to its commit on the branch of this repository it points into, else the value as written, "?" when absent. Mirrors siteTipPart in site_pages_html.go.
+  function tipPart(tip, field) {
+    const val = String(tip || "");
+    if (!/^[0-9a-f]{7,40}$/.test(val)) return { label: val || "?" };
+    const side = parseBranchField(field);
+    return { label: val.slice(0, 12), href: commitRef(val, side.url ? "" : side.name) };
+  }
+
+  // itemChips lists an item's chip row as {kind, class, word, icon, label, href, rel, title, parts} descriptors, in kind order: the sprint dates first; the issue and asset counts; the branch pair, the tip pair head first as the branch pair, stacked and the relations; the due date; priority, assignees, reviewers and labels; origin, bot and the fork mark. opts.subject names a reference target and opts.type its type, opts.more is the page a card's "+n" chip opens, opts.issues the member issues of a milestone or sprint card, none at zero, and opts.fork the repository of a fork pull request. Mirrors siteItemChips in site_pages_html.go.
+  function itemChips(header, ext, opts) {
+    const h = header || {};
+    const o = opts || {};
+    const type = h.type || EXT_DEFAULT_TYPE[ext] || ext;
+    const chips = [];
+    if (type === "sprint" && (h.start || h.end)) chips.push({ kind: "date", label: (h.start || "?") + " → " + (h.end || "?") });
+    if (o.issues) chips.push({ kind: "count", icon: "☐", label: o.issues + (o.issues === 1 ? " issue" : " issues") });
+    const assets = type === "release" ? releaseAssetLabel(h.artifacts) : "";
+    if (assets) chips.push({ kind: "count", icon: TYPE_GLYPH.release, label: assets });
+    if (type === "pull-request" && (h.head || h.base)) {
+      const parts = [branchPart(h.head), branchPart(h.base)];
+      chips.push({ kind: "reference", icon: "⎇", label: parts[0].label + " → " + parts[1].label, parts });
+    }
+    if (type === "pull-request" && (h["base-tip"] || h["head-tip"])) {
+      const parts = [tipPart(h["head-tip"], h.head), tipPart(h["base-tip"], h.base)];
+      chips.push({ kind: "reference", icon: TYPE_GLYPH.commit, label: parts[0].label + " → " + parts[1].label, parts });
+    }
+    if (h["depends-on"]) {
+      const under = anyRefHash(h["depends-on"].split(",")[0]);
+      chips.push(Object.assign({ kind: "reference", icon: TYPE_GLYPH["pull-request"], label: "stacked" }, under ? { href: commitRef(under, "gitmsg/review") } : {}));
+    }
+    for (const rel of ITEM_REFS) if (h[rel[0]]) chips.push(...relationChips(rel, h[rel[0]], o.subject, o.more, o.type));
+    if (h.due) chips.push({ kind: "date", class: "chip-due" + (dueOverdue(h) ? " overdue" : ""), label: "due " + h.due });
+    const labels = itemLabels(h);
+    const labelName = (l) => (l.scope ? l.scope + "/" + l.value : l.value);
+    const emails = (key) => (h[key] || "").split(",").map((s) => s.trim()).filter(Boolean);
+    for (const l of labels) if (l.scope === "priority") chips.push({ kind: "facet", class: "chip-priority prio-" + l.value, label: l.value, href: searchHref("label", labelName(l)) });
+    for (const a of emails("assignees")) chips.push({ kind: "facet", class: "chip-assignee", icon: "☛", label: assigneeLabel(a), href: searchHref("assignee", a) });
+    for (const r of emails("reviewers")) chips.push({ kind: "facet", icon: "✎", label: assigneeLabel(r), href: searchHref("reviewer", r) });
+    for (const l of labels) {
+      if (l.scope === "priority" || l.scope === "status") continue;
+      chips.push({ kind: "facet", class: "chip-label", label: labelName(l), href: searchHref("label", labelName(l)) });
+    }
+    if (h["origin-platform"] || h["origin-url"] || h["origin-author-name"]) {
+      const platform = h["origin-platform"] || "imported", url = h["origin-url"] || "";
+      chips.push(Object.assign({ kind: "provenance", class: "chip-origin", icon: "↗", label: platform, title: url || platform }, /^https?:/i.test(url) ? { href: url, rel: "noopener" } : {}));
+    }
+    if (isBotAuthor(h)) chips.push({ kind: "provenance", class: "chip-bot", icon: "⚙", label: "bot", title: h["origin-author-email"] || "automated author" });
+    if (o.fork) chips.push(Object.assign({ kind: "provenance", icon: "⑂", label: "fork", title: o.fork }, /^https:\/\//.test(o.fork) ? { href: o.fork } : {}));
+    return chips;
+  }
+
+  // indexEntry finds an item's subject and type in the loaded items index of its extension, null when the index is not loaded or holds no entry; the newest version's subject wins, and the newest version that names a type gives the type.
+  function indexEntry(ctx, ext, hash) {
+    const idx = ctx && ctx.itemsIndex && ctx.itemsIndex[ext];
+    if (!idx || !Array.isArray(idx.items) || !hash) return null;
+    if (!idx.subjects || idx.subjects.size !== idx.items.length) {
+      const map = new Map();
+      for (const e of idx.items) {
+        const h = parseGitmsg(String(e.header || "")) || {};
+        const key = h.edits && !refRepoUrl(h.edits) ? refHash(h.edits) : String(e.sha || "").slice(0, 12);
+        if (!key) continue;
+        if (!map.has(key)) map.set(key, { subject: h.retracted === "true" ? "" : subjectText(e.subject || ""), type: h.type || "" });
+        else if (!map.get(key).type) map.get(key).type = h.type || "";
+      }
+      idx.subjects = { size: idx.items.length, map };
+    }
+    return idx.subjects.map.get(hash.slice(0, 12)) || null;
+  }
+
+  // indexSubject names an item from the loaded items index of its extension, "" when none names it.
+  function indexSubject(ctx, ext, hash) { return (indexEntry(ctx, ext, hash) || {}).subject || ""; }
+
+  // indexType names an item's type from the loaded items index of its extension, "" when none holds it. Mirrors siteRefTypes in site_pages_html.go.
+  function indexType(ctx, ext, hash) { return (indexEntry(ctx, ext, hash) || {}).type || ""; }
 
   // stateCounts tallies items by header state and returns the total with a per-state map.
   function stateCounts(items) {
@@ -3257,13 +3443,13 @@
     };
   }
 
-  // codeMetaCommit converts one code index entry into a body-less commit record carrying its subject, branch and parents, hollow until bodies/code fills it.
+  // codeMetaCommit converts one code index entry into a body-less commit record carrying its subject, excerpt, branch and parents, hollow until bodies/code fills it.
   function codeMetaCommit(e) {
     return {
       hash: e.sha, short: String(e.sha || "").slice(0, 12), tree: "",
       parents: Array.isArray(e.parents) ? e.parents : [],
       authorName: e.author || "", authorEmail: e.email || "", authorTime: e.ts || 0,
-      content: String(e.subject || ""), rawMessage: String(e.subject || ""),
+      content: String(e.subject || ""), rawMessage: String(e.subject || ""), excerpt: String(e.excerpt || ""),
       subject: String(e.subject || ""), gitmsg: null, refs: [], _branch: e.branch || "", hollow: true,
     };
   }
@@ -4867,7 +5053,7 @@
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, resolveMergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,
-    headFor, parseRefs, refRepoUrl, releaseAssets, releaseAssetLabel, itemBodyBlocks, headSubject, releaseVersionChip, headChips, rowChips, rowHeadChips, chipStateClass, stateCounts, groupThread, flattenThread,
+    headFor, parseRefs, refRepoUrl, releaseAssets, releaseAssetLabel, itemBodyBlocks, headSubject, releaseVersionChip, headChips, pageHeadChips, rowChips, rowHeadChips, itemChips, refExt, relationChips, indexSubject, indexType, chipClass, chipLead, chipText, HEADER_REF_RE, searchHref, chipStateClass, stateCounts, groupThread, flattenThread,
     THREAD_MAX_DEPTH, embeddedRefs, groupPM, authorStats, iconName, iconColorClass,
     ANCESTOR_CAP, refBranch, parentRef, parentQuote, quotedRefFor, resolveAncestors,
     CONCURRENCY, isBinary, isLFSPointer,

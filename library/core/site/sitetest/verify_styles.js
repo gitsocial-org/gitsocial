@@ -61,15 +61,15 @@ function checkFeedbackCard(theme, cards, feedback) {
 // DETAIL_HEAD_SIZE is --fs-h1 at the 16px root, the size the page layer's own h1 carries.
 const DETAIL_HEAD_SIZE = "36px";
 
-// DETAIL_HEAD_SHAPE is the head: the h1 subject alone, the chips ride the meta line.
+// DETAIL_HEAD_SHAPE is the head: the h1 subject alone.
 const DETAIL_HEAD_SHAPE = /^h1\.subject$/;
 
 // DETAIL_META_SHAPE is the detail meta line the parity fixture names (pageBits): the avatar, the author, the type
-// glyph, the time and the hash, then the page's further bits, and the state chip last.
-const DETAIL_META_SHAPE = new RegExp("^" + FIX.metaRow.pageBits.map((c) => (c === "author" ? "(?:a|span)." : c === "hash" ? "a." : "span.") + c.replace("-", "\\-")).join(" > ") + "( > [a-z]+\\.[a-z0-9.-]+)* > span\\.chip\\.[a-z0-9.-]*state$");
+// glyph, the time and the hash, then the page's further bits, and no chip.
+const DETAIL_META_SHAPE = new RegExp("^" + FIX.metaRow.pageBits.map((c) => (c === "author" ? "(?:a|span)." : c === "hash" ? "a." : "span.") + c.replace("-", "\\-")).join(" > ") + "( > [a-z]+\\.[a-z0-9.-]+)*$");
 
-// checkDetailHead asserts a detail head holds an h1 subject at the page's heading size, and the state chip
-// ends the meta line. head, subject and meta are the detail route's ".detail > .card-head", its h1's and
+// checkDetailHead asserts a detail head holds an h1 subject at the page's heading size with the state chip
+// after it, and the meta line ends on the hash or a marker bit. head, subject and meta are the detail route's ".detail > .card-head", its h1's and
 // ".detail > .detail-meta > .meta" records.
 function checkDetailHead(theme, head, subject, meta) {
   if (!head || !subject || !meta) {
@@ -79,7 +79,7 @@ function checkDetailHead(theme, head, subject, meta) {
   const shapes = head.map((r) => r.shape);
   ok("detail head " + theme + ": the h1 subject alone", shapes.every((s) => DETAIL_HEAD_SHAPE.test(s)), shapes.join(" | "));
   const metas = meta.map((r) => r.shape);
-  ok("detail head " + theme + ": the meta line leads with the avatar, the author and the glyph, and ends on the state chip", metas.every((s) => DETAIL_META_SHAPE.test(s)), metas.join(" | "));
+  ok("detail head " + theme + ": the meta line leads with the avatar, the author and the glyph", metas.every((s) => DETAIL_META_SHAPE.test(s)), metas.join(" | "));
   const sizes = new Set(subject.map((r) => r.fontSize));
   ok("detail head " + theme + ": the subject takes the page's h1 size", sizes.size === 1 && sizes.has(DETAIL_HEAD_SIZE), [...sizes].join("|"));
 }

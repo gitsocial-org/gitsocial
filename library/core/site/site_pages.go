@@ -29,7 +29,7 @@ const (
 	sitePagesManifestKey = ".gitsocial/site/pages.json"
 	// sitePagesVersion is the page layer's schema version; bump it when a page
 	// head or its sealed markup changes.
-	sitePagesVersion = 43
+	sitePagesVersion = 59
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -613,9 +613,9 @@ func incrementalSitePages(client *objstore.Client, prefix string, site sitePageS
 	}
 	affectedDirs := map[string]bool{}
 	uploads := make([]sitePageUpload, 0, len(affected))
-	titles := siteItemPageTitles(roots, siteFileTitleSet(prior.Files))
+	titles, types := siteItemPageTitles(roots, siteFileTitleSet(prior.Files)), siteRefTypes(roots)
 	for _, r := range affected {
-		page, err := renderSitePage("item", buildSiteItemPage(r, listByExt[r.Msg.Ext], site, titles, src, refs))
+		page, err := renderSitePage("item", buildSiteItemPage(r, listByExt[r.Msg.Ext], site, titles, types, src, refs))
 		if err != nil {
 			return false, err
 		}
@@ -733,7 +733,7 @@ func sitePageEntriesSince(entries []sitePageMsg, tip string) ([]sitePageMsg, boo
 	return nil, false
 }
 
-// affectedSitePageRoots maps a delta onto the top-level items whose pages must be regenerated, newest-first; a member with no owning root is skipped.
+// affectedSitePageRoots maps a delta onto the top-level items whose pages must be regenerated, newest-first, and adds the item a new repost or quote names, whose list row counts it; a member with no owning root is skipped.
 func affectedSitePageRoots(roots map[string][]*sitePageItem, delta map[string]bool) []*sitePageItem {
 	owner := map[string]*sitePageItem{}
 	for _, rs := range roots {
@@ -747,9 +747,15 @@ func affectedSitePageRoots(roots map[string][]*sitePageItem, delta map[string]bo
 	var affected []*sitePageItem
 	seen := map[*sitePageItem]bool{}
 	for sha := range delta {
-		if r := owner[sha]; r != nil && !seen[r] {
-			seen[r] = true
-			affected = append(affected, r)
+		r := owner[sha]
+		if r == nil {
+			continue
+		}
+		for _, hit := range []*sitePageItem{r, owner[pageLocalCommitHash(pageItemField(r, "original"))]} {
+			if hit != nil && !seen[hit] {
+				seen[hit] = true
+				affected = append(affected, hit)
+			}
 		}
 	}
 	sort.Slice(affected, func(i, j int) bool {
@@ -825,6 +831,7 @@ func writeSiteItemPages(client *objstore.Client, prefix string, roots map[string
 	budget := sitePagesBudget
 	complete := true
 	chunk := sitePagesChunk()
+	types := siteRefTypes(roots)
 	for _, list := range sitePageLists {
 		rs := roots[list.Ext]
 		for done[list.Ext] < len(rs) {
@@ -835,7 +842,7 @@ func writeSiteItemPages(client *objstore.Client, prefix string, roots map[string
 			batch := min(chunk, len(rs)-done[list.Ext], budget)
 			uploads := make([]sitePageUpload, 0, batch)
 			for _, it := range rs[done[list.Ext] : done[list.Ext]+batch] {
-				page, err := renderSitePage("item", buildSiteItemPage(it, list, site, titles, src, refs))
+				page, err := renderSitePage("item", buildSiteItemPage(it, list, site, titles, types, src, refs))
 				if err != nil {
 					return nil, false, 0, err
 				}
@@ -855,6 +862,7 @@ func writeSiteItemPages(client *objstore.Client, prefix string, roots map[string
 func writeSiteTypeLists(client *objstore.Client, prefix string, roots map[string][]*sitePageItem, done map[string]int, complete bool, site sitePageSite, prior *sitePagesManifest, affected map[string]bool) (map[string]int, map[string]string, error) {
 	counts := map[string]int{}
 	frontier := map[string]string{}
+	tallies, types := siteEntryTallies(roots), siteRefTypes(roots)
 	for _, list := range sitePageLists {
 		sealed, sealedSha := 0, ""
 		if prior != nil {
@@ -893,6 +901,7 @@ func writeSiteTypeLists(client *objstore.Client, prefix string, roots map[string
 				totalVisible++
 			}
 		}
+		subjects := siteListSubjects(roots[list.Ext])
 		var newPages [][]*sitePageItem // oldest-first segments to seal
 		if complete {
 			for len(head) > sitePagesListSize {
@@ -906,7 +915,7 @@ func writeSiteTypeLists(client *objstore.Client, prefix string, roots map[string
 		chunk := sitePagesChunk()
 		uploads := make([]sitePageUpload, 0, min(len(newPages), chunk))
 		for i, segment := range newPages {
-			page, err := renderSitePage("list", buildSiteSealedListPage(list, site, segment, sealed+i+1, finalSealed))
+			page, err := renderSitePage("list", buildSiteSealedListPage(list, site, segment, sealed+i+1, finalSealed, subjects, types, tallies))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -923,7 +932,7 @@ func writeSiteTypeLists(client *objstore.Client, prefix string, roots map[string
 			return nil, nil, err
 		}
 		sealed = finalSealed
-		page, err := renderSitePage("list", buildSiteListHeadPage(list, site, head, totalVisible, sealed))
+		page, err := renderSitePage("list", buildSiteListHeadPage(list, site, head, totalVisible, sealed, subjects, types, tallies))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -960,11 +969,11 @@ func siteChainedListPage(list sitePageList, entries []sitePageListEntry, metaBit
 	return d
 }
 
-// buildSiteListHeadPage assembles a type's mutable head list page.
-func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePageItem, total, sealed int) siteListPageData {
+// buildSiteListHeadPage assembles a type's mutable head list page; subjects names the items its rows reference and types their types, and tallies counts what other entries add to each row.
+func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePageItem, total, sealed int, subjects, types map[string]string, tallies map[string]siteEntryCounts) siteListPageData {
 	entries := make([]sitePageListEntry, 0, len(head))
 	for _, it := range head {
-		entries = append(entries, buildSiteListEntry(it, sitePageDefaultTypes[list.Ext]))
+		entries = append(entries, buildSiteListEntry(it, subjects, types, tallies[it.Msg.Short]))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", total, list.Label)}
 	if list.Ext == "pm" || list.Ext == "review" {
@@ -999,11 +1008,11 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 	return d
 }
 
-// buildSiteSealedListPage assembles one sealed older list page; siteChainedListPage owns its chain.
-func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries []*sitePageItem, n, sealed int) siteListPageData {
+// buildSiteSealedListPage assembles one sealed older list page; siteChainedListPage owns its chain, subjects names the items its rows reference and types their types, and tallies counts what other entries add to each row.
+func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries []*sitePageItem, n, sealed int, subjects, types map[string]string, tallies map[string]siteEntryCounts) siteListPageData {
 	entries := make([]sitePageListEntry, 0, len(pageEntries))
 	for _, it := range pageEntries {
-		entries = append(entries, buildSiteListEntry(it, sitePageDefaultTypes[list.Ext]))
+		entries = append(entries, buildSiteListEntry(it, subjects, types, tallies[it.Msg.Short]))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", len(entries), list.Label), fmt.Sprintf("older page %d", n)}
 	d := siteChainedListPage(list, entries, metaBits, n, sealed)

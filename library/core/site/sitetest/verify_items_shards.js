@@ -41,7 +41,7 @@ async function main() {
   for (const ext of ["social", "pm", "review", "memo"]) manifests[ext] = await readManifest(ext).catch(() => null);
   const ext = Object.keys(manifests).filter((e) => manifests[e]).sort((a, b) => manifests[b].shards.length - manifests[a].shards.length)[0];
   const m = manifests[ext];
-  ok("multi-shard fixture: chosen ext has sealed shards (" + ext + ")", m && m.version === 5 && m.shards.length >= 2, "shards=" + (m && m.shards.length));
+  ok("multi-shard fixture: chosen ext has sealed shards (" + ext + ")", m && m.version === 6 && m.shards.length >= 2, "shards=" + (m && m.shards.length));
 
   // (2) Eager load touches only the newest shard + head.
   {
@@ -49,7 +49,7 @@ async function main() {
     const ctx = GS.newContext(BASE);
     const idx = await GS.loadItemsIndex(ctx, ext);
     inst.restore();
-    ok("loadItemsIndex returns a v5 index with residentShas", idx && idx.version === 5 && idx.residentShas && idx.residentShas.size > 0);
+    ok("loadItemsIndex returns a v6 index with residentShas", idx && idx.version === 6 && idx.residentShas && idx.residentShas.size > 0);
     ok("index reports pending older shards", idx && !idx.allResident && idx.olderShards.length === m.shards.length - 1, "older=" + (idx && idx.olderShards.length));
     const fetched = shardFetches(inst.seen, ext, m);
     ok("eager load fetches one (newest) sealed shard", fetched === 1, "fetched=" + fetched);

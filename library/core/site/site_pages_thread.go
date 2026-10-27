@@ -29,6 +29,7 @@ type sitePageMsg struct {
 	TS      int64
 	Subject string
 	Text    string           // a comment, feedback, repost or quote's first line, from its index entry (siteMetaEntry)
+	Excerpt string           // every other entry's excerpt, from its index entry (siteMetaEntry)
 	Message string           // full raw commit message from the bodies corpus
 	Header  *protocol.Header // nil for plain commits (implicit posts)
 	// AdoptedAuthor, AdoptedEmail and AdoptedTime name an adopted copy's original author and time (siteMetaEntry)
@@ -43,7 +44,6 @@ type sitePageItem struct {
 	Resolved  *sitePageMsg // latest version (== Msg when never edited)
 	Edited    bool
 	Retracted bool
-	InReplyTo string          // author of the parent comment a nested reply answers ("" = replies to the root)
 	Depth     int             // visual indent of a nested reply, capped at sitePageThreadMaxDepth
 	parent    *sitePageItem   // the reply this one answers, nil when it answers the root
 	Replies   []*sitePageItem // for roots: the thread, parent before children, siblings by time
@@ -154,7 +154,7 @@ func pageItemField(it *sitePageItem, key string) string {
 func pageItemBody(it *sitePageItem) string {
 	if it.Resolved.Message != "" {
 		// Drop link reference definitions here, the one accessor every page builder reads an item through.
-		return siteStripLinkRefDefs(protocol.ExtractCleanContent(it.Resolved.Message))
+		return siteCleanContent(it.Resolved.Message)
 	}
 	return it.Resolved.Subject
 }
@@ -165,6 +165,17 @@ func pageRowText(it *sitePageItem) string {
 		return it.Resolved.Text
 	}
 	return it.Resolved.Subject
+}
+
+// pageRowExcerpt returns a titled row's excerpt: from the fetched body, else the indexed excerpt, so both page passes give one entry; a retracted row has none.
+func pageRowExcerpt(it *sitePageItem) string {
+	if it.Retracted {
+		return ""
+	}
+	if it.Resolved.Message != "" {
+		return siteExcerpt(pageItemBody(it))
+	}
+	return it.Resolved.Excerpt
 }
 
 // buildSitePageThreads resolves versions and assembles reply threads, returning each extension's top-level items newest-first; a reply with no local root is dropped.
@@ -198,7 +209,6 @@ func buildSitePageThreads(msgs map[string][]sitePageMsg) map[string][]*sitePageI
 		if root := pageResolveRoot(byShort, ref); root != nil && root != it {
 			if parentHash := pageLocalCommitHash(pageHeaderField(it.Msg, "reply-to")); parentHash != "" {
 				if parent := byShort[parentHash]; parent != nil && parent != root {
-					it.InReplyTo, _ = pageDisplayAuthor(parent.Msg)
 					it.parent = parent
 				}
 			}
@@ -325,7 +335,7 @@ func readSitePagesMeta(client *objstore.Client, prefix, ext string, items *siteS
 		}
 		msgs = append(msgs, sitePageMsg{
 			Ext: ext, SHA: e.SHA, Short: e.SHA[:12], Idx: len(msgs), Author: e.Author, Email: e.Email,
-			TS: e.TS, Subject: e.Subject, Text: e.Text, Header: protocol.ParseHeader(e.Header),
+			TS: e.TS, Subject: e.Subject, Text: e.Text, Excerpt: e.Excerpt, Header: protocol.ParseHeader(e.Header),
 			AdoptedAuthor: e.AdoptedAuthor, AdoptedEmail: e.AdoptedEmail, AdoptedTime: e.AdoptedTime,
 		})
 	}
@@ -359,11 +369,11 @@ func readSitePagesCorpus(client *objstore.Client, prefix, ext string, items *sit
 	return msgs, nil
 }
 
-// attachThreadBodies reads back the bodies the affected threads render.
+// attachThreadBodies reads back the bodies the affected threads render, the canonical of a root included for its quote box.
 func attachThreadBodies(client *objstore.Client, prefix string, affected []*sitePageItem) error {
 	var msgs []*sitePageMsg
 	for _, r := range affected {
-		msgs = append(msgs, r.Resolved)
+		msgs = append(msgs, r.Msg, r.Resolved)
 		for _, rep := range r.Replies {
 			msgs = append(msgs, rep.Resolved)
 		}

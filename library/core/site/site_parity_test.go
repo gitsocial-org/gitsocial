@@ -44,10 +44,11 @@ type parityRawObjectCase struct {
 
 // parityFeedbackCase pins the verdict and anchor label a feedback card's header yields.
 type parityFeedbackCase struct {
-	Name          string            `json:"name"`
-	Header        map[string]string `json:"header"`
-	ExpectVerdict string            `json:"expectVerdict"`
-	ExpectAnchor  string            `json:"expectAnchor"`
+	Name             string            `json:"name"`
+	Header           map[string]string `json:"header"`
+	ExpectVerdict    string            `json:"expectVerdict"`
+	ExpectSuggestion bool              `json:"expectSuggestion"`
+	ExpectAnchor     string            `json:"expectAnchor"`
 }
 
 // parityReleaseHeadCase pins the subject and version chip a release head yields.
@@ -130,12 +131,13 @@ type parityReleaseRowCase struct {
 
 // parityCardSkeletonCase pins the head slots one item type's list row fills and the word that ends its author line; an empty ExpectHead is a body-only row.
 type parityCardSkeletonCase struct {
-	Name         string            `json:"name"`
-	Ext          string            `json:"ext"`
-	Header       map[string]string `json:"header"`
-	FirstLine    string            `json:"firstLine"`
-	ExpectHead   []string          `json:"expectHead"`
-	ExpectMarker string            `json:"expectMarker"`
+	Name          string            `json:"name"`
+	Ext           string            `json:"ext"`
+	Header        map[string]string `json:"header"`
+	FirstLine     string            `json:"firstLine"`
+	ExpectHead    []string          `json:"expectHead"`
+	ExpectMarker  string            `json:"expectMarker"`
+	ExpectExcerpt string            `json:"expectExcerpt"`
 }
 
 // parityCardSkeleton pins the one card shape: its part order, its head's slot order, the body-only part order, and a case per item type.
@@ -323,21 +325,64 @@ type parityItemRow struct {
 	Bits []parityRowBit `json:"bits"`
 }
 
-// parityItemPageMetaCase pins the definition rows and the label chips one item's header yields on the page and in the app.
+// parityItemChip pins one chip of a chip row: its kind, value class, relation word, glyph, label, link and rel, and the linked sides of a branch pair.
+type parityItemChip struct {
+	Kind  string         `json:"kind"`
+	Class string         `json:"class"`
+	Word  string         `json:"word"`
+	Glyph string         `json:"glyph"`
+	Text  string         `json:"text"`
+	Href  string         `json:"href"`
+	Rel   string         `json:"rel"`
+	Parts []parityRowBit `json:"parts"`
+}
+
+// parityChipKindCase pins the class, glyph and text both renderers give the first chip of one kind that a header yields.
+type parityChipKindCase struct {
+	Name   string            `json:"name"`
+	Source string            `json:"source"`
+	Ext    string            `json:"ext"`
+	Header map[string]string `json:"header"`
+	Kind   string            `json:"kind"`
+	Class  string            `json:"class"`
+	Glyph  string            `json:"glyph"`
+	Label  string            `json:"label"`
+}
+
+// parityItemPageMetaCase pins the definition rows and the chip row one item's header yields on the page and in the app.
 type parityItemPageMetaCase struct {
-	Name         string            `json:"name"`
-	Ext          string            `json:"ext"`
-	Header       map[string]string `json:"header"`
-	ExpectRows   []parityItemRow   `json:"expectRows"`
-	ExpectLabels []parityRowBit    `json:"expectLabels"`
+	Name        string            `json:"name"`
+	Ext         string            `json:"ext"`
+	Header      map[string]string `json:"header"`
+	ExpectRows  []parityItemRow   `json:"expectRows"`
+	ExpectChips []parityItemChip  `json:"expectChips"`
+}
+
+// parityCountChipsCase pins the count chips one item carries on a card and a static entry.
+type parityCountChipsCase struct {
+	Name   string            `json:"name"`
+	Ext    string            `json:"ext"`
+	Header map[string]string `json:"header"`
+	Sub    int               `json:"sub"`
+	Issues int               `json:"issues"`
+	Counts struct {
+		Comments         int `json:"comments"`
+		Reposts          int `json:"reposts"`
+		Quotes           int `json:"quotes"`
+		Approved         int `json:"approved"`
+		ChangesRequested int `json:"changesRequested"`
+	} `json:"counts"`
+	ExpectChips []string `json:"expectChips"`
 }
 
 // parityFixtures is the shared fixture file shape.
 type parityFixtures struct {
+	CountChips     []parityCountChipsCase    `json:"countChips"`
 	RefTokens      []parityRefTokenCase      `json:"refTokens"`
 	PageBodyRefs   []parityPageBodyCase      `json:"pageBodyRefs"`
 	RowText        []parityRowTextCase       `json:"rowText"`
 	ItemPageMeta   []parityItemPageMetaCase  `json:"itemPageMeta"`
+	ChipKinds      []parityChipKindCase      `json:"chipKinds"`
 	PRDiff         parityPRDiff              `json:"prDiff"`
 	MessageCases   []parityMessageCase       `json:"messageCases"`
 	RawObjectCases []parityRawObjectCase     `json:"rawObjectCases"`
@@ -458,7 +503,7 @@ func TestParityMetaRow(t *testing.T) {
 	if got, page := strings.Join(parityBitClasses(siteItemPageMeta(it), len(f.MetaRow.PageBits)), ","), strings.Join(f.MetaRow.PageBits, ","); got != page {
 		t.Errorf("item page meta bits = %q, want %q", got, page)
 	}
-	row := buildSiteListEntry(it, "issue")
+	row := buildSiteListEntry(it, nil, nil, siteEntryCounts{})
 	if got := strings.Join(parityBitClasses(row.Meta, len(f.MetaRow.Bits)), ","); got != want {
 		t.Errorf("list row meta bits = %q, want %q", got, want)
 	}
@@ -488,7 +533,7 @@ func TestParityEditedMetaRow(t *testing.T) {
 	it := &sitePageItem{Msg: msg, Resolved: edit, Edited: true}
 	for name, c := range map[string]struct{ bits, want []string }{
 		"item page": {parityBitClasses(siteItemPageMeta(it), len(f.MetaRow.PageEditedBits)), f.MetaRow.PageEditedBits},
-		"list row":  {parityBitClasses(buildSiteListEntry(it, "issue").Meta, len(f.MetaRow.EditedBits)), f.MetaRow.EditedBits},
+		"list row":  {parityBitClasses(buildSiteListEntry(it, nil, nil, siteEntryCounts{}).Meta, len(f.MetaRow.EditedBits)), f.MetaRow.EditedBits},
 	} {
 		if got, want := strings.Join(c.bits, ","), strings.Join(c.want, ","); got != want {
 			t.Errorf("%s meta bits = %q, want %q", name, got, want)
@@ -569,8 +614,8 @@ func TestParityRowGlyph(t *testing.T) {
 	}
 }
 
-// TestParityReleaseRow asserts a release row counts its assets where every
-// other row links its hash, against the fixture unit_parity.js also asserts.
+// TestParityReleaseRow asserts a release row counts its assets as the last chip
+// of its chip row, off its author line, against the fixture unit_parity.js also asserts.
 func TestParityReleaseRow(t *testing.T) {
 	f := loadParityFixtures(t)
 	if len(f.ReleaseRows) == 0 {
@@ -583,17 +628,21 @@ func TestParityReleaseRow(t *testing.T) {
 			}
 			fields := map[string]string{"type": "release", "tag": "v1.0", "artifacts": c.Artifacts}
 			msg := &sitePageMsg{Ext: "release", SHA: strings.Repeat("e", 40), Short: strings.Repeat("e", 12), Message: "v1.0", TS: 1700000000, Header: &protocol.Header{Ext: "release", Fields: fields}}
-			row := buildSiteListEntry(&sitePageItem{Msg: msg, Resolved: msg}, "release")
+			row := buildSiteListEntry(&sitePageItem{Msg: msg, Resolved: msg}, nil, nil, siteEntryCounts{})
 			var bits []string
 			for _, b := range row.Meta {
 				bits = append(bits, b.Class+"|"+b.Text)
 			}
 			want := []string{"author|unknown", "reltime|" + sitePageDate(msg.TS), "hash|" + msg.Short}
-			if c.ExpectLabel != "" {
-				want = append(want, "|"+c.ExpectLabel)
-			}
 			if strings.Join(bits, ",") != strings.Join(want, ",") {
 				t.Errorf("release row meta = %v, want %v", bits, want)
+			}
+			last := ""
+			if len(row.Chips) > 0 {
+				last = row.Chips[len(row.Chips)-1].Label
+			}
+			if last != c.ExpectLabel {
+				t.Errorf("release row last chip = %q, want %q", last, c.ExpectLabel)
 			}
 		})
 	}
@@ -626,7 +675,7 @@ func parityCardMarker(t *testing.T, card string, c parityCardSkeletonCase) {
 	}
 }
 
-// parityHeadedCard asserts a headed row leads with the glyph, then the author line, then the head with its slots in order.
+// parityHeadedCard asserts a headed row's parts are in the fixture's order, the head holding its slots in order.
 func parityHeadedCard(t *testing.T, card string, c parityCardSkeletonCase, parts []string) {
 	t.Helper()
 	open := strings.Index(card, `<div class="card-head">`)
@@ -637,14 +686,16 @@ func parityHeadedCard(t *testing.T, card string, c parityCardSkeletonCase, parts
 	if got := parityCardSlots(card[open:end]); strings.Join(got, ",") != strings.Join(c.ExpectHead, ",") {
 		t.Errorf("head slots = %v, want %v", got, c.ExpectHead)
 	}
-	for i, part := range parts[:4] {
+	prev, prevPart := -1, ""
+	for _, part := range parts {
 		at := strings.Index(card, `class="`+part)
 		if at < 0 {
-			t.Fatalf("no %s in %s", part, card)
+			continue
 		}
-		if i > 0 && at < strings.Index(card, `class="`+parts[i-1]) {
-			t.Errorf("%s comes before %s", part, parts[i-1])
+		if at < prev {
+			t.Errorf("%s comes before %s", part, prevPart)
 		}
+		prev, prevPart = at, part
 	}
 }
 
@@ -659,10 +710,14 @@ func parityBodyOnlyCard(t *testing.T, card string, c parityCardSkeletonCase, par
 	if len(got) < len(want) || strings.Join(got[:len(want)], ",") != strings.Join(want, ",") {
 		t.Errorf("row slots = %v, want them to lead with %v", got, want)
 	}
+	last := parts[len(parts)-1]
 	meta := strings.Index(card, `<span class="`+parts[2]+`">`)
-	body := strings.Index(card, `<div class="`+parts[3]+`">`+c.FirstLine+`</div>`)
+	body := strings.Index(card, `<div class="`+last+`">`+c.FirstLine+`</div>`)
 	if meta < 0 || body < meta {
-		t.Errorf("want the meta row then the %s carrying %q: %s", parts[3], c.FirstLine, card)
+		t.Errorf("want the meta row then the %s carrying %q: %s", last, c.FirstLine, card)
+	}
+	if chips := strings.Index(card, `class="`+parts[3]); chips >= 0 && (chips < meta || chips > body) {
+		t.Errorf("want the %s between the meta row and the %s: %s", parts[3], last, card)
 	}
 }
 
@@ -685,7 +740,7 @@ func TestParityCardSkeleton(t *testing.T) {
 				msg.Text = c.FirstLine // a body-only row reads its index text
 			}
 			it := &sitePageItem{Msg: msg, Resolved: msg, Retracted: c.Header["retracted"] == "true"}
-			entry := buildSiteListEntry(it, sitePageDefaultTypes[c.Ext])
+			entry := buildSiteListEntry(it, nil, nil, siteEntryCounts{})
 			page, err := renderSitePage("entries", []sitePageListEntry{entry})
 			if err != nil {
 				t.Fatalf("render entries: %v", err)
@@ -696,6 +751,9 @@ func TestParityCardSkeleton(t *testing.T) {
 				return
 			}
 			parityHeadedCard(t, string(page), c, f.CardSkeleton.Parts)
+			if c.ExpectExcerpt != "" && !strings.Contains(string(page), `<div class="excerpt"><div class="body body-clamp">`+c.ExpectExcerpt+`</div></div>`) {
+				t.Errorf("want the excerpt %q after the title: %s", c.ExpectExcerpt, page)
+			}
 		})
 	}
 }
@@ -719,7 +777,7 @@ func TestParityAvatar(t *testing.T) {
 	msg := &sitePageMsg{Ext: "pm", SHA: strings.Repeat("b", 40), Short: strings.Repeat("b", 12), Author: "Ada Lovelace", Email: "ada@example.com", Message: "An issue", Header: &protocol.Header{Ext: "pm", Fields: map[string]string{"type": "issue"}}}
 	it := &sitePageItem{Msg: msg, Resolved: msg}
 	lead := `<span class="avatar av-6" title="Ada Lovelace">AL</span><span class="type-glyph`
-	row, err := renderSitePage("entries", []sitePageListEntry{buildSiteListEntry(it, "issue")})
+	row, err := renderSitePage("entries", []sitePageListEntry{buildSiteListEntry(it, nil, nil, siteEntryCounts{})})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -968,8 +1026,8 @@ func TestParityAdmonitions(t *testing.T) {
 	}
 }
 
-// TestParityFeedbackCard asserts the feedback card's verdict class and anchor
-// chip label match the fixture the app's own half (unit_parity.js) asserts.
+// TestParityFeedbackCard asserts the feedback card's verdict and anchor chips
+// are its chip row, off its author line, against the fixture the app's own half (unit_parity.js) asserts.
 func TestParityFeedbackCard(t *testing.T) {
 	f := loadParityFixtures(t)
 	if len(f.FeedbackCards) == 0 {
@@ -984,6 +1042,34 @@ func TestParityFeedbackCard(t *testing.T) {
 			}
 			if got := sitePageFeedbackAnchor(item); got != c.ExpectAnchor {
 				t.Errorf("anchor = %q, want %q", got, c.ExpectAnchor)
+			}
+			var want []string
+			if c.ExpectVerdict != "" {
+				want = append(want, strings.ReplaceAll(c.ExpectVerdict, "-", " "))
+			}
+			if c.ExpectSuggestion {
+				want = append(want, "suggestion")
+			}
+			if c.ExpectAnchor != "" {
+				want = append(want, c.ExpectAnchor)
+			}
+			fields := maps.Clone(c.Header)
+			fields["type"] = "feedback"
+			typed := &sitePageMsg{Ext: "review", Header: &protocol.Header{Ext: "review", Fields: fields}}
+			reply := buildSiteReply(&sitePageItem{Msg: typed, Resolved: typed}, nil, parityRefAsHref)
+			var got []string
+			for _, chip := range reply.Chips {
+				got = append(got, chip.Label)
+			}
+			if !slices.Equal(got, want) {
+				t.Errorf("chip row = %q, want %q", got, want)
+			}
+			page, err := renderSitePage("item", siteItemPageData{Replies: []sitePageReply{reply}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if meta := regexp.MustCompile(`<p class="meta">.*?</p>`).FindString(string(page)); strings.Contains(meta, "chip") {
+				t.Errorf("the author line carries a chip: %s", meta)
 			}
 		})
 	}
@@ -1028,8 +1114,8 @@ func TestParityFeedbackCardVariant(t *testing.T) {
 		t.Fatalf("chips = %v, want %v", reply.Chips, want)
 	}
 	for i := range want {
-		if reply.Chips[i] != want[i] {
-			t.Errorf("chip %d = %v, want %v", i, reply.Chips[i], want[i])
+		if got := reply.Chips[i]; got.Class != want[i].Class || got.Label != want[i].Label || got.Href != want[i].Href {
+			t.Errorf("chip %d = %v, want %v", i, got, want[i])
 		}
 	}
 }
@@ -1137,14 +1223,14 @@ func TestParityRowHead(t *testing.T) {
 func TestParityDetailHeadMarkup(t *testing.T) {
 	fields := map[string]string{"type": "pull-request", "state": "merged"}
 	msg := &sitePageMsg{Ext: "review", SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: "Expand notes with more lines", Header: &protocol.Header{Ext: "review", Fields: fields}}
-	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[1], sitePageSite{URL: "https://example.com/"}, map[string]string{msg.Short: "Expand notes with more lines"}, nil, nil)
+	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[1], sitePageSite{URL: "https://example.com/"}, map[string]string{msg.Short: "Expand notes with more lines"}, nil, nil, nil)
 	page, err := renderSitePage("item", d)
 	if err != nil {
 		t.Fatalf("render item page: %v", err)
 	}
 	for _, want := range []string{
 		`<div class="card-head"><h1 class="subject">Expand notes with more lines</h1></div>`,
-		` <span class="chip state merged">merged</span></span></div>`,
+		`<a class="hash" href="aaaaaaaaaaaa.html">aaaaaaaaaaaa</a> <span class="chip state merged">merged</span></span></div>`,
 	} {
 		if !strings.Contains(string(page), want) {
 			t.Errorf("detail head markup missing:\nwant %s\ngot %s", want, page)
@@ -1164,7 +1250,7 @@ func TestParityReleasePageMarkup(t *testing.T) {
 	}
 	body := "Ship the rewrite\n\nabc1234 Fix the walk\ndef5678 Add a retry budget"
 	msg := &sitePageMsg{Ext: "release", SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: body, Header: &protocol.Header{Ext: "release", Fields: fields}}
-	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[3], sitePageSite{URL: "https://example.com/"}, map[string]string{msg.Short: "v1.2.0"}, nil, nil)
+	d := buildSiteItemPage(&sitePageItem{Msg: msg, Resolved: msg}, sitePageLists[3], sitePageSite{URL: "https://example.com/"}, map[string]string{msg.Short: "v1.2.0"}, nil, nil, nil)
 	page, err := renderSitePage("item", d)
 	if err != nil {
 		t.Fatalf("render item page: %v", err)
@@ -1174,7 +1260,7 @@ func TestParityReleasePageMarkup(t *testing.T) {
 		`<dt><a class="hash" href="https://example.com/index.html#commit:def5678@">def5678</a></dt><dd>Add a retry budget</dd></dl>`,
 		`<div class="assets"><div class="assets-head">Assets</div>`,
 		`<a class="asset-row" href="https://dl.example.com/v1.2.0/gs-linux.tar.gz" rel="noopener"><span class="mono selectable">gs-linux.tar.gz</span></a>`,
-		`<span class="mono selectable">SHA256SUMS</span><span class="chip">checksums</span>`,
+		`<span class="mono selectable">SHA256SUMS</span><span class="chip chip-ref">⏏ checksums</span>`,
 	} {
 		if !strings.Contains(string(page), want) {
 			t.Errorf("release page markup missing:\nwant %s\ngot %s", want, page)
@@ -1435,7 +1521,19 @@ func parityRowShape(key string, bits []sitePageBit) string {
 	return key + "=" + strings.Join(parts, "|")
 }
 
-// TestParityItemPageMeta asserts an item page lists the definition rows the app's trailerRows builds, with the same keys, order, text and link targets, and the label chips the app puts under its meta line; the JS half is in unit_parity.js.
+// parityChipShape names a chip the way unit_parity.js compares it: class, text and link, then the text and link of each side of a branch pair.
+func parityChipShape(c parityItemChip) string {
+	shape := strings.Join([]string{c.Kind, c.Class, c.Word, c.Glyph, c.Text}, "|") + "@" + c.Href
+	if c.Rel != "" {
+		shape += "[" + c.Rel + "]"
+	}
+	for _, p := range c.Parts {
+		shape += "[" + p.Text + "@" + p.Href + "]"
+	}
+	return shape
+}
+
+// TestParityItemPageMeta asserts an item page lists the definition rows the app's trailerRows builds, with the same keys, order, text and link targets, and the chip row the app's itemChips builds; the JS half is in unit_parity.js.
 func TestParityItemPageMeta(t *testing.T) {
 	f := loadParityFixtures(t)
 	if len(f.ItemPageMeta) == 0 {
@@ -1459,15 +1557,19 @@ func TestParityItemPageMeta(t *testing.T) {
 			if !slices.Equal(got, want) {
 				t.Errorf("rows = %q, want %q", got, want)
 			}
-			var gotLabels, wantLabels []string
-			for _, chip := range siteItemLabels(&sitePageItem{Msg: msg, Resolved: msg}) {
-				gotLabels = append(gotLabels, chip.Label+"@"+strings.TrimPrefix(chip.Href, "../index.html"))
+			var gotChips, wantChips []string
+			for _, chip := range siteItemChips(&sitePageItem{Msg: msg, Resolved: msg}, nil, nil, "", 0) {
+				parts := make([]parityRowBit, 0, len(chip.Parts))
+				for _, p := range chip.Parts {
+					parts = append(parts, parityRowBit{Text: p.Text, Href: strings.TrimPrefix(p.Href, "../index.html")})
+				}
+				gotChips = append(gotChips, parityChipShape(parityItemChip{Kind: chip.Kind, Class: chip.Class, Word: chip.Word, Glyph: chip.Icon, Text: chip.Label, Href: strings.TrimPrefix(chip.Href, "../index.html"), Rel: chip.Rel, Parts: parts}))
 			}
-			for _, b := range c.ExpectLabels {
-				wantLabels = append(wantLabels, b.Text+"@"+b.Href)
+			for _, chip := range c.ExpectChips {
+				wantChips = append(wantChips, parityChipShape(chip))
 			}
-			if !slices.Equal(gotLabels, wantLabels) {
-				t.Errorf("label chips = %q, want %q", gotLabels, wantLabels)
+			if !slices.Equal(gotChips, wantChips) {
+				t.Errorf("chips = %q, want %q", gotChips, wantChips)
 			}
 			page, err := renderSitePage("rows", rows)
 			if err != nil {
@@ -1509,5 +1611,71 @@ func TestParityTreeIcons(t *testing.T) {
 		if _, ok := sitePagesIcons[key]; !ok {
 			t.Errorf("icon key %q is not in icons.js", key)
 		}
+	}
+}
+
+// TestParityChipKinds asserts the page renders the first chip of each kind with the class, glyph and text unit_parity.js asserts on the app's chip.
+func TestParityChipKinds(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.ChipKinds) == 0 {
+		t.Fatal("no chip kind cases in parity fixtures")
+	}
+	chipRe := regexp.MustCompile(`^<(?:a|span) class="([^"]*)"[^>]*>(.*)</(?:a|span)>$`)
+	for _, c := range f.ChipKinds {
+		t.Run(c.Name, func(t *testing.T) {
+			msg := &sitePageMsg{Ext: c.Ext, SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: "Subject", Header: &protocol.Header{Ext: c.Ext, Fields: c.Header}}
+			it := &sitePageItem{Msg: msg, Resolved: msg}
+			chips := siteItemChips(it, nil, nil, "", 0)
+			if c.Source == "feedback" {
+				chips = buildSiteReply(it, nil, parityRefAsHref).Chips
+			}
+			i := slices.IndexFunc(chips, func(chip sitePageChip) bool { return chip.Kind == c.Kind })
+			if i < 0 {
+				t.Fatalf("no %s chip in %v", c.Kind, chips)
+			}
+			if chips[i].Icon != c.Glyph {
+				t.Errorf("glyph = %q, want %q", chips[i].Icon, c.Glyph)
+			}
+			var b strings.Builder
+			if err := sitePageTemplates.ExecuteTemplate(&b, "chip", chips[i]); err != nil {
+				t.Fatal(err)
+			}
+			m := chipRe.FindStringSubmatch(b.String())
+			if m == nil || m[1] != c.Class || m[2] != c.Label {
+				t.Errorf("chip = %s, want class %q and text %q", b.String(), c.Class, c.Label)
+			}
+		})
+	}
+}
+
+// TestParityCountChips asserts a static entry carries the count chips unit_parity.js asserts on the app's card, the verdicts read from the replies of a pull request.
+func TestParityCountChips(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.CountChips) == 0 {
+		t.Fatal("no count chip cases in parity fixtures")
+	}
+	for _, c := range f.CountChips {
+		t.Run(c.Name, func(t *testing.T) {
+			it := pagesTestRoot(c.Ext, "a", "Subject", c.Header)
+			verdicts := slices.Repeat([]string{"approved"}, c.Counts.Approved)
+			verdicts = append(verdicts, slices.Repeat([]string{"changes-requested"}, c.Counts.ChangesRequested)...)
+			for i := range c.Counts.Comments {
+				fields := map[string]string{"type": "comment"}
+				if i < len(verdicts) {
+					fields = map[string]string{"type": "feedback", "review-state": verdicts[i]}
+				}
+				reply := pagesTestRoot("review", "b", "A note", fields)
+				reply.Msg.Email = fmt.Sprintf("reviewer%d@example.com", i)
+				it.Replies = append(it.Replies, reply)
+			}
+			entry := buildSiteListEntry(it, nil, nil, siteEntryCounts{Reposts: c.Counts.Reposts, Quotes: c.Counts.Quotes, Sub: c.Sub, Issues: c.Issues})
+			got := make([]string, 0, len(entry.Chips))
+			for _, chip := range entry.Chips {
+				got = append(got, chipLabelText(chip))
+			}
+			if !slices.Equal(got, c.ExpectChips) {
+				t.Errorf("chips = %q, want %q", got, c.ExpectChips)
+			}
+		})
 	}
 }
