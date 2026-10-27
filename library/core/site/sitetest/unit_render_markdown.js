@@ -155,5 +155,8 @@ eq(mentionAnchors.map((a) => [textOf(a), href(a)]),
 ok(textOf(mentions).indexOf("@@x@y.io") !== -1 && textOf(mentions).indexOf("not bob@example.com.") !== -1, "an escaped mention and a bare email stay text");
 eq(findClass(mentions, "hash").filter((a) => a.tagName === "A").map(href), ["#commit:abc123def456"], "a ref beside a mention still links");
 
+console.log("=== a tag line that no block rule takes ===");
+eq(["</html>Summary", "<div class=\"x\"", "a\n</b>x\nb"].map((src) => findTag(GS.renderCommitBody(src), "p").map(textOf)), [["Summary"], ["<div class=\"x\""], ["a", "x", "b"]], "a line that starts with a tag no block rule takes is a paragraph of its own, as on a page, and the parse ends");
+
 console.log("\n" + pass + " passed, " + fail + " failed");
 process.exit(fail ? 1 : 0);

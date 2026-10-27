@@ -2666,6 +2666,8 @@
         if (isThematicBreak(lines[i])) break;
         para.push(lines[i]); i++;
       }
+      // A line that breaks a paragraph but matched no block rule is consumed as text, so the loop makes progress. Mirrors parseSiteMarkdown in site_markdown.go.
+      if (!para.length) { para.push(lines[i]); i++; }
       const spans = parseInline(para.join("\n"), defs);
       if (setext) blocks.push({ type: "heading", level: setext, spans });
       // A paragraph whose spans carry no visible text is what an HTML comment leaves behind, so it is dropped.
