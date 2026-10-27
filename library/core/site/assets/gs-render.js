@@ -727,11 +727,16 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     armClamp();
   }
 
-  // watchClamp measures a body again when its size changes: one hidden at its deadline, or one that fit before a font or a highlight settled.
+  // watchClamp measures a body again when its unclamped height changes: one hidden at its deadline, or one that fit before a font or a highlight settled; the clamp's own resize is ignored, so a sub-pixel overflow cannot loop.
   function watchClamp(entry) {
     entry.node.classList.remove("body-clamp");
     if (entry.observer || typeof ResizeObserver !== "function") return;
-    entry.observer = new ResizeObserver(() => queueClamp(entry));
+    entry.observer = new ResizeObserver((records) => {
+      const height = records[records.length - 1].contentRect.height;
+      if (entry.queued || height === entry.fitHeight) return;
+      entry.fitHeight = height;
+      queueClamp(entry);
+    });
     entry.observer.observe(entry.node);
   }
 
@@ -772,7 +777,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // clampNode wraps a node in a CSS clamp, and the next measure pass gives it a Show more toggle when it overflows.
   function clampNode(node) {
     const wrap = el("div", { class: "body-clamp-wrap" }, [node]);
-    queueClamp({ node, wrap, deadline: Date.now() + 4000, queued: false, btn: null, observer: null });
+    queueClamp({ node, wrap, deadline: Date.now() + 4000, queued: false, btn: null, observer: null, fitHeight: null });
     return wrap;
   }
 
