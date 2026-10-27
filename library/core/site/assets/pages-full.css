@@ -999,6 +999,10 @@
   .akind-releases { background: var(--warn); }
   .akind-memos { background: color-mix(in srgb, var(--link) 45%, var(--warn)); }
   .akind-commits { background: color-mix(in srgb, var(--text) 45%, var(--bg)); }
+  .akind-tags { background: color-mix(in srgb, var(--warn) 50%, var(--bg)); }
+  .akind-milestones { background: color-mix(in srgb, var(--open) 50%, var(--bg)); }
+  .akind-sprints { background: color-mix(in srgb, var(--open) 55%, var(--text)); }
+  .akind-reviews { background: color-mix(in srgb, var(--merged) 50%, var(--bg)); }
   .chart-filter { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0; }
   .chart-filter .filter-chip { display: inline-flex; align-items: center; gap: var(--sp-2); }
   .legend-swatch { width: 0.7rem; height: 0.7rem; border-radius: 2px; display: inline-block; }

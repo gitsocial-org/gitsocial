@@ -2127,13 +2127,25 @@
     return String(name || "").replace(TAG_HASH_SUFFIX, "").replace(/^v?\d+(?:\.\d+)*/, "");
   }
 
+  // parseTagger splits a tag object's tagger line into name, email and time; null when absent.
+  function parseTagger(tagger) {
+    const m = /^(.*) <([^>]*)> (\d+) /.exec(tagger || "");
+    return m ? { name: m[1], email: m[2], time: parseInt(m[3], 10) } : null;
+  }
+
+  // tagAuthorship returns a tag's author and date: the tagger of an annotated tag, else the author of its commit; empty when unreadable.
+  async function tagAuthorship(ctx, sha) {
+    const peeled = await peelTag(ctx, sha);
+    const tagger = parseTagger(peeled.tagger);
+    if (tagger) return tagger;
+    const obj = peeled.commit ? await getObject(ctx, peeled.commit) : null;
+    const c = obj && obj.type === "commit" ? parseCommit(peeled.commit, obj.body) : null;
+    return c ? { name: c.authorName, email: c.authorEmail, time: c.authorTime } : { name: "", email: "", time: 0 };
+  }
+
   // tagTime returns a tag's date: the tagger time of an annotated tag, else the author time of its commit; 0 when unreadable.
   async function tagTime(ctx, sha) {
-    const peeled = await peelTag(ctx, sha);
-    const m = /> (\d+) [+-]\d{4}$/.exec(peeled.tagger);
-    if (m) return parseInt(m[1], 10);
-    const obj = peeled.commit ? await getObject(ctx, peeled.commit) : null;
-    return obj && obj.type === "commit" ? parseCommit(peeled.commit, obj.body).authorTime : 0;
+    return (await tagAuthorship(ctx, sha)).time;
   }
 
   // orderTagTies sorts each group of tags that differ only by a commit-hash suffix by date, newest first, in the group's own slots; a fresh artifact entry spares the peel.
@@ -3540,6 +3552,22 @@
     return true;
   }
 
+  // drainCodeIndex loads every pending shard onto the index-backed code walk and returns its commits, one per sha; null without a code index.
+  async function drainCodeIndex(ctx) {
+    const w = await codeIndexWalkState(ctx);
+    if (!w) return null;
+    return withWalkLock(w, async () => {
+      let guard = (w.older || []).length, stall = 0;
+      while (w.older && w.older.length) {
+        await loadNextCodeShard(ctx, w);
+        const n = (w.older || []).length;
+        if (n === guard) { if (++stall >= 2) break; } else stall = 0;
+        guard = n;
+      }
+      return w.items;
+    });
+  }
+
   // codeAncestry drains the code index into a hash to commit Map for ancestry questions; null without a v5 corpus.
   function codeAncestry(ctx) {
     const key = "codeAncestry";
@@ -3547,18 +3575,9 @@
     const load = (async () => {
       const w = await codeIndexWalkState(ctx);
       if (!w || !w.hasParents) return null;
-      return withWalkLock(w, async () => {
-        let guard = (w.older || []).length, stall = 0;
-        while (w.older && w.older.length) {
-          await loadNextCodeShard(ctx, w);
-          const n = (w.older || []).length;
-          if (n === guard) { if (++stall >= 2) break; } else stall = 0;
-          guard = n;
-        }
-        const map = new Map();
-        for (const c of w.items) map.set(c.hash, c);
-        return map;
-      });
+      const map = new Map();
+      for (const c of await drainCodeIndex(ctx)) map.set(c.hash, c);
+      return map;
     })();
     ctx.walks[key] = load;
     return load;
@@ -4830,15 +4849,19 @@
     return h.version ? ("v" + h.version) : (h.tag || "");
   }
 
-  // ANALYTICS_SPECS maps each data branch to its analytics series and counted item type; ANALYTICS_KINDS is the ordered series list.
+  // ANALYTICS_SPECS maps each data branch to its analytics series and counted item type; ANALYTICS_KINDS is the ordered series list; ANALYTICS_EXTS loads each branch once.
   const ANALYTICS_SPECS = [
     { ext: "social", kind: "posts", type: "" },
     { ext: "pm", kind: "issues", type: "issue" },
+    { ext: "pm", kind: "milestones", type: "milestone" },
+    { ext: "pm", kind: "sprints", type: "sprint" },
     { ext: "review", kind: "prs", type: "pull-request" },
+    { ext: "review", kind: "reviews", type: "feedback" },
     { ext: "release", kind: "releases", type: "release" },
     { ext: "memo", kind: "memos", type: "" },
   ];
   const ANALYTICS_KINDS = ANALYTICS_SPECS.map((s) => s.kind);
+  const ANALYTICS_EXTS = [...new Set(ANALYTICS_SPECS.map((s) => s.ext))];
 
   // COUNTS_WALK_CAP bounds the loose-object walk one extension may do without a metadata index, so a view degrades to recent items instead of stalling.
   const COUNTS_WALK_CAP = WALK_CAP;
@@ -4884,14 +4907,23 @@
     const perKind = {};
     let latestRelease = "";
     let partial = false;
-    // Per-extension lanes in parallel; the reduce below keeps spec order.
-    const lanes = await Promise.all(ANALYTICS_SPECS.map(async (spec) => {
-      const items = await loadExtItemsAll(ctx, spec.ext);
-      return { spec, items, complete: await extSetComplete(ctx, spec.ext) };
-    }));
-    for (const { spec, items, complete } of lanes) {
+    // Each extension once, the code index and the tags in parallel; the loops below keep spec order.
+    const [lanes, code, tags] = await Promise.all([
+      Promise.all(ANALYTICS_EXTS.map(async (ext) => ({ ext, items: await loadExtItemsAll(ctx, ext), complete: await extSetComplete(ctx, ext) }))),
+      drainCodeIndex(ctx),
+      analyticsTags(ctx),
+    ]);
+    // Every commit of every code branch counts once, with its author; a bucket with no code index leaves the commits to the stats times of the chart.
+    for (const c of code || []) entries.push({ kind: "commits", time: c.authorTime || 0, author: c.authorName || c.authorEmail || "unknown", email: c.authorEmail || "" });
+    if (code) perKind.commits = code.length;
+    for (const t of tags) entries.push({ kind: "tags", time: t.time || 0, author: t.name || t.email || "unknown", email: t.email || "" });
+    perKind.tags = tags.length;
+    for (const { ext, items, complete } of lanes) {
       if (!complete) partial = true;
-      if (spec.ext === "release") latestRelease = latestReleaseVersion(items);
+      if (ext === "release") latestRelease = latestReleaseVersion(items);
+    }
+    for (const spec of ANALYTICS_SPECS) {
+      const { items } = lanes.find((l) => l.ext === spec.ext);
       let count = 0;
       for (const it of items) {
         if (spec.type && ((it.header && it.header.type) || "") !== spec.type) continue;
@@ -4906,7 +4938,17 @@
       }
       perKind[spec.kind] = count;
     }
-    return { entries, perKind, kinds: ANALYTICS_KINDS.slice(), total: entries.length, latestRelease, partial };
+    return { entries, perKind, kinds: (code ? ["commits"] : []).concat("tags", ANALYTICS_KINDS), total: entries.length, latestRelease, partial };
+  }
+
+  // analyticsTags returns the author and date of each tag, from the tags artifact where its entry is fresh, else from the tag object.
+  async function analyticsTags(ctx) {
+    const tags = await listTags(ctx);
+    const fresh = await freshTagEntries(ctx, tags);
+    return Promise.all(tags.map((t) => {
+      const e = fresh.get(t.name);
+      return e ? { name: e.author, email: e.email, time: e.time } : tagAuthorship(ctx, t.sha).catch(() => ({ name: "", email: "", time: 0 }));
+    }));
   }
 
   // activityBuckets buckets analytics entries into contiguous periods, each with a per-kind count map and the peak total; weekly buckets start Monday.
@@ -5051,7 +5093,7 @@
     loadTimelineItems, loadTimelineWindow, headerAction, itemActions, dropMergeCloses, HOME_ROWS, compactCount, loadNavCounts, resolveCodeItems, resolveShortShaFromIndex, resolveShortSha, readRefMode, newContext,
     loadCommitsPage, loadCommitsLayout, COMMITS_PAGE_SIZE,
     manifestFor, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
-    parseTree, getTree, resolvePath, listBranches, listTags, orderTagTies, orderedTags, tagsByCommit, loadSiteTags, loadTagRange, tagRangeWindow, tagRangeFiles, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
+    parseTree, getTree, resolvePath, listBranches, listTags, parseTagger, orderTagTies, orderedTags, tagsByCommit, loadSiteTags, loadTagRange, tagRangeWindow, tagRangeFiles, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,
     parseInline, parseMarkdown, parseList, isTableSeparator, cellAlign, splitTableRow, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter,
     splitLines, diffLines, buildHunks, diffTrees, commitTree, mergeBase, resolveMergeBase, fileDiff,
     intraLine, MAX_DIFF_LINES, DIFF_TREE_SCAN_CAP,

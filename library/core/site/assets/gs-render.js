@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, anyRefHash, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, findForkPull, hydrateForkPull, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, peelTag, tagsByCommit, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseInline, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, pageHeadChips, rowHeadChips, itemChips, refExt, relationChips, indexSubject, indexType, chipClass, chipLead, chipText, HEADER_REF_RE, searchHref, chipStateClass, resolveAncestors, resolvePath, resolveShortSha, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, anyRefHash, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, findForkPull, hydrateForkPull, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, parseTagger, peelTag, tagsByCommit, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseInline, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, pageHeadChips, rowHeadChips, itemChips, refExt, relationChips, indexSubject, indexType, chipClass, chipLead, chipText, HEADER_REF_RE, searchHref, chipStateClass, resolveAncestors, resolvePath, resolveShortSha, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // listLink links a detail page to the list its item lives in, named, as the pre-rendered pages do in their footer; the browser's own Back is the return trip.
   function listLink(tab) {
@@ -3503,7 +3503,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
   // KIND_LABELS names each chart series; GRANS is the granularity toggle order.
-  const KIND_LABELS = { commits: "commits", posts: "posts", issues: "issues", prs: "PRs", releases: "releases", memos: "memos" };
+  const KIND_LABELS = { commits: "commits", tags: "tags", posts: "social", issues: "issues", milestones: "milestones", sprints: "sprints", prs: "PRs", reviews: "reviews", releases: "releases", memos: "memos" };
   const GRANS = ["weekly", "monthly", "yearly"];
   const GRAN_NOUN = { weekly: "week", monthly: "month", yearly: "year" };
 
@@ -3516,7 +3516,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       el("div", { class: valueClass || "stat-value" }, [String(value)]),
       el("div", { class: "stat-label mono" }, [label]),
     ]));
-    cell("total items", data.total);
+    cell("total", data.total);
     for (const k of data.kinds) cell(KIND_LABELS[k] || k, data.perKind[k] || 0);
     if (mostActive) cell("most active", mostActive.label, "stat-value-text mono");
     wrap.append(grid);
@@ -3675,9 +3675,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     chartSec.append(chartSlot);
     wrap.append(chartSec);
     wrap.append(analyticsAuthors(authors, data.total));
-    const commitEntries = (stats && Array.isArray(stats.commitTimes)) ? stats.commitTimes.map((t) => ({ kind: "commits", time: t })) : [];
-    const chartKinds = commitEntries.length ? ["commits"].concat(data.kinds) : data.kinds.slice();
-    const chartEntries = commitEntries.length ? data.entries.concat(commitEntries) : data.entries;
+    // A bucket with no code index charts the commit times of the default branch from the stats, with no author.
+    const statsCommits = !data.perKind.commits && stats && Array.isArray(stats.commitTimes) ? stats.commitTimes.map((t) => ({ kind: "commits", time: t })) : [];
+    const chartKinds = statsCommits.length ? ["commits"].concat(data.kinds) : data.kinds.slice();
+    const chartEntries = data.entries.concat(statsCommits);
     let gran = "monthly";
     let selected = "all";
     // draw re-buckets the loaded data at the current granularity and series and repaints.
@@ -4015,12 +4016,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       for (const name of heads.keys()) addReleaseChip(name);
     }).catch(() => { /* the chips are best-effort; the list already painted */ });
     return [headingRow("tags", countHead(tags.length, "tag"))].concat(list);
-  }
-
-  // parseTagger parses a tagger line into { name, email, time }, or null.
-  function parseTagger(tagger) {
-    const m = /^(.*) <([^>]*)> (\d+) /.exec(tagger || "");
-    return m ? { name: m[1], email: m[2], time: parseInt(m[3], 10) } : null;
   }
 
   // tagDetail renders a tag page: header, commits since the previous tag, and the three-dot diff against it, which enriches in the background.

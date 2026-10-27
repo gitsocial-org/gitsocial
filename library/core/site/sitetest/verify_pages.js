@@ -154,8 +154,10 @@ async function item7() {
   // Summary stat grid: total + per-kind + most active.
   ok("analytics has a Summary section", /Summary/.test(vt));
   ok("analytics stat grid has cells", findClass(viewNode, "stat-cell").length >= 5, "cells=" + findClass(viewNode, "stat-cell").length);
-  ok("summary shows total items", /total items/.test(vt));
-  ok("summary shows per-kind labels", /posts/.test(vt) && /issues/.test(vt) && /PRs/.test(vt) && /releases/.test(vt) && /memos/.test(vt));
+  const stat = {};
+  for (const c of findClass(viewNode, "stat-cell")) stat[textOf(findClass(c, "stat-label")[0])] = Number(textOf(c.firstChild));
+  ok("summary shows per-kind labels, social for every social item", ["total", "commits", "tags", "social", "issues", "milestones", "sprints", "PRs", "reviews", "releases", "memos"].every((k) => k in stat), JSON.stringify(stat));
+  ok("summary counts the code commits, and the total is the sum of the kinds", stat.commits > 0 && stat.total === ["commits", "tags", "social", "issues", "milestones", "sprints", "PRs", "reviews", "releases", "memos"].reduce((n, k) => n + stat[k], 0), JSON.stringify(stat));
   ok("summary shows most active period", /most active/.test(vt));
   const nums = findClass(viewNode, "stat-value").map((c) => textOf(c));
   ok("stat values are numeric", nums.length > 0 && nums.every((n) => /^\d+$/.test(n)), nums.join(","));
@@ -173,6 +175,8 @@ async function item7() {
   const contrib = findClass(viewNode, "contrib").length ? findClass(viewNode, "contrib")[findClass(viewNode, "contrib").length - 1] : null;
   const contribNameLinks = contrib ? findClass(contrib, "contrib-name").map((n) => findTag(n, "a")[0]).filter(Boolean) : [];
   ok("top-authors names link to the search page", contribNameLinks.length > 0, "name links=" + contribNameLinks.length);
+  const authorSum = contrib ? findClass(contrib, "contrib-meta").reduce((n, m) => n + Number(textOf(findClass(m, "chip")[0])), 0) : 0;
+  ok("the authors count the commits and the items, the summary total", authorSum === stat.total, "authors=" + authorSum + " total=" + stat.total);
   ok("author link prefills the search author facet", contribNameLinks.some((a) => (a.getAttribute("href") || "").indexOf("#/search/author") === 0), contribNameLinks.map((a) => a.getAttribute("href")).join(","));
   ok("top-authors heading has a live filter input", findClass(viewNode, "contrib-filter").length === 1);
   const contribFilter = findClass(viewNode, "contrib-filter")[0];
