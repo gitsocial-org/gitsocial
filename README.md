@@ -1,17 +1,22 @@
+# GitSocial
 
-<h1>GitSocial</h1>
+---
 
 *Git-native collaboration platform*
 
 ---
 
-GitSocial is an open source Go binary that stores issues, pull requests, comments and other data in git. It can push that data to your own S3 bucket, which then serves as both a git remote and a static site. [GitSocial.org](https://gitsocial.org) runs this way.
+GitSocial stores issues, pull requests, comments and releases as commits in git, so they clone, fork and push along with the code.
 
-Each issue, pull request or comment is a commit with GitMsg trailers on a `gitmsg/*` branch. The GitSocial CLI and TUI can create and browse these items ([demo](documentation/demo/demo.mp4)).
+It is a single open source Go binary that:
+
+- reads and writes these items from a CLI and a TUI
+- imports existing data from GitHub or GitLab
+- publishes the repository and a static site to an S3 bucket, with no server
+
+[GitSocial.org](https://gitsocial.org) runs this way.
 
 ## Install
-
-GitSocial needs git 2.38 or later.
 
 ### macOS / Linux with Homebrew
 
@@ -33,37 +38,64 @@ scoop install gitsocial
 - Go: `go install github.com/gitsocial-org/gitsocial/cli/gitsocial@latest`
 - Binary: download from the [releases](https://gitsocial.org/releases/index.html) page
 
+GitSocial needs git 2.38 or later.
+
 ## Quick Start
 
-Before the first mirror or push, enable public access for the bucket in the dashboard of the provider.
-
-### Mirror a project
+In any cloned repository, show the code, the commits and the tags in the browser:
 
 ```bash
-gitsocial mirror https://github.com/owner/repo s3://s3.example.com/mybucket/repo    # first run asks for credentials
+gitsocial serve
 ```
 
-On a large repository, try `-n 100` first to limit the items per type. `--url https://example.org/` enables the HTML pages at a domain that you configure in the same dashboard.
-
-### Explore a repository in the terminal
-
-Clone the repository from GitHub or GitLab, then run these commands in the repository directory:
+To bring the issues, pull requests and releases from GitHub or GitLab, and the discussions from GitHub:
 
 ```bash
-gitsocial import     # import issues, pull requests, releases and discussions
-gitsocial tui        # explore in the terminal
-gitsocial serve      # show the site in the browser
+gitsocial import -n 20
 ```
 
-### Host your own repository on a bucket
+`-n` caps the items per type, drop it for a full import, which can take a while on a large repository. A running `gitsocial serve` picks up the imported items as they arrive.
+
+## Terminal UI
+
+The TUI browses and creates the same items, and configures the repository ([demo](documentation/demo/demo.gif)):
 
 ```bash
-gitsocial config credentials set s3.example.com    # paste the access key and the secret key
+gitsocial tui
+```
+
+## Publish to a bucket
+
+Any S3-compatible bucket works, whether AWS S3, Cloudflare R2, DigitalOcean Spaces or Hetzner Object Storage, and it serves as a git remote and a static site at the same time.
+
+To mirror a GitHub or GitLab project, with its items, into a bucket:
+
+```bash
+gitsocial mirror https://github.com/owner/repo s3://s3.example.com/mybucket/repo
+```
+
+The first run asks for credentials, and each later run refreshes the mirror.
+
+To publish your own repository, set the credentials once for the endpoint, then add the bucket as a remote and push:
+
+```bash
+gitsocial config credentials set s3.example.com
 gitsocial remote add s3://s3.example.com/mybucket/myrepo --default --site
 gitsocial push
 ```
 
-Anyone can then clone it with `gitsocial clone s3://s3.example.com/mybucket/myrepo`, or with `git clone` from the public URL of the bucket.
+A private bucket needs no further setup, and anyone with the credentials can clone it:
+
+```bash
+gitsocial clone s3://s3.example.com/mybucket/myrepo
+```
+
+For a public project, enable public access in the dashboard of the provider, and anyone can then `git clone` from the public URL of the bucket. To serve the HTML pages at your own domain, configure the domain in the same dashboard, then set the URL and push again:
+
+```bash
+gitsocial config site set url https://example.org/
+gitsocial push
+```
 
 ## Documentation
 
@@ -86,7 +118,7 @@ Anyone can then clone it with `gitsocial clone s3://s3.example.com/mybucket/myre
 | [PM](documentation/PM.md) | Issues, milestones, sprints, labels, boards | [GitPM](specs/GITPM.md) |
 | [Review](documentation/REVIEW.md) | Pull requests, feedback, forks, version tracking, cross-forge scenarios | [GitReview](specs/GITREVIEW.md) |
 | [Release](documentation/RELEASE.md) | Releases, artifacts, checksums, signatures, SBOM | [GitRelease](specs/GITRELEASE.md) |
-| [Memo](documentation/MEMO.md) | Tiered memos for knowledge as commits | — |
+| [Memo](documentation/MEMO.md) | Tiered memos for knowledge as commits | none |
 
 ### Clients
 
@@ -95,7 +127,7 @@ Anyone can then clone it with `gitsocial clone s3://s3.example.com/mybucket/myre
 | [CLI](documentation/CLI.md) | Commands, flags, output formats |
 | [TUI](documentation/TUI-DIAGRAMS.md) | Per-view layouts, [keybindings](documentation/TUI-KEYS.md) |
 | [JSON-RPC](documentation/RPC.md) | Client integration over stdio |
-| [Agent Skill](https://github.com/gitsocial-org/gitsocial-agent-skill) | AI-assisted workflows for Claude Code, Cursor, and other agents |
+| [Agent Skill](https://github.com/gitsocial-org/gitsocial-agent-skill) | AI-assisted workflows for Claude Code, Cursor and other agents |
 
 ### Development
 
