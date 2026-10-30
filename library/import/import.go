@@ -268,30 +268,37 @@ func Run(adapter SourceAdapter, opts Options) (Stats, error) {
 	return stats, nil
 }
 
-// executePM writes the milestones, issues and comments the PM plan holds.
-func executePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
+// countPM counts what executePM would write, for a dry run.
+func countPM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
 	stats := Stats{}
 	platform := mapping.Source
-	if opts.DryRun {
-		for _, m := range plan.Milestones {
-			if mapping.IsMapped(MappingKey(platform, "milestone", m.ExternalID)) {
-				stats.Skipped++
-			} else {
-				stats.Milestones++
-			}
+	for _, m := range plan.Milestones {
+		if mapping.IsMapped(MappingKey(platform, "milestone", m.ExternalID)) {
+			stats.Skipped++
+		} else {
+			stats.Milestones++
 		}
-		for _, issue := range plan.Issues {
-			if mapping.IsMapped(MappingKey(platform, "issue", issue.ExternalID)) {
-				stats.Skipped++
-			} else {
-				stats.Issues++
-			}
-		}
-		cs := executeItemComments(opts, plan.Comments, mapping, "issue", "issue-comment", "pm", "issue", issueContentByID(plan.Issues))
-		stats.Comments += cs.Comments
-		stats.Skipped += cs.Skipped
-		return stats
 	}
+	for _, issue := range plan.Issues {
+		if mapping.IsMapped(MappingKey(platform, "issue", issue.ExternalID)) {
+			stats.Skipped++
+		} else {
+			stats.Issues++
+		}
+	}
+	cs := executeItemComments(opts, plan.Comments, mapping, "issue", "issue-comment", "pm", "issue", issueContentByID(plan.Issues))
+	stats.Comments += cs.Comments
+	stats.Skipped += cs.Skipped
+	return stats
+}
+
+// executePM writes the milestones, issues and comments the PM plan holds.
+func executePM(opts Options, plan *PMPlan, mapping *MappingFile) Stats {
+	if opts.DryRun {
+		return countPM(opts, plan, mapping)
+	}
+	stats := Stats{}
+	platform := mapping.Source
 	repoURL := gitmsg.ResolveRepoURL(opts.WorkDir)
 	branch := gitmsg.GetExtBranch(opts.WorkDir, "pm")
 	authorName, authorEmail, err := git.GetAuthorIdentity(opts.WorkDir)
