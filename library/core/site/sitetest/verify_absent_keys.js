@@ -3,7 +3,7 @@
 // a full HTML error body (~27 KB on R2), so a handful of speculative probes cost
 // more than the page they are part of.
 //
-// Three cases, each with a source of truth the page already holds:
+// Three cases, each with a source of truth the page already holds, and a fourth, the avatar manifest a site config does not name:
 //   - an extension branch absent from .gitsocial/refs.json. The manifest is
 //     the fast path and NOT proof of absence — it is written best-effort by
 //     whichever pusher last succeeded, so treating its silence as authoritative
@@ -147,6 +147,14 @@ async function main() {
     ok(key + " declares an icon", !!icon, (html || "").slice(0, 60));
     ok(key + " references no favicon.ico", !/favicon\.ico/.test(html || ""));
   }
+
+  // ---- 4. a site config with no avatarManifest costs the app no manifest request ----
+  const cfgCtx = GS.newContext(TD);
+  const cfg = await GS.loadSiteCustomization(cfgCtx);
+  ok("the fixture's site config names no avatar manifest", !!cfg && cfg.avatarManifest === undefined, JSON.stringify(cfg));
+  await GS.applySiteCustomization(cfgCtx, "fallback");
+  ok("applying the customization asks for no avatar manifest, nor did the boot",
+    hits(log, /avatars\.json$/).length === 0, hits(log, /avatars\.json$/).map((r) => r.url).join(" | "));
 
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);

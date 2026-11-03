@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, hydrateItems, loadForkPulls, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, setGrammarBase, setRefContext, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, hydrateItems, loadForkPulls, loadInteractionCounts, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, loadAvatarManifest, setAvatarKeys, setGrammarBase, setRefContext, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -23,6 +23,9 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   // take several seconds to hydrate its first window, so this is generous: it
   // only trips on a real stall, never a slow-but-progressing load).
   const WATCHDOG_MS = 30000;
+
+  // CUSTOMIZATION_WAIT_MS bounds how long the first route waits for the site customization; a stalled customization never holds the first paint.
+  const CUSTOMIZATION_WAIT_MS = 2000;
 
   // firstViewSignalled guards the page-entry boot handshake: gs-upgrade.js holds
   // the content slot on a loading treatment and installs window.__gsOnFirstView,
@@ -70,7 +73,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     if (t && t.scrollIntoView) t.scrollIntoView();
   }
 
-  async function route(ctx) {
+  async function route(ctx, entryHash) {
     // Claim the current route generation. Every paint below goes through the
     // guarded `setView`, which drops writes once a newer route() has started —
     // so a slow earlier route (its async view resolving late) cannot overwrite a
@@ -89,7 +92,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     // Capture the hash NOW: on an upgraded page, gs-upgrade's syncURL rewrites
     // the URL to a clean (hashless) page URL right after this handler's
     // synchronous prefix, so location.hash is unreliable after the first await.
-    const hashAtEntry = location.hash;
+    const hashAtEntry = entryHash === undefined ? location.hash : entryHash;
     const r = parseRoute(hashAtEntry);
     // Remember the last in-app hash so a detail page's "back" returns to where the
     // user came from (a board/milestone/sprint/search list), not a fixed default.
@@ -402,14 +405,17 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   }
 
   // applySiteCustomization fetches the push-published site-config.json and applies
-  // its title/accent/accentDark/favicon overrides with strict validation; each
-  // field is applied only when valid, and any absence/error leaves the default.
+  // its title/accent/accentDark/favicon overrides with strict validation, and the avatar
+  // manifest when the config names one; any absence/error leaves the default.
   async function applySiteCustomization(ctx, fallbackName) {
     let cfg = null;
     try { cfg = await loadSiteCustomization(ctx); } catch { cfg = null; }
     if (cfg && typeof cfg.title === "string" && cfg.title.trim()) setDocTitle(cfg.title.trim());
     else setDocTitle(fallbackName);
     if (cfg) { applyAccent(cfg.accent, cfg.accentDark); applyFavicon(ctx.base, cfg.favicon); }
+    if (cfg && typeof cfg.avatarManifest === "string" && cfg.avatarManifest) {
+      try { setAvatarKeys(await loadAvatarManifest(ctx), ctx.base); } catch { /* the initials stay */ }
+    }
   }
 
   // startFreshnessWatch surfaces a maintainer's push in a long-lived tab: on return
@@ -442,6 +448,8 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   }
 
   async function init() {
+    // The page upgrade cleans the URL after this script loads, so the first route takes the hash it seeded now.
+    const entryHash = location.hash;
     const ctx = newContext(deriveBase(location));
     // Grammar files are fetched relative to the bucket base, so tell the render
     // layer where the site is served from before any code block is highlighted.
@@ -449,9 +457,9 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     const name = repoTitle(ctx.base);
     // The document/tab title names the browsed project, not the static "gitsocial"
     // shell placeholder — derived from the same served-directory name as the chrome.
-    // A pushed site customization (title/accent/favicon) overrides these defaults.
+    // A pushed site customization overrides these defaults.
     setDocTitle(name);
-    applySiteCustomization(ctx, name);
+    const applying = applySiteCustomization(ctx, name);
     // The store opens beside the customization read, so the first route's object reads find it open.
     objectStore(ctx);
     // Not awaited: the counts fill in beside the nav and never hold the first route.
@@ -462,7 +470,8 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     const run = () => route(ctx);
     window.addEventListener("hashchange", run);
     if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("keydown", onGlobalKey);
-    run();
+    // The first route waits for the customization; a route that started meanwhile already painted the hash.
+    Promise.race([applying, new Promise((resolve) => setTimeout(resolve, CUSTOMIZATION_WAIT_MS))]).then(() => { if (routeGen === 0) route(ctx, entryHash); });
   }
 
   Object.assign(NS, { route, init, applySiteCustomization, applyAccent, applyFavicon });

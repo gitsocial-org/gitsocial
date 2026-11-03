@@ -178,6 +178,10 @@ for (const c of FIX.avatars) {
   eq(node.className + "|" + node.textContent, "avatar " + c.expectClass + "|" + c.expectInitials, c.name);
 }
 
+console.log("=== parity invariant: the avatar key of an email ===");
+if (!FIX.avatarKeys || !FIX.avatarKeys.length) { fail++; console.log("FAIL no avatarKeys cases in parity fixtures"); }
+for (const c of FIX.avatarKeys || []) eq(GS.avatarKey(c.email), c.expect, c.name);
+
 console.log("=== parity invariant: an adopted copy's row and a cross-repository edit ===");
 {
   const A = FIX.adopted;

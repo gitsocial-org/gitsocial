@@ -344,8 +344,8 @@ func WriteSiteStats(remoteURL string, env objstore.HelperEnv, stats map[string]a
 	return nil
 }
 
-// Rebuild uploads the shell, seeds the refs manifest, runs the item-artifact state machine over every data branch and maintains the fork pull request area. It sends no refs, and the workspace's site.publish guard is the only enabler.
-func Rebuild(remoteURL string, env objstore.HelperEnv, workdir string, ov objstore.SiteOverride, progress objstore.Progress, forks ForkPullSource) (published, complete bool, area *ForkPullArea, err error) {
+// Rebuild syncs the avatar store, uploads the shell, seeds the refs manifest, runs the item-artifact state machine over every data branch and maintains the fork pull request area. It sends no refs, and the workspace's site.publish guard is the only enabler.
+func Rebuild(remoteURL string, env objstore.HelperEnv, workdir, cacheDir string, ov objstore.SiteOverride, progress objstore.Progress, forks ForkPullSource) (published, complete bool, area *ForkPullArea, err error) {
 	client, prefix, err := objstore.ClientForRemote(remoteURL, env)
 	if err != nil {
 		return false, false, nil, err
@@ -365,7 +365,7 @@ func Rebuild(remoteURL string, env objstore.HelperEnv, workdir string, ov objsto
 	}
 	src := objstore.NewLocalCommitSource(env.GitDir, workdir)
 	defer src.Close()
-	if complete, err = rebuildSite(client, prefix, src, ov, progress); err != nil {
+	if complete, err = rebuildSite(client, prefix, src, ov, progress, workspaceAvatarStore(workdir, cacheDir)); err != nil {
 		return true, complete, nil, err
 	}
 	// The area follows the fork heads, which no bucket ref names, so the skip marker does not gate it.
@@ -378,8 +378,12 @@ func Rebuild(remoteURL string, env objstore.HelperEnv, workdir string, ov objsto
 	return true, complete, maintainSiteForks(client, prefix, refs, eff, forks, note), nil
 }
 
-// rebuildSite is Rebuild over a resolved client and prefix; complete is false when a bootstrap still owes work a later pass must finish.
-func rebuildSite(client *objstore.Client, prefix string, src *objstore.LocalCommitSource, ov objstore.SiteOverride, progress objstore.Progress) (complete bool, err error) {
+// rebuildSite is Rebuild over a resolved client, prefix and avatar store; complete is false when a bootstrap still owes work a later pass must finish.
+func rebuildSite(client *objstore.Client, prefix string, src *objstore.LocalCommitSource, ov objstore.SiteOverride, progress objstore.Progress, avatarStore string) (complete bool, err error) {
+	// A new manifest moves the skip digest, so the sync runs before the marker check.
+	if err := syncAvatarStore(client, prefix, avatarStore, progress); err != nil {
+		return false, fmt.Errorf("avatar store: %w", err)
+	}
 	// Skip the pass when nothing a site artifact derives from has moved since the last one at this shell version.
 	shellVersion, err := siteVersion()
 	if err != nil {

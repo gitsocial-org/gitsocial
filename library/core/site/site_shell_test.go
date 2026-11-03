@@ -47,6 +47,62 @@ func TestSitePageSiteHash_shellVersion(t *testing.T) {
 	}
 }
 
+// TestSitePageSiteHash_avatarManifest: a new, changed or removed avatar manifest regenerates the pages, and the push-state digest follows it.
+func TestSitePageSiteHash_avatarManifest(t *testing.T) {
+	client, bucket := testClient(t)
+	hash := func() string {
+		site, err := sitePageSiteWithAvatars(client, "", SiteCustomization{Title: "t"}, "https://example.com/")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return sitePageSiteHash(site)
+	}
+	none := hash()
+	if err := WriteAvatarManifest(client, "", []string{"bbbbbbbbbbbbbbbb", "aaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaa"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := bucket.Object(AvatarManifestKey); got != `{"v":1,"keys":["aaaaaaaaaaaaaaaa","bbbbbbbbbbbbbbbb"]}` {
+		t.Errorf("manifest = %s, want the keys sorted and deduplicated", got)
+	}
+	set := hash()
+	if err := WriteAvatarManifest(client, "", []string{"aaaaaaaaaaaaaaaa"}); err != nil {
+		t.Fatal(err)
+	}
+	changed := hash()
+	if none == set || set == changed {
+		t.Errorf("site hash ignores the avatar manifest: none %s, set %s, changed %s", none, set, changed)
+	}
+	if foldAvatarManifest("d", "") != "d" || foldAvatarManifest("d", "a") == foldAvatarManifest("d", "b") {
+		t.Error("the push-state digest does not follow the avatar manifest, or moves with no manifest")
+	}
+	if err := client.Delete(AvatarManifestKey); err != nil {
+		t.Fatal(err)
+	}
+	if hash() != none {
+		t.Error("a removed manifest does not give the hash of no manifest")
+	}
+}
+
+// TestReadAvatarManifest_absent: an absent manifest or another version is empty with no digest, and a parse error is an error.
+func TestReadAvatarManifest_absent(t *testing.T) {
+	client, bucket := testClient(t)
+	if keys, digest, err := readAvatarManifest(client, ""); err != nil || len(keys) != 0 || digest != "" {
+		t.Errorf("absent manifest = %v %q %v, want empty", keys, digest, err)
+	}
+	bucket.Seed(AvatarManifestKey, []byte(`{"v":2,"keys":["aaaaaaaaaaaaaaaa"]}`))
+	if keys, digest, err := readAvatarManifest(client, ""); err != nil || len(keys) != 0 || digest != "" {
+		t.Errorf("manifest at another version = %v %q %v, want empty", keys, digest, err)
+	}
+	bucket.Seed(AvatarManifestKey, []byte(`{not json`))
+	if _, _, err := readAvatarManifest(client, ""); err == nil {
+		t.Error("a malformed manifest is not an error")
+	}
+	bucket.Seed(AvatarManifestKey, []byte(`{"v":1,"keys":["aaaaaaaaaaaaaaaa"]}`))
+	if keys, digest, err := readAvatarManifest(client, ""); err != nil || !keys["aaaaaaaaaaaaaaaa"] || len(digest) != 12 {
+		t.Errorf("manifest = %v %q %v", keys, digest, err)
+	}
+}
+
 // TestSiteShellSweep_firstTransitionKeepsRoots: the first versioned push over
 // a pre-versioning bucket keeps the root-level copies, since the old pages
 // reference them until the budgeted regeneration finishes.

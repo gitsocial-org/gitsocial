@@ -49,7 +49,7 @@ Examples:
   gitsocial push --all-remotes   # every remote, in alphabetical order
   gitsocial push --dry-run       # print the plan, send nothing
   gitsocial push --no-code       # data and site, no code branches
-  gitsocial push --site-only     # rebuild the site, send no refs
+  gitsocial push --site-only     # rebuild the site from the refs in the bucket, send none
   gitsocial push --all-branches  # every local branch
   gitsocial push --full          # detach a thin fork bucket`,
 		Args: cobra.ArbitraryArgs,
@@ -149,7 +149,7 @@ Examples:
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without pushing")
 	cmd.Flags().BoolVar(&noCode, "no-code", false, "Skip code branches")
 	cmd.Flags().BoolVar(&noSite, "no-site", false, "Skip the site rebuild for this push")
-	cmd.Flags().BoolVar(&siteOnly, "site-only", false, "Rebuild the site, send no refs")
+	cmd.Flags().BoolVar(&siteOnly, "site-only", false, "Rebuild the site from the refs in the bucket, send none")
 	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "Send every local branch")
 	cmd.Flags().BoolVar(&allRemotes, "all-remotes", false, "Push to every configured remote")
 	cmd.Flags().BoolVar(&full, "full", false, "Detach a thin fork bucket and upload every object")

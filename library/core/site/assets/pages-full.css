@@ -188,6 +188,7 @@
   }
   /* One size everywhere, a quote box included. */
   .avatar { width: var(--sp-6); height: var(--sp-6); font-size: var(--fs-md); }
+  .avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
   .avatar.av-0 { background: hsl(0 45% 40% / 0.5); }
   .avatar.av-1 { background: hsl(30 45% 40% / 0.5); }
   .avatar.av-2 { background: hsl(60 45% 40% / 0.5); }

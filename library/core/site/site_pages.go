@@ -180,14 +180,19 @@ func sitePagesEffective(cfg SiteCustomization, ok bool) (string, bool) {
 
 // sitePageSiteFor assembles the site identity every page stamps, resolving a relative site.image against the base URL.
 func sitePageSiteFor(cfg SiteCustomization, base string) sitePageSite {
-	site := sitePageSite{Title: cfg.Title, URL: base, Description: cfg.Description, Image: cfg.Image, Favicon: cfg.Favicon, AccentCSS: sitePagesAccentCSS(cfg)}
-	if site.Image != "" && !strings.Contains(site.Image, "://") {
-		site.Image = base + site.Image
-	}
+	site := sitePageSite{Title: cfg.Title, URL: base, Description: cfg.Description, Image: sitePageResolve(cfg.Image, base), Favicon: cfg.Favicon, AccentCSS: sitePagesAccentCSS(cfg)}
 	if site.Title == "" {
 		site.Title = sitePageDefaultTitle(base)
 	}
 	return site
+}
+
+// sitePageResolve joins a relative bucket key onto the base URL; an absolute URL or "" passes through.
+func sitePageResolve(location, base string) string {
+	if location != "" && !strings.Contains(location, "://") {
+		return base + location
+	}
+	return location
 }
 
 // sitePageSiteHash fingerprints the site identity baked into every page; a change, the shell revision included, regenerates the page layer.
@@ -197,7 +202,7 @@ func sitePageSiteHash(site sitePageSite) string {
 
 // sitePageSiteHashWith is sitePageSiteHash over an explicit shell dir, the seam its test varies.
 func sitePageSiteHashWith(site sitePageSite, shellDir string) string {
-	h := sha256.Sum256([]byte(site.Title + "\x00" + site.URL + "\x00" + site.Description + "\x00" + site.Image + "\x00" + site.Favicon + "\x00" + string(site.AccentCSS) + "\x00" + shellDir))
+	h := sha256.Sum256([]byte(site.Title + "\x00" + site.URL + "\x00" + site.Description + "\x00" + site.Image + "\x00" + site.Favicon + "\x00" + string(site.AccentCSS) + "\x00" + site.AvatarDigest + "\x00" + shellDir))
 	return hex.EncodeToString(h[:])[:12]
 }
 
@@ -220,7 +225,10 @@ func sitePagesState(client *objstore.Client, prefix string, refs map[string]stri
 		return "", true
 	}
 	// The file layer's flag comes from the recorded set, since this helper has no default branch to walk a tree from.
-	site := sitePageSiteFor(cfg, url)
+	site, err := sitePageSiteWithAvatars(client, prefix, cfg, url)
+	if err != nil {
+		return "", true
+	}
 	site.Files = sitePagesHasFiles(manifest)
 	if manifest.SiteHash != sitePageSiteHash(site) {
 		return "", true
@@ -249,7 +257,10 @@ func rebuildSitePages(client *objstore.Client, prefix string, refs map[string]st
 		}
 		return false, sitePagesStateOff, nil
 	}
-	site := sitePageSiteFor(cfg, url)
+	site, err := sitePageSiteWithAvatars(client, prefix, cfg, url)
+	if err != nil {
+		return false, "", err
+	}
 	manifest, err := readSitePagesManifest(client, prefix)
 	if err != nil {
 		return false, "", err
@@ -973,7 +984,7 @@ func siteChainedListPage(list sitePageList, entries []sitePageListEntry, metaBit
 func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePageItem, total, sealed int, subjects, types map[string]string, tallies map[string]siteEntryCounts) siteListPageData {
 	entries := make([]sitePageListEntry, 0, len(head))
 	for _, it := range head {
-		entries = append(entries, buildSiteListEntry(it, subjects, types, tallies[it.Msg.Short]))
+		entries = append(entries, buildSiteListEntry(it, subjects, types, tallies[it.Msg.Short], site.Avatars))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", total, list.Label)}
 	if list.Ext == "pm" || list.Ext == "review" {
@@ -1012,7 +1023,7 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 func buildSiteSealedListPage(list sitePageList, site sitePageSite, pageEntries []*sitePageItem, n, sealed int, subjects, types map[string]string, tallies map[string]siteEntryCounts) siteListPageData {
 	entries := make([]sitePageListEntry, 0, len(pageEntries))
 	for _, it := range pageEntries {
-		entries = append(entries, buildSiteListEntry(it, subjects, types, tallies[it.Msg.Short]))
+		entries = append(entries, buildSiteListEntry(it, subjects, types, tallies[it.Msg.Short], site.Avatars))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", len(entries), list.Label), fmt.Sprintf("older page %d", n)}
 	d := siteChainedListPage(list, entries, metaBits, n, sealed)

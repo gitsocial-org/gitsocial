@@ -114,7 +114,7 @@ func TestSiteRebuild_URLOverrideStamped(t *testing.T) {
 	if err := client.Put("HEAD", []byte("ref: refs/heads/main\n")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{URL: "https://r2.example"}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{URL: "https://r2.example"}, nil, ""); err != nil {
 		t.Fatalf("rebuildSite: %v", err)
 	}
 
@@ -150,7 +150,7 @@ func TestSiteRebuild_PublishOverrideDisablesPagesOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	// First rebuild (no override) builds the page set and stamps the skip marker.
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("rebuildSite build: %v", err)
 	}
 	if !keyExists(client, sitePagesManifestKey) {
@@ -158,7 +158,7 @@ func TestSiteRebuild_PublishOverrideDisablesPagesOnly(t *testing.T) {
 	}
 	// A publish=false override, with the config ref and all branch tips unchanged,
 	// must still run a full pass (the folded digest differs) and delete the pages.
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{Publish: "false"}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{Publish: "false"}, nil, ""); err != nil {
 		t.Fatalf("rebuildSite disable: %v", err)
 	}
 	for _, key := range []string{sitePagesManifestKey, sitePagesRobotsKey, sitePagesFeedKey} {

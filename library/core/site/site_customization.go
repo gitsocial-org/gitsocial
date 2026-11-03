@@ -74,6 +74,8 @@ type SiteCustomization struct {
 	// The file layer's globs, comma-separated strings so the type stays comparable.
 	FilesInclude string `json:"filesInclude,omitempty"`
 	FilesExclude string `json:"filesExclude,omitempty"`
+	// AvatarManifest is the digest of the avatar manifest; the push sets it and the config ref cannot.
+	AvatarManifest string `json:"avatarManifest,omitempty"`
 }
 
 // siteBoolString normalizes a raw guard value to "true" or "false"; "" means unset, so the guard is off.
@@ -268,7 +270,7 @@ func readSiteBaseCustomization(client *objstore.Client, prefix string, refs map[
 	return valid, ok, nil
 }
 
-// writeSiteCustomization publishes the validated site customization after every push; an absent or malformed config deletes the artifact instead.
+// writeSiteCustomization publishes the validated site customization and the avatar manifest digest after every push; an absent or malformed config deletes the artifact instead.
 func writeSiteCustomization(client *objstore.Client, prefix string, refs map[string]string, ov objstore.SiteOverride, src *objstore.LocalCommitSource) error {
 	cfg, ok, err := readSiteCustomization(client, prefix, refs, ov, src)
 	if err != nil {
@@ -276,6 +278,9 @@ func writeSiteCustomization(client *objstore.Client, prefix string, refs map[str
 	}
 	if !ok {
 		return client.Delete(prefix + siteCustomizationKey)
+	}
+	if _, cfg.AvatarManifest, err = readAvatarManifest(client, prefix); err != nil {
+		return err
 	}
 	data, err := json.Marshal(cfg)
 	if err != nil {

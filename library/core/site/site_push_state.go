@@ -40,6 +40,14 @@ func foldSiteOverride(digest string, ov objstore.SiteOverride) string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(digest+"\x00"+ov.URL+"\x00"+ov.Publish+"\x00"+ov.Pages)))
 }
 
+// foldAvatarManifest folds the avatar manifest digest into the digest, since a new manifest moves no bucket ref; no manifest leaves the digest unchanged.
+func foldAvatarManifest(digest, avatarDigest string) string {
+	if avatarDigest == "" {
+		return digest
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(digest+"\x00avatars\x00"+avatarDigest)))
+}
+
 // readSitePushState fetches the push-state marker; ok is false when absent, at another version, or unreadable.
 func readSitePushState(client *objstore.Client, prefix string) (sitePushState, bool) {
 	data, err := client.Get(prefix + sitePushStateKey)
@@ -60,8 +68,12 @@ func siteMaintenanceUpToDate(client *objstore.Client, prefix, shellVersion strin
 	if err != nil {
 		return false, ""
 	}
-	// Fold in the per-remote override, which is invisible to the bucket refs.
-	digest = foldSiteOverride(digest, ov)
+	// Fold in the per-remote override and the avatar manifest, which are invisible to the bucket refs.
+	_, avatarDigest, err := readAvatarManifest(client, prefix)
+	if err != nil {
+		return false, ""
+	}
+	digest = foldAvatarManifest(foldSiteOverride(digest, ov), avatarDigest)
 	if !ok || state.ShellVersion != shellVersion {
 		return false, digest
 	}

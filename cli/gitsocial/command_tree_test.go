@@ -31,6 +31,7 @@ var jsonSkipPaths = map[string]bool{
 	"import release":  true, // network
 	"import review":   true, // network
 	"import social":   true, // network
+	"import avatars":  true, // network
 	"personal init":   true, // writes the personal repo
 	"personal sync":   true, // network
 }

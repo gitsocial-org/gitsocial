@@ -187,7 +187,7 @@ const sitePageTemplateText = `{{define "head"}}<!DOCTYPE html>
 {{end}}{{if .Omitted}}<div class="notice">{{.Omitted}} more not shown.</div>
 {{end}}{{if .More}}<div class="notice">The page shows the first {{lineCap}} changed lines. <a href="{{.AppHref}}">The app shows the rest.</a></div>
 {{end}}</div>
-{{end}}{{define "avatar"}}{{with .Avatar}}<span class="avatar {{.Class}}" title="{{.Title}}">{{.Initials}}</span>{{end}}{{end}}{{define "glyph"}}{{if .Glyph}}<span class="type-glyph{{if .GlyphClass}} {{.GlyphClass}}{{end}}"{{if .GlyphTitle}} title="{{.GlyphTitle}}"{{end}}>{{.Glyph}}</span>{{end}}{{end}}{{define "hometoggle"}}<summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></summary>
+{{end}}{{define "avatar"}}{{with .Avatar}}<span class="avatar {{.Class}}" title="{{.Title}}">{{if .Image}}<img src="{{.Image}}" alt="{{.Initials}}" loading="lazy">{{else}}{{.Initials}}{{end}}</span>{{end}}{{end}}{{define "glyph"}}{{if .Glyph}}<span class="type-glyph{{if .GlyphClass}} {{.GlyphClass}}{{end}}"{{if .GlyphTitle}} title="{{.GlyphTitle}}"{{end}}>{{.Glyph}}</span>{{end}}{{end}}{{define "hometoggle"}}<summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg fill="none" viewBox="0 0 16 16" aria-hidden="true"><path stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="m3.5 6 4.5 4.5L12.5 6"/></svg></span></summary>
 {{end}}{{define "filerow"}}<a class="home-row" href="{{.Href}}">{{.Icon}}<span class="home-row-subject">{{.Name}}</span></a>
 {{end}}{{define "entries"}}{{range .}}<div class="card"{{if .ID}} id="{{.ID}}"{{end}}>{{template "avatar" .}}{{template "glyph" .}}{{if or .Meta .BodyOnly}}<span class="meta">{{template "bits" .Meta}}{{if .Chip}} · <span class="marker">{{.Chip.Label}}</span>{{end}}</span>
 {{end}}{{template "chiprow" .Chips}}{{if .BodyOnly}}{{if .Text}}<div class="body body-clamp">{{.Text}}</div>
@@ -356,7 +356,7 @@ type sitePageAssets struct {
 }
 
 // siteAvatar is the initials circle that leads a card with an author line.
-type siteAvatar struct{ Class, Initials, Title string }
+type siteAvatar struct{ Class, Initials, Title, Image string }
 
 // sitePageReply is one thread reply, rendered as the app's comment or feedback card.
 type sitePageReply struct {
@@ -483,13 +483,15 @@ type siteFrontReadme struct {
 
 // sitePageSite is the resolved site identity every page stamps.
 type sitePageSite struct {
-	Title       string
-	URL         string // normalized site.url (trailing slash)
-	Description string
-	Image       string       // absolute og:image URL ("" = no social card)
-	Favicon     string       // configured favicon: an absolute URL or a relative bucket key ("" = unconfigured)
-	AccentCSS   template.CSS // accent override every page's head inlines ("" = none configured)
-	Files       bool         // the file layer has pages: every sidebar carries the Files entry
+	Title        string
+	URL          string // normalized site.url (trailing slash)
+	Description  string
+	Image        string            // absolute og:image URL ("" = no social card)
+	Favicon      string            // configured favicon: an absolute URL or a relative bucket key ("" = unconfigured)
+	AccentCSS    template.CSS      // accent override every page's head inlines ("" = none configured)
+	Files        bool              // the file layer has pages: every sidebar carries the Files entry
+	Avatars      map[string]string // avatar key to picture src, one per manifest key
+	AvatarDigest string            // the manifest digest ("" = no manifest)
 }
 
 // sitePageList describes one type directory: extension, bucket dir, label, shell route, sidebar label and glyph.
@@ -848,9 +850,9 @@ func siteAvatarHue(name, email string) int {
 	return int(hash.Sum32() % siteAvatarHues)
 }
 
-// sitePageAvatar builds an author's initials circle, its hue class from the email. Mirrors authorAvatar in gs-render.js.
-func sitePageAvatar(name, email string) *siteAvatar {
-	return &siteAvatar{Class: "av-" + strconv.Itoa(siteAvatarHue(name, email)), Initials: siteAvatarInitials(name, email), Title: sitePageAuthorLabel(name, email)}
+// sitePageAvatar builds an author's initials circle, its hue class from the email and its picture from the avatar key of the email. Mirrors authorAvatar in gs-render.js.
+func sitePageAvatar(name, email string, avatars map[string]string) *siteAvatar {
+	return &siteAvatar{Class: "av-" + strconv.Itoa(siteAvatarHue(name, email)), Initials: siteAvatarInitials(name, email), Title: sitePageAuthorLabel(name, email), Image: avatars[AvatarKey(email)]}
 }
 
 // sitePageAuthorBit builds a message's author bit, the email in its title when it is not the label.
@@ -1382,15 +1384,16 @@ func sitePageFeedbackFileRef(r, pr *sitePageItem) string {
 }
 
 // buildSiteReply renders one thread reply as a comment or feedback card, or a tombstone line when it was retracted; root is the item the reply is under, and link resolves the refs of its body.
-func buildSiteReply(r, root *sitePageItem, link func(ref string) string) sitePageReply {
+func buildSiteReply(r, root *sitePageItem, link func(ref string) string, avatars map[string]string) sitePageReply {
 	if r.Retracted {
 		return sitePageReply{Variant: "comment", Depth: r.Depth, Tomb: "a reply from " + sitePageDate(pageEffectiveTime(r.Msg)) + " was retracted by its author"}
 	}
 	t := pageMsgType(r.Msg)
 	glyph, glyphClass := sitePageGlyph(t, "")
+	name, email := pageDisplayAuthor(r.Msg)
 	s := sitePageReply{
 		Variant:    "comment",
-		Avatar:     sitePageAvatar(pageDisplayAuthor(r.Msg)),
+		Avatar:     sitePageAvatar(name, email, avatars),
 		Depth:      r.Depth,
 		Glyph:      glyph,
 		GlyphClass: glyphClass,
@@ -1435,7 +1438,7 @@ func siteQuotedText(metadata string) string {
 }
 
 // buildSiteQuote builds the quote box of a reply, a quote or a repost from the GitMsg-Ref its message carries for what it answers, reply-to before original; nil when the message quotes nothing. Mirrors replyQuoteBlock in gs-render.js.
-func buildSiteQuote(it *sitePageItem, link func(ref string) string) *sitePageReply {
+func buildSiteQuote(it *sitePageItem, link func(ref string) string, avatars map[string]string) *sitePageReply {
 	t := pageItemType(it)
 	if t != "comment" && t != "quote" && t != "repost" {
 		return nil
@@ -1456,7 +1459,7 @@ func buildSiteQuote(it *sitePageItem, link func(ref string) string) *sitePageRep
 			}
 			author := &sitePageMsg{Author: ref.Author, Email: ref.Email}
 			glyph, glyphClass := sitePageGlyph(ref.Fields["type"], "")
-			q := &sitePageReply{Variant: "reply-quote dimmed", Avatar: sitePageAvatar(ref.Author, ref.Email), Glyph: glyph, GlyphClass: glyphClass, GlyphTitle: ref.Fields["type"], Meta: []sitePageBit{sitePageAuthorLink(author)}, Paras: sitePageParas(quoted, link)}
+			q := &sitePageReply{Variant: "reply-quote dimmed", Avatar: sitePageAvatar(ref.Author, ref.Email, avatars), Glyph: glyph, GlyphClass: glyphClass, GlyphTitle: ref.Fields["type"], Meta: []sitePageBit{sitePageAuthorLink(author)}, Paras: sitePageParas(quoted, link)}
 			if t == "repost" {
 				q.Variant = "reply-quote"
 			}
@@ -1626,6 +1629,7 @@ func siteItemPageDatedTitle(it *sitePageItem, subject string) string {
 func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, titles, types map[string]string, src *objstore.LocalCommitSource, refs map[string]string) siteItemPageData {
 	route := "commit:" + it.Msg.Short + "@gitmsg/" + list.Ext
 	link := sitePageRefHref(site, titles)
+	name, email := pageDisplayAuthor(it.Msg)
 	subject, body := protocol.SplitSubjectBody(pageItemBody(it))
 	bodyOnly := sitePageBodyOnly(pageItemType(it))
 	if bodyOnly {
@@ -1656,7 +1660,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 	pills, identity := sitePageHeadChips(it, d.Heading)
 	d.MetaChips = pills
 	d.Chips = append(identity, siteItemChips(it, titles, types, "", 0)...)
-	d.Avatar = sitePageAvatar(pageDisplayAuthor(it.Msg))
+	d.Avatar = sitePageAvatar(name, email, site.Avatars)
 	d.HeadingHref = siteHeadingHref(it, d.Heading)
 	icon, repoIcon := sitePageIcons(site.Favicon, "../")
 	d.Chrome = sitePageChrome{
@@ -1679,7 +1683,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		d.Assets = buildSiteReleaseAssets(it)
 	}
 	if !it.Retracted {
-		d.Quote = buildSiteQuote(it, link)
+		d.Quote = buildSiteQuote(it, link, site.Avatars)
 	}
 	d.Diff = buildSitePRDiff(it, site, src, refs)
 	threadBytes := 0
@@ -1688,7 +1692,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 			d.Omitted = len(it.Replies) - i
 			break
 		}
-		d.Replies = append(d.Replies, buildSiteReply(r, it, link))
+		d.Replies = append(d.Replies, buildSiteReply(r, it, link, site.Avatars))
 		threadBytes += len(pageItemBody(r))
 	}
 	return d
@@ -1846,7 +1850,7 @@ func siteEntryTallies(roots map[string][]*sitePageItem) map[string]siteEntryCoun
 }
 
 // buildSiteListEntry renders one root as a list page's row: the author line, the chip row led by the identity chips, the sub-issue count and the interaction counts, then the title or the text; subjects names the items its chips reference, and counts holds what other entries add to it.
-func buildSiteListEntry(it *sitePageItem, subjects, types map[string]string, counts siteEntryCounts) sitePageListEntry {
+func buildSiteListEntry(it *sitePageItem, subjects, types map[string]string, counts siteEntryCounts, avatars map[string]string) sitePageListEntry {
 	t := pageItemType(it)
 	// A list page sits one directory below the item pages.
 	href := "../i/" + it.Msg.Short + ".html"
@@ -1858,7 +1862,8 @@ func buildSiteListEntry(it *sitePageItem, subjects, types map[string]string, cou
 	state := pageItemField(it, "state")
 	glyph, glyphClass := sitePageGlyph(t, state)
 	row := siteRowHead(it)
-	row.Avatar = sitePageAvatar(pageDisplayAuthor(it.Msg))
+	name, email := pageDisplayAuthor(it.Msg)
+	row.Avatar = sitePageAvatar(name, email, avatars)
 	row.Glyph, row.GlyphClass, row.GlyphTitle = glyph, glyphClass, sitePageGlyphTitle(t, state)
 	row.Href, row.Meta = href, meta
 	// The sub-issue count and the interaction counts follow the identity chips, as issueCard and chipRow in gs-render.js do.

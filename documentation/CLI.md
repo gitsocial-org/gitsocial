@@ -56,7 +56,7 @@ Sends the `gitmsg/*` branches, state refs, tags, the default branch when it is a
 ```
 gitsocial push [remote...]
 gitsocial push --dry-run       # print the plan, send nothing
-gitsocial push --site-only     # rebuild the site, send no refs
+gitsocial push --site-only     # rebuild the site from the refs in the bucket, send none
 ```
 
 ### gitsocial serve
@@ -76,6 +76,7 @@ gitsocial serve --addr 127.0.0.1:8080
 | git hooks | not run: `core.hooksPath` is the null device in the environment of the serve process |
 | poll | `git for-each-ref refs/heads refs/tags refs/gitmsg` every 2 s; one push at a time |
 | tracking refs | `refs/remotes/gitsocial-serve/*` and `refs/gitsocial/tracking/gitsocial-serve/*`, deleted on exit and written again from the bucket at the next start |
+| pictures | the avatar store of the `origin` URL, which `gitsocial import avatars` fills ([import](#import)) |
 
 ### gitsocial mirror
 
@@ -284,6 +285,7 @@ gitsocial import pm [url]           # milestones, issues and their comments
 gitsocial import release [url]      # releases and artifact metadata
 gitsocial import review [url]       # fork registrations, pull requests and their comments
 gitsocial import social [url]       # discussions and their comments
+gitsocial import avatars [url]      # author pictures from GitHub into the avatar store and the s3 remote
 gitsocial import pm --state open --limit 100 --dry-run
 ```
 
@@ -295,6 +297,7 @@ gitsocial import pm --state open --limit 100 --dry-run
 - An imported pull request takes `base-tip` and `head-tip` from the forge's commit ids, and from local branches only when the forge gives none. `--update` records the new tips of a pull request whose ids changed, also when nothing else changed.
 - An imported GitHub sub-issue keeps its parent issue, and GitSocial derives `root` from it.
 - The mapping file `~/.cache/gitsocial/imports/<url-slug>.json` maps platform ids to commit hashes; `--map-file` overrides it.
+- `import avatars` writes each picture to the avatar store `~/.cache/gitsocial/imports/<url-slug>.avatars/`, then to the push remote, or to `--remote <name>`, and records each hit and miss in `~/.cache/gitsocial/imports/<url-slug>.avatars.json`. With no s3 remote it fills only the store, and the next push of a workspace whose `origin` is that URL publishes it. An author whose picture is in the store or the bucket is not looked up again. A miss is not looked up again for 30 days; delete the file to retry every miss. A timeout or a server error is not recorded, so the next run tries that author again. At the GitHub rate limit the run stops and prints how many authors remain, and the next run continues. `--set-email <email> --set-file <file>` stores and uploads one local picture. The [static site](STATIC-SITE.md#artifacts) shows each picture in the avatar of its author.
 
 ## Scripting
 

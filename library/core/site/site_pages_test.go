@@ -183,7 +183,7 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	// artifacts only and stamp the marker with pages "off". index.html is the
 	// embedded shell (uploadSiteFiles always ships it), never the generated front
 	// page.
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("rebuildSite: %v", err)
 	}
 	if !keyExists(client, "index.html") || generatedFront() {
@@ -201,7 +201,7 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	// publish on, pages off: site artifacts yes, page layer no. index.html stays
 	// the shell.
 	seedPagesConfig(t, client, map[string]any{"publish": "true", "title": "Pages Test"})
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("rebuildSite publish-only: %v", err)
 	}
 	if !keyExists(client, siteCustomizationKey) {
@@ -214,7 +214,7 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	// Both guards + url: the page layer appears and index.html BECOMES the
 	// generated front page (the entry flip), overwriting the embedded shell.
 	seedPagesConfig(t, client, pagesTestSite())
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("rebuildSite pages-on: %v", err)
 	}
 	if !generatedFront() {
@@ -251,7 +251,7 @@ func TestSitePages_GuardsAndDisable(t *testing.T) {
 	// back — index.html is never deleted, it is dual-owned), and the marker
 	// returns to "off".
 	seedPagesConfig(t, client, map[string]any{"publish": "true", "pages": "false", "url": "https://example.com/", "title": "Pages Test"})
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("rebuildSite disable: %v", err)
 	}
 	gone := append([]string{sitePagesSitemapKey, sitePagesRobotsKey, sitePagesFeedKey, "posts/index.html", "issues/index.html", "posts/feed.xml", "issues/feed.xml", sitePagesManifestKey}, itemKeys...)
@@ -283,7 +283,7 @@ func TestSitePages_IndexHTMLReclaim(t *testing.T) {
 	}
 	// A full rebuildSite: uploadSiteFiles ships the shell at index.html, then
 	// rebuildSitePages overwrites it with the generated front page (the flip).
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("rebuildSite: %v", err)
 	}
 	isFront := func() bool {
@@ -309,7 +309,7 @@ func TestSitePages_IndexHTMLReclaim(t *testing.T) {
 	if err := client.Put("refs/tags/v0.1", []byte(socialTip+"\n")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("rebuildSite reclaim: %v", err)
 	}
 	if !isFront() {
@@ -705,7 +705,7 @@ func TestSitePages_OldMarkerDoesNotMaskPagesBootstrap(t *testing.T) {
 	if err := client.Put("HEAD", []byte("ref: refs/heads/main\n")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("rebuildSite: %v", err)
 	}
 	// Simulate an older binary's pass: pages wiped, marker stamped WITHOUT a
@@ -724,7 +724,7 @@ func TestSitePages_OldMarkerDoesNotMaskPagesBootstrap(t *testing.T) {
 	if up, _ := siteMaintenanceUpToDate(client, "", mustSiteVersion(t), objstore.SiteOverride{}); up {
 		t.Fatal("a pages-unaware marker must not report up-to-date")
 	}
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("recovery rebuildSite: %v", err)
 	}
 	if !keyExists(client, sitePagesManifestKey) {
@@ -1342,7 +1342,7 @@ func TestSitePages_ForeignRootKeysSurvive(t *testing.T) {
 
 	// Full push with the page layer on: shell upload, items index, pages regen.
 	seedPagesConfig(t, client, pagesTestSite())
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("rebuildSite pages-on: %v", err)
 	}
 	if !keyExists(client, sitePagesManifestKey) {
@@ -1353,7 +1353,7 @@ func TestSitePages_ForeignRootKeysSurvive(t *testing.T) {
 
 	// Pages-disable cleanup cycle: the sweep deletes every page-layer key.
 	seedPagesConfig(t, client, map[string]any{"publish": "true", "pages": "false", "url": "https://example.com/", "title": "Pages Test"})
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("rebuildSite disable: %v", err)
 	}
 	if keyExists(client, sitePagesManifestKey) {
@@ -1691,14 +1691,14 @@ func TestSitePages_relationChips(t *testing.T) {
 		t.Errorf("want five closes chips, the first named by its page subject:\n%s", page[strings.Index(page, `<div class="detail-meta">`):][:1200])
 	}
 	labels := make([]string, 0, 4)
-	for _, chip := range buildSiteListEntry(it, nil, nil, siteEntryCounts{}).Chips {
+	for _, chip := range buildSiteListEntry(it, nil, nil, siteEntryCounts{}, nil).Chips {
 		labels = append(labels, chipLabelText(chip))
 	}
 	want := []string{"closes ☐ bbbbbbbbbbbb", "closes ☐ cccccccccccc", "closes ☐ dddddddddddd", "+2"}
 	if strings.Join(labels, ",") != strings.Join(want, ",") {
 		t.Errorf("row chips = %q, want %q", labels, want)
 	}
-	if more := buildSiteListEntry(it, nil, nil, siteEntryCounts{}).Chips[3].Href; more != "../i/"+it.Msg.Short+".html" {
+	if more := buildSiteListEntry(it, nil, nil, siteEntryCounts{}, nil).Chips[3].Href; more != "../i/"+it.Msg.Short+".html" {
 		t.Errorf("the +n chip opens %q, want the item page", more)
 	}
 }
@@ -1711,7 +1711,7 @@ func TestSiteListSubjects_entryNamesItsListItems(t *testing.T) {
 	gone.Msg.Subject, gone.Retracted = "Gone", true
 	child := pagesTestRoot("pm", "a", "Child", map[string]string{"type": "issue", "parent": "#commit:bbbbbbbbbbbb@gitmsg/pm", "blocks": "#commit:cccccccccccc@gitmsg/pm"})
 	labels := make([]string, 0, 2)
-	for _, chip := range buildSiteListEntry(child, siteListSubjects([]*sitePageItem{child, parent, gone}), nil, siteEntryCounts{}).Chips {
+	for _, chip := range buildSiteListEntry(child, siteListSubjects([]*sitePageItem{child, parent, gone}), nil, siteEntryCounts{}, nil).Chips {
 		labels = append(labels, chipLabelText(chip))
 	}
 	if want := "☐ Fix the walk,blocks ☐ cccccccccccc"; strings.Join(labels, ",") != want {
@@ -1748,7 +1748,7 @@ func TestSiteRowHead_bodyOnlyQuote(t *testing.T) {
 	attached := *indexed
 	attached.Message = message
 	for name, msg := range map[string]*sitePageMsg{"index entry": indexed, "attached body": &attached} {
-		row := buildSiteListEntry(&sitePageItem{Msg: msg, Resolved: msg}, nil, nil, siteEntryCounts{})
+		row := buildSiteListEntry(&sitePageItem{Msg: msg, Resolved: msg}, nil, nil, siteEntryCounts{}, nil)
 		if !row.BodyOnly || row.Text != "> quoted" {
 			t.Errorf("%s: row = %+v, want a body-only row carrying %q", name, row, "> quoted")
 		}

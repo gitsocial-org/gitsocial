@@ -13,13 +13,14 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/internal/testutil"
 )
 
-// siteConfigJSONKeys lists the json tag names SiteCustomization declares.
+// siteConfigJSONKeys lists the json tag names SiteCustomization declares, less avatarManifest, which only the push sets.
 func siteConfigJSONKeys() []string {
 	t := reflect.TypeOf(SiteCustomization{})
 	keys := make([]string, 0, t.NumField())
 	for i := range t.NumField() {
-		tag, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
-		keys = append(keys, tag)
+		if tag, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ","); tag != "avatarManifest" {
+			keys = append(keys, tag)
+		}
 	}
 	sort.Strings(keys)
 	return keys

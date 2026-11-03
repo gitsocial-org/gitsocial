@@ -67,6 +67,13 @@ func TestValidateSiteCustomization(t *testing.T) {
 		}
 	})
 
+	t.Run("the config ref cannot set the avatar manifest digest", func(t *testing.T) {
+		c, ok := validateSiteCustomization(map[string]interface{}{"title": "Keep", "avatarManifest": "abcdef012345"})
+		if !ok || c.AvatarManifest != "" {
+			t.Fatalf("avatarManifest from the config = %+v ok=%v", c, ok)
+		}
+	})
+
 	t.Run("long title truncated", func(t *testing.T) {
 		c, ok := validateSiteCustomization(map[string]interface{}{"title": strings.Repeat("x", siteConfigMaxTitle+50)})
 		if !ok || len(c.Title) != siteConfigMaxTitle {
@@ -130,6 +137,32 @@ func TestWriteSiteCustomization(t *testing.T) {
 		}
 		if bucket.PutCount(siteCustomizationKey) != 1 {
 			t.Fatalf("expected 1 PUT, got %d", bucket.PutCount(siteCustomizationKey))
+		}
+		if got.AvatarManifest != "" {
+			t.Fatalf("a bucket with no avatar manifest publishes a digest: %q", got.AvatarManifest)
+		}
+	})
+
+	t.Run("an avatar manifest publishes its digest", func(t *testing.T) {
+		client, _ := testClient(t)
+		if err := WriteAvatarManifest(client, "", []string{"aaaaaaaaaaaaaaaa"}); err != nil {
+			t.Fatal(err)
+		}
+		_, digest, err := readAvatarManifest(client, "")
+		if err != nil || digest == "" {
+			t.Fatalf("read manifest: %q %v", digest, err)
+		}
+		sha := seedCoreConfigCommit(t, client, `{"version":1,"site":{"title":"Demo"}}`)
+		if err := writeSiteCustomization(client, "", map[string]string{"refs/gitmsg/core/config": sha}, objstore.SiteOverride{}, nil); err != nil {
+			t.Fatalf("writeSiteCustomization: %v", err)
+		}
+		data, err := client.Get(siteCustomizationKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got SiteCustomization
+		if err := json.Unmarshal(data, &got); err != nil || got.AvatarManifest != digest {
+			t.Fatalf("artifact = %s, want avatarManifest %q", data, digest)
 		}
 	})
 

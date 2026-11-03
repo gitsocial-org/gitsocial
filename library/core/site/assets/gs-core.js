@@ -3998,6 +3998,26 @@
     return base + favicon;
   }
 
+  // AVATARS_DIR is the bucket directory of the author pictures, one object per avatar key (AvatarsDir).
+  const AVATARS_DIR = ".gitsocial/site/avatars/";
+
+  // avatarKey returns FNV-1a 64 of the lowercase trimmed email's UTF-8 bytes as 16 hex digits. Mirrors AvatarKey in site_avatars.go.
+  function avatarKey(email) {
+    let hash = 0xcbf29ce484222325n;
+    for (const b of new TextEncoder().encode(String(email || "").trim().toLowerCase())) hash = ((hash ^ BigInt(b)) * 0x100000001b3n) & 0xffffffffffffffffn;
+    return hash.toString(16).padStart(16, "0");
+  }
+
+  // loadAvatarManifest fetches the avatar manifest once per context into a set of keys; empty when absent, malformed or at another version.
+  async function loadAvatarManifest(ctx) {
+    if (ctx.avatarKeys !== undefined) return ctx.avatarKeys;
+    let keys = new Set();
+    const text = await fetchText(ctx.base, ".gitsocial/site/avatars.json");
+    if (text) { try { const m = JSON.parse(text); if (m && m.v === 1 && Array.isArray(m.keys)) keys = new Set(m.keys.filter((k) => typeof k === "string")); } catch { keys = new Set(); } }
+    ctx.avatarKeys = keys;
+    return keys;
+  }
+
   // SWIMLANE_FIELDS are the board group-by options, mirroring pm.SwimlaneFields.
   const SWIMLANE_FIELDS = ["", "priority", "kind", "assignees", "author"];
   // SWIMLANE_LABELS names each field for the group-by control (none for "").
@@ -5101,7 +5121,7 @@
     THREAD_MAX_DEPTH, embeddedRefs, groupPM, authorStats, iconName, iconColorClass,
     ANCESTOR_CAP, refBranch, parentRef, parentQuote, quotedRefFor, resolveAncestors,
     CONCURRENCY, isBinary, isLFSPointer,
-    itemLabels, isBodyOnly, facetType, stripLinkRefDefs, subjectText, buildBoard, boardColumnsFrom, loadSiteConfig, loadSiteCustomization, siteFaviconHref, loadInteractionCounts, loadExtItemsForCounts, COUNTS_WALK_CAP, countsFor, matchIssueColumn, PM_BOARD_COLUMNS, pmParentHash,
+    itemLabels, isBodyOnly, facetType, stripLinkRefDefs, subjectText, buildBoard, boardColumnsFrom, loadSiteConfig, loadSiteCustomization, siteFaviconHref, AVATARS_DIR, avatarKey, loadAvatarManifest, loadInteractionCounts, loadExtItemsForCounts, COUNTS_WALK_CAP, countsFor, matchIssueColumn, PM_BOARD_COLUMNS, pmParentHash,
     SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneValue, swimlaneOrder, groupBySwimlane, swimlaneLabel,
     buildIssueHierarchy, pmProgress, searchItems, searchItemsFaceted, parseSearchFilters, itemMatchesHash, searchableText, itemSubject, typeGlyph, loadSearchWindow, fullSearchBytes,
     SEARCH_GROUPS, hashEq,

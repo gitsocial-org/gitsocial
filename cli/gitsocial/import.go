@@ -96,6 +96,7 @@ Examples:
 		newImportSubCmd("release", "Import releases", []string{"release"}, 50),
 		newImportSubCmd("review", "Import forks and pull requests", []string{"review"}, 50),
 		newImportSubCmd("social", "Import discussions as posts", []string{"social"}, 50),
+		newImportAvatarsCmd(),
 	)
 	return cmd
 }

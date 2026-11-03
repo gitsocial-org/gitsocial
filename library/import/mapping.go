@@ -12,6 +12,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/site"
 )
 
 // mappingSchemaVersion is written to every mapping file; readers reject files
@@ -331,18 +332,5 @@ func ResolveMappingPath(cacheDir, repoURL, mapFile string) string {
 		wd, _ := os.Getwd()
 		return filepath.Join(wd, clean)
 	}
-	return filepath.Join(cacheDir, "imports", urlToSlug(repoURL)+".json")
-}
-
-// urlToSlug converts a repo URL to a filesystem-safe directory name.
-func urlToSlug(url string) string {
-	url = strings.TrimPrefix(url, "https://")
-	url = strings.TrimPrefix(url, "http://")
-	url = strings.TrimSuffix(url, ".git")
-	url = strings.ReplaceAll(url, "/", "-")
-	url = strings.ReplaceAll(url, ":", "-")
-	if len(url) > 50 {
-		url = url[:50]
-	}
-	return url
+	return filepath.Join(cacheDir, "imports", site.RepoSlug(repoURL)+".json")
 }

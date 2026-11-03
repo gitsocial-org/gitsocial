@@ -204,7 +204,7 @@ Outside the tree:
 ├── open.lock                  # serializes the version probe of each open
 ├── repositories/              # bare clones of followed repositories
 ├── forks/                     # bare clones of registered forks
-├── imports/                   # import mapping files, one per repository URL
+├── imports/                   # per repository URL: the import mapping, the avatar memo and the avatar store
 └── memo/session/              # session memo repos
 ```
 

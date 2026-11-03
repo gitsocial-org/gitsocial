@@ -216,7 +216,7 @@ func rebuildSiteOnly(workdir, remote string, opts Options, progress objstore.Pro
 	if !strings.HasPrefix(remoteURL, "s3://") {
 		return nil, fmt.Errorf("remote %q is %s, not an s3 remote", remote, remoteURL)
 	}
-	published, complete, area, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress, forkPullSource(workdir, opts.CacheDir))
+	published, complete, area, err := PublishSite(workdir, remoteURL, opts.CacheDir, ResolveSiteOverride(workdir, remote), progress, forkPullSource(workdir, opts.CacheDir))
 	if err != nil {
 		return nil, fmt.Errorf("rebuild site at %s: %w", remoteURL, err)
 	}
@@ -245,7 +245,7 @@ func rebuildSite(workdir, remote, remoteURL string, opts Options, progress objst
 	if opts.DryRun {
 		return SiteOutcome{Skipped: "dry-run"}
 	}
-	published, complete, area, err := PublishSite(workdir, remoteURL, ResolveSiteOverride(workdir, remote), progress, forkPullSource(workdir, opts.CacheDir))
+	published, complete, area, err := PublishSite(workdir, remoteURL, opts.CacheDir, ResolveSiteOverride(workdir, remote), progress, forkPullSource(workdir, opts.CacheDir))
 	if errors.Is(err, objstore.ErrThinBucket) {
 		// A thin fork bucket has no site by design; that is a skip, not a failure
 		// (an explicit `--site-only` still errors, see rebuildSiteOnly).
@@ -263,13 +263,13 @@ func rebuildSite(workdir, remote, remoteURL string, opts Options, progress objst
 // PublishSite uploads the browser static site to an s3 bucket and refreshes the
 // bucket HEAD + push-time stats. override carries the target remote's per-remote
 // deployment overrides (url/publish/pages) so the site stamps this bucket's own
-// values. Shared by `gitsocial push` (via Push) and the explicit
+// values. cacheDir locates the avatar store, "" skips it. Shared by `gitsocial push` (via Push) and the explicit
 // `gitsocial push --site-only` so their site wiring can't drift.
 // published is false (no error) when the workspace's site.publish guard is not
 // enabled, the only enabler for the static site. HEAD and stats are
 // best-effort: a failure there does not fail the rebuild.
-func PublishSite(workdir, remoteURL string, override objstore.SiteOverride, progress objstore.Progress, forks site.ForkPullSource) (published, complete bool, area *site.ForkPullArea, err error) {
-	published, complete, area, err = site.Rebuild(remoteURL, objstore.HelperEnvFromOS(), workdir, override, progress, forks)
+func PublishSite(workdir, remoteURL, cacheDir string, override objstore.SiteOverride, progress objstore.Progress, forks site.ForkPullSource) (published, complete bool, area *site.ForkPullArea, err error) {
+	published, complete, area, err = site.Rebuild(remoteURL, objstore.HelperEnvFromOS(), workdir, cacheDir, override, progress, forks)
 	if err != nil || !published {
 		return published, complete, area, err
 	}

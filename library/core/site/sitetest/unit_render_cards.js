@@ -279,6 +279,16 @@ ok(Array.from(hues).every((c) => /^av-(\d|1[01])$/.test(c)) && hues.size === GS.
 const gitAuthored = GS.commitCard({ hash: sha40("q"), short: H("q"), content: "Import the tree", authorName: "Ada", authorEmail: "ada@example.com", authorTime: 1750000000, gitmsg: { "origin-author-name": "Grace Hopper", "origin-author-email": "grace@example.com" } }, "trunk", {});
 eq([textOf(elems(gitAuthored)[0]), hueOf("", "grace@example.com")[0]], ["GH", Array.from(elems(gitAuthored)[0]._cls)[1]], "a commit card's avatar is the author its author line names");
 
+console.log("=== a picture the bucket holds fills the circle ===");
+GS.setAvatarKeys(new Set([GS.avatarKey("ada@example.com")]), "https://example.com/");
+const pictured = avatar("Ada Lovelace", "Ada@Example.com ");
+const img = elems(pictured)[0];
+eq([pictured.className, pictured.getAttribute("title"), elems(pictured).length, img.tagName, img.getAttribute("alt"), img.getAttribute("loading"), textOf(pictured)], ["avatar " + hueOf("Ada Lovelace", "ada@example.com")[0], "Ada Lovelace", 1, "IMG", "AL", "lazy", ""], "a key in the manifest gives the picture inside the circle, class and title unchanged, the initials as its alt");
+eq(img.getAttribute("src"), "https://example.com/.gitsocial/site/avatars/" + GS.avatarKey("ada@example.com"), "the src joins the base and the avatar directory");
+eq([elems(avatar("Eve", "eve@example.com")).length, textOf(avatar("Eve", "eve@example.com"))], [0, "E"], "a key not in the manifest keeps the initials");
+GS.setAvatarKeys(new Set(), "");
+eq(elems(avatar("Ada Lovelace", "ada@example.com")).length, 0, "an empty manifest shows the initials");
+
 console.log("=== a list member ===");
 const memberOf = (ref) => findTag(GS.listMemberRow(ref), "a").map((a) => a.getAttribute("href")).concat(findClass(GS.listMemberRow(ref), "selectable").map(textOf));
 eq(memberOf("#branch:main"), ["#branch:main"], "a local member links to its route");
@@ -344,6 +354,18 @@ function autoScroll() {
 
 // rest holds the assertions that need no scheduling and the branch and tag views, and closes the run.
 async function rest() {
+  console.log("=== the avatar manifest loads once per context ===");
+  const realFetch = global.fetch;
+  const manifestBodies = { "v1": JSON.stringify({ v: 1, keys: ["aaaaaaaaaaaaaaaa", 7] }), "v2": JSON.stringify({ v: 2, keys: ["aaaaaaaaaaaaaaaa"] }) };
+  let manifestReads = 0, manifestVersion = "v1";
+  global.fetch = async (url) => { manifestReads++; const buf = Buffer.from(String(url).endsWith(".gitsocial/site/avatars.json") ? manifestBodies[manifestVersion] : ""); return { ok: true, status: 200, headers: { get: () => null }, arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) }; };
+  const manifestCtx = GS.newContext("http://bucket.test/repo/");
+  eq(Array.from(await GS.loadAvatarManifest(manifestCtx)), ["aaaaaaaaaaaaaaaa"], "the manifest gives its string keys");
+  await GS.loadAvatarManifest(manifestCtx);
+  eq(manifestReads, 1, "a second read in the context makes no request");
+  manifestVersion = "v2";
+  eq((await GS.loadAvatarManifest(GS.newContext("http://bucket.test/repo/"))).size, 0, "a manifest at another version is empty");
+  global.fetch = realFetch;
   console.log("=== a branch card and a tag card lead with their glyph ===");
   // refsCtx reads its branches and tags from the manifest and the tags artifact alone, and knows the release branch is absent, so nothing is fetched.
   const refsCtx = {

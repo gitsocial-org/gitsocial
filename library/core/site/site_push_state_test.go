@@ -43,7 +43,7 @@ func TestPushSite_SkipMarker(t *testing.T) {
 
 	// First push: full pass. It writes the refs manifest, configs, items, and the
 	// marker last.
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("first rebuildSite: %v", err)
 	}
 	if _, ok := readSitePushState(client, ""); !ok {
@@ -61,7 +61,7 @@ func TestPushSite_SkipMarker(t *testing.T) {
 	manifestPutsBefore := bucket.PutCount(bucketRefsKey)
 	listsBefore := bucket.ListCount()
 
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("second rebuildSite: %v", err)
 	}
 	if got := bucket.TotalPuts(); got != putsBefore {
@@ -86,7 +86,7 @@ func TestPushSite_SkipMarker(t *testing.T) {
 		t.Fatalf("advance social ref: %v", err)
 	}
 	manifestBefore := bucket.PutCount(bucketRefsKey)
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("third rebuildSite: %v", err)
 	}
 	if got := bucket.PutCount(bucketRefsKey); got == manifestBefore {
@@ -100,7 +100,7 @@ func TestPushSite_SkipMarker(t *testing.T) {
 func TestPushSite_HeadChangeInvalidates(t *testing.T) {
 	client, _ := testClient(t)
 	seedSiteBucket(t, client)
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("first rebuildSite: %v", err)
 	}
 	if up, _ := siteMaintenanceUpToDate(client, "", mustSiteVersion(t), objstore.SiteOverride{}); !up {
@@ -121,7 +121,7 @@ func TestPushSite_HeadChangeInvalidates(t *testing.T) {
 func TestPushSite_CorruptMarkerFallsBack(t *testing.T) {
 	client, bucket := testClient(t)
 	seedSiteBucket(t, client)
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("first rebuildSite: %v", err)
 	}
 	// Corrupt the marker.
@@ -138,7 +138,7 @@ func TestPushSite_CorruptMarkerFallsBack(t *testing.T) {
 	// The full pass must run (it re-reads the manifest it left correct, and
 	// rewrites nothing else) and rewrite the marker to a valid one.
 	manifestGetsBefore := bucket.GetCount(bucketRefsKey)
-	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil); err != nil {
+	if _, err := rebuildSite(client, "", nil, objstore.SiteOverride{}, nil, ""); err != nil {
 		t.Fatalf("second rebuildSite after corruption: %v", err)
 	}
 	if got := bucket.GetCount(bucketRefsKey); got == manifestGetsBefore {

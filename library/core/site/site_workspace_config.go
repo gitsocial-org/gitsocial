@@ -3,8 +3,8 @@
 // The site customization the static site serves lives in the `site` sub-object
 // of the core config commit at refs/gitmsg/core/config (see site_customization.go
 // for the push-time reader/writer that resolves it from a bucket). These helpers
-// are the workspace-side source of truth: `gitsocial push --site-only` publishes whatever
-// they store, so the TUI reads and writes the same place. Fields are validated
+// are the workspace-side source of truth; a push that sends the config ref publishes
+// what they store, and `--site-only` rebuilds from the config ref the bucket holds. Fields are validated
 // with the same strict rules the push writer and the browser reader apply.
 
 package site

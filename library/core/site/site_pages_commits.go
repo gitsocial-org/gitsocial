@@ -132,13 +132,13 @@ func writeSiteCommitPages(client *objstore.Client, prefix string, entries []site
 }
 
 // buildSiteCommitEntry renders one commit row: its subject linking into the app's commit view, its meta line, the excerpt its index entry carries, and the id that makes the row citable.
-func buildSiteCommitEntry(e siteMetaEntry, base, branch string) sitePageListEntry {
+func buildSiteCommitEntry(e siteMetaEntry, base, branch string, avatars map[string]string) sitePageListEntry {
 	short := e.SHA[:12]
 	href := base + "index.html#commit:" + short + "@" + branch
 	// A commit is the default thing of a repository, so its row carries no type glyph under the face, as commitCard in gs-render.js.
 	return sitePageListEntry{
 		ID:      "c-" + short,
-		Avatar:  sitePageAvatar(e.Author, e.Email),
+		Avatar:  sitePageAvatar(e.Author, e.Email, avatars),
 		Href:    href,
 		Title:   e.Subject,
 		Excerpt: e.Excerpt,
@@ -170,7 +170,7 @@ func siteCommitsChrome(site sitePageSite, title, canonical, route string) sitePa
 func buildSiteCommitsHeadPage(site sitePageSite, head []siteMetaEntry, branch string, total, sealed int) siteListPageData {
 	entries := make([]sitePageListEntry, 0, len(head))
 	for _, e := range head {
-		entries = append(entries, buildSiteCommitEntry(e, "../", branch))
+		entries = append(entries, buildSiteCommitEntry(e, "../", branch, site.Avatars))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", total, siteCommitsList.Label), branch, "newest first"}
 	d := siteChainedListPage(siteCommitsList, entries, metaBits, 0, sealed)
@@ -182,7 +182,7 @@ func buildSiteCommitsHeadPage(site sitePageSite, head []siteMetaEntry, branch st
 func buildSiteCommitsSealedPage(site sitePageSite, segment []siteMetaEntry, branch string, n, sealed int) siteListPageData {
 	entries := make([]sitePageListEntry, 0, len(segment))
 	for _, e := range segment {
-		entries = append(entries, buildSiteCommitEntry(e, "../", branch))
+		entries = append(entries, buildSiteCommitEntry(e, "../", branch, site.Avatars))
 	}
 	metaBits := []string{fmt.Sprintf("%d %s", len(entries), siteCommitsList.Label), branch, fmt.Sprintf("older page %d", n)}
 	d := siteChainedListPage(siteCommitsList, entries, metaBits, n, sealed)

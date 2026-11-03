@@ -20,6 +20,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/site"
 )
 
 // lockedBuffer collects the output of a child across goroutines.
@@ -385,5 +387,27 @@ func TestServe_RebuildAfterDelete(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(bucket, ".gitsocial", "site")); err != nil {
 		t.Errorf("site artifacts after the rebuild: %v", err)
+	}
+}
+
+// TestServe_avatars: serve publishes the store pictures of the workspace authors.
+func TestServe_avatars(t *testing.T) {
+	t.Parallel()
+	dir, cacheDir := serveRepo(t)
+	_, body := avatarTestPNG(t)
+	key := site.AvatarKey("cli-test@test.com")
+	storeDir := site.AvatarStoreDir(cacheDir, protocol.NormalizeURL(git.GetOriginURL(dir)))
+	if err := os.MkdirAll(storeDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(storeDir, key), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := startServe(t, dir, cacheDir)
+	if status, got := httpGet(t, c.url+site.AvatarsDir+key); status != 200 || got != string(body) {
+		t.Errorf("GET the picture = %d, %d bytes, want 200 and the store bytes", status, len(got))
+	}
+	if status, got := httpGet(t, c.url+site.AvatarManifestKey); status != 200 || !strings.Contains(got, key) {
+		t.Errorf("GET the manifest = %d %q, want the key", status, got)
 	}
 }

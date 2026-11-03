@@ -157,6 +157,13 @@ type parityAvatarCase struct {
 	ExpectInitials string `json:"expectInitials"`
 }
 
+// parityAvatarKeyCase pins the avatar key both renderers give one email.
+type parityAvatarKeyCase struct {
+	Name   string `json:"name"`
+	Email  string `json:"email"`
+	Expect string `json:"expect"`
+}
+
 // parityItemCounts pins the sidebar count per list for a set of top-level items.
 type parityItemCounts struct {
 	Items []struct {
@@ -399,6 +406,7 @@ type parityFixtures struct {
 	ReleaseAssets  []parityReleaseAssetsCase `json:"releaseAssets"`
 	CardSkeleton   parityCardSkeleton        `json:"cardSkeleton"`
 	Avatars        []parityAvatarCase        `json:"avatars"`
+	AvatarKeys     []parityAvatarKeyCase     `json:"avatarKeys"`
 	HomeRows       parityHomeRows            `json:"homeRows"`
 	Adopted        parityAdopted             `json:"adopted"`
 	ItemCounts     parityItemCounts          `json:"itemCounts"`
@@ -503,7 +511,7 @@ func TestParityMetaRow(t *testing.T) {
 	if got, page := strings.Join(parityBitClasses(siteItemPageMeta(it), len(f.MetaRow.PageBits)), ","), strings.Join(f.MetaRow.PageBits, ","); got != page {
 		t.Errorf("item page meta bits = %q, want %q", got, page)
 	}
-	row := buildSiteListEntry(it, nil, nil, siteEntryCounts{})
+	row := buildSiteListEntry(it, nil, nil, siteEntryCounts{}, nil)
 	if got := strings.Join(parityBitClasses(row.Meta, len(f.MetaRow.Bits)), ","); got != want {
 		t.Errorf("list row meta bits = %q, want %q", got, want)
 	}
@@ -511,7 +519,7 @@ func TestParityMetaRow(t *testing.T) {
 		t.Errorf("list row hash href = %q, want the item's own page", row.Meta[2].Href)
 	}
 	comment := &sitePageMsg{Ext: "social", SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: "A comment", Header: &protocol.Header{Ext: "social", Fields: map[string]string{"type": "comment"}}}
-	reply := buildSiteReply(&sitePageItem{Msg: comment, Resolved: comment}, it, parityRefAsHref)
+	reply := buildSiteReply(&sitePageItem{Msg: comment, Resolved: comment}, it, parityRefAsHref, nil)
 	if got := strings.Join(parityBitClasses(reply.Meta, len(f.MetaRow.Bits)), ","); got != want {
 		t.Errorf("reply meta bits = %q, want %q", got, want)
 	}
@@ -533,7 +541,7 @@ func TestParityEditedMetaRow(t *testing.T) {
 	it := &sitePageItem{Msg: msg, Resolved: edit, Edited: true}
 	for name, c := range map[string]struct{ bits, want []string }{
 		"item page": {parityBitClasses(siteItemPageMeta(it), len(f.MetaRow.PageEditedBits)), f.MetaRow.PageEditedBits},
-		"list row":  {parityBitClasses(buildSiteListEntry(it, nil, nil, siteEntryCounts{}).Meta, len(f.MetaRow.EditedBits)), f.MetaRow.EditedBits},
+		"list row":  {parityBitClasses(buildSiteListEntry(it, nil, nil, siteEntryCounts{}, nil).Meta, len(f.MetaRow.EditedBits)), f.MetaRow.EditedBits},
 	} {
 		if got, want := strings.Join(c.bits, ","), strings.Join(c.want, ","); got != want {
 			t.Errorf("%s meta bits = %q, want %q", name, got, want)
@@ -628,7 +636,7 @@ func TestParityReleaseRow(t *testing.T) {
 			}
 			fields := map[string]string{"type": "release", "tag": "v1.0", "artifacts": c.Artifacts}
 			msg := &sitePageMsg{Ext: "release", SHA: strings.Repeat("e", 40), Short: strings.Repeat("e", 12), Message: "v1.0", TS: 1700000000, Header: &protocol.Header{Ext: "release", Fields: fields}}
-			row := buildSiteListEntry(&sitePageItem{Msg: msg, Resolved: msg}, nil, nil, siteEntryCounts{})
+			row := buildSiteListEntry(&sitePageItem{Msg: msg, Resolved: msg}, nil, nil, siteEntryCounts{}, nil)
 			var bits []string
 			for _, b := range row.Meta {
 				bits = append(bits, b.Class+"|"+b.Text)
@@ -740,7 +748,7 @@ func TestParityCardSkeleton(t *testing.T) {
 				msg.Text = c.FirstLine // a body-only row reads its index text
 			}
 			it := &sitePageItem{Msg: msg, Resolved: msg, Retracted: c.Header["retracted"] == "true"}
-			entry := buildSiteListEntry(it, nil, nil, siteEntryCounts{})
+			entry := buildSiteListEntry(it, nil, nil, siteEntryCounts{}, nil)
 			page, err := renderSitePage("entries", []sitePageListEntry{entry})
 			if err != nil {
 				t.Fatalf("render entries: %v", err)
@@ -768,7 +776,7 @@ func TestParityAvatar(t *testing.T) {
 	}
 	for _, c := range f.Avatars {
 		t.Run(c.Name, func(t *testing.T) {
-			a := sitePageAvatar(c.Author, c.Email)
+			a := sitePageAvatar(c.Author, c.Email, nil)
 			if a.Class != c.ExpectClass || a.Initials != c.ExpectInitials || a.Title != sitePageAuthorLabel(c.Author, c.Email) {
 				t.Errorf("avatar = %+v, want class %q, initials %q", *a, c.ExpectClass, c.ExpectInitials)
 			}
@@ -777,7 +785,7 @@ func TestParityAvatar(t *testing.T) {
 	msg := &sitePageMsg{Ext: "pm", SHA: strings.Repeat("b", 40), Short: strings.Repeat("b", 12), Author: "Ada Lovelace", Email: "ada@example.com", Message: "An issue", Header: &protocol.Header{Ext: "pm", Fields: map[string]string{"type": "issue"}}}
 	it := &sitePageItem{Msg: msg, Resolved: msg}
 	lead := `<span class="avatar av-6" title="Ada Lovelace">AL</span><span class="type-glyph`
-	row, err := renderSitePage("entries", []sitePageListEntry{buildSiteListEntry(it, nil, nil, siteEntryCounts{})})
+	row, err := renderSitePage("entries", []sitePageListEntry{buildSiteListEntry(it, nil, nil, siteEntryCounts{}, nil)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -786,11 +794,41 @@ func TestParityAvatar(t *testing.T) {
 	}
 	comment := &sitePageMsg{Ext: "social", SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Author: "Ada Lovelace", Email: "ada@example.com", Message: "A comment", Header: &protocol.Header{Ext: "social", Fields: map[string]string{"type": "comment"}}}
 	feedback := &sitePageMsg{Ext: "review", SHA: strings.Repeat("c", 40), Short: strings.Repeat("c", 12), Author: "Ada Lovelace", Email: "ada@example.com", Message: "Looks right", Header: &protocol.Header{Ext: "review", Fields: map[string]string{"type": "feedback"}}}
-	if reply := buildSiteReply(&sitePageItem{Msg: comment, Resolved: comment}, it, parityRefAsHref); reply.Avatar == nil || *reply.Avatar != *sitePageAvatar("Ada Lovelace", "ada@example.com") {
+	if reply := buildSiteReply(&sitePageItem{Msg: comment, Resolved: comment}, it, parityRefAsHref, nil); reply.Avatar == nil || *reply.Avatar != *sitePageAvatar("Ada Lovelace", "ada@example.com", nil) {
 		t.Errorf("a comment reply carries the author's avatar: %+v", reply.Avatar)
 	}
-	if reply := buildSiteReply(&sitePageItem{Msg: feedback, Resolved: feedback}, it, parityRefAsHref); reply.Avatar != nil {
+	if reply := buildSiteReply(&sitePageItem{Msg: feedback, Resolved: feedback}, it, parityRefAsHref, nil); reply.Avatar != nil {
 		t.Errorf("a feedback reply keeps its look and carries no avatar: %+v", reply.Avatar)
+	}
+	if len(f.AvatarKeys) == 0 {
+		t.Fatal("no avatarKeys cases in parity fixtures")
+	}
+	for _, c := range f.AvatarKeys {
+		if got := AvatarKey(c.Email); got != c.Expect {
+			t.Errorf("%s: avatar key = %q, want %q", c.Name, got, c.Expect)
+		}
+	}
+	client, bucket := testClient(t)
+	bucket.Seed(AvatarManifestKey, []byte(`{"v":1,"keys":["`+AvatarKey("ada@example.com")+`"]}`))
+	site, err := sitePageSiteWithAvatars(client, "", SiteCustomization{}, "https://example.com/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := "https://example.com/" + AvatarsDir + AvatarKey("ada@example.com")
+	for _, c := range []struct{ name, email, want string }{
+		{"a key in the manifest gives the picture, its src joined to the base", "Ada@Example.com", `<span class="avatar av-6" title="Ada Lovelace"><img src="` + src + `" alt="AL" loading="lazy"></span>`},
+		{"a key not in the manifest keeps the initials", "eve@example.com", `title="Ada Lovelace">AL</span>`},
+	} {
+		page, err := renderSitePage("avatar", struct{ Avatar *siteAvatar }{sitePageAvatar("Ada Lovelace", c.email, site.Avatars)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(page), c.want) {
+			t.Errorf("%s: %s", c.name, page)
+		}
+	}
+	if a := buildSiteListEntry(it, nil, nil, siteEntryCounts{}, site.Avatars).Avatar; a.Image != src || a.Class != "av-6" || a.Title != "Ada Lovelace" {
+		t.Errorf("a list row of an author in the manifest carries the picture in the same circle: %+v", *a)
 	}
 }
 
@@ -1056,7 +1094,7 @@ func TestParityFeedbackCard(t *testing.T) {
 			fields := maps.Clone(c.Header)
 			fields["type"] = "feedback"
 			typed := &sitePageMsg{Ext: "review", Header: &protocol.Header{Ext: "review", Fields: fields}}
-			reply := buildSiteReply(&sitePageItem{Msg: typed, Resolved: typed}, nil, parityRefAsHref)
+			reply := buildSiteReply(&sitePageItem{Msg: typed, Resolved: typed}, nil, parityRefAsHref, nil)
 			var got []string
 			for _, chip := range reply.Chips {
 				got = append(got, chip.Label)
@@ -1105,7 +1143,7 @@ func TestParityFeedbackFileRef(t *testing.T) {
 func TestParityFeedbackCardVariant(t *testing.T) {
 	fields := map[string]string{"type": "feedback", "review-state": "changes-requested", "file": "notes.txt", "new-line": "2"}
 	msg := &sitePageMsg{Ext: "review", Header: &protocol.Header{Ext: "review", Fields: fields}}
-	reply := buildSiteReply(&sitePageItem{Msg: msg, Resolved: msg}, nil, parityRefAsHref)
+	reply := buildSiteReply(&sitePageItem{Msg: msg, Resolved: msg}, nil, parityRefAsHref, nil)
 	if reply.Variant != "feedback verdict-changes-requested" {
 		t.Errorf("variant = %q, want %q", reply.Variant, "feedback verdict-changes-requested")
 	}
@@ -1627,7 +1665,7 @@ func TestParityChipKinds(t *testing.T) {
 			it := &sitePageItem{Msg: msg, Resolved: msg}
 			chips := siteItemChips(it, nil, nil, "", 0)
 			if c.Source == "feedback" {
-				chips = buildSiteReply(it, nil, parityRefAsHref).Chips
+				chips = buildSiteReply(it, nil, parityRefAsHref, nil).Chips
 			}
 			i := slices.IndexFunc(chips, func(chip sitePageChip) bool { return chip.Kind == c.Kind })
 			if i < 0 {
@@ -1668,7 +1706,7 @@ func TestParityCountChips(t *testing.T) {
 				reply.Msg.Email = fmt.Sprintf("reviewer%d@example.com", i)
 				it.Replies = append(it.Replies, reply)
 			}
-			entry := buildSiteListEntry(it, nil, nil, siteEntryCounts{Reposts: c.Counts.Reposts, Quotes: c.Counts.Quotes, Sub: c.Sub, Issues: c.Issues})
+			entry := buildSiteListEntry(it, nil, nil, siteEntryCounts{Reposts: c.Counts.Reposts, Quotes: c.Counts.Quotes, Sub: c.Sub, Issues: c.Issues}, nil)
 			got := make([]string, 0, len(entry.Chips))
 			for _, chip := range entry.Chips {
 				got = append(got, chipLabelText(chip))

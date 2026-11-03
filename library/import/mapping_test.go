@@ -59,29 +59,6 @@ func TestMappingFile_GetHash(t *testing.T) {
 	}
 }
 
-func TestURLToSlug(t *testing.T) {
-	cases := []struct{ input, want string }{
-		{"https://github.com/user/repo", "github.com-user-repo"},
-		{"http://github.com/user/repo", "github.com-user-repo"},
-		{"https://github.com/user/repo.git", "github.com-user-repo"},
-		{"https://gitlab.example.com:8080/group/project", "gitlab.example.com-8080-group-project"},
-	}
-	for _, c := range cases {
-		got := urlToSlug(c.input)
-		if got != c.want {
-			t.Errorf("urlToSlug(%q) = %q, want %q", c.input, got, c.want)
-		}
-	}
-}
-
-func TestURLToSlug_Truncation(t *testing.T) {
-	long := "https://github.com/very-long-organization-name/very-long-repository-name-that-goes-on-and-on"
-	got := urlToSlug(long)
-	if len(got) > 50 {
-		t.Errorf("urlToSlug truncation failed: len=%d, want <=50", len(got))
-	}
-}
-
 func TestReadWriteMapping(t *testing.T) {
 	dir := t.TempDir()
 	repoURL := "https://github.com/test/repo"
