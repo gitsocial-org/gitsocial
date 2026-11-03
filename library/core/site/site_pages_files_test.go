@@ -296,7 +296,7 @@ func TestSiteFilePages_Incremental(t *testing.T) {
 		t.Error("a pass over an unchanged tree must write nothing")
 	}
 
-	next := commitRepoFiles(t, dir, map[string]string{"docs/one.md": "# One\n\nfirst, revised.\n"}, "docs/gone.md")
+	next := commitRepoFiles(t, dir, map[string]string{"docs/one.md": "# One\n\nfirst, revised.\n"})
 	if buildFilePages(t, client, dir, next, pagesTestSite()) {
 		t.Fatal("the third pass must complete")
 	}
@@ -308,6 +308,9 @@ func TestSiteFilePages_Incremental(t *testing.T) {
 	}
 	if !strings.Contains(getKey(t, client, "f/docs/one.html"), "first, revised.") {
 		t.Error("the rewritten page must carry the new content")
+	}
+	if buildFilePages(t, client, dir, commitRepoFiles(t, dir, nil, "docs/gone.md"), pagesTestSite()) {
+		t.Fatal("the fourth pass must complete")
 	}
 	if keyExists(client, "f/docs/gone.html") {
 		t.Error("a document that left the tree must have its page swept")
@@ -380,6 +383,56 @@ func TestSiteFilePages_BudgetResume(t *testing.T) {
 	}
 	if !strings.Contains(getKey(t, client, "f/index.html"), "7 files") {
 		t.Error("the resumed index must list every file")
+	}
+}
+
+// TestSiteFilePages_RelativeLinkToPage: a relative link to a published document links its page, and any other keeps the app route.
+func TestSiteFilePages_RelativeLinkToPage(t *testing.T) {
+	dir, head := pagesFileRepo(t, map[string]string{
+		"README.md": "# Readme\n",
+		"GUIDE.md":  "# Guide\n\n[plain](NOTES.md) [section](./NOTES.md#Lists) [missing](missing.md)\n",
+		"NOTES.md":  "# Notes\n\n## Lists\n",
+		"docs/A.md": "# A\n\n[sibling](B.md)\n",
+		"docs/B.md": "# B\n",
+	})
+	client, _ := testClient(t)
+	buildFilePages(t, client, dir, head, pagesTestSite())
+	if !strings.Contains(getKey(t, client, "f/docs/A.html"), `<a href="https://example.com/f/docs/B.html">sibling</a>`) {
+		t.Error("a bare link in a directory must link the page of its sibling")
+	}
+	page := getKey(t, client, "f/GUIDE.html")
+	for _, want := range []string{
+		`<a href="https://example.com/f/NOTES.html">plain</a>`,
+		`<a href="https://example.com/f/NOTES.html#md-lists">section</a>`,
+		`<a href="https://example.com/index.html#file:missing.md@main">missing</a>`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("file page must carry %q", want)
+		}
+	}
+}
+
+// TestSiteFilePages_SetChangeRewritesLinks: a new document rewrites the unchanged page that links it.
+func TestSiteFilePages_SetChangeRewritesLinks(t *testing.T) {
+	dir, head := pagesFileRepo(t, map[string]string{
+		"README.md": "# Readme\n",
+		"GUIDE.md":  "# Guide\n\n[notes](NOTES.md)\n",
+	})
+	client, bucket := testClient(t)
+	buildFilePages(t, client, dir, head, pagesTestSite())
+	if !strings.Contains(getKey(t, client, "f/GUIDE.html"), `href="https://example.com/index.html#file:NOTES.md@main"`) {
+		t.Fatal("a link to an unpublished document must take the app route")
+	}
+	writes := bucket.PutCount("f/GUIDE.html")
+	next := commitRepoFiles(t, dir, map[string]string{"NOTES.md": "# Notes\n"})
+	if buildFilePages(t, client, dir, next, pagesTestSite()) {
+		t.Fatal("the second pass must complete")
+	}
+	if bucket.PutCount("f/GUIDE.html") != writes+1 {
+		t.Error("a new document must rewrite the page that links it")
+	}
+	if !strings.Contains(getKey(t, client, "f/GUIDE.html"), `href="https://example.com/f/NOTES.html"`) {
+		t.Error("the rewritten page must link the new document's page")
 	}
 }
 

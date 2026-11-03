@@ -5110,7 +5110,7 @@
     reviewSummary, suggestionBody,
     loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadBranchLogIndexed, loadCompareCommitsWindow, loadGraphWindow, orderGraphWindow, assignGraphLanes, GRAPH_WINDOW,
     loadItemsIndex, loadOlderItemShards, olderItemBytes, loadBodyIndex, extWalkState, indexCommit, metaCommit, hydrateItem, hydrateItems,
-    loadTimelineItems, loadTimelineWindow, headerAction, itemActions, dropMergeCloses, HOME_ROWS, compactCount, loadNavCounts, resolveCodeItems, resolveShortShaFromIndex, resolveShortSha, readRefMode, newContext,
+    loadTimelineItems, loadTimelineWindow, headerAction, itemActions, dropMergeCloses, HOME_ROWS, compactCount, loadNavCounts, loadPagesDoc, resolveCodeItems, resolveShortShaFromIndex, resolveShortSha, readRefMode, newContext,
     loadCommitsPage, loadCommitsLayout, COMMITS_PAGE_SIZE,
     manifestFor, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
     parseTree, getTree, resolvePath, listBranches, listTags, parseTagger, orderTagTies, orderedTags, tagsByCommit, loadSiteTags, loadTagRange, tagRangeWindow, tagRangeFiles, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,

@@ -29,7 +29,7 @@ const (
 	sitePagesManifestKey = ".gitsocial/site/pages.json"
 	// sitePagesVersion is the page layer's schema version; bump it when a page
 	// head or its sealed markup changes.
-	sitePagesVersion = 59
+	sitePagesVersion = 60
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -279,7 +279,7 @@ func rebuildSitePages(client *objstore.Client, prefix string, refs map[string]st
 	if err != nil {
 		return false, "", err
 	}
-	home := readSiteFrontHome(src, site, refs, defaultBranch)
+	home := readSiteFrontHome(src, site, refs, defaultBranch, sitePagesFilesState(manifest))
 	files := siteFilePass{docs: docs, branch: defaultBranch, tip: tip, src: src}
 	switch {
 	case manifest != nil && manifest.Cursor == nil && sitePagesTipsCurrent(manifest, tips) && !sitePagesCommitsPending(manifest) &&
@@ -364,7 +364,7 @@ func sitePagesTipsCurrent(m *sitePagesManifest, tips map[string]string) bool {
 }
 
 // readSiteFrontHome reads the front page's body from the local odb at the bucket's own tip, so the page cannot describe content the bucket is unable to serve.
-func readSiteFrontHome(src *objstore.LocalCommitSource, site sitePageSite, refs map[string]string, defaultBranch string) *siteFrontHome {
+func readSiteFrontHome(src *objstore.LocalCommitSource, site sitePageSite, refs map[string]string, defaultBranch string, files *siteFilesState) *siteFrontHome {
 	if defaultBranch == "" {
 		return nil
 	}
@@ -379,7 +379,7 @@ func readSiteFrontHome(src *objstore.LocalCommitSource, site sitePageSite, refs 
 	if len(home.Files) > sitePagesHomeRows {
 		home.Files, home.MoreFiles = home.Files[:sitePagesHomeRows], home.Files[sitePagesHomeRows:]
 	}
-	home.Readme = readSiteFrontReadme(src, tip, siteReadmeName(entries), defaultBranch, site)
+	home.Readme = readSiteFrontReadme(src, tip, siteReadmeName(entries), defaultBranch, site, siteFilePageHrefs(site, siteFileDocsFromState(files)))
 	return home
 }
 
@@ -482,8 +482,8 @@ func siteReadmeName(entries []siteTreeEntry) string {
 	return ""
 }
 
-// readSiteFrontReadme reads and renders one root README, capping the source at a line boundary so the renderer takes no half line.
-func readSiteFrontReadme(src *objstore.LocalCommitSource, tip, name, branch string, site sitePageSite) *siteFrontReadme {
+// readSiteFrontReadme reads and renders one root README, capping the source at a line boundary so the renderer takes no half line; a link to a path in pages links its page.
+func readSiteFrontReadme(src *objstore.LocalCommitSource, tip, name, branch string, site sitePageSite, pages map[string]string) *siteFrontReadme {
 	if tip == "" || name == "" {
 		return nil
 	}
@@ -492,7 +492,7 @@ func readSiteFrontReadme(src *objstore.LocalCommitSource, tip, name, branch stri
 		return nil
 	}
 	text, truncated := siteMDTruncateSource(string(body), sitePagesReadmeMax)
-	rendered := renderSiteMarkdown(siteStripFrontMatter(text), siteMarkdownContext{AppBase: sitePageAppURL(site, ""), Branch: branch, Doc: name})
+	rendered := renderSiteMarkdown(siteStripFrontMatter(text), siteMarkdownContext{AppBase: sitePageAppURL(site, ""), Branch: branch, Doc: name, Pages: pages})
 	if rendered == "" {
 		return nil
 	}

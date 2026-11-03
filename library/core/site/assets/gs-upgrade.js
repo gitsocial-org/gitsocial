@@ -70,10 +70,12 @@
     if (r.type === "home" && r.anchor) {
       var m = parsedRoute(meta);
       if (m && m.type === "home") return { route: frag, ownPage: true };
+      // A file route names a heading without the md- prefix of its id, so the app's own scroll finds it.
+      var suffix = (m && m.type === "file") ? r.anchor.replace(/^md-/, "") : r.anchor;
       // Ask the grammar whether the page's own route takes the anchor as a suffix, so a shared commits row survives the upgrade.
-      var combined = meta + ":" + frag;
+      var combined = meta + ":" + suffix;
       var c = parsedRoute(combined);
-      if (c && c.type !== "notfound" && c.anchor === r.anchor) return { route: combined, ownPage: true };
+      if (c && c.type !== "notfound" && c.anchor === suffix) return { route: combined, ownPage: true };
       return { route: meta, ownPage: true };
     }
     return { route: frag, ownPage: frag === meta };
@@ -239,21 +241,31 @@
     if (frag === "/memos") return base + "memos/index.html";
     var c = COMMITS_ROUTE.exec(frag);
     if (c) return base + "commits/" + (c[1] || "index") + ".html";
+    var f = FILE_ROUTE.exec(frag);
+    var pages = (typeof window !== "undefined" && window.__gsFilePages) || null;
+    if (f && f[4] === undefined && pages && f[3] === pages.branch && Object.prototype.hasOwnProperty.call(pages.keys, f[2])) return base + pages.keys[f[2]];
     return null;
   }
 
   // COMMITS_ROUTE mirrors gs-core's /commits[/<n>][:<anchor>] grammar: the page is the object, the anchor the place in it.
   var COMMITS_ROUTE = /^\/commits(?:\/(\d+))?(?::([A-Za-z0-9][\w.-]*))?$/;
 
+  // FILE_ROUTE mirrors gs-core's file:<path>@<branch>[:<suffix>] grammar; a suffix is a line range or a heading anchor.
+  var FILE_ROUTE = /^(file:([^@]*)@([^:]*))(?::(.*))?$/;
+
+  // routeParts splits a route fragment into its page route and its in-page anchor: a commits row, or a file heading as its md- id.
+  function routeParts(frag) {
+    frag = String(frag || "");
+    var c = COMMITS_ROUTE.exec(frag);
+    if (c && c[2]) return { route: frag.slice(0, frag.length - c[2].length - 1), anchor: "#" + c[2] };
+    var f = FILE_ROUTE.exec(frag);
+    if (f && f[4] !== undefined && /^[A-Za-z0-9][\w.-]*$/.test(f[4]) && !/^L\d+(?:-\d+)?$/.test(f[4])) return { route: f[1], anchor: "#md-" + f[4] };
+    return { route: frag, anchor: "" };
+  }
+
   // routeAnchor returns a route fragment's trailing "#<anchor>", and routeWithoutAnchor is its complement.
-  function routeAnchor(frag) {
-    var m = COMMITS_ROUTE.exec(frag || "");
-    return (m && m[2]) ? "#" + m[2] : "";
-  }
-  function routeWithoutAnchor(frag) {
-    var a = routeAnchor(frag);
-    return a ? String(frag).slice(0, String(frag).length - a.length) : String(frag || "");
-  }
+  function routeAnchor(frag) { return routeParts(frag).anchor; }
+  function routeWithoutAnchor(frag) { return routeParts(frag).route; }
 
   // overrideQuery returns the leading "?…" of the ?base=/?repo= params, which must survive every URL rewrite.
   function overrideQuery(search) {
@@ -293,17 +305,22 @@
   }
 
   var firstSync = true;
+  // servedRel is the path the document was served at, read on the first sync; only there does the gs-route meta name the current page.
+  var servedRel = null;
   // duringPop keeps a popstate-driven hashchange to a replaceState, so the pop's history position stands.
   var duringPop = false;
-  // syncURL reflects the rendered route into history: the clean page URL when the route has a page, else the normalized entry URL.
-  function syncURL(base) {
+  // syncURL reflects the rendered route into history: the clean page URL when the route has a page, else the normalized entry URL; replace keeps the history entry.
+  function syncURL(base, replace) {
     var frag = (window.location.hash || "").replace(/^#/, "");
     var q = overrideQuery(window.location.search);
     var anchor = routeAnchor(frag);
     var route = routeWithoutAnchor(frag);
     // Keep the current page when it is itself a valid page for this route; only the residual entry hash is stripped.
     var curRel = pathRel(base, window.location.href);
-    if (curRel !== null && hashForPath(base, base + curRel) === "#" + route) {
+    if (firstSync) servedRel = curRel;
+    var meta = metaRoute();
+    var ownPage = curRel !== null && curRel === servedRel && meta !== "" && route === meta;
+    if (curRel !== null && (ownPage || hashForPath(base, base + curRel) === "#" + route)) {
       var keepURL = base + curRel + q + anchor;
       if (curRel !== "" && (window.location.pathname || "").length && window.location.href !== keepURL) {
         try { history.replaceState({ gs: 1 }, "", keepURL); } catch (e) { /* history off */ }
@@ -323,7 +340,7 @@
     var target = pageURL + q + anchor;
     if (window.location.href === target) { firstSync = false; return; }
     try {
-      if (firstSync || duringPop) history.replaceState({ gs: 1 }, "", target);
+      if (firstSync || duringPop || replace) history.replaceState({ gs: 1 }, "", target);
       else history.pushState({ gs: 1 }, "", target);
     } catch (e) { /* history unavailable — stay on the hash URL */ }
     firstSync = false;
@@ -342,6 +359,11 @@
       window.location.hash = anchored ? h + ":" + frag : h;
     });
     window.addEventListener("hashchange", function () { syncURL(base); duringPop = false; });
+  }
+
+  // wireFilePages installs the hook gs-app calls once window.__gsFilePages is set, which reflects the current route in place.
+  function wireFilePages(base) {
+    window.__gsOnFilePages = function () { syncURL(base, true); };
   }
 
   // boot runs the takeover and restores the served page on any failure, re-throwing so the caller can report it.
@@ -444,6 +466,7 @@
     if (typeof setTimeout === "function") setTimeout(restoreStatic, APP_MAX_MS);
     // Wire the URL reflection after gs-app: hashchange listeners fire in registration order, and the app must read the hash first.
     wireNav(base);
+    wireFilePages(base);
     syncURL(base);
   }
 
@@ -459,9 +482,9 @@
       pageURLForHash: pageURLForHash, hashForPath: hashForPath,
       entryURLForHash: entryURLForHash, overrideQuery: overrideQuery,
       routeAnchor: routeAnchor, entryFor: entryFor,
-      syncURL: syncURL, wireNav: wireNav, boot: boot,
+      syncURL: syncURL, wireNav: wireNav, wireFilePages: wireFilePages, boot: boot,
       // _resetSync returns the module to its just-loaded state, so a suite can drive one boot after another.
-      _resetSync: function () { firstSync = true; duringPop = false; settled = false; undoChrome = null; entryHref = null; },
+      _resetSync: function () { firstSync = true; servedRel = null; duringPop = false; settled = false; undoChrome = null; entryHref = null; },
       // _setBootMaxMs shortens both give-up watchdogs so a suite need not wait them out; Node only.
       _setBootMaxMs: function (ms) { BOOT_MAX_MS = ms; APP_MAX_MS = ms; },
     };

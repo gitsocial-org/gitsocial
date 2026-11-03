@@ -494,6 +494,8 @@ async function main() {
   // globals gs-upgrade reads; save the shim's originals and restore them after, so
   // the fixture-driven GS.route sections that follow keep the shim's DOM window.
   const savedWindow = global.window, savedHistory = global.history, savedLocation = global.location;
+  // fileAnchorTrip holds the reflected URL and the boot entry of a file section anchor, asserted once the app has rendered one.
+  let fileAnchorTrip = null;
 
   console.log("\n--- syncURL/wireNav: item page → app-only route → back (history walk) ---");
   // Boot the app from a real item page URL, wire the nav, and prime the entry
@@ -559,6 +561,70 @@ async function main() {
     const depth0 = win.stack.length;
     UP.syncURL(base);
     ok("shell app-only entry URL is unchanged", win.href() === shellURL && win.stack.length === depth0, "href=" + win.href());
+  }
+
+  console.log("\n--- A file route reflects to its page ---");
+  {
+    const FILE_PAGES = { branch: "main", keys: { "docs/A.md": "f/docs/A.html", "index.md": "f/index.md.html" } };
+    // withMeta stands in for the served page's gs-route meta while fn runs.
+    const withMeta = (route, fn) => {
+      const qs = global.document.querySelector;
+      global.document.querySelector = (sel) => (/gs-route/.test(sel) ? { getAttribute: () => route } : qs.call(global.document, sel));
+      try { return fn(); } finally { global.document.querySelector = qs; }
+    };
+    {
+      mkBrowser(base + "index.html");
+      const noLookup = UP.pageURLForHash(base, "file:docs/A.md@main");
+      global.window.__gsFilePages = FILE_PAGES;
+      ok("file route maps to its page key", UP.pageURLForHash(base, "file:docs/A.md@main") === base + "f/docs/A.html", "url=" + UP.pageURLForHash(base, "file:docs/A.md@main"));
+      ok("file route without a page keeps the hash",
+        noLookup === null && ["file:docs/B.md@main", "file:docs/A.md@dev", "file:docs/A.md@main:L3", "file:docs/A.md"].every((r) => UP.pageURLForHash(base, r) === null),
+        "noLookup=" + noLookup + " " + JSON.stringify(["file:docs/B.md@main", "file:docs/A.md@dev", "file:docs/A.md@main:L3", "file:docs/A.md"].map((r) => UP.pageURLForHash(base, r))));
+      ok("file mapping reads the manifest key", UP.pageURLForHash(base, "file:index.md@main") === base + "f/index.md.html" && savedWindow.__gsFilePages && savedWindow.__gsFilePages.keys["notes.txt"] === "f/notes.html",
+        "url=" + UP.pageURLForHash(base, "file:index.md@main") + " app=" + JSON.stringify(savedWindow.__gsFilePages));
+    }
+    {
+      // boot() seeds the page's own route on the hash; the manifest has not arrived, so only the meta names the page.
+      const pageURL = base + "f/docs/A.html";
+      const win = mkBrowser(pageURL + "?base=b#file:docs/A.md@main");
+      UP._resetSync();
+      UP.wireNav(base);
+      withMeta("file:docs/A.md@main", () => UP.syncURL(base));
+      ok("a served file page keeps its URL at boot", win.href() === pageURL + "?base=b" && win.stack.length === 1, "href=" + win.href());
+    }
+    {
+      // A shared hash link enters at index.html; the manifest arrives after the entry sync and rewrites that entry.
+      const win = mkBrowser(base + "index.html#file:docs/A.md@main");
+      UP._resetSync();
+      UP.wireNav(base);
+      UP.wireFilePages(base);
+      withMeta("/", () => UP.syncURL(base));
+      const before = win.href();
+      global.window.__gsFilePages = FILE_PAGES;
+      withMeta("/", () => global.window.__gsOnFilePages());
+      ok("manifest arrival replaces the entry URL", before === base + "index.html#file:docs/A.md@main" && win.href() === base + "f/docs/A.html" && win.stack.length === 1,
+        "before=" + before + " href=" + win.href() + " stack=" + win.stack.length);
+    }
+    ok("file page -> null (reload handles it)", UP.hashForPath(base, base + "f/docs/A.html") === null);
+    {
+      const win = mkBrowser(base + "index.html#file:docs/A.md@main:lists");
+      global.window.__gsFilePages = FILE_PAGES;
+      UP._resetSync();
+      withMeta("/", () => UP.syncURL(base));
+      const reflected = win.href();
+      const pg = mkPage({ url: base + "f/docs/A.html", hash: "#md-lists", dataBase: "../", metaRoute: "file:docs/A.md@main", content: global.__shim.mkEl("div") });
+      pg.activate();
+      const entry = UP.entryFor();
+      pg.restore();
+      fileAnchorTrip = { reflected, entry };
+    }
+    {
+      const win = mkBrowser(base + "index.html#file:docs/A.md@main:L3-9");
+      global.window.__gsFilePages = FILE_PAGES;
+      UP._resetSync();
+      withMeta("/", () => UP.syncURL(base));
+      ok("file line range keeps the hash", win.href() === base + "index.html#file:docs/A.md@main:L3-9" && UP.routeAnchor("file:docs/A.md@main:L3-9") === "", "href=" + win.href());
+    }
   }
   global.window = savedWindow; global.history = savedHistory; global.location = savedLocation;
 
@@ -700,6 +766,12 @@ async function main() {
   ok("file page carries gs-route (file) + data-base(../) + upgrade script", /name="gs-route" content="file:notes\.txt@main"/.test(filePage.text) && /data-base="\.\.\/"/.test(filePage.text) && new RegExp('<script defer src="\\.\\./' + SHELL_RE + 'gs-upgrade\\.js">').test(filePage.text));
   const fileView = await bootLike(base, "file:notes.txt@main", null);
   ok("file-page meta route boots the app's file view", fileView.length > 0 && !/not found/i.test(fileView), "view=" + fileView.slice(0, 80));
+  // The app scrolls a file route's anchor to md-<anchor>, so the booted route must render a heading with that id.
+  await bootLike(base, "file:README.md@main:about", null);
+  const anchored = findTag(global.__shim.viewNode, /^h[1-6]$/).some((h) => h.getAttribute("id") === "md-about");
+  ok("file section anchor round-trips",
+    !!fileAnchorTrip && fileAnchorTrip.reflected === base + "f/docs/A.html#md-lists" && fileAnchorTrip.entry.route === "file:docs/A.md@main:lists" && UP.routeAnchor("file:docs/A.md@main:lists") === "#md-lists" && anchored,
+    JSON.stringify(fileAnchorTrip) + " heading=" + anchored);
 
   console.log("\n--- Front page ↔ booted home view agree (no first-load swap) ---");
   // index.html is dual-owned: the static front page paints first and the app's

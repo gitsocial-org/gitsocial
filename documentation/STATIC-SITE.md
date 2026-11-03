@@ -76,7 +76,7 @@ Effective when `publish`, `pages` and a valid `url` are all set. Every push then
 - One page per top-level item, with its thread inlined up to a limit.
 - A list page per type, paged oldest-first with `older →` and `← newer` links. A full page holds a complete page of rows, and later pushes do not rewrite it; the newest rows are on the head page, `index.html`. Milestones and sprints are in `issues`.
 - The commits list of the default branch, one row per commit with no diffs, its body as the excerpt the code index carries. A row is citable as `commits/<n>.html#c-<sha12>`.
-- A file page for each prose document on the default branch, at `f/<path>.html`: markdown (`.md`, `.markdown`, `.mdown`, `.mdx`) and the extensionless convention documents (LICENSE, CONTRIBUTING, CHANGELOG and their siblings). The selection excludes documents under a dotdir or a vendored, test or fixture directory, and also submodules, symlinks, the root README and paths with a space or one of `@ : # ? %`. `filesInclude` and `filesExclude` change the selection.
+- A file page for each prose document on the default branch, at `f/<path>.html`, and their list at `f/index.html`. [File pages](#file-pages) has the selection and the key rule; `filesInclude` and `filesExclude` change the selection.
 - The front page: one section with the branch, the latest commit and the root files, each with the type icon of the app, two of them shown and the rest behind a chevron, then the README.
 - `sitemap.xml` with every indexable page, and Atom feeds: `feed.xml` and one per type directory, memos and commits excluded; each push reads the bodies of a feed's entries before it writes the feed.
 
@@ -86,6 +86,7 @@ What a page shows:
 - An item page heads with its title alone, leads its meta line with the avatar, level with the top of the meta line when the chip row follows it, puts the type glyph after the author and ends the line with the state pill, open included, and shows the chip row of a card under the line, the version of a release at its front. It lists the header fields that no chip carries, the rows of the app's trailer list, between the chip row and the body, so the reader has every fact of the item before its first paragraph. A body-only item has no head.
 - A thread reply puts its chip row before its text, which takes the clamp; a feedback reply carries its verdict, a suggestion mark and its anchor as chips, and a nested reply sits on the rail of the one it answers. The page of a reply, quote or repost shows the quote box of its card under its body, read from the GitMsg-Ref its message carries.
 - A repository-relative image in the README shows as its alt text.
+- A relative link in a file page or the README to a published document links its page, a section as `#md-<slug>`; any other relative link opens its file route in the app. A new or removed document writes every file page again, and the README links the documents of the previous push.
 - A pull request page carries a Files changed section: each changed file with its status letter, path and line counts, then the unified hunks up to a cap. Past the cap, a notice links the app for the rest. A generated file, such as a lockfile or a file under `vendor/`, shows closed with a `generated` label on the page and in the app; a click opens it, and the page leaves its hunks to the app. A range that does not resolve in the object database of the pusher shows a one-line notice in its place.
 - The pages of retracted items and very short file pages carry `noindex,follow`.
 - Every `<title>` is unique, and every description is prose with the markdown stripped.
@@ -98,6 +99,24 @@ What a page leaves to the app:
 - A commit row that the code index holds from before the excerpt field has no excerpt until the code index is built again.
 
 On a large repository, several pushes can be necessary to write every page; `GITSOCIAL_SITE_PAGES_BUDGET` limits the item pages that one push writes ([S3.md](S3.md#environment-variables)). Setting `pages false` or removing `url` deletes the pages on the next push.
+
+### File pages
+
+The selection reads the tree of the default branch. A file is published when it passes each row, in this order.
+
+| Rule | Value |
+|---|---|
+| Excluded first | a path with a space or one of `@ : # ? % \ " < >`, a submodule, a symlink, the root README, and a path that a `filesExclude` glob matches |
+| Skipped directories | a directory whose name starts with `.`, and `node_modules`, `vendor`, `testdata`, `third_party`, `fixtures`, `golden`, `corpus`, `snapshots`, `__snapshots__`, at any depth, case-insensitive |
+| Markdown | `.md`, `.markdown`, `.mdown`, `.mdx`, case-insensitive; rendered as markdown, front matter stripped, MDX import, export and component blocks dropped |
+| Convention names | an extensionless file named, in any case, `AUTHORS`, `CHANGELOG`, `CHANGES`, `CONTRIBUTING`, `CONTRIBUTORS`, `COPYING`, `INSTALL`, `MAINTAINERS`, `NOTICE`, `README`, `SECURITY`, `TODO`, or a name that starts with `LICEN`; shown as preformatted text |
+| Included by glob | any other file that a `filesInclude` glob matches; shown as preformatted text |
+| Key | the extension swapped for `.html`, else `.html` appended: `docs/A.md` is `f/docs/A.html`, `LICENSE` is `f/LICENSE.html`; when two files map to one key, or to `f/index.html`, the later one by path takes `f/<path>.html`, and a third is skipped |
+| Size | the first 256 KiB of the source, cut at a line, with a truncation notice |
+| Sitemap | a page under 100 words carries `noindex,follow` and is not in the sitemap |
+| Rewrite | a page is written again when its blob or key changes, when the default branch changes, and when a document is added or removed |
+
+A source file is not published by default. To publish one, add its glob to `filesInclude`, for example `cmd/**/*.go`; each matching file then gets a page under `f/` with its source as text, and the file route of the app shows that page's URL.
 
 ## Fork pull requests
 
@@ -177,7 +196,7 @@ The app reads the artifacts under `.gitsocial/site/`, and the bucket's ref list 
 | `bodies/<ext>/` | message bodies, loaded on demand |
 | `items/code/` | one index of plain commits across code branches, with parent shas |
 | `bodies/code/` | the message of each commit in `items/code/`, which the commit lists of the app read for their excerpts |
-| `pages.json` | page-layer manifest: schema version, consumed tips, bootstrap cursor, list and commits partitions, the sidebar's item counts |
+| `pages.json` | page-layer manifest: schema version, consumed tips, bootstrap cursor, list and commits partitions, the sidebar's item counts, the file pages with their keys |
 | `site-config.json` | the customization values, and `avatarManifest`, the digest of `avatars.json`, which only the push sets |
 | `avatars/<key>` | the picture of one author, as the forge served it, under the avatar key of the email; written by `gitsocial import avatars` and by the push from the avatar store; `public, max-age=86400` |
 | `avatars.json` | `{"v":1,"keys":[...]}`, the sorted avatar keys that `avatars/` holds; written after the pictures by the import and the push; no-cache |
@@ -236,6 +255,7 @@ Page entry:
 - The page's head script sets the stored theme before the body is parsed and marks `<html>` with `gs-boot`, which hides the page during boot; the front page is not hidden.
 - Every step of the app start is reversible: a shell asset that fails or hangs, a throw during boot, or a route that does not settle restores the served page and its URL.
 - A `location.hash` that names a route has priority over the page's own route; a bare anchor stays on the page.
+- A file route on the default branch shows the URL of its page when `pages.json` has a record for the path, with a section anchor as `#md-<slug>`. A line range, another branch or a path with no page keeps the hash URL. A page that starts the app keeps its own URL.
 
 Index maintenance:
 

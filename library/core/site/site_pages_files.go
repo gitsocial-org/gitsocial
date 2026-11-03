@@ -119,6 +119,28 @@ func siteFileDocsChanged(state *siteFilesState, docs []siteFileDoc, branch strin
 	return false
 }
 
+// siteFilePathsChanged reports whether the discovered paths differ from the published ones, which is what rewrites the links between pages.
+func siteFilePathsChanged(prior map[string]siteFileRecord, docs []siteFileDoc) bool {
+	if len(prior) != len(docs) {
+		return true
+	}
+	for _, d := range docs {
+		if _, ok := prior[d.Path]; !ok {
+			return true
+		}
+	}
+	return false
+}
+
+// siteFilePageHrefs maps each document's repo path to the absolute href of its page.
+func siteFilePageHrefs(site sitePageSite, docs []siteFileDoc) map[string]string {
+	hrefs := make(map[string]string, len(docs))
+	for _, d := range docs {
+		hrefs[d.Path] = site.URL + d.Key
+	}
+	return hrefs
+}
+
 // siteFilesMoved reports whether a pass changed the published set, which is what rewrites the sitemap.
 func siteFilesMoved(prior, next *siteFilesState) bool {
 	if prior == nil || next == nil {
@@ -475,11 +497,11 @@ func siteFileMeta(body string, markdown bool) (title, summary string, leadHeadin
 }
 
 // buildSiteFilePage assembles one document's page: its rendered or preformatted body, its meta line, and the file route the boot hook stamps.
-func buildSiteFilePage(doc siteFileDoc, source string, truncated bool, site sitePageSite, branch, title, lastmod string, thin bool) siteFilePageData {
+func buildSiteFilePage(doc siteFileDoc, source string, truncated bool, site sitePageSite, branch, title, lastmod string, thin bool, pages map[string]string) siteFilePageData {
 	_, summary, leadHeading := siteFileMeta(siteFileHead(source), doc.Markdown)
 	d := siteFilePageData{Truncated: truncated}
 	if doc.Markdown {
-		d.HTML = template.HTML(renderSiteMarkdown(source, siteMarkdownContext{AppBase: sitePageAppURL(site, ""), Branch: branch, Doc: doc.Path}))
+		d.HTML = template.HTML(renderSiteMarkdown(source, siteMarkdownContext{AppBase: sitePageAppURL(site, ""), Branch: branch, Doc: doc.Path, Pages: pages}))
 	} else {
 		d.Pre = source
 	}
@@ -542,8 +564,9 @@ func maintainSiteFilePages(client *objstore.Client, prefix string, site sitePage
 		return nil, budget, nil
 	}
 	state := &siteFilesState{Branch: branch, Files: map[string]siteFileRecord{}}
-	// A branch change moves every page's route and meta line, so it rewrites every page.
-	regen = regen || prior == nil || prior.Branch != branch
+	// A branch change moves every page's route and meta line, and a new or removed path moves the links between pages, so each rewrites every page.
+	regen = regen || prior == nil || prior.Branch != branch || (!prior.Pending && siteFilePathsChanged(priorFiles, docs))
+	pages := siteFilePageHrefs(site, docs)
 	changed := regen
 	titles := map[string]bool{}
 	for t := range taken {
@@ -583,7 +606,7 @@ func maintainSiteFilePages(client *objstore.Client, prefix string, site sitePage
 		title := siteFilePageTitle(doc, source, titles)
 		lastmod := sitePageDate(commitTimes[doc.Path])
 		thin := siteFileWordCount(source, doc.Markdown) < sitePagesFileMinWords
-		page, err := renderSitePage("file", buildSiteFilePage(doc, source, truncated, site, branch, title, lastmod, thin))
+		page, err := renderSitePage("file", buildSiteFilePage(doc, source, truncated, site, branch, title, lastmod, thin, pages))
 		if err != nil {
 			return nil, budget, err
 		}

@@ -81,7 +81,8 @@ type siteMDSpan struct {
 type siteMarkdownContext struct {
 	AppBase string
 	Branch  string
-	Doc     string // repo path of the document, whose directory a relative link starts from
+	Doc     string            // repo path of the document, whose directory a relative link starts from
+	Pages   map[string]string // repo path to the absolute href of its page
 }
 
 // siteMDRender carries one document's render state: its context and the heading slugs already used.
@@ -701,7 +702,7 @@ func siteMDJoinPath(dir, rel string) string {
 	return strings.Join(parts, "/")
 }
 
-// siteMDHref gates a link target: an in-page anchor is rewritten onto this renderer's heading ids, and a bare-relative path resolves to the app's file route. "" renders the link with no href.
+// siteMDHref gates a link target: an in-page anchor is rewritten onto this renderer's heading ids, and a bare-relative path resolves to its page, else to the app's file route. "" renders the link with no href.
 func siteMDHref(raw string, ctx siteMarkdownContext) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -729,8 +730,15 @@ func siteMDHref(raw string, ctx siteMarkdownContext) string {
 	if i := strings.LastIndex(ctx.Doc, "/"); i >= 0 {
 		dir = ctx.Doc[:i]
 	}
-	ref := ctx.AppBase + "file:" + siteMDJoinPath(dir, path) + "@" + ctx.Branch
-	if slug := siteMDSlug(frag); slug != "" {
+	joined, slug := siteMDJoinPath(dir, path), siteMDSlug(frag)
+	if page, ok := ctx.Pages[joined]; ok {
+		if slug != "" {
+			page += "#md-" + slug
+		}
+		return page
+	}
+	ref := ctx.AppBase + "file:" + joined + "@" + ctx.Branch
+	if slug != "" {
 		ref += ":" + slug
 	}
 	return ref

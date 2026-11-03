@@ -887,6 +887,28 @@ func TestSitePages_FrontReadmeRendered(t *testing.T) {
 	}
 }
 
+// TestSitePages_FrontReadmeLinksPages: the front page README links a document that the prior manifest published.
+func TestSitePages_FrontReadmeLinksPages(t *testing.T) {
+	dir, head := pagesFileRepo(t, map[string]string{
+		"README.md": "# Readme\n\n[guide](GUIDE.md#Usage) [code](main.go)\n",
+		"GUIDE.md":  "# Guide\n\n## Usage\n",
+		"main.go":   "package main\n",
+	})
+	client, _ := testClient(t)
+	buildFilePages(t, client, dir, head, pagesTestSite())
+	if !strings.Contains(getKey(t, client, sitePagesFrontKey), `href="https://example.com/index.html#file:GUIDE.md@main:usage"`) {
+		t.Error("with no prior manifest the README link must take the app route")
+	}
+	buildFilePages(t, client, dir, head, pagesTestSite())
+	front := getKey(t, client, sitePagesFrontKey)
+	if !strings.Contains(front, `<a href="https://example.com/f/GUIDE.html#md-usage">guide</a>`) {
+		t.Error("the README must link the page the prior manifest published")
+	}
+	if !strings.Contains(front, `<a href="https://example.com/index.html#file:main.go@main">code</a>`) {
+		t.Error("a link to a path with no page must keep the app route")
+	}
+}
+
 // TestSitePages_FrontHomeIgnoresLocalBranch: the file listing and the README
 // come from the BUCKET's tip for the default branch, never from the local ref of
 // the same name. The local repo here carries main with a README; the bucket does
