@@ -479,7 +479,7 @@ func buildSiteFilePage(doc siteFileDoc, source string, truncated bool, site site
 	_, summary, leadHeading := siteFileMeta(siteFileHead(source), doc.Markdown)
 	d := siteFilePageData{Truncated: truncated}
 	if doc.Markdown {
-		d.HTML = template.HTML(renderSiteMarkdown(source, siteMarkdownContext{AppBase: sitePageAppURL(site, ""), Branch: branch}))
+		d.HTML = template.HTML(renderSiteMarkdown(source, siteMarkdownContext{AppBase: sitePageAppURL(site, ""), Branch: branch, Doc: doc.Path}))
 	} else {
 		d.Pre = source
 	}

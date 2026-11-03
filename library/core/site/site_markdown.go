@@ -81,6 +81,7 @@ type siteMDSpan struct {
 type siteMarkdownContext struct {
 	AppBase string
 	Branch  string
+	Doc     string // repo path of the document, whose directory a relative link starts from
 }
 
 // siteMDRender carries one document's render state: its context and the heading slugs already used.
@@ -674,11 +675,18 @@ func siteMDSlug(s string) string {
 	return siteMDSlugSpaceRE.ReplaceAllString(s, "-")
 }
 
-// siteMDJoinPath normalizes a relative path the way the reader's joinPath does.
-func siteMDJoinPath(rel string) string {
+// siteMDJoinPath resolves a relative path against the document's directory, honoring ./, ../ and a leading /, as the reader's joinPath does.
+func siteMDJoinPath(dir, rel string) string {
 	rel = strings.TrimPrefix(rel, "./")
-	rel = strings.TrimPrefix(rel, "/")
 	var parts []string
+	for _, seg := range strings.Split(dir, "/") {
+		if seg != "" {
+			parts = append(parts, seg)
+		}
+	}
+	if strings.HasPrefix(rel, "/") {
+		parts, rel = nil, rel[1:]
+	}
 	for _, seg := range strings.Split(rel, "/") {
 		switch seg {
 		case "", ".":
@@ -717,7 +725,11 @@ func siteMDHref(raw string, ctx siteMarkdownContext) string {
 	if path == "" {
 		return ""
 	}
-	ref := ctx.AppBase + "file:" + siteMDJoinPath(path) + "@" + ctx.Branch
+	dir := ""
+	if i := strings.LastIndex(ctx.Doc, "/"); i >= 0 {
+		dir = ctx.Doc[:i]
+	}
+	ref := ctx.AppBase + "file:" + siteMDJoinPath(dir, path) + "@" + ctx.Branch
 	if slug := siteMDSlug(frag); slug != "" {
 		ref += ":" + slug
 	}

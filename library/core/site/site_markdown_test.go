@@ -418,6 +418,26 @@ func TestSiteMarkdown_Empty(t *testing.T) {
 	}
 }
 
+// TestSiteMarkdown_relativeLinkFromDirectory: a relative link starts from the directory of its document, and a leading / from the root.
+func TestSiteMarkdown_relativeLinkFromDirectory(t *testing.T) {
+	ctx := mdTestContext
+	ctx.Doc = "docs/A.md"
+	got := renderSiteMarkdown("[b](B.md) [dot](./B.md) [up](../C.md) [sub](sub/E.md#x)\n", ctx)
+	for _, want := range []string{
+		`<a href="https://example.com/index.html#file:docs/B.md@main">b</a>`,
+		`<a href="https://example.com/index.html#file:docs/B.md@main">dot</a>`,
+		`<a href="https://example.com/index.html#file:C.md@main">up</a>`,
+		`<a href="https://example.com/index.html#file:docs/sub/E.md@main:x">sub</a>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("rendered markdown must carry %q:\n%s", want, got)
+		}
+	}
+	if j := siteMDJoinPath("docs", "/D.md"); j != "D.md" {
+		t.Errorf("siteMDJoinPath(docs, /D.md) = %q, want D.md", j)
+	}
+}
+
 // TestSiteMarkdown_NoReferenceContext: without a branch (a bucket whose tip the
 // pusher cannot read) a relative reference resolves to nothing rather than to a
 // link that goes nowhere.
