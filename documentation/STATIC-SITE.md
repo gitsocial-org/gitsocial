@@ -77,7 +77,7 @@ Effective when `publish`, `pages` and a valid `url` are all set. Every push then
 - A list page per type, paged oldest-first with `older →` and `← newer` links. A full page holds a complete page of rows, and later pushes do not rewrite it; the newest rows are on the head page, `index.html`. Milestones and sprints are in `issues`.
 - The commits list of the default branch, one row per commit with no diffs, its body as the excerpt the code index carries. A row is citable as `commits/<n>.html#c-<sha12>`.
 - A file page for each prose document on the default branch, at `f/<path>.html`, and their list at `f/index.html`. [File pages](#file-pages) has the selection and the key rule; `filesInclude` and `filesExclude` change the selection.
-- The front page: one section with the branch, the latest commit and the root files, each with the type icon of the app, two of them shown and the rest behind a chevron, then the README.
+- The front page: one section with the branch, the latest commit and the root files, each with the type icon of the app, two of them shown and the rest behind a chevron, then the README. A root file with a page links its page.
 - `sitemap.xml` with every indexable page, and Atom feeds: `feed.xml` and one per type directory, memos and commits excluded; each push reads the bodies of a feed's entries before it writes the feed.
 
 What a page shows:
@@ -86,7 +86,7 @@ What a page shows:
 - An item page heads with its title alone, leads its meta line with the avatar, level with the top of the meta line when the chip row follows it, puts the type glyph after the author and ends the line with the state pill, open included, and shows the chip row of a card under the line, the version of a release at its front. It lists the header fields that no chip carries, the rows of the app's trailer list, between the chip row and the body, so the reader has every fact of the item before its first paragraph. A body-only item has no head.
 - A thread reply puts its chip row before its text, which takes the clamp; a feedback reply carries its verdict, a suggestion mark and its anchor as chips, and a nested reply sits on the rail of the one it answers. The page of a reply, quote or repost shows the quote box of its card under its body, read from the GitMsg-Ref its message carries.
 - A repository-relative image in the README shows as its alt text.
-- A relative link in a file page or the README to a published document links its page, a section as `#md-<slug>`; any other relative link opens its file route in the app. A new or removed document writes every file page again, and the README links the documents of the previous push.
+- A relative link in a file page or the README to a published document links its page, a section as `#md-<slug>`; any other relative link opens its file route in the app. A new or removed document writes every file page again, and the README links the documents of the same push.
 - A pull request page carries a Files changed section: each changed file with its status letter, path and line counts, then the unified hunks up to a cap. Past the cap, a notice links the app for the rest. A generated file, such as a lockfile or a file under `vendor/`, shows closed with a `generated` label on the page and in the app; a click opens it, and the page leaves its hunks to the app. A range that does not resolve in the object database of the pusher shows a one-line notice in its place.
 - The pages of retracted items and very short file pages carry `noindex,follow`.
 - Every `<title>` is unique, and every description is prose with the markdown stripped.
@@ -255,7 +255,7 @@ Page entry:
 - The page's head script sets the stored theme before the body is parsed and marks `<html>` with `gs-boot`, which hides the page during boot; the front page is not hidden.
 - Every step of the app start is reversible: a shell asset that fails or hangs, a throw during boot, or a route that does not settle restores the served page and its URL.
 - A `location.hash` that names a route has priority over the page's own route; a bare anchor stays on the page.
-- A file route on the default branch shows the URL of its page when `pages.json` has a record for the path, with a section anchor as `#md-<slug>`. A line range, another branch or a path with no page keeps the hash URL. A page that starts the app keeps its own URL.
+- A file route on the default branch shows the URL of its page when `pages.json` has a record for the path, with a section anchor as `#md-<slug>`. A line range, another branch or a path with no page keeps the hash URL. A page that starts the app keeps its own URL. In the app, a relative markdown link, a file tree row, a home row and a file search row that point to such a file carry its page URL, and a plain click on one opens the file route in the app.
 
 Index maintenance:
 

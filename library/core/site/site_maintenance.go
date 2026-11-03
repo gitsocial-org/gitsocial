@@ -128,7 +128,7 @@ func reclaimSitePagesFront(client *objstore.Client, prefix string, refs map[stri
 	if !sitePagesTipsCurrent(manifest, tips) {
 		return true // tips moved: pending, a site rebuild redoes it and reclaims
 	}
-	home := readSiteFrontHome(src, site, refs, readSiteDefaultBranch(client, prefix), manifest.Files)
+	home := readSiteFrontHome(src, site, refs, readSiteDefaultBranch(client, prefix), siteFileDocsFromState(manifest.Files))
 	if err := writeSiteFrontPage(client, prefix, site, home); err != nil {
 		fmt.Fprintf(os.Stderr, "gitsocial s3: reclaim front page: %v\n", err)
 		return false

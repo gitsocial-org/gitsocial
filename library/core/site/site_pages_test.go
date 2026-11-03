@@ -790,7 +790,11 @@ func pagesFrontRepo(t *testing.T) (dir, head string) {
 // bucket carries the default branch at the local commit, so both sources agree
 // and the body is the one the app renders.
 func TestSitePages_FrontHome(t *testing.T) {
-	dir, head := pagesFrontRepo(t)
+	dir, _ := pagesFrontRepo(t)
+	writeRepoFiles(t, dir, map[string]string{"GUIDE.md": "# Guide\n"})
+	gitRun(t, dir, "add", "GUIDE.md")
+	gitRun(t, dir, "commit", "-q", "--amend", "--no-edit")
+	head := gitRun(t, dir, "rev-parse", "HEAD")
 
 	client, _ := testClient(t)
 	seedPagesConfig(t, client, pagesTestSite())
@@ -819,6 +823,9 @@ func TestSitePages_FrontHome(t *testing.T) {
 	}
 	if !strings.Contains(front, `<a class="home-row" href="https://example.com/index.html#file:README.md@main"><span class="gs-icon tree-icon"><svg `) || !strings.Contains(front, `</svg></span><span class="home-row-subject">README.md</span></a>`) {
 		t.Error("the code block must list the root files as one-line links with the type icon")
+	}
+	if !strings.Contains(front, `<a class="home-row" href="https://example.com/f/GUIDE.html">`) {
+		t.Error("a root file with a page must link its page")
 	}
 	if i, j := strings.Index(front, `class="home-section"`), strings.Index(front, "readme paragraph text"); i < 0 || j < 0 || j < i {
 		t.Error("the README must render after the code block")
@@ -887,7 +894,7 @@ func TestSitePages_FrontReadmeRendered(t *testing.T) {
 	}
 }
 
-// TestSitePages_FrontReadmeLinksPages: the front page README links a document that the prior manifest published.
+// TestSitePages_FrontReadmeLinksPages: the front page README links a document that the same push publishes.
 func TestSitePages_FrontReadmeLinksPages(t *testing.T) {
 	dir, head := pagesFileRepo(t, map[string]string{
 		"README.md": "# Readme\n\n[guide](GUIDE.md#Usage) [code](main.go)\n",
@@ -896,13 +903,9 @@ func TestSitePages_FrontReadmeLinksPages(t *testing.T) {
 	})
 	client, _ := testClient(t)
 	buildFilePages(t, client, dir, head, pagesTestSite())
-	if !strings.Contains(getKey(t, client, sitePagesFrontKey), `href="https://example.com/index.html#file:GUIDE.md@main:usage"`) {
-		t.Error("with no prior manifest the README link must take the app route")
-	}
-	buildFilePages(t, client, dir, head, pagesTestSite())
 	front := getKey(t, client, sitePagesFrontKey)
 	if !strings.Contains(front, `<a href="https://example.com/f/GUIDE.html#md-usage">guide</a>`) {
-		t.Error("the README must link the page the prior manifest published")
+		t.Error("the README must link the page that the same push publishes")
 	}
 	if !strings.Contains(front, `<a href="https://example.com/index.html#file:main.go@main">code</a>`) {
 		t.Error("a link to a path with no page must keep the app route")

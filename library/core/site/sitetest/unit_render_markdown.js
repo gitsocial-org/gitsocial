@@ -55,6 +55,26 @@ eq(findTag(rel, "img").map((n) => [n.getAttribute("src"), n.getAttribute("alt")]
   [[null, "logo"], ["https://cdn.example/x.png", "remote"], [null, "bad"]],
   "a relative image has no src without a bucket, an https one is kept, another scheme is dropped");
 
+console.log("=== relative links to a document with a page ===");
+const pageCtx = { base: "https://example.com/", filePages: { branch: "trunk", keys: { "docs/B.md": "f/docs/B.html" } } };
+const paged = GS.renderMarkdown("[b](B.md) [sec](B.md#The-Rules) [c](C.md)\n\n<a href=\"B.md\">raw</a>\n", { branch: "trunk", dir: "docs", ctx: pageCtx });
+const pagedLinks = findTag(paged, "a");
+eq(pagedLinks.slice(0, 2).concat(pagedLinks.slice(3)).map((a) => [href(a), a.getAttribute("data-route")]),
+  [["https://example.com/f/docs/B.html", "#file:docs/B.md@trunk"], ["https://example.com/f/docs/B.html#md-the-rules", "#file:docs/B.md@trunk:the-rules"], ["https://example.com/f/docs/B.html", "#file:docs/B.md@trunk"]],
+  "relative link carries its page URL");
+const otherBranch = GS.renderMarkdown("[b](B.md)\n", { branch: "dev", dir: "docs", ctx: pageCtx });
+eq([pagedLinks[2], findTag(otherBranch, "a")[0]].map((a) => [href(a), a.getAttribute("data-route")]),
+  [["#file:docs/C.md@trunk", null], ["#file:docs/B.md@dev", null]],
+  "relative link without a page keeps the hash route");
+global.location.hash = "#/";
+const clicks = [{ button: 0 }, { button: 0, metaKey: true }, { button: 0, ctrlKey: true }, { button: 0, shiftKey: true }, { button: 0, altKey: true }, { button: 1 }].map((props) => {
+  global.location.hash = "#/";
+  let prevented = false;
+  fire(paged, "click", Object.assign({ target: pagedLinks[0], preventDefault() { prevented = true; } }, props));
+  return [prevented, global.location.hash];
+});
+eq(clicks, [[true, "#file:docs/B.md@trunk"]].concat(Array(5).fill([false, "#/"])), "page-URL link routes in-app on a plain click");
+
 console.log("=== heading ids and in-page anchors ===");
 const heads = GS.renderMarkdown("# The Rules!\n\n## The Rules!\n\n[jump](#the-rules)\n");
 eq([findTag(heads, "h1")[0].getAttribute("id"), findTag(heads, "h2")[0].getAttribute("id")], ["md-the-rules", "md-the-rules-1"], "a repeated heading slug is suffixed");

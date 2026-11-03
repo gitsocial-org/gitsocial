@@ -388,6 +388,13 @@ for (const c of FIX.countChips) {
   eq(row ? row._children.filter((n) => n && n.nodeType === 1).map((n) => n.textContent).join("|") : "", c.expectChips.join("|"), c.name);
 }
 
+console.log("=== parity invariant: the href of a relative markdown link ===");
+{
+  const L = FIX.markdownLinks;
+  const mdctx = { branch: L.branch, dir: L.doc.slice(0, L.doc.lastIndexOf("/")), ctx: { base: L.base, filePages: { branch: L.branch, keys: L.pages } } };
+  for (const c of L.cases) eq(GS.relativeHref(c.raw, mdctx), c.expect, c.name + ": href");
+}
+
 console.log("=== parity invariant: tag display order ===");
 (async () => {
   for (const c of FIX.tagOrder) {

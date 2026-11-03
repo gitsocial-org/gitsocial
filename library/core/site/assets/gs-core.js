@@ -3672,6 +3672,26 @@
     return ctx.pagesDoc;
   }
 
+  // loadFilePages sets ctx.filePages to the file pages of the default branch, {branch, keys} with keys path to page key, once per context; null when pages.json has none for that branch.
+  function loadFilePages(ctx) {
+    if (!ctx.filePagesLoad) {
+      ctx.filePagesLoad = Promise.all([loadPagesDoc(ctx), listBranches(ctx)]).then(([doc, { defaultBranch }]) => {
+        const files = doc && doc.files;
+        const ok = files && files.files && files.branch === defaultBranch;
+        ctx.filePages = ok ? { branch: defaultBranch, keys: Object.fromEntries(Object.entries(files.files).filter(([, rec]) => rec && rec.key).map(([path, rec]) => [path, rec.key])) } : null;
+        return ctx.filePages;
+      }).catch(() => (ctx.filePages = null));
+    }
+    return ctx.filePagesLoad;
+  }
+
+  // filePageHref returns the URL of the page of a path on a branch, or null when ctx.filePages has no page for it.
+  function filePageHref(ctx, path, branch) {
+    const pages = ctx && ctx.filePages;
+    if (!pages || branch !== pages.branch || !Object.prototype.hasOwnProperty.call(pages.keys, path)) return null;
+    return ctx.base + pages.keys[path];
+  }
+
   // loadCommitsLayout reads the commits list's published partition from the page manifest; a fast path, with loadCommitsPage deriving it when absent.
   async function loadCommitsLayout(ctx) {
     if (ctx.commitsLayout !== undefined) return ctx.commitsLayout;
@@ -5110,7 +5130,7 @@
     reviewSummary, suggestionBody,
     loadExtItems, loadExtItemsWindow, loadExtItemsUpTo, findItemDeep, loadBranchLogWindow, loadBranchLogIndexed, loadCompareCommitsWindow, loadGraphWindow, orderGraphWindow, assignGraphLanes, GRAPH_WINDOW,
     loadItemsIndex, loadOlderItemShards, olderItemBytes, loadBodyIndex, extWalkState, indexCommit, metaCommit, hydrateItem, hydrateItems,
-    loadTimelineItems, loadTimelineWindow, headerAction, itemActions, dropMergeCloses, HOME_ROWS, compactCount, loadNavCounts, loadPagesDoc, resolveCodeItems, resolveShortShaFromIndex, resolveShortSha, readRefMode, newContext,
+    loadTimelineItems, loadTimelineWindow, headerAction, itemActions, dropMergeCloses, HOME_ROWS, compactCount, loadNavCounts, loadPagesDoc, loadFilePages, filePageHref, resolveCodeItems, resolveShortShaFromIndex, resolveShortSha, readRefMode, newContext,
     loadCommitsPage, loadCommitsLayout, COMMITS_PAGE_SIZE,
     manifestFor, refTip, parseRoute, commitRef, compareRef, resolveCompareRef, COMMIT_VIEW, EXT_BRANCHES, WALK_CAP, DETAIL_WALK_CAP,
     parseTree, getTree, resolvePath, listBranches, listTags, parseTagger, orderTagTies, orderedTags, tagsByCommit, loadSiteTags, loadTagRange, tagRangeWindow, tagRangeFiles, compareTagsDesc, tagVersionKey, peelTag, stripSignatureBlock, headBranchName,

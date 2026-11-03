@@ -279,7 +279,7 @@ func rebuildSitePages(client *objstore.Client, prefix string, refs map[string]st
 	if err != nil {
 		return false, "", err
 	}
-	home := readSiteFrontHome(src, site, refs, defaultBranch, sitePagesFilesState(manifest))
+	home := readSiteFrontHome(src, site, refs, defaultBranch, docs)
 	files := siteFilePass{docs: docs, branch: defaultBranch, tip: tip, src: src}
 	switch {
 	case manifest != nil && manifest.Cursor == nil && sitePagesTipsCurrent(manifest, tips) && !sitePagesCommitsPending(manifest) &&
@@ -363,8 +363,8 @@ func sitePagesTipsCurrent(m *sitePagesManifest, tips map[string]string) bool {
 	return true
 }
 
-// readSiteFrontHome reads the front page's body from the local odb at the bucket's own tip, so the page cannot describe content the bucket is unable to serve.
-func readSiteFrontHome(src *objstore.LocalCommitSource, site sitePageSite, refs map[string]string, defaultBranch string, files *siteFilesState) *siteFrontHome {
+// readSiteFrontHome reads the front page's body from the local odb at the bucket's own tip, so the page cannot describe content the bucket is unable to serve; the README links the pages of docs.
+func readSiteFrontHome(src *objstore.LocalCommitSource, site sitePageSite, refs map[string]string, defaultBranch string, docs []siteFileDoc) *siteFrontHome {
 	if defaultBranch == "" {
 		return nil
 	}
@@ -375,11 +375,12 @@ func readSiteFrontHome(src *objstore.LocalCommitSource, site sitePageSite, refs 
 		Latest:     readSiteFrontLatest(src, site, tip, defaultBranch),
 	}
 	entries := readSiteRootTree(src, tip)
-	home.Files = buildSiteFrontFiles(entries, site, defaultBranch)
+	pages := siteFilePageHrefs(site, docs)
+	home.Files = buildSiteFrontFiles(entries, site, defaultBranch, pages)
 	if len(home.Files) > sitePagesHomeRows {
 		home.Files, home.MoreFiles = home.Files[:sitePagesHomeRows], home.Files[sitePagesHomeRows:]
 	}
-	home.Readme = readSiteFrontReadme(src, tip, siteReadmeName(entries), defaultBranch, site, siteFilePageHrefs(site, siteFileDocsFromState(files)))
+	home.Readme = readSiteFrontReadme(src, tip, siteReadmeName(entries), defaultBranch, site, pages)
 	return home
 }
 
@@ -500,7 +501,7 @@ func readSiteFrontReadme(src *objstore.LocalCommitSource, tip, name, branch stri
 }
 
 // buildSiteFrontFiles renders the root listing the app's homeFileRows shows: directories first, then files.
-func buildSiteFrontFiles(entries []siteTreeEntry, site sitePageSite, branch string) []siteFrontFile {
+func buildSiteFrontFiles(entries []siteTreeEntry, site sitePageSite, branch string, pages map[string]string) []siteFrontFile {
 	ordered := append([]siteTreeEntry(nil), entries...)
 	sort.SliceStable(ordered, func(i, j int) bool {
 		a, b := ordered[i], ordered[j]
@@ -515,7 +516,11 @@ func buildSiteFrontFiles(entries []siteTreeEntry, site sitePageSite, branch stri
 	})
 	files := make([]siteFrontFile, 0, len(ordered))
 	for _, e := range ordered {
-		files = append(files, siteFrontFile{Name: e.Name, Href: sitePageAppURL(site, "file:"+e.Name+"@"+branch), Icon: siteTreeIcon(e.Name, siteTreeKind(e.Mode))})
+		href, ok := pages[e.Name]
+		if !ok {
+			href = sitePageAppURL(site, "file:"+e.Name+"@"+branch)
+		}
+		files = append(files, siteFrontFile{Name: e.Name, Href: href, Icon: siteTreeIcon(e.Name, siteTreeKind(e.Mode))})
 	}
 	return files
 }

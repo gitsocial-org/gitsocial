@@ -3,8 +3,10 @@ const SHELL = require("./shellrev.js");
 // fixture (M3-M5): guard-gated generation, item pages with threads inlined,
 // type list pages + chain, the timeline front page (code commits + README),
 // sitemap/robots coverage, and the guards-off bucket carrying zero page keys.
-// Pure HTTP over the served fixture — the pages are the no-JS surface, so no
-// shim/DOM is involved.
+// Pure HTTP over the served fixture, except one home view booted under the shim.
+require("./shim.js");
+require("../assets/icons.js");
+const GS = require("../assets/gs-app.js");
 let pass = 0, fail = 0;
 const ok = (n, c, e) => { (c ? pass++ : fail++); console.log((c ? "PASS " : "FAIL ") + n + (!c && e ? " :: " + e : "")); };
 const ORIGIN = process.env.GS_SITE_ORIGIN || "http://localhost:8000";
@@ -43,7 +45,7 @@ const REPLY_TEXT = "Congrats, this is huge!";
     /<div class="home-head"><a class="chip" href="[^"]*index\.html#branch:main">⎇ main<\/a> <a class="home-commit" href="[^"]*index\.html#commit:[0-9a-f]{12}@main"><span class="home-row-subject">Add python and rust sources<\/span> <span class="meta"><span class="author"[^>]*>[^<]+<\/span> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <span class="hash">[0-9a-f]{12}<\/span><\/span><\/a><\/div>/.test(front.text));
   // The sidebar counts are the app's alone: a count baked into a sealed page would go stale.
   ok("a served page's sidebar carries no counts", !/nav-count/.test(front.text.replace(/<style data-gs-core>[\s\S]*?<\/style>/, "")));
-  ok("front lists the root files as one-line links", /<a class="home-row" href="[^"]*index\.html#file:notes\.txt@main"><span class="gs-icon tree-icon"><svg [^]*?<\/svg><\/span><span class="home-row-subject">notes\.txt<\/span><\/a>/.test(front.text));
+  ok("front lists the root files as one-line links, a file with a page linking its page", /<a class="home-row" href="[^"]*\/f\/notes\.html"><span class="gs-icon tree-icon"><svg [^]*?<\/svg><\/span><span class="home-row-subject">notes\.txt<\/span><\/a>/.test(front.text));
   ok("the section shows two rows and folds the rest behind its chevron, under a fade",
     /<div class="home-files">(<a class="home-row"[^\n]*?<\/a>\n){2}<details class="home-more"><summary class="home-toggle" aria-label="Show all"><span class="gs-icon chevron"><svg [^]*?<\/details><div class="home-fade"><\/div><\/div>/.test(front.text));
   ok("the section carries no label and no activity rows", !/>Show all|>See more|Recent activity/.test(front.text));
@@ -213,6 +215,14 @@ const REPLY_TEXT = "Congrats, this is huge!";
   // noindex,follow, and only the file index reaches the sitemap.
   ok("sitemap covers the file index but not a page under the word floor", locs.includes(cfg.url + "f/index.html") && !locs.includes(cfg.url + "f/notes.html"), JSON.stringify(locs.filter((l) => l.includes("/f/"))));
   ok("a file page under the word floor carries noindex,follow", /<meta name="robots" content="noindex,follow">/.test(doc.text));
+  // The README links notes.txt: the page and the booted home view both link its page, and the app keeps the file route for an in-app click.
+  global.__shim.setHash("#/");
+  await GS.route(GS.newContext(TD));
+  await global.__shim.settle();
+  const notesLink = global.__shim.findTag(global.__shim.viewNode, "a").find((a) => global.__shim.textOf(a) === "Notes");
+  ok("home README links the page of a document",
+    front.text.includes('<a href="' + cfg.url + 'f/notes.html">Notes</a>') && !!notesLink && notesLink.getAttribute("href") === TD + "f/notes.html" && notesLink.getAttribute("data-route") === "#file:notes.txt@main",
+    "app=" + (notesLink && notesLink.getAttribute("href") + " " + notesLink.getAttribute("data-route")));
 
   console.log("\n--- Guards off: zero page keys, shell index.html intact ---");
   for (const key of ["sitemap.xml", "robots.txt", "posts/index.html", "issues/index.html", "commits/index.html", "f/index.html"]) {

@@ -418,6 +418,20 @@ type parityFixtures struct {
 	ListHeadings   map[string]string         `json:"listHeadings"`
 	TagOrder       []parityTagOrderCase      `json:"tagOrder"`
 	TreeIcons      []parityTreeIconCase      `json:"treeIcons"`
+	MarkdownLinks  parityMarkdownLinks       `json:"markdownLinks"`
+}
+
+// parityMarkdownLinks is one document, its site, the published pages and the href each raw link takes.
+type parityMarkdownLinks struct {
+	Doc    string            `json:"doc"`
+	Base   string            `json:"base"`
+	Branch string            `json:"branch"`
+	Pages  map[string]string `json:"pages"`
+	Cases  []struct {
+		Name   string `json:"name"`
+		Raw    string `json:"raw"`
+		Expect string `json:"expect"`
+	} `json:"cases"`
 }
 
 // parityTreeIconCase is one root entry and the icon key and hue class both renderers give it.
@@ -1713,6 +1727,31 @@ func TestParityCountChips(t *testing.T) {
 			}
 			if !slices.Equal(got, c.ExpectChips) {
 				t.Errorf("chips = %q, want %q", got, c.ExpectChips)
+			}
+		})
+	}
+}
+
+// TestParityMarkdownLinks asserts siteMDHref gives a relative link the href the app's relativeHref gives, against the fixture unit_parity.js also asserts.
+func TestParityMarkdownLinks(t *testing.T) {
+	l := loadParityFixtures(t).MarkdownLinks
+	if len(l.Cases) == 0 {
+		t.Fatal("no markdown link cases in parity fixtures")
+	}
+	docs := make([]siteFileDoc, 0, len(l.Pages))
+	for path, key := range l.Pages {
+		docs = append(docs, siteFileDoc{Path: path, Key: key})
+	}
+	site := sitePageSite{URL: l.Base}
+	ctx := siteMarkdownContext{AppBase: sitePageAppURL(site, ""), Branch: l.Branch, Doc: l.Doc, Pages: siteFilePageHrefs(site, docs)}
+	for _, c := range l.Cases {
+		t.Run(c.Name, func(t *testing.T) {
+			want := c.Expect
+			if strings.HasPrefix(want, "#") {
+				want = l.Base + "index.html" + want
+			}
+			if got := siteMDHref(c.Raw, ctx); got != want {
+				t.Errorf("siteMDHref(%q) = %q, want %q", c.Raw, got, want)
 			}
 		})
 	}

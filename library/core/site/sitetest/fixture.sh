@@ -86,10 +86,10 @@ mkdir -p "$W"
 git init -q -b main "$W"
 ident "Ada Lovelace" "ada@example.com"
 # The README carries the shape a real one has — a hero div, a badge image, a
-# heading, a list, an in-page anchor — because the front page PRE-RENDERS it
+# heading, a list, an in-page anchor, a link to a file page — because the front page PRE-RENDERS it
 # (site_markdown.go) and verify_upgrade_boot.js asserts the served structure
 # against what the app's home view renders from the same blob.
-printf '<div align="center">\n  <img src="https://img.example.com/badge.svg" alt="build badge">\n  <h1>thread-demo</h1>\n</div>\n\nShowcase fixture.\n\n## About\n\n- rendered on the served page\n- and again in the app\n\n[About](#about)\n' >"$W/README.md"
+printf '<div align="center">\n  <img src="https://img.example.com/badge.svg" alt="build badge">\n  <h1>thread-demo</h1>\n</div>\n\nShowcase fixture.\n\n## About\n\n- rendered on the served page\n- and again in the app\n\n[About](#about)\n\n[Notes](notes.txt)\n' >"$W/README.md"
 gcommit "Initial commit: README"
 printf 'one\ntwo\n' >"$W/notes.txt"
 gcommit "Add notes"

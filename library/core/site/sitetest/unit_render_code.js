@@ -316,6 +316,33 @@ async function main() {
   await GS.updateCodeSidebar(ctx, { type: "commits" });
   eq([slot.childNodes.length, codeLink.classList.contains("tree-open")], [0, false], "another route empties the slot and clears the mark");
 
+  console.log("=== file links carry the page URL of a file with a page ===");
+  const filePages = { branch: "trunk", keys: { "README.md": "f/README.html", "docs/deep.txt": "f/docs/deep.html" } };
+  const pctx = Object.assign({}, ctx, { filePages, filePagesLoad: Promise.resolve(filePages) });
+  const linkOf = (a) => [a.getAttribute("href"), a.getAttribute("data-route")];
+  const pcode = (await GS.codeView(pctx))[0];
+  await tick(30);
+  const pfiles = findClass(pcode, "tree-row").filter((r) => r.tagName === "A");
+  const plist = findClass(pcode, "tree-list")[0];
+  const routed = [{ button: 0 }, { button: 0, metaKey: true }, { button: 1 }].map((props) => {
+    global.location.hash = "#/";
+    let prevented = false;
+    fire(plist, "click", Object.assign({ target: pfiles.find((r) => textOf(r).includes("README")), preventDefault() { prevented = true; } }, props));
+    return [prevented, global.location.hash];
+  });
+  eq([pfiles.map(linkOf), routed],
+    [[["http://seeded/f/docs/deep.html", "#file:docs/deep.txt@trunk"], ["#file:logo.png@trunk", null], ["#file:main.go@trunk", null], ["http://seeded/f/README.html", "#file:README.md@trunk"]], [[true, "#file:README.md@trunk"], [false, "#/"], [false, "#/"]]],
+    "tree row carries its page URL");
+  await pcode.__tree.setFilter("deep");
+  eq(findClass(pcode, "tree-row").filter((r) => r.tagName === "A").map(linkOf), [["http://seeded/f/docs/deep.html", "#file:docs/deep.txt@trunk"]], "search file row carries its page URL");
+  const phome = (await GS.homeView(pctx))[0];
+  const homeRows = findClass(phome, "home-row");
+  global.location.hash = "#/";
+  fire(findClass(phome, "home-files")[0], "click", { button: 0, target: homeRows.find((r) => r.getAttribute("data-route")) });
+  eq([homeRows.map(linkOf).filter(([, r]) => r), global.location.hash], [[["http://seeded/f/README.html", "#file:README.md@trunk"]], "#file:README.md@trunk"], "home row carries its page URL");
+  const fbChip = findClass(GS.feedbackCard({ commit: { hash: sha("e1"), short: sha("e1").slice(0, 12), authorTime: 1750000000 }, header: { file: "README.md", "new-line": "2" }, content: "A note", author: "Ada" }, false, { head: "#branch:trunk", base: "#branch:trunk" }), "chip").find((c) => c.tagName === "A");
+  eq(fbChip ? linkOf(fbChip) : null, ["#file:README.md@trunk:L2", null], "file chip carries its page URL");
+
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);
 }

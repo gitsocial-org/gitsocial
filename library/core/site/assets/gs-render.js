@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, anyRefHash, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, findForkPull, hydrateForkPull, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, parseTagger, peelTag, tagsByCommit, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, AVATARS_DIR, avatarKey, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseInline, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, headSubject, releaseVersionChip, pageHeadChips, rowHeadChips, itemChips, refExt, relationChips, indexSubject, indexType, chipClass, chipLead, chipText, HEADER_REF_RE, searchHref, chipStateClass, resolveAncestors, resolvePath, resolveShortSha, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, anyRefHash, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, findForkPull, hydrateForkPull, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, parseTagger, peelTag, tagsByCommit, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, AVATARS_DIR, avatarKey, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseInline, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, loadFilePages, filePageHref, headSubject, releaseVersionChip, pageHeadChips, rowHeadChips, itemChips, refExt, relationChips, indexSubject, indexType, chipClass, chipLead, chipText, HEADER_REF_RE, searchHref, chipStateClass, resolveAncestors, resolvePath, resolveShortSha, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // listLink links a detail page to the list its item lives in, named, as the pre-rendered pages do in their footer; the browser's own Back is the return trip.
   function listLink(tab) {
@@ -1280,6 +1280,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return s;
   }
 
+  // fileLinkAttrs returns the link attributes of a file: its page URL with the file route in data-route when it has a page, else the file route.
+  function fileLinkAttrs(ctx, path, branch) {
+    const route = fileRef(path, branch);
+    const page = filePageHref(ctx, path, branch);
+    return page ? { href: page, "data-route": route } : { href: route };
+  }
+
   // ---- Object URLs for in-bucket images (revoked on route change) ----
 
   // IMG_MIME maps displayable image extensions to MIME types; SVG rides through img so scripts stay inert.
@@ -1391,16 +1398,39 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // hrefOk accepts absolute web, mailto, in-page and root-relative hrefs.
   function hrefOk(v) { return /^(https?:|mailto:|#|\/)/i.test(v || ""); }
 
-  // relativeHref resolves a bare-relative href to the in-site file route, with a fragment as a :slug suffix.
-  function relativeHref(raw, mdctx) {
-    if (!raw || !mdctx || !mdctx.branch) return "";
-    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw) || raw.startsWith("//") || raw.startsWith("#") || raw.startsWith("/")) return "";
+  // relativeTarget resolves a bare-relative href to its repo path, its fragment slug and its in-site file route, or null.
+  function relativeTarget(raw, mdctx) {
+    if (!raw || !mdctx || !mdctx.branch) return null;
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw) || raw.startsWith("//") || raw.startsWith("#") || raw.startsWith("/")) return null;
     const hashAt = raw.indexOf("#");
     const frag = hashAt >= 0 ? raw.slice(hashAt + 1) : "";
     const path = (hashAt >= 0 ? raw.slice(0, hashAt) : raw).split("?")[0];
-    if (!path) return "";
+    if (!path) return null;
     const slug = frag ? mdSlug(frag) : "";
-    return fileRef(joinPath(mdctx.dir || "", path), mdctx.branch) + (slug ? ":" + slug : "");
+    const joined = joinPath(mdctx.dir || "", path);
+    return { path: joined, slug, route: fileRef(joined, mdctx.branch) + (slug ? ":" + slug : "") };
+  }
+
+  // targetPageHref returns the page URL of a relative target, a section as #md-<slug>, or null when it has no page.
+  function targetPageHref(t, mdctx) {
+    const page = filePageHref(mdctx.ctx, t.path, mdctx.branch);
+    return page ? page + (t.slug ? "#md-" + t.slug : "") : null;
+  }
+
+  // relativeHref resolves a bare-relative href to the page of its document, a section as #md-<slug>, else to its in-site file route.
+  function relativeHref(raw, mdctx) {
+    const t = relativeTarget(raw, mdctx);
+    return t ? (targetPageHref(t, mdctx) || t.route) : "";
+  }
+
+  // setLinkHref sets an anchor's href from a markdown href; a page URL keeps its file route in data-route for an in-app click.
+  function setLinkHref(a, raw, mdctx) {
+    if (hrefOk(raw)) { a.setAttribute("href", raw); return; }
+    const t = relativeTarget(raw, mdctx);
+    if (!t) return;
+    const page = targetPageHref(t, mdctx);
+    a.setAttribute("href", page || t.route);
+    if (page) a.setAttribute("data-route", t.route);
   }
 
   // applyImgSrc keeps an absolute https src, defers a relative path to resolveImages, and drops every other scheme.
@@ -1436,11 +1466,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         const name = (a.name || "").toLowerCase();
         if (!SANITIZE_ATTRS.has(name)) continue;
         const value = a.value == null ? "" : String(a.value);
-        if (name === "href") {
-          const href = hrefOk(value) ? value : relativeHref(value, mdctx);
-          if (href) clean.setAttribute("href", href);
-          continue;
-        }
+        if (name === "href") { setLinkHref(clean, value, mdctx); continue; }
         if (name === "src") { rawSrc = value; continue; }
         if (name === "alt") { alt = value; continue; }
         clean.setAttribute(name, value);
@@ -1583,8 +1609,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       else if (s.type === "link") {
         // No ref anchors inside an anchor: nesting would split the author's link.
         const a = el("a", {}, renderInline(s.spans, mdctx, true));
-        const href = hrefOk(s.href) ? s.href : relativeHref(s.href, mdctx);
-        if (href) a.setAttribute("href", href);
+        setLinkHref(a, s.href, mdctx);
         out.push(a);
       } else if (mdctx && mdctx.hardBreaks && s.value.indexOf("\n") >= 0) {
         // A single newline is a hard br, as in a GitHub comment.
@@ -1699,7 +1724,20 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     renderBlocksInto(root, parseMarkdown(text), mdctx);
     if (mdctx.ctx) resolveImages(root, mdctx.ctx, mdctx.tip);
     wireInPageAnchors(root);
+    wireRouteLinks(root);
     return root;
+  }
+
+  // wireRouteLinks routes a plain left click on a page-URL link under root in-app through its data-route; any other click is left to the browser.
+  function wireRouteLinks(root) {
+    if (!root || typeof root.addEventListener !== "function") return;
+    root.addEventListener("click", (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      const a = e.target && e.target.closest ? e.target.closest("a[data-route]") : null;
+      if (!a) return;
+      e.preventDefault();
+      location.hash = a.getAttribute("data-route");
+    });
   }
 
   // wireInPageAnchors scrolls plain #fragment links to their md- heading and pushes a shareable URL.
@@ -1802,8 +1840,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return { modes, pane };
   }
 
-  // breadcrumb renders a path as the root plus one link per segment.
-  function breadcrumb(path, branch) {
+  // breadcrumb renders a path as the root plus one link per segment; a segment with a page links it.
+  function breadcrumb(path, branch, ctx) {
     const row = el("div", { class: "breadcrumb mono" }, []);
     const rootA = el("a", { href: fileRef("", branch) }, [branch || "root"]);
     row.append(rootA);
@@ -1812,8 +1850,9 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     for (const part of parts) {
       acc = acc ? acc + "/" + part : part;
       row.append(document.createTextNode(" / "));
-      row.append(el("a", { href: fileRef(acc, branch) }, [part]));
+      row.append(el("a", fileLinkAttrs(ctx, acc, branch), [part]));
     }
+    wireRouteLinks(row);
     return row;
   }
 
@@ -1879,7 +1918,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     // fileRow is a navigating anchor row (Enter activates natively).
     function fileRow(entry, childPath, depth) {
       const cls = "tree-row" + (childPath === activePath ? " tree-active" : "");
-      return el("a", { class: cls, href: fileRef(childPath, branch) }, [
+      return el("a", { class: cls, ...fileLinkAttrs(ctx, childPath, branch) }, [
         indent(depth), el("span", { class: "tree-chevron-spacer" }, []),
         treeIcon(entry), el("span", { class: "mono", title: entry.name }, [entry.name]),
       ]);
@@ -2009,7 +2048,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
             await renderFiltered(childrenEl, kids, childPath, depth + 1, f);
           }
         } else {
-          container.append(el("a", { class: "tree-row", href: fileRef(childPath, branch) }, [
+          container.append(el("a", { class: "tree-row", ...fileLinkAttrs(ctx, childPath, branch) }, [
             indent(depth), el("span", { class: "tree-chevron-spacer" }, []), treeIcon(e), nameSpan,
           ]));
         }
@@ -2047,6 +2086,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       ]));
     }
 
+    wireRouteLinks(listNode);
     renderLevel(listNode, rootEntries, rootPath, 0);
     return { expanded, rerender, setFilter, buildIndex };
   }
@@ -2063,7 +2103,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   // treeView renders a breadcrumb and search input above the interactive tree rooted at path.
   function treeView(ctx, entries, path, branch) {
     const wrap = el("div", { class: "detail" }, []);
-    wrap.append(breadcrumb(path, branch));
+    wrap.append(breadcrumb(path, branch, ctx));
     const listNode = el("div", { class: "tree-list" }, []);
     if (!entries.length) { listNode.append(el("div", { class: "empty" }, ["Empty directory."])); wrap.append(listNode); return [wrap]; }
     const ctrl = mountTree(ctx, listNode, entries, path, branch, { expanded: ctx.treeExpanded });
@@ -2137,7 +2177,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     if (isLFSPointer(bytes)) return blobLabelView(path, branch, "Git LFS pointer");
     const wrap = el("div", { class: "detail" }, []);
     const blobMeta = el("div", { class: "meta blob-meta" }, [humanSize(bytes.length)]);
-    const head = el("div", { class: "blob-head" }, [breadcrumb(path, branch), blobMeta]);
+    const head = el("div", { class: "blob-head" }, [breadcrumb(path, branch, ctx), blobMeta]);
     wrap.append(head);
     if (imageExt(path)) {
       const u = bytesObjectUrl(bytes, path);
@@ -4420,12 +4460,13 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // treeOrBlob resolves a path on a branch and renders a directory or file.
   async function treeOrBlob(ctx, path, branch, line, lineEnd) {
+    const pagesReady = loadFilePages(ctx);
     const tip = await refTip(ctx, "refs/heads/" + branch);
     if (!tip) return [el("div", { class: "err" }, ["Branch not found: " + branch])];
     const node = await resolvePath(ctx, tip, path);
     if (!node) return [el("div", { class: "err" }, ["Path not found: " + path])];
     if (node.type === "tree") {
-      const entries = await getTree(ctx, node.sha);
+      const [entries] = await Promise.all([getTree(ctx, node.sha), pagesReady]);
       return treeView(ctx, entries || [], path, branch);
     }
     if (node.type === "commit") return blobLabelView(path, branch, "Submodule at " + node.sha.slice(0, 12), node.sha);
@@ -4439,6 +4480,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const obj = await getContentObject(ctx, node.sha);
     if (!obj) return [el("div", { class: "err" }, ["Object not found."])];
     if (prismReady) await withPrismDeadline(prismReady);
+    await pagesReady;
     return blobView(obj.body, path, branch, line, lineEnd, ctx, tip);
   }
 
@@ -4447,7 +4489,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const head = await headFor(ctx);
     const branch = headBranchName(head);
     if (!branch || !head.sha) return [el("div", { class: "err" }, ["No default branch to browse."])];
-    const entries = await getTree(ctx, (await resolvePath(ctx, head.sha, "")).sha);
+    const [entries] = await Promise.all([getTree(ctx, (await resolvePath(ctx, head.sha, "")).sha), loadFilePages(ctx)]);
     return treeView(ctx, entries || [], "", branch);
   }
 
@@ -4507,10 +4549,10 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
   // homeFileRows renders the root entries as one-line links, directories first.
-  function homeFileRows(entries, branch) {
+  function homeFileRows(ctx, entries, branch) {
     const dirs = entries.filter((e) => e.type === "tree").sort((a, b) => a.name.localeCompare(b.name));
     const files = entries.filter((e) => e.type !== "tree").sort((a, b) => a.name.localeCompare(b.name));
-    return dirs.concat(files).map((e) => el("a", { class: "home-row", href: fileRef(e.name, branch) }, [
+    return dirs.concat(files).map((e) => el("a", { class: "home-row", ...fileLinkAttrs(ctx, e.name, branch) }, [
       treeIcon(e), el("span", { class: "home-row-subject" }, [e.name]),
     ]));
   }
@@ -4527,6 +4569,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // homeView renders the landing: the head line, the first HOME_ROWS root entries with the rest behind their chevron, then the README.
   async function homeView(ctx) {
+    const pagesReady = loadFilePages(ctx);
     const head = await headFor(ctx);
     const branch = headBranchName(head);
     const wrap = el("div", { class: "detail" }, []);
@@ -4539,7 +4582,8 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const readme = findReadme(entries);
     const commitObj = await getObject(ctx, head.sha);
     const latest = commitObj && commitObj.type === "commit" ? parseCommit(head.sha, commitObj.body) : null;
-    const rows = homeFileRows(entries, branch);
+    await pagesReady;
+    const rows = homeFileRows(ctx, entries, branch);
     const section = el("div", { class: "home-section" }, [homeHead(branch, latest)]);
     if (rows.length) {
       const files = el("div", { class: "home-files" }, rows.slice(0, HOME_ROWS));
@@ -4547,6 +4591,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
         const toggle = el("summary", { class: "home-toggle", "aria-label": "Show all" }, [chevronEl("down") || "⌄"]);
         files.append(el("details", { class: "home-more" }, [toggle].concat(rows.slice(HOME_ROWS))), el("div", { class: "home-fade" }, []));
       }
+      wireRouteLinks(files);
       section.append(files);
     }
     wrap.append(section);
@@ -4597,7 +4642,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
       const tip = await refTip(ctx, "refs/heads/" + branch);
       if (!tip) return null;
       const rootNode = await resolvePath(ctx, tip, "");
-      const rootEntries = rootNode && (await getTree(ctx, rootNode.sha));
+      const [rootEntries] = await Promise.all([rootNode && getTree(ctx, rootNode.sha), loadFilePages(ctx)]);
       if (!rootEntries) return null;
       // Ancestors auto-expand so the active row is visible.
       const parts = target.path ? target.path.split("/") : [];
@@ -4643,6 +4688,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, relativeHref, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();
