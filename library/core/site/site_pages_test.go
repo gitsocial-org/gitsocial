@@ -1611,6 +1611,31 @@ func TestSitePages_CrawlHygiene(t *testing.T) {
 	}
 }
 
+// TestSitePages_emptyListNoindex asserts a list head page with no visible entry carries noindex,follow and stays out of the sitemap, and a list with an entry carries no robots tag.
+func TestSitePages_emptyListNoindex(t *testing.T) {
+	client, _ := testClient(t)
+	seedPagesConfig(t, client, pagesTestSite())
+	seedSocialMessages(t, client, "", []pageMsgSpec{{msg: "A post", ts: 1000}})
+	issue := seedExtMessages(t, client, "pm", "", []pageMsgSpec{{msg: "Gone soon\n\nGitMsg: ext=\"pm\"; type=\"issue\"; v=\"0.1.0\"", ts: 1100}})
+	retract := "GitMsg: ext=\"pm\"; edits=\"#commit:" + issue[0][:12] + "@gitmsg/pm\"; retracted=\"true\"; v=\"0.1.0\""
+	seedExtMessages(t, client, "pm", issue[0], []pageMsgSpec{{msg: retract, ts: 1200}})
+	if pending, _ := buildPages(t, client); pending {
+		t.Fatal("unexpected pending")
+	}
+	sitemap := getKey(t, client, sitePagesSitemapKey)
+	for _, dir := range []string{"issues", "prs", "memos", "releases"} {
+		if page := getKey(t, client, dir+"/index.html"); !strings.Contains(page, `<meta name="robots" content="noindex,follow">`) {
+			t.Errorf("empty list %s/index.html must carry noindex,follow", dir)
+		}
+		if strings.Contains(sitemap, "/"+dir+"/index.html</loc>") {
+			t.Errorf("empty list %s/index.html must stay out of the sitemap", dir)
+		}
+	}
+	if page := getKey(t, client, "posts/index.html"); strings.Contains(page, `name="robots"`) {
+		t.Error("a list with an entry must carry no robots meta")
+	}
+}
+
 // pagesTestRoot builds one root item of ext from its message and header fields, its sha the digit repeated.
 func pagesTestRoot(ext, digit, message string, fields map[string]string) *sitePageItem {
 	sha := strings.Repeat(digit, 40)

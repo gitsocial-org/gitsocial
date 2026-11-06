@@ -41,7 +41,7 @@ const (
 	siteFeedBodyMax = 4 * 1024
 	// sitePageDescriptionLen bounds the meta/OG description (~160 chars).
 	sitePageDescriptionLen = 160
-	// sitePageRobotsNoIndex is the meta robots value a tombstone carries.
+	// sitePageRobotsNoIndex is the meta robots value a tombstone and an empty list carry.
 	sitePageRobotsNoIndex = "noindex,follow"
 )
 

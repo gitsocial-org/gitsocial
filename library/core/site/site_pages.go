@@ -29,7 +29,7 @@ const (
 	sitePagesManifestKey = ".gitsocial/site/pages.json"
 	// sitePagesVersion is the page layer's schema version; bump it when a page
 	// head or its sealed markup changes.
-	sitePagesVersion = 60
+	sitePagesVersion = 61
 	// sitePagesListSize is one list page's entry count.
 	sitePagesListSize = 100
 	// sitePagesFeedSize is the Atom feeds' entry count.
@@ -1020,6 +1020,10 @@ func buildSiteListHeadPage(list sitePageList, site sitePageSite, head []*sitePag
 		TypeFeed:      site.URL + siteTypeFeedKey(list),
 		TypeFeedTitle: siteTypeFeedTitle(list, site),
 		Nav:           sitePageSidebar("../", list.Dir, site.Files),
+	}
+	// An empty list stays out of the sitemap, so its page is not indexed either.
+	if total == 0 {
+		d.Chrome.Robots = sitePageRobotsNoIndex
 	}
 	return d
 }

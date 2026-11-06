@@ -88,7 +88,7 @@ What a page shows:
 - A repository-relative image in the README shows as its alt text.
 - A relative link in a file page or the README to a published document links its page, a section as `#md-<slug>`; any other relative link opens its file route in the app. A new or removed document writes every file page again, and the README links the documents of the same push.
 - A pull request page carries a Files changed section: each changed file with its status letter, path and line counts, then the unified hunks up to a cap. Past the cap, a notice links the app for the rest. A generated file, such as a lockfile or a file under `vendor/`, shows closed with a `generated` label on the page and in the app; a click opens it, and the page leaves its hunks to the app. A range that does not resolve in the object database of the pusher shows a one-line notice in its place.
-- The pages of retracted items and very short file pages carry `noindex,follow`.
+- The pages of retracted items, very short file pages and list pages with no entry carry `noindex,follow`.
 - Every `<title>` is unique, and every description is prose with the markdown stripped.
 
 What a page leaves to the app:
