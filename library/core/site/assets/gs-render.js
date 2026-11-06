@@ -2918,6 +2918,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     const pr = (item.header.type || "") === "feedback" ? items.find((i) => hashEq(i.commit.short, anyRefHash(item.header["pull-request"]))) : null;
     const nodes = detailView(item, { tab, branch, pr: pr ? pr.header : null }, skip, ctx);
     const root = nodes[0];
+    root.__subject = headSubject(item.header, cv.ext, itemSubject(item));
     for (const e of embeddedRefs(item.commit, item.header)) root.append(embeddedBlock(e));
     if (cv.ext === "release") {
       const sec = releaseAssetsSection(item.header);
@@ -3994,6 +3995,17 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     commits: "No commits in this repository.",
   };
 
+  // PAGE_LIST_TABS are the list routes that have a generated page.
+  const PAGE_LIST_TABS = { issues: 1, prs: 1, timeline: 1, releases: 1, memos: 1 };
+
+  // routeTitle titles a route the way its generated page does: "<subject> · <site>" for an item, "<heading> · <site>" for a list with a page, else the site title.
+  function routeTitle(r, site, subject) {
+    if (r.type === "commit" && subject) return subject + " · " + site;
+    if (r.type === "index" && PAGE_LIST_TABS[r.tab]) return LIST_HEADINGS[r.tab] + " · " + site;
+    if (r.type === "commits") return LIST_HEADINGS.commits + (r.page ? " · page " + r.page : "") + " · " + site;
+    return site;
+  }
+
   // listHeading renders a list route's h1.
   function listHeading(tab) {
     return el("h1", {}, [LIST_HEADINGS[tab]]);
@@ -4688,6 +4700,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, relativeHref, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, routeTitle, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, relativeHref, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

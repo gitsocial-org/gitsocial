@@ -398,7 +398,8 @@
     preloadScript(shellURL(base, "gs-app.js"));
     await shellLoad;
     // Resolve the entry now: entryFor asks gs-core's parseRoute, which exists only once the batch above has run.
-    var route = entryFor().route;
+    var entry = entryFor();
+    var route = entry.route;
     var appCSS = await cssLoad;
     var coreCSS = coreLoad ? await coreLoad : null;
     // Capture what the reveal suspends: the static page's own styles and body. The inlined data-gs-core base stays live across the swap.
@@ -456,6 +457,8 @@
     if (cloaked) revealChrome();
     // The handshake gs-app.js honors once its first route has settled, a view's deferred section included.
     window.__gsOnFirstView = revealApp;
+    // gs-app.js keeps the served <title> on the page's own entry and titles every other route.
+    window.__gsPageEntry = { ownPage: entry.ownPage };
     // Seed the route: location.hash is the only channel gs-app's init reads.
     if (route && ("#" + route) !== window.location.hash) {
       try { history.replaceState(null, "", "#" + route); } catch (e) { window.location.hash = route; }

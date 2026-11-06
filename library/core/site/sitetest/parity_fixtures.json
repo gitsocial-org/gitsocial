@@ -643,6 +643,19 @@
     "graph": "Commit graph",
     "board": "Board"
   },
+  "routeTitles": [
+    { "name": "an issue", "route": "commit:aaaaaaaaaaaa@gitmsg/pm", "ext": "pm", "header": { "type": "issue" }, "firstLine": "Fix the walk", "site": "Demo", "expect": "Fix the walk · Demo" },
+    { "name": "a tagged release", "route": "commit:bbbbbbbbbbbb@gitmsg/release", "ext": "release", "header": { "type": "release", "tag": "v1.2.0" }, "firstLine": "Ship it", "site": "Demo", "expect": "v1.2.0 · Demo" },
+    { "name": "the issues list", "route": "/issues", "site": "Demo", "expect": "Issues · Demo" },
+    { "name": "the pull requests list", "route": "/prs", "site": "Demo", "expect": "Pull Requests · Demo" },
+    { "name": "the timeline", "route": "/timeline", "site": "Demo", "expect": "Timeline · Demo" },
+    { "name": "the releases list", "route": "/releases", "site": "Demo", "expect": "Releases · Demo" },
+    { "name": "the memos list", "route": "/memos", "site": "Demo", "expect": "Memos · Demo" },
+    { "name": "the commits head", "route": "/commits", "site": "Demo", "expect": "Commits · Demo" },
+    { "name": "a sealed commits page", "route": "/commits/3", "site": "Demo", "expect": "Commits · page 3 · Demo" },
+    { "name": "the front page", "route": "/", "site": "Demo", "expect": "Demo" },
+    { "name": "a route with no page", "route": "/board", "site": "Demo", "expect": "Demo" }
+  ],
   "tagOrder": [
     { "name": "hash suffixes tie and sort by date", "tags": [{ "name": "v3.1.0.7a1b2c3", "time": 100 }, { "name": "v3.1.0.41f0e9d", "time": 200 }, { "name": "v3.0.9.aa11bb2", "time": 50 }], "expect": ["v3.1.0.41f0e9d", "v3.1.0.7a1b2c3", "v3.0.9.aa11bb2"] },
     { "name": "a plain version joins its hash-suffixed group", "tags": [{ "name": "v2.0", "time": 10 }, { "name": "v2.0.abcdef1", "time": 20 }], "expect": ["v2.0.abcdef1", "v2.0"] },

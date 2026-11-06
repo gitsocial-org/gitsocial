@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -416,9 +417,21 @@ type parityFixtures struct {
 	Admonitions    []parityAdmonitionCase    `json:"admonitions"`
 	ListEmpty      map[string]string         `json:"listEmpty"`
 	ListHeadings   map[string]string         `json:"listHeadings"`
+	RouteTitles    []parityRouteTitleCase    `json:"routeTitles"`
 	TagOrder       []parityTagOrderCase      `json:"tagOrder"`
 	TreeIcons      []parityTreeIconCase      `json:"treeIcons"`
 	MarkdownLinks  parityMarkdownLinks       `json:"markdownLinks"`
+}
+
+// parityRouteTitleCase is one route, the site title and the subject of its item, and the <title> its page and the app give it.
+type parityRouteTitleCase struct {
+	Name      string            `json:"name"`
+	Route     string            `json:"route"`
+	Ext       string            `json:"ext"`
+	Header    map[string]string `json:"header"`
+	FirstLine string            `json:"firstLine"`
+	Site      string            `json:"site"`
+	Expect    string            `json:"expect"`
 }
 
 // parityMarkdownLinks is one document, its site, the published pages and the href each raw link takes.
@@ -485,6 +498,38 @@ func TestParityListHeadings(t *testing.T) {
 		if want, ok := f.ListHeadings[tab]; !ok || want != list.NavLabel {
 			t.Errorf("%s: heading %q, fixture %q", tab, list.NavLabel, want)
 		}
+	}
+}
+
+// TestParityRouteTitles pins the <title> of each page kind to the fixture the app's routeTitle is checked against (unit_parity.js); a route with no page takes the site title.
+func TestParityRouteTitles(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.RouteTitles) == 0 {
+		t.Fatal("no route title cases in parity fixtures")
+	}
+	for _, c := range f.RouteTitles {
+		t.Run(c.Name, func(t *testing.T) {
+			site := sitePageSite{Title: c.Site, URL: "https://example.com/"}
+			got := site.Title
+			if c.Ext != "" {
+				short := strings.TrimSuffix(strings.TrimPrefix(c.Route, "commit:"), "@gitmsg/"+c.Ext)
+				msg := &sitePageMsg{Ext: c.Ext, SHA: short + strings.Repeat("0", 28), Short: short, Message: c.FirstLine, Header: &protocol.Header{Ext: c.Ext, Fields: c.Header}}
+				it := &sitePageItem{Msg: msg, Resolved: msg}
+				roots := map[string][]*sitePageItem{c.Ext: {it}}
+				list := sitePageLists[slices.IndexFunc(sitePageLists, func(l sitePageList) bool { return l.Ext == c.Ext })]
+				got = buildSiteItemPage(it, list, site, siteItemPageTitles(roots, nil), siteRefTypes(roots), nil, nil).Chrome.Title
+			} else if i := slices.IndexFunc(sitePageLists, func(l sitePageList) bool { return l.Route == c.Route }); i >= 0 {
+				got = buildSiteListHeadPage(sitePageLists[i], site, nil, 0, 0, nil, nil, nil).Chrome.Title
+			} else if c.Route == siteCommitsRoute {
+				got = buildSiteCommitsHeadPage(site, nil, "main", 0, 0).Chrome.Title
+			} else if n, ok := strings.CutPrefix(c.Route, siteCommitsRoute+"/"); ok {
+				page, _ := strconv.Atoi(n)
+				got = buildSiteCommitsSealedPage(site, nil, "main", page, page).Chrome.Title
+			}
+			if got != c.Expect {
+				t.Errorf("title = %q, want %q", got, c.Expect)
+			}
+		})
 	}
 }
 

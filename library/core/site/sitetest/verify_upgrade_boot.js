@@ -297,7 +297,7 @@ function mkPage(opts) {
     set hash(h) { apply(h.charAt(0) === "#" ? h : "#" + h); },
   };
   const doc = {
-    head: head, body: body, documentElement: documentElement,
+    head: head, body: body, documentElement: documentElement, title: opts.title || "",
     createElement: (t) => mk(t),
     createTextNode: (v) => shimDoc.createTextNode(v),
     getElementById: (id) => (id === "gs-page" ? mount : shimDoc.getElementById(id)),
@@ -324,6 +324,7 @@ function mkPage(opts) {
   }
   return {
     win: win, visible: visible, sample: sample, samples: samples, events: events,
+    title: () => doc.title, entry: () => win.__gsPageEntry,
     booting: booting, viewLoading: viewLoading, chromeUp: chromeUp,
     // fillView models gs-app rendering its first view into the slot. It runs
     // BEFORE the handshake, as the app does, so the suite can assert that a
@@ -773,6 +774,36 @@ async function main() {
     !!fileAnchorTrip && fileAnchorTrip.reflected === base + "f/docs/A.html#md-lists" && fileAnchorTrip.entry.route === "file:docs/A.md@main:lists" && UP.routeAnchor("file:docs/A.md@main:lists") === "#md-lists" && anchored,
     JSON.stringify(fileAnchorTrip) + " heading=" + anchored);
 
+  console.log("\n--- A page entry keeps the served title, and a navigation titles its route ---");
+  {
+    const SERVED = "SERVED TITLE";
+    const savedTitle = global.document.title;
+    const tctx = GS.newContext(base);
+    const cfg = await GS.loadSiteCustomization(tctx);
+    const siteName = (cfg && typeof cfg.title === "string" && cfg.title.trim()) || GS.repoTitle(base);
+    global.window.__gsPageEntry = { ownPage: true };
+    global.document.title = SERVED;
+    await GS.applySiteCustomization(tctx, GS.repoTitle(base));
+    ok("the site name does not replace the served title on a page entry", global.document.title === SERVED, "title=" + global.document.title);
+    setHash("#commit:" + short + "@gitmsg/pm");
+    await GS.route(tctx, "#commit:" + short + "@gitmsg/pm", { ownPage: true });
+    ok("the page's own entry route keeps the served title", global.document.title === SERVED, "title=" + global.document.title);
+    setHash("#/issues");
+    await GS.route(tctx);
+    ok("a navigation to a list titles it as its page", global.document.title === "Issues · " + siteName, "title=" + global.document.title);
+    setHash("#commit:" + short + "@gitmsg/pm");
+    await GS.route(tctx);
+    ok("a navigation to an item titles it as its page", global.document.title === GS.headSubject(issue.header, "pm", GS.itemSubject(issue)) + " · " + siteName, "title=" + global.document.title);
+    setHash("#/board");
+    await GS.route(tctx);
+    ok("a navigation to a route with no page takes the site name", global.document.title === siteName, "title=" + global.document.title);
+    delete global.window.__gsPageEntry;
+    global.document.title = SERVED;
+    await GS.applySiteCustomization(tctx, GS.repoTitle(base));
+    ok("the plain shell titles the tab with the site name", global.document.title === siteName, "title=" + global.document.title);
+    global.document.title = savedTitle;
+  }
+
   console.log("\n--- Front page ↔ booted home view agree (no first-load swap) ---");
   // index.html is dual-owned: the static front page paints first and the app's
   // home render replaces that body in place. The two must therefore SHOW THE
@@ -960,9 +991,10 @@ async function main() {
     // the same content in different typography and (on the front page) with the
     // README actually rendered. The visitor gets one loading state and then the
     // finished app, once.
-    const page = mkPage({ url: base + "index.html", metaRoute: "/", dataBase: "./", content: HOST });
+    const page = mkPage({ url: base + "index.html", metaRoute: "/", dataBase: "./", content: HOST, title: "SERVED TITLE" });
     const r = await runBoot(page);
     ok("matching route: the boot completed", !r.err, "err=" + (r.err && r.err.message));
+    ok("matching route: the boot keeps the served title and tells the app the entry is the page's own", page.title() === "SERVED TITLE" && page.entry() && page.entry().ownPage === true, "title=" + page.title() + " entry=" + JSON.stringify(page.entry()));
     // The shell batch is fetched onto the page's own loading line: nothing can be
     // styled until pages-full.css lands, so the chrome cannot precede it and every
     // asset up to and including it settles onto a blank page.
@@ -1044,6 +1076,7 @@ async function main() {
     const page = mkPage({ url: base + "index.html", metaRoute: "/", hash: COMMIT_LINK, dataBase: "./", content: HOST });
     const r = await runBoot(page);
     ok("mismatched route: the boot completed", !r.err, "err=" + (r.err && r.err.message));
+    ok("mismatched route: the app is told the entry is not the page's own, so it titles the route", page.entry() && page.entry().ownPage === false, "entry=" + JSON.stringify(page.entry()));
     ok("mismatched route: the host page's content is never shown", !page.states().includes(HOST) && r.beforeSignal === CHROME_LOADING, JSON.stringify(page.states()));
     ok("mismatched route: the app stylesheet is live from the chrome reveal on", page.appCSS() && page.appCSS().media === "all" && !page.styledByPage());
     ok("mismatched route: the same chrome-then-content sequence as a matching entry", JSON.stringify(page.states()) === JSON.stringify([LOADING, CHROME_LOADING, CHROME_VIEW]) && r.after !== r.beforeSignal, JSON.stringify(page.states()));

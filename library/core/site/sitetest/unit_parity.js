@@ -318,6 +318,12 @@ const headings = Object.entries(GS.LIST_HEADINGS).sort().map((e) => e.join("="))
 const fixtureHeadings = Object.entries(FIX.listHeadings).sort().map((e) => e.join("=")).join(",");
 eq(headings, fixtureHeadings, "LIST_HEADINGS matches the page layer's nav labels");
 
+console.log("=== parity invariant: the tab title of a route ===");
+for (const c of FIX.routeTitles) {
+  const subject = c.ext ? GS.headSubject(c.header, c.ext, c.firstLine) : "";
+  eq(GS.routeTitle(GS.parseRoute("#" + c.route), c.site, subject), c.expect, c.name + ": route title");
+}
+
 console.log("=== parity invariant: the row text of a body-only item ===");
 for (const c of FIX.rowText) {
   eq(GS.subjectBody(GS.cleanContent(c.message))[0], c.expect, c.name + ": row text");

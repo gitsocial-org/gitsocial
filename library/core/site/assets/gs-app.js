@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, hydrateItems, loadForkPulls, loadInteractionCounts, loadFilePages, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, loadAvatarManifest, setAvatarKeys, setGrammarBase, setRefContext, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, hydrateItems, loadForkPulls, loadInteractionCounts, loadFilePages, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, routeTitle, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, loadAvatarManifest, setAvatarKeys, setGrammarBase, setRefContext, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -73,7 +73,8 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     if (t && t.scrollIntoView) t.scrollIntoView();
   }
 
-  async function route(ctx, entryHash) {
+  // route renders the hash route into #view; entry is the page entry gs-upgrade.js describes, given only to the first route.
+  async function route(ctx, entryHash, entry) {
     // Claim the current route generation. Every paint below goes through the
     // guarded `setView`, which drops writes once a newer route() has started —
     // so a slow earlier route (its async view resolving late) cannot overwrite a
@@ -113,6 +114,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     else if (r.type === "config") activeTab = "config";
     highlightNav(activeTab);
     revokeObjectUrls();
+    let subject = "";
     setView([el("div", { class: "loading" }, [spinner()])]);
     // Boot watchdog: a route whose async work never settles would otherwise sit on
     // the spinner with no console error. If the view is still the loading placeholder
@@ -226,7 +228,9 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
         // A branchless route resolves by hash through the item indexes and the fork area first, so an item opens as an item and a code commit as its page.
         const found = r.branch ? null : (await findRefItem(ctx, "#commit:" + r.hash, "")) || (await findForkPull(ctx, r.hash) ? { branch: "gitmsg/review" } : null);
         const branch = found ? found.branch : r.branch;
-        setView(COMMIT_VIEW[branch] ? await itemDetail(ctx, r.hash, branch, setView, (tab) => { if (myGen === routeGen) highlightNav(tab); }) : await commitDetail(ctx, r.hash, r.branch));
+        const view = COMMIT_VIEW[branch] ? await itemDetail(ctx, r.hash, branch, setView, (tab) => { if (myGen === routeGen) highlightNav(tab); }) : await commitDetail(ctx, r.hash, r.branch);
+        subject = (view[0] && view[0].__subject) || "";
+        setView(view);
       } else if (r.type === "home") {
         setView(await homeView(ctx));
         if (r.anchor) scrollToAnchor(r.anchor, 10);
@@ -284,6 +288,8 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
       // watchdog so it can never fire over a page that already painted, and let
       // a page-entry boot reveal the app it has been holding behind the static page.
       routeSettled();
+      // The first route of a page's own entry keeps the served <title>.
+      if (myGen === routeGen && !(entry && entry.ownPage)) titleRoute(r, subject);
       signalFirstView(ctx);
     }
     // Record this hash as the "came from" for the NEXT navigation's back link.
@@ -352,14 +358,32 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   // (gs-core.js); an invalid value is ignored so a bad config never breaks the page.
   const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
-  // setDocTitle applies a title to the tab and header, textContent only.
+  // siteName is the site title the header shows and each route title ends with.
+  let siteName = "";
+
+  // titled is the route and subject the tab title names on a page entry, so a later site name titles it again.
+  let titled = null;
+
+  // pageEntry returns the entry gs-upgrade.js describes on a generated page, null in the plain shell.
+  function pageEntry() { return (typeof window !== "undefined" && window.__gsPageEntry) || null; }
+
+  // setDocTitle applies the site name to the header, textContent only; the plain shell titles the tab with it, a page entry by its route.
   function setDocTitle(name) {
     if (typeof document === "undefined" || !name) return;
-    document.title = name;
+    siteName = name;
+    if (!pageEntry()) document.title = name;
+    else if (titled) document.title = routeTitle(titled.r, name, titled.subject);
     const title = document.getElementById("repo-title");
     if (title) title.textContent = name;
     const mobileTitle = document.getElementById("mobile-title");
     if (mobileTitle) mobileTitle.textContent = name;
+  }
+
+  // titleRoute titles the tab of a page entry after a route, in the form its generated page has.
+  function titleRoute(r, subject) {
+    if (typeof document === "undefined" || !pageEntry()) return;
+    titled = { r, subject };
+    if (siteName) document.title = routeTitle(r, siteName, subject);
   }
 
   // applyAccent overrides the --link accent token. The theme toggle sets a
@@ -463,9 +487,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     // layer where the site is served from before any code block is highlighted.
     setGrammarBase(ctx.base + (window.GS_SHELL || ""));
     const name = repoTitle(ctx.base);
-    // The document/tab title names the browsed project, not the static "gitsocial"
-    // shell placeholder — derived from the same served-directory name as the chrome.
-    // A pushed site customization overrides these defaults.
+    // The header names the browsed project by its served directory; a pushed site customization overrides it.
     setDocTitle(name);
     const applying = applySiteCustomization(ctx, name);
     // The store opens beside the customization read, so the first route's object reads find it open.
@@ -480,7 +502,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     window.addEventListener("hashchange", run);
     if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("keydown", onGlobalKey);
     // The first route waits for the customization; a route that started meanwhile already painted the hash.
-    Promise.race([applying, new Promise((resolve) => setTimeout(resolve, CUSTOMIZATION_WAIT_MS))]).then(() => { if (routeGen === 0) route(ctx, entryHash); });
+    Promise.race([applying, new Promise((resolve) => setTimeout(resolve, CUSTOMIZATION_WAIT_MS))]).then(() => { if (routeGen === 0) route(ctx, entryHash, pageEntry()); });
   }
 
   Object.assign(NS, { route, init, applySiteCustomization, applyAccent, applyFavicon });
