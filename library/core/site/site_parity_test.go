@@ -582,8 +582,8 @@ func TestParityMetaRow(t *testing.T) {
 	if got := strings.Join(parityBitClasses(reply.Meta, len(f.MetaRow.Bits)), ","); got != want {
 		t.Errorf("reply meta bits = %q, want %q", got, want)
 	}
-	if reply.Meta[2].Href != "../index.html"+f.MetaRow.CommentHashRoute {
-		t.Errorf("reply hash href = %q, want the route %q under the shell", reply.Meta[2].Href, f.MetaRow.CommentHashRoute)
+	if reply.Meta[2].Href != "../i/"+msg.Short+".html" {
+		t.Errorf("reply hash href = %q, want the page of its root, which carries the reply", reply.Meta[2].Href)
 	}
 }
 
@@ -1639,7 +1639,7 @@ func TestParityItemPageMeta(t *testing.T) {
 	for _, c := range f.ItemPageMeta {
 		t.Run(c.Name, func(t *testing.T) {
 			msg := &sitePageMsg{Ext: c.Ext, SHA: strings.Repeat("a", 40), Short: strings.Repeat("a", 12), Message: "Subject", Header: &protocol.Header{Ext: c.Ext, Fields: c.Header}}
-			rows := siteItemPageRows(&sitePageItem{Msg: msg, Resolved: msg})
+			rows := siteItemPageRows(&sitePageItem{Msg: msg, Resolved: msg}, nil)
 			var got, want []string
 			for _, r := range rows {
 				got = append(got, parityRowShape(r.Key, r.Bits))

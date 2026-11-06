@@ -1643,6 +1643,62 @@ func pagesTestRoot(ext, digit, message string, fields map[string]string) *sitePa
 	return &sitePageItem{Msg: msg, Resolved: msg}
 }
 
+// TestSitePages_refsLinkPages asserts a ref to a root item links its page from a relation chip, a stacked chip, a header row, a quote's hash and a reply's hash, on an item page and a list row; a code commit, a tag and a label keep the route of the app.
+func TestSitePages_refsLinkPages(t *testing.T) {
+	target := pagesTestRoot("pm", "a", "Target issue", map[string]string{"type": "issue"})
+	ref := "#commit:" + target.Msg.Short + "@gitmsg/pm"
+	code := "#commit:" + strings.Repeat("c", 12) + "@main"
+	linking := pagesTestRoot("pm", "b", "Linking issue", map[string]string{"type": "issue", "blocks": ref, "related": code, "supersedes": ref, "labels": "kind/bug"})
+	quoted := "My take\n\nGitMsg: ext=\"social\"; type=\"quote\"; original=\"" + ref + "\"; v=\"0.1.0\"\nGitMsg-Ref: ext=\"pm\"; type=\"issue\"; author=\"Bob\"; email=\"bob@example.com\"; time=\"2026-01-02T03:04:05Z\"; ref=\"" + ref + "\"; v=\"0.1.0\"\n > Target issue"
+	quote := pagesTestRoot("social", "d", quoted, map[string]string{"type": "quote", "original": ref})
+	release := pagesTestRoot("release", "e", "Ship\n\nnotes", map[string]string{"type": "release", "tag": "v1.0.0"})
+	target.Replies = []*sitePageItem{pagesTestRoot("social", "f", "A reply", map[string]string{"type": "comment", "original": ref})}
+	under := pagesTestRoot("review", "1", "Base change", map[string]string{"type": "pull-request"})
+	stacked := pagesTestRoot("review", "2", "Stacked change", map[string]string{"type": "pull-request", "depends-on": "#commit:" + under.Msg.Short + "@gitmsg/review"})
+	roots := map[string][]*sitePageItem{"pm": {target, linking}, "review": {under, stacked}, "social": {quote}, "release": {release}}
+	titles, types := siteItemPageTitles(roots, nil), siteRefTypes(roots)
+	render := func(it *sitePageItem, list sitePageList) string {
+		page, err := renderSitePage("item", buildSiteItemPage(it, list, sitePageSite{Title: "Refs", URL: "https://example.com/"}, titles, types, nil, nil))
+		if err != nil {
+			t.Fatalf("render item page: %v", err)
+		}
+		return string(page)
+	}
+	pageHref := "../i/" + target.Msg.Short + ".html"
+	linkPage := render(linking, sitePageLists[0])
+	if !regexp.MustCompile(`<a class="[^"]*" href="` + regexp.QuoteMeta(pageHref) + `"[^>]*>[^<]*Target issue</a>`).MatchString(linkPage) {
+		t.Errorf("a relation chip must link the page of its target:\n%s", linkPage)
+	}
+	if !strings.Contains(linkPage, `<dt>supersedes</dt><dd><a href="`+pageHref+`">`+ref+`</a></dd>`) {
+		t.Errorf("a header row must link the page of its target:\n%s", linkPage)
+	}
+	if !strings.Contains(render(quote, sitePageLists[2]), `<a class="hash" href="`+pageHref+`">`+target.Msg.Short+`</a>`) {
+		t.Error("a quote's hash must link the page of the quoted root")
+	}
+	if !strings.Contains(render(target, sitePageLists[0]), `<a class="hash" href="`+pageHref+`">`+strings.Repeat("f", 12)+`</a>`) {
+		t.Error("a reply's hash must link the page of its root, which carries the reply")
+	}
+	rowHrefs := map[string]bool{}
+	for _, chip := range buildSiteListEntry(linking, titles, types, siteEntryCounts{}, nil).Chips {
+		rowHrefs[chip.Href] = true
+	}
+	if !rowHrefs[pageHref] {
+		t.Errorf("a list row's relation chip must link the page of its target: %v", rowHrefs)
+	}
+	if !rowHrefs["../index.html"+code] || !strings.Contains(linkPage, `href="../index.html`+code+`"`) {
+		t.Errorf("a code commit must keep the route of the app:\n%s", linkPage)
+	}
+	if !strings.Contains(linkPage, `href="`+sitePageSearchHref("label", "kind/bug")+`"`) {
+		t.Errorf("a label must keep its search route:\n%s", linkPage)
+	}
+	if stackPage := render(stacked, sitePageLists[1]); !regexp.MustCompile(`<a class="[^"]*" href="\.\./i/` + under.Msg.Short + `\.html"[^>]*>[^<]*stacked</a>`).MatchString(stackPage) {
+		t.Errorf("a stacked chip must link the page of the pull request under it:\n%s", stackPage)
+	}
+	if !strings.Contains(render(release, sitePageLists[3]), `<a href="../index.html#tag:v1.0.0">v1.0.0</a>`) {
+		t.Error("a tag must keep the route of the app")
+	}
+}
+
 // pagesTestRender renders one root's item page; titles names the roots that have a page.
 func pagesTestRender(t *testing.T, it *sitePageItem, list sitePageList, titles map[string]string) string {
 	t.Helper()

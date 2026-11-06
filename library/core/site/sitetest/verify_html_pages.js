@@ -115,7 +115,8 @@ const REPLY_TEXT = "Congrats, this is huge!";
   const AV = /<span class="avatar av-(?:\d|1[01])" title="[^"]+">[^<]+<\/span>/.source;
   const replyRe = new RegExp("^\n" + AV + /<span class="type-glyph tg-comment" title="comment">↩<\/span><p class="meta"><(?:a|span) class="author"[^\n]*<\/p>\n<div class="body body-clamp">/.source);
   ok("a reply card leads with its avatar and its glyph, then its author line, then its body under the clamp", replies.length > 0 && replies.every((r) => replyRe.test(r)), replies[0] && replies[0].slice(0, 300));
-  ok("a reply's author line reads author, date, hash, the hash opening its route", replies.length > 0 && replies.every((r) => /<p class="meta"><(?:a|span) class="author"[^>]*>[^<]*<\/(?:a|span)> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="\.\.\/index\.html#commit:[0-9a-f]{12}@gitmsg\/social">[0-9a-f]{12}<\/a>/.test(r)), replies[0] && replies[0].slice(0, 400));
+  const threadPage = thread ? (/<link rel="canonical" href="[^"]*\/i\/([0-9a-f]{12})\.html">/.exec(thread) || [])[1] : "";
+  ok("a reply's author line reads author, date, hash, the hash opening the page of its root", !!threadPage && replies.length > 0 && replies.every((r) => new RegExp(/<p class="meta"><(?:a|span) class="author"[^>]*>[^<]*<\/(?:a|span)> · <span class="reltime" title="[^"]+">\d{4}-\d{2}-\d{2}<\/span> · <a class="hash" href="\.\.\/i\//.source + threadPage + /\.html">[0-9a-f]{12}<\/a>/.source).test(r)), replies[0] && replies[0].slice(0, 400));
   // A post is the root of its own page, feed entry and OG card, and its first
   // line names it on every other surface, so it keeps that line as its heading.
   // The body-only rule is for replies and for a repost's absent content.

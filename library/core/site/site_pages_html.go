@@ -615,6 +615,14 @@ func sitePageRefHref(site sitePageSite, titles map[string]string) func(ref strin
 	}
 }
 
+// siteRootPageHref returns the page of the root item a short hash names, "" when it names no root; types holds every root (TestSitePages_refsLinkPages).
+func siteRootPageHref(hash string, types map[string]string) string {
+	if len(hash) != 12 || types[hash] == "" {
+		return ""
+	}
+	return "../i/" + hash + ".html"
+}
+
 // sitePageDescription extracts a meta description: the text, else the subject, stripped of markdown and truncated.
 func sitePageDescription(text, fallback string) string {
 	collapsed := strings.Join(strings.Fields(siteMarkdownPlainText(text)), " ")
@@ -1074,6 +1082,7 @@ func siteRelationChips(word, icon, val string, capped bool, subjects, types map[
 			}
 			if repo == "" {
 				typ = types[hash]
+				chip.Href = cmp.Or(siteRootPageHref(hash, types), chip.Href)
 			}
 		}
 		chip.Icon = cmp.Or(icon, siteRefGlyph(r.Text, typ))
@@ -1132,7 +1141,7 @@ func siteItemChips(it *sitePageItem, subjects, types map[string]string, more str
 	if deps := h["depends-on"]; deps != "" {
 		chip := sitePageChip{Kind: "reference", Icon: sitePageTypeGlyph["pull-request"], Label: "stacked"}
 		if under := sitePageAnyRefHash(strings.Split(deps, ",")[0]); under != "" {
-			chip.Href = "../index.html#commit:" + under + "@gitmsg/review"
+			chip.Href = cmp.Or(siteRootPageHref(under, types), "../index.html#commit:"+under+"@gitmsg/review")
 		}
 		chips = append(chips, chip)
 	}
@@ -1248,13 +1257,16 @@ func sitePageItemHeader(it *sitePageItem) map[string]string {
 	return fields
 }
 
-// sitePageRefLink links one header ref: a ref of this repository to its route, a browsable cross-repository ref to its URL as written; any other value stays text. Mirrors refLink in gs-render.js.
-func sitePageRefLink(ref string) sitePageBit {
+// sitePageRefLink links one header ref: a ref to a root item in types to its page, any other ref of this repository to its route, a browsable cross-repository ref to its URL as written; any other value stays text. Mirrors refLink in gs-render.js.
+func sitePageRefLink(ref string, types map[string]string) sitePageBit {
 	if !sitePageHeaderRefRe.MatchString(ref) {
 		return sitePageTextBit(ref)
 	}
 	repo, _, _ := strings.Cut(ref, "#")
 	if repo == "" {
+		if href := siteRootPageHref(pageLocalCommitHash(ref), types); href != "" && strings.HasPrefix(ref, "#commit:") {
+			return sitePageBit{Text: ref, Href: href}
+		}
 		return sitePageBit{Text: ref, Href: "../index.html" + ref}
 	}
 	if strings.HasPrefix(repo, "https://") {
@@ -1274,14 +1286,14 @@ func sitePageListBits(val string, link func(string) sitePageBit) []sitePageBit {
 	return bits
 }
 
-// sitePageRefListBits links each ref of a comma-separated list; a value that is not refs alone stays as written. Mirrors refListValue in gs-render.js.
-func sitePageRefListBits(val string) []sitePageBit {
+// sitePageRefListBits links each ref of a comma-separated list, a root in types to its page; a value that is not refs alone stays as written. Mirrors refListValue in gs-render.js.
+func sitePageRefListBits(val string, types map[string]string) []sitePageBit {
 	for _, part := range strings.Split(val, ",") {
 		if !sitePageHeaderRefRe.MatchString(strings.TrimSpace(part)) {
 			return []sitePageBit{sitePageTextBit(val)}
 		}
 	}
-	return sitePageListBits(val, sitePageRefLink)
+	return sitePageListBits(val, func(ref string) sitePageBit { return sitePageRefLink(ref, types) })
 }
 
 // sitePageTipBranch names the branch of this repository a tip field points into: the head for head-tip, the base for the other tips; "" for a fork branch or a feedback's commit. Mirrors tipBranch in gs-render.js.
@@ -1300,8 +1312,8 @@ func sitePageTipBranch(key string, h map[string]string) string {
 	return p.Value
 }
 
-// sitePageTrailerBits renders one trailer value: a tip to its commit on its branch, an email or label to its search facet, each ref of a list to its route. Mirrors trailerValue in gs-render.js.
-func sitePageTrailerBits(key, val string, h map[string]string) []sitePageBit {
+// sitePageTrailerBits renders one trailer value: a tip to its commit on its branch, an email or label to its search facet, each ref of a list to its page or route. Mirrors trailerValue in gs-render.js.
+func sitePageTrailerBits(key, val string, h, types map[string]string) []sitePageBit {
 	if sitePageTipKeys[key] {
 		if sitePageTipRe.MatchString(val) {
 			return []sitePageBit{{Text: val, Href: "../index.html#commit:" + val + "@" + sitePageTipBranch(key, h)}}
@@ -1311,18 +1323,18 @@ func sitePageTrailerBits(key, val string, h map[string]string) []sitePageBit {
 	if facet := sitePageFacetKeys[key]; facet != "" {
 		return sitePageListBits(val, func(v string) sitePageBit { return sitePageBit{Text: v, Href: sitePageSearchHref(facet, v)} })
 	}
-	return sitePageRefListBits(val)
+	return sitePageRefListBits(val, types)
 }
 
-// siteItemPageRows lists an item page's definition rows in key order: each header field no other part of the page carries. Mirrors trailerRows in gs-render.js, pinned by TestParityItemPageMeta.
-func siteItemPageRows(it *sitePageItem) []sitePageRow {
+// siteItemPageRows lists an item page's definition rows in key order: each header field no other part of the page carries, a ref to a root in types linking its page. Mirrors trailerRows in gs-render.js, pinned by TestParityItemPageMeta.
+func siteItemPageRows(it *sitePageItem, types map[string]string) []sitePageRow {
 	h := sitePageItemHeader(it)
 	values := map[string][]sitePageBit{}
 	for key, val := range h {
 		if sitePageTrailerSkip[key] || (it.Msg.Ext == "release" && sitePageReleaseSkip[key]) {
 			continue
 		}
-		values[key] = sitePageTrailerBits(key, val, h)
+		values[key] = sitePageTrailerBits(key, val, h, types)
 	}
 	rows := make([]sitePageRow, 0, len(values))
 	for _, key := range slices.Sorted(maps.Keys(values)) {
@@ -1383,7 +1395,7 @@ func sitePageFeedbackFileRef(r, pr *sitePageItem) string {
 	return "../index.html" + ref
 }
 
-// buildSiteReply renders one thread reply as a comment or feedback card, or a tombstone line when it was retracted; root is the item the reply is under, and link resolves the refs of its body.
+// buildSiteReply renders one thread reply as a comment or feedback card, or a tombstone line when it was retracted; root is the item the reply is under, whose page its hash links, and link resolves the refs of its body.
 func buildSiteReply(r, root *sitePageItem, link func(ref string) string, avatars map[string]string) sitePageReply {
 	if r.Retracted {
 		return sitePageReply{Variant: "comment", Depth: r.Depth, Tomb: "a reply from " + sitePageDate(pageEffectiveTime(r.Msg)) + " was retracted by its author"}
@@ -1402,7 +1414,11 @@ func buildSiteReply(r, root *sitePageItem, link func(ref string) string, avatars
 	}
 	// A comment's author line carries its hash, as metaRow in gs-render.js does; a feedback card's does not.
 	if t != "feedback" {
-		s.Meta = append(s.Meta, sitePageHashBit(r.Msg.Short, "../index.html#commit:"+r.Msg.Short+"@gitmsg/"+r.Msg.Ext))
+		href := "../index.html#commit:" + r.Msg.Short + "@gitmsg/" + r.Msg.Ext
+		if root != nil {
+			href = "../i/" + root.Msg.Short + ".html"
+		}
+		s.Meta = append(s.Meta, sitePageHashBit(r.Msg.Short, href))
 	}
 	if r.Edited {
 		s.Meta = append(s.Meta, sitePageEditedBit(r))
@@ -1437,8 +1453,8 @@ func siteQuotedText(metadata string) string {
 	return strings.Join(lines, "\n")
 }
 
-// buildSiteQuote builds the quote box of a reply, a quote or a repost from the GitMsg-Ref its message carries for what it answers, reply-to before original; nil when the message quotes nothing. Mirrors replyQuoteBlock in gs-render.js.
-func buildSiteQuote(it *sitePageItem, link func(ref string) string, avatars map[string]string) *sitePageReply {
+// buildSiteQuote builds the quote box of a reply, a quote or a repost from the GitMsg-Ref its message carries for what it answers, reply-to before original, its hash linking the page of a root in types; nil when the message quotes nothing. Mirrors replyQuoteBlock in gs-render.js.
+func buildSiteQuote(it *sitePageItem, link func(ref string) string, types, avatars map[string]string) *sitePageReply {
 	t := pageItemType(it)
 	if t != "comment" && t != "quote" && t != "repost" {
 		return nil
@@ -1468,7 +1484,7 @@ func buildSiteQuote(it *sitePageItem, link func(ref string) string, avatars map[
 			}
 			if hash := pageLocalCommitHash(ref.Ref); hash != "" {
 				_, branch, _ := strings.Cut(ref.Ref, "@")
-				q.Meta = append(q.Meta, sitePageHashBit(hash, "../index.html#commit:"+hash+"@"+branch))
+				q.Meta = append(q.Meta, sitePageHashBit(hash, cmp.Or(siteRootPageHref(hash, types), "../index.html#commit:"+hash+"@"+branch)))
 			}
 			return q
 		}
@@ -1655,7 +1671,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 	} else {
 		d.Body = sitePageBodyBlocks(body, pageItemType(it) == "release", link)
 		siteLinkNoteRows(d.Body, site)
-		d.Rows = siteItemPageRows(it)
+		d.Rows = siteItemPageRows(it, types)
 	}
 	pills, identity := sitePageHeadChips(it, d.Heading)
 	d.MetaChips = pills
@@ -1683,7 +1699,7 @@ func buildSiteItemPage(it *sitePageItem, list sitePageList, site sitePageSite, t
 		d.Assets = buildSiteReleaseAssets(it)
 	}
 	if !it.Retracted {
-		d.Quote = buildSiteQuote(it, link, site.Avatars)
+		d.Quote = buildSiteQuote(it, link, types, site.Avatars)
 	}
 	d.Diff = buildSitePRDiff(it, site, src, refs)
 	threadBytes := 0
