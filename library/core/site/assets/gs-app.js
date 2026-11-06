@@ -115,14 +115,16 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     highlightNav(activeTab);
     revokeObjectUrls();
     let subject = "";
-    setView([el("div", { class: "loading" }, [spinner()])]);
+    // An adopted served page stays as the view until the route's data replaces it.
+    const adopted = !!(entry && entry.adopted);
+    if (!adopted) setView([el("div", { class: "loading" }, [spinner()])]);
     // Boot watchdog: a route whose async work never settles would otherwise sit on
     // the spinner with no console error. If the view is still the loading placeholder
     // after WATCHDOG_MS, surface a visible error and log it. `settled` is flipped by
     // every real setView below (routeSettled), so a slow load that painted is spared.
     let settled = false;
     const watchdog = (typeof setTimeout === "function") ? setTimeout(() => {
-      if (settled) return;
+      if (settled || adopted) return;
       try { if (typeof console !== "undefined" && console.error) console.error("gitsocial: route " + location.hash + " did not render within " + (WATCHDOG_MS / 1000) + "s (possible stalled load)"); } catch (e) { /* no console */ }
       setView([el("div", { class: "err" }, [
         "This view has stalled. Reload the page.",
@@ -228,7 +230,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
         // A branchless route resolves by hash through the item indexes and the fork area first, so an item opens as an item and a code commit as its page.
         const found = r.branch ? null : (await findRefItem(ctx, "#commit:" + r.hash, "")) || (await findForkPull(ctx, r.hash) ? { branch: "gitmsg/review" } : null);
         const branch = found ? found.branch : r.branch;
-        const view = COMMIT_VIEW[branch] ? await itemDetail(ctx, r.hash, branch, setView, (tab) => { if (myGen === routeGen) highlightNav(tab); }) : await commitDetail(ctx, r.hash, r.branch);
+        const view = COMMIT_VIEW[branch] ? await itemDetail(ctx, r.hash, branch, adopted ? () => {} : setView, (tab) => { if (myGen === routeGen) highlightNav(tab); }) : await commitDetail(ctx, r.hash, r.branch);
         subject = (view[0] && view[0].__subject) || "";
         setView(view);
       } else if (r.type === "home") {

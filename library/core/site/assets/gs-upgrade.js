@@ -141,6 +141,33 @@
     return nodes;
   }
 
+  // ADOPT_ROUTE matches the routes whose served page is the first view: an item page and a type list page.
+  var ADOPT_ROUTE = /^(?:commit:[0-9a-f]{7,40}@gitmsg\/(?:pm|review|social|release|memo)|\/issues|\/prs|\/timeline|\/releases|\/memos)$/;
+
+  // adoptServed moves the served content, all of #gs-page but its sidebar, into the staged #view; null when the entry is not the page's own or the page has no such content.
+  function adoptServed(entry, chromeNodes) {
+    if (!entry.ownPage || entry.route !== metaRoute() || !ADOPT_ROUTE.test(entry.route)) return null;
+    var mount = document.getElementById("gs-page");
+    var view = null;
+    for (var i = 0; i < chromeNodes.length && !view; i++) view = chromeNodes[i].querySelector('[id="view"]');
+    if (!mount || !view) return null;
+    var nodes = [], content = false;
+    var kids = [].slice.call(mount.childNodes);
+    for (var k = 0; k < kids.length; k++) {
+      var n = kids[k];
+      if (n.nodeType === 1 && /^aside$/i.test(n.tagName) && /(^|\s)page-nav(\s|$)/.test(n.getAttribute("class") || "")) continue;
+      if (n.nodeType === 1 || /\S/.test(n.nodeValue || "")) content = true;
+      nodes.push(n);
+    }
+    if (!content) return null;
+    while (view.firstChild) view.removeChild(view.firstChild);
+    // An item takes the .detail wrapper of the app's item view, so the app's detail rules style it; a restore moves the nodes out of it.
+    var slot = view;
+    if (entry.route.indexOf("commit:") === 0) { slot = document.createElement("div"); slot.className = "detail"; view.appendChild(slot); }
+    for (var m = 0; m < nodes.length; m++) slot.appendChild(nodes[m]);
+    return { mount: mount, nodes: nodes };
+  }
+
   // BOOT_MAX_MS bounds the shell-asset phase, from the first request to gs-app.js having executed; expiring restores the served page.
   var BOOT_MAX_MS = 10000;
 
@@ -416,6 +443,7 @@
     wireChrome();
     var cloaked = false;
     try { cloaked = document.documentElement.classList.contains(BOOT_CLASS); } catch (e) { /* shimmed DOM */ }
+    var adopted = cloaked ? adoptServed(entry, chromeNodes) : null;
     // revealChrome puts the app's frame up once the stylesheet governs the page, suspending the static layer reversibly.
     function revealChrome() {
       if (undoChrome) return;
@@ -434,6 +462,7 @@
         if (coreCSS) coreCSS.media = "not all";
         for (var i2 = 0; i2 < staticStyles.length; i2++) staticStyles[i2].node.media = staticStyles[i2].media;
         for (var j2 = 0; j2 < staticBody.length; j2++) staticBody[j2].style.display = "";
+        if (adopted) for (var a = 0; a < adopted.nodes.length; a++) adopted.mount.appendChild(adopted.nodes[a]);
         // Hide, rather than remove, everything the takeover added, so a late gs-app still finds a #view to render into.
         var kids = [].slice.call(document.body.childNodes);
         for (var m = 0; m < kids.length; m++) {
@@ -455,10 +484,12 @@
     }
     // The chrome goes up now, unless the page was left visible: there the two steps collapse and revealApp does both.
     if (cloaked) revealChrome();
+    // An adopted page is its own first view: it shows with the chrome, before any bucket read, and the route's data redraws it.
+    if (adopted) { try { document.documentElement.classList.remove(LOADING_CLASS); } catch (e) { /* shimmed DOM */ } }
     // The handshake gs-app.js honors once its first route has settled, a view's deferred section included.
     window.__gsOnFirstView = revealApp;
-    // gs-app.js keeps the served <title> on the page's own entry and titles every other route.
-    window.__gsPageEntry = { ownPage: entry.ownPage };
+    // gs-app.js keeps the served <title> on the page's own entry, titles every other route, and paints no spinner over an adopted page.
+    window.__gsPageEntry = { ownPage: entry.ownPage, adopted: !!adopted };
     // Seed the route: location.hash is the only channel gs-app's init reads.
     if (route && ("#" + route) !== window.location.hash) {
       try { history.replaceState(null, "", "#" + route); } catch (e) { window.location.hash = route; }

@@ -194,7 +194,9 @@ function mkPage(opts) {
   const mount = mk("div");
   mount.setAttribute("id", "gs-page");
   mount.setAttribute("data-base", opts.dataBase);
-  mount.append(opts.content);
+  // opts.nav models the served sidebar, the one part of #gs-page the adopt step leaves behind.
+  if (opts.nav) { const aside = mk("aside"); aside.setAttribute("class", "page-nav"); aside.append(opts.nav); mount.append(aside); }
+  mount.append(...[].concat(opts.content));
   body.appendChild(mount);
   const meta = mk("meta");
   meta.setAttribute("name", "gs-route");
@@ -260,7 +262,12 @@ function mkPage(opts) {
   // Each sample also records location.hash, which is the only channel gs-app's
   // init reads: the sample taken as gs-app.js is requested is therefore the route
   // the app is about to boot, before syncURL rewrites the URL to a clean page URL.
-  const sample = (tag) => samples.push({ tag: tag, visible: visible(), hash: state.hash });
+  const sample = (tag) => {
+    samples.push({ tag: tag, visible: visible(), hash: state.hash });
+    // adoptedUnderDetail records, as the app is fetched, whether #view holds the served content under a .detail element.
+    const v = viewNode(), d = v && findIn(v, (n) => n._cls.has("detail") || /(^|\s)detail(\s|$)/.test(n.getAttribute("class") || ""));
+    if (tag === "gs-app.js") api.adoptedUnderDetail = !!d && global.__shim.textOf(d).trim() !== "" && global.__shim.textOf(d) === global.__shim.textOf(v);
+  };
   // events is the interleaving of requests and settles, recorded separately
   // because that interleaving IS the difference between loading the shell in
   // parallel and loading it serially. A serial boot reads request/settle/request/
@@ -322,9 +329,9 @@ function mkPage(opts) {
       set: () => { throw new Error("handshake install failed"); },
     });
   }
-  return {
+  const api = {
     win: win, visible: visible, sample: sample, samples: samples, events: events,
-    title: () => doc.title, entry: () => win.__gsPageEntry,
+    title: () => doc.title, entry: () => win.__gsPageEntry, mount: mount, viewText: () => global.__shim.textOf(viewNode()).replace(/\s+/g, " ").trim(),
     booting: booting, viewLoading: viewLoading, chromeUp: chromeUp,
     // fillView models gs-app rendering its first view into the slot. It runs
     // BEFORE the handshake, as the app does, so the suite can assert that a
@@ -347,6 +354,7 @@ function mkPage(opts) {
     },
     restore: () => { global.document = shimDoc; global.window = shimWin; global.history = shimHist; },
   };
+  return api;
 }
 
 // runBoot drives the real boot() over a page and reports how it settled. The
@@ -804,6 +812,24 @@ async function main() {
     global.document.title = savedTitle;
   }
 
+  console.log("\n--- An adopted page stays until the route's data redraws it ---");
+  {
+    const ADOPTED = "ADOPTED SERVED CONTENT";
+    const itemRoute = "#commit:" + short + "@gitmsg/pm";
+    global.__shim.viewNode.replaceChildren(ADOPTED);
+    setHash(itemRoute);
+    const adoptedRoute = GS.route(GS.newContext(base), itemRoute, { ownPage: true, adopted: true });
+    const during = viewText();
+    await adoptedRoute;
+    ok("the entry route paints no spinner over an adopted page", during === ADOPTED, "during=" + during.slice(0, 60));
+    ok("the route's data redraws the adopted view when it lands", !viewText().includes(ADOPTED) && viewText().includes(GS.itemSubject(issue)), "view=" + viewText().slice(0, 80));
+    global.__shim.viewNode.replaceChildren(ADOPTED);
+    const fetched = GS.route(GS.newContext(base), itemRoute, { ownPage: true, adopted: false });
+    const spun = findClass(global.__shim.viewNode, "loading").length;
+    await fetched;
+    ok("an entry that is not adopted paints the spinner as before", spun === 1, "spinners=" + spun);
+  }
+
   console.log("\n--- Front page ↔ booted home view agree (no first-load swap) ---");
   // index.html is dual-owned: the static front page paints first and the app's
   // home render replaces that body in place. The two must therefore SHOW THE
@@ -1096,10 +1122,63 @@ async function main() {
   }
   {
     // A shared link to the page's OWN item resolves to the same route the meta
-    // names, and gets the same sequence.
+    // names, so the served item is adopted as on a plain entry.
     const page = mkPage({ url: base + "i/abcdef012345.html", metaRoute: ITEM_ROUTE, hash: "#" + ITEM_ROUTE, dataBase: "../", content: ITEM });
     const r = await runBoot(page);
-    ok("a deep link to the page's own route gets the same two steps", r.beforeSignal === CHROME_LOADING && page.states().length === 3 && !page.states().includes(ITEM), JSON.stringify(page.states()));
+    ok("a deep link to the page's own route adopts the served item", r.beforeSignal === CHROME + " " + ITEM && JSON.stringify(page.states()) === JSON.stringify([LOADING, CHROME + " " + ITEM, CHROME_VIEW]), JSON.stringify(page.states()));
+  }
+
+  console.log("\n--- The page's own entry adopts the served content ---");
+  {
+    const NAV = "SIDEBAR NAV";
+    const ADOPTED = CHROME + " " + ITEM;
+    let reads = 0;
+    const counted = global.fetch;
+    global.fetch = (url, o) => { reads++; return counted(url, o); };
+    const page = mkPage({ url: base + "i/abcdef012345.html", metaRoute: ITEM_ROUTE, dataBase: "../", content: ITEM, nav: NAV });
+    const r = await runBoot(page);
+    global.fetch = counted;
+    ok("own-page entry: the boot completed and tells the app the page is adopted", !r.err && page.entry() && page.entry().adopted === true, "err=" + (r.err && r.err.message) + " entry=" + JSON.stringify(page.entry()));
+    ok("own-page entry: the served item shows with the chrome, before gs-app.js is fetched", shownAt(page, "gs-app.js").length === 2 && shownAt(page, "gs-app.js").every((v) => v === ADOPTED), JSON.stringify(shownAt(page, "gs-app.js")));
+    ok("own-page entry: the reveal comes with zero bucket reads", reads === 0, "reads=" + reads);
+    ok("own-page entry: the sidebar of the served page stays behind", r.beforeSignal === ADOPTED && !r.beforeSignal.includes(NAV), "visible=" + r.beforeSignal);
+    ok("own-page entry: a redraw after the reveal replaces the adopted nodes", r.beforeReveal === CHROME_VIEW && r.after === CHROME_VIEW, "beforeReveal=" + r.beforeReveal + " after=" + r.after);
+    ok("own-page entry: loading, then the served item, then the app's view", JSON.stringify(page.states()) === JSON.stringify([LOADING, ADOPTED, CHROME_VIEW]), JSON.stringify(page.states()));
+    ok("own-page entry: the adopted item sits under the app's .detail wrapper in #view", page.adoptedUnderDetail, "adoptedUnderDetail=" + page.adoptedUnderDetail);
+  }
+  {
+    // The served item page itself: the adopted view reads what the page served, less its sidebar.
+    const open = '<div id="gs-page" data-base="../">';
+    const inner = itemPage.text.slice(itemPage.text.indexOf(open) + open.length, itemPage.text.lastIndexOf("</div>\n</body>"));
+    const holder = global.__shim.mkEl("div");
+    holder.innerHTML = inner;
+    const page = mkPage({ url: base + "i/" + short + ".html", metaRoute: "commit:" + short + "@gitmsg/pm", dataBase: "../", content: holder.childNodes.slice() });
+    const r = await runBoot(page);
+    // Markup spacing differs between the two readings, so the text compares without whitespace.
+    const bare = (t) => t.replace(/\s+/g, "");
+    const served = pageText(inner.replace(/<aside class="page-nav">[\s\S]*?<\/aside>/, ""));
+    ok("the served item page's text equals the adopted view's text", !r.err && page.entry().adopted === true && bare(served).length > 0 && bare(r.beforeSignal) === bare(CHROME + served), "served=" + served.slice(0, 80) + " visible=" + r.beforeSignal.slice(0, 90));
+  }
+  {
+    const page = mkPage({ url: base + "issues/index.html", metaRoute: "/issues", dataBase: "../", content: "ISSUES LIST STATIC" });
+    const r = await runBoot(page);
+    ok("a type list page adopts its served list", r.beforeSignal === CHROME + " ISSUES LIST STATIC", "visible=" + r.beforeSignal);
+  }
+  {
+    const page = mkPage({ url: base + "f/notes.html", metaRoute: "file:notes.txt@main", dataBase: "../", content: HOST });
+    const r = await runBoot(page);
+    ok("a page whose route the adopt step does not know takes the fetch path", page.entry() && page.entry().adopted === false && JSON.stringify(page.states()) === JSON.stringify([LOADING, CHROME_LOADING, CHROME_VIEW]), JSON.stringify(page.states()));
+  }
+  {
+    const page = mkPage({ url: base + "i/abcdef012345.html", metaRoute: ITEM_ROUTE, dataBase: "../", content: [], nav: "SIDEBAR NAV" });
+    const r = await runBoot(page);
+    ok("a page with nothing but its sidebar takes the fetch path", page.entry() && page.entry().adopted === false && r.beforeSignal === CHROME_LOADING, "visible=" + r.beforeSignal);
+  }
+  {
+    const page = mkPage({ url: base + "i/abcdef012345.html", metaRoute: ITEM_ROUTE, dataBase: "../", content: ITEM, nav: "SIDEBAR NAV", serves: { "gs-app.js": false } });
+    const r = await runBoot(page);
+    const kids = page.mount.childNodes.filter((n) => n && (n.nodeType === 1 || String(n.nodeValue || "").trim()));
+    ok("a failed boot after an adopt puts the served page back whole, sidebar first, with no .detail wrapper", !!r.err && page.visible() === "SIDEBAR NAV" + ITEM && !page.chromeUp() && kids.length === 2 && kids[0].tagName === "ASIDE" && !page.mount.querySelector(".detail"), "visible=" + JSON.stringify(page.visible()) + " kids=" + kids.length);
   }
 
   console.log("\n--- An ordinary anchor is not a route ---");
@@ -1111,14 +1190,14 @@ async function main() {
     const page = mkPage({ url: base + "i/abcdef012345.html", metaRoute: ITEM_ROUTE, hash: "#c-ef408bf738a2", dataBase: "../", content: ITEM });
     const r = await runBoot(page);
     ok("an unroutable anchor falls back to the page's own route", bootHash(page) === "#" + ITEM_ROUTE, "hash=" + bootHash(page));
-    ok("an anchor entry still gets the chrome-then-content boot", r.beforeSignal === CHROME_LOADING && page.states().length === 3, "visible=" + r.beforeSignal + " states=" + page.states().length);
+    ok("an anchor entry adopts the served item", r.beforeSignal === CHROME + " " + ITEM && page.states().length === 3, "visible=" + r.beforeSignal + " states=" + page.states().length);
   }
   {
     // Off the grammar entirely: same fallback, no notfound view.
     const page = mkPage({ url: base + "i/abcdef012345.html", metaRoute: ITEM_ROUTE, hash: "#nope:whatever", dataBase: "../", content: ITEM });
     const r = await runBoot(page);
     ok("an off-grammar fragment falls back to the page's own route", bootHash(page) === "#" + ITEM_ROUTE, "hash=" + bootHash(page));
-    ok("an off-grammar fragment keeps the same two steps", r.beforeSignal === CHROME_LOADING && page.states().length === 3, "visible=" + r.beforeSignal);
+    ok("an off-grammar fragment adopts the served item", r.beforeSignal === CHROME + " " + ITEM && page.states().length === 3, "visible=" + r.beforeSignal);
   }
   {
     // The exception: the home view's README is what heading anchors are IN, so on
