@@ -1,20 +1,16 @@
 # GitSocial
 
----
-
 *Git-native collaboration platform*
 
 ---
 
-GitSocial stores issues, pull requests, comments and releases as commits in git, so they clone, fork and push along with the code.
+Git made code portable, but nothing around the code is: a clone carries every commit, author, signature and branch, while the issues, pull requests and comments stay in the host's database, and the notes of each AI agent stay in its own files.
 
-It is a single open source Go binary that:
+GitSocial's philosophy is that the commit was always enough: it has an author and a time, it carries a signature, and its message carries structured trailers, so an issue or a pull request can be stored as a commit with the right trailers. GitSocial writes this collaboration data on `gitmsg/*` branches alongside the code, following the [GitMsg](specs/GITMSG.md) protocol.
 
-- reads and writes these items from a CLI and a TUI
-- imports existing data from GitHub or GitLab
-- publishes the repository and a static site to an S3 bucket, with no server
+GitSocial is a single open source binary: run `gitsocial tui` or `gitsocial serve` in any git repository to explore it, or `gitsocial import` to bring the issues, pull requests and releases of a project from GitHub or GitLab. You can also publish the repository and a static site to an S3 bucket with `gitsocial push`; [GitSocial.org](https://gitsocial.org) is hosted this way on Cloudflare R2.
 
-[GitSocial.org](https://gitsocial.org) runs this way.
+For data sovereignty, static hosting, portability, AI agent memory, verified identity and the alternatives, see [Why GitSocial](documentation/WHY-GITSOCIAL.md).
 
 ## Install
 
@@ -48,17 +44,17 @@ In any cloned repository, show the code, the commits and the tags in the browser
 gitsocial serve
 ```
 
-To bring the issues, pull requests and releases from GitHub or GitLab, and the discussions from GitHub:
+To bring the issues, pull requests and releases from GitHub or GitLab:
 
 ```bash
 gitsocial import -n 20
 ```
 
-`-n` caps the items per type, drop it for a full import, which can take a while on a large repository. A running `gitsocial serve` picks up the imported items as they arrive.
+`-n` caps the items per type. Drop it for a full import, which can take a while on a large repository.
 
 ## Terminal UI
 
-The TUI browses and creates the same items, and configures the repository ([demo](documentation/demo/demo.gif)):
+Use the TUI to browse and create the same items and to configure the repository ([demo](documentation/demo/demo.gif)):
 
 ```bash
 gitsocial tui
@@ -68,15 +64,13 @@ gitsocial tui
 
 Any S3-compatible bucket works, whether AWS S3, Cloudflare R2, DigitalOcean Spaces or Hetzner Object Storage, and it serves as a git remote and a static site at the same time.
 
-To mirror a GitHub or GitLab project, with its items, into a bucket:
+To mirror a GitHub or GitLab project into a bucket:
 
 ```bash
 gitsocial mirror https://github.com/owner/repo s3://s3.example.com/mybucket/repo
 ```
 
-The first run asks for credentials, and each later run refreshes the mirror.
-
-To publish your own repository, set the credentials once for the endpoint, then add the bucket as a remote and push:
+To publish your own repository:
 
 ```bash
 gitsocial config credentials set s3.example.com
@@ -90,7 +84,7 @@ A private bucket needs no further setup, and anyone with the credentials can clo
 gitsocial clone s3://s3.example.com/mybucket/myrepo
 ```
 
-For a public project, enable public access in the dashboard of the provider, and anyone can then `git clone` from the public URL of the bucket. To serve the HTML pages at your own domain, configure the domain in the same dashboard, then set the URL and push again:
+For a public project, enable public access in the dashboard of the hosting provider, and anyone can then `git clone` from the public URL of the bucket. To serve the HTML pages at your own domain, configure the domain in the same dashboard, then set the URL and push again:
 
 ```bash
 gitsocial config site set url https://example.org/
