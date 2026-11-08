@@ -113,7 +113,7 @@ Configuration MUST be stored at `refs/gitmsg/pm/config`.
 
 Configuration MUST include: `version`.
 
-Configuration MAY include: `framework` (board framework preset: `minimal`, `kanban`, `scrum`; default: `kanban`), `boards` (array of custom board definitions).
+Configuration MAY include: `framework` (board framework preset: `minimal`, `kanban`, `scrum`; default: `minimal`), `boards` (array of custom board definitions).
 
 ```json
 {
@@ -147,7 +147,7 @@ Board column fields:
 - `filter`: Match expression — `state:<value>` or `status:<value>` (REQUIRED)
 - `wip`: Work-in-progress limit (OPTIONAL)
 
-Board resolution: (1) Use custom `boards` if defined, (2) otherwise derive from `framework`, (3) otherwise use default kanban board. Issues without a matching column filter SHOULD appear in the first column. Issues with `state=closed` SHOULD appear in the last column.
+Board resolution: (1) Use custom `boards` if defined, (2) otherwise derive from `framework`, (3) otherwise use the default minimal board. Issues without a matching column filter SHOULD appear in the first column. Issues with `state=closed` SHOULD appear in the last column.
 
 ## Appendix: Manifest
 

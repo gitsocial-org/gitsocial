@@ -435,6 +435,7 @@
   .nav-tree-slot:empty { display: none; }
   /* A click on Code, on the code route, hides the tree and turns the caret back. */
   .nav-tree-slot.nav-tree-hidden { display: none; }
+  #nav a.nav-off { display: none; }
   #nav a[data-nav="code"].tree-open .nav-icon { transform: rotate(90deg); }
   .nav-tree-list { border: none; background: transparent; }
   .nav-tree-list .tree-row { padding: 0.06rem var(--sp-2); line-height: 1.4; font-size: var(--fs-ui); border-radius: var(--r-ctl); }

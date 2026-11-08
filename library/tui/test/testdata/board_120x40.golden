@@ -1,39 +1,39 @@
-╭─ ※  GitSocial ───────────────╮╭─ ▦  Boards · Kanban ─────────────────────────────────────────────────────────────────╮
+╭─ ※  GitSocial ───────────────╮╭─ ▦  Boards · Minimal ────────────────────────────────────────────────────────────────╮
 │                              ││                                                                                      │
-│  ⌕  Search  ············  /  ││   Backlog (2)       │  In Progress (0)   │  Review (0)        │  Done (1)            │
+│  ⌕  Search  ············  /  ││   Open (2)                               │  Closed (1)                               │
 │  ⚑  Notifications  ·····  @  ││  ─────────────────────────────────────────────────────────────────────────────────   │
-│  ◧  Analytics  ·········  %  ││   ☒ Implement ...   │                    │                    │  ☑ Add keyboa...     │
-│ ──────────────────────────── ││   ☐ Add dark m...   │                    │                    │                      │
-│  ⌘  Social  ············  S  ││                     │                    │                    │                      │
-│     ⏱  Timeline              ││                     │                    │                    │                      │
-│     ⊡  My Repository         ││                     │                    │                    │                      │
-│     ⎇  My Branches           ││                     │                    │                    │                      │
-│     ⌗  My Tags               ││                     │                    │                    │                      │
-│     ☷ My Lists              ││                     │                    │                    │                      │
-│        • Memo Inherits (au...││                     │                    │                    │                      │
-│     ㋡ My Followers          ││                     │                    │                    │                      │
-│     ➼  Explore               ││                     │                    │                    │                      │
-│  ☐  PM  ················  P  ││                     │                    │                    │                      │
-│     ▦  Boards                ││                     │                    │                    │                      │
-│     ☐  Issues                ││                     │                    │                    │                      │
-│     ◇  Milestones            ││                     │                    │                    │                      │
-│  △  Review  ············  R  ││                     │                    │                    │                      │
-│  ⏏  Release  ···········  V  ││                     │                    │                    │                      │
-│  ☞  Memos  ·············  M  ││                     │                    │                    │                      │
-│                              ││                     │                    │                    │                      │
-│                              ││                     │                    │                    │                      │
-│                              ││                     │                    │                    │                      │
-│                              ││                     │                    │                    │                      │
-│                              ││                     │                    │                    │                      │
-│                              ││                     │                    │                    │                      │
-│                              ││                     │                    │                    │                      │
-│                              ││                     │                    │                    │                      │
-│                              ││                     │                    │                    │                      │
-│ ──────────────────────────── ││                     │                    │                    │                      │
-│  ⚙  Configuration            ││                     │                    │                    │                      │
-│  ⚿  Identity                 ││                     │                    │                    │                      │
-│  ⛁  Cache  ········ XXXKB    ││                     │                    │                    │                      │
-│  ⌨  Settings                 ││                     │                    │                    │                      │
+│  ◧  Analytics  ·········  %  ││   ☒ Implement real-time notifications    │  ☑ Add keyboard shortcuts                 │
+│ ──────────────────────────── ││   ☐ Add dark mode support                │                                           │
+│  ⌘  Social  ············  S  ││                                          │                                           │
+│     ⏱  Timeline              ││                                          │                                           │
+│     ⊡  My Repository         ││                                          │                                           │
+│     ⎇  My Branches           ││                                          │                                           │
+│     ⌗  My Tags               ││                                          │                                           │
+│     ☷ My Lists              ││                                          │                                           │
+│        • Memo Inherits (au...││                                          │                                           │
+│     ㋡ My Followers          ││                                          │                                           │
+│     ➼  Explore               ││                                          │                                           │
+│  ☐  PM  ················  P  ││                                          │                                           │
+│     ▦  Boards                ││                                          │                                           │
+│     ☐  Issues                ││                                          │                                           │
+│  △  Review  ············  R  ││                                          │                                           │
+│  ⏏  Release  ···········  V  ││                                          │                                           │
+│  ☞  Memos  ·············  M  ││                                          │                                           │
+│                              ││                                          │                                           │
+│                              ││                                          │                                           │
+│                              ││                                          │                                           │
+│                              ││                                          │                                           │
+│                              ││                                          │                                           │
+│                              ││                                          │                                           │
+│                              ││                                          │                                           │
+│                              ││                                          │                                           │
+│                              ││                                          │                                           │
+│                              ││                                          │                                           │
+│ ──────────────────────────── ││                                          │                                           │
+│  ⚙  Configuration            ││                                          │                                           │
+│  ⚿  Identity                 ││                                          │                                           │
+│  ⛁  Cache  ········ XXXKB    ││                                          │                                           │
+│  ⌨  Settings                 ││                                          │                                           │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
 │ ──────────────────────────── ││   n:new  m:mine  x:collapse col  s:swimlanes  K:forks  r:refresh  </>:move  p:push   │
 │.../tui-test-FIXTURE          ││   tab:focus  f:fetch  I:import  q:quit  ?:help                                       │

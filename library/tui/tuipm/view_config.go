@@ -84,7 +84,7 @@ func (v *configView) Update(msg tea.Msg, state *tuicore.State) tea.Cmd {
 	case pmConfigLoadedMsg:
 		v.framework = msg.framework
 		if v.framework == "" {
-			v.framework = "kanban"
+			v.framework = "minimal"
 		}
 		v.cursor = v.frameworkIndex(v.framework)
 	case pmConfigSavedMsg:

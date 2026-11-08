@@ -3261,7 +3261,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return s;
   }
 
-  // boardBody renders the kanban board with a group-by swimlane control and session-only column state.
+  // boardBody renders the board with a group-by swimlane control and session-only column state.
   function boardBody(issues, config) {
     const board = buildBoard(issues, config);
     const state = newBoardState();
@@ -4621,6 +4621,20 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     commits: ["commit", "commits"], branches: ["branch", "branches"], tags: ["tag", "tags"],
   };
 
+  // navFeaturesOff names the PM nav items the framework lacks; no config means the minimal framework, which has neither.
+  function navFeaturesOff(config) {
+    return ["milestones", "sprints"].filter((key) => !(config && config[key]));
+  }
+
+  // applyNavFeatures hides the sidebar links of the PM features the framework lacks.
+  async function applyNavFeatures(ctx) {
+    if (typeof document === "undefined" || !document.querySelectorAll) return;
+    let config = null;
+    try { config = await loadSiteConfig(ctx); } catch (e) { config = null; }
+    const off = navFeaturesOff(config);
+    for (const a of Array.from(document.querySelectorAll("#nav a[data-nav]"))) a.classList.toggle("nav-off", off.includes(a.getAttribute("data-nav")));
+  }
+
   // updateNavCounts writes each sidebar count beside its nav item, the exact number in its title; a failed read leaves the sidebar as it was.
   async function updateNavCounts(ctx) {
     if (typeof document === "undefined" || !document.querySelectorAll) return;
@@ -4700,6 +4714,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, routeTitle, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, relativeHref, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, routeTitle, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, relativeHref, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures, navFeaturesOff });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

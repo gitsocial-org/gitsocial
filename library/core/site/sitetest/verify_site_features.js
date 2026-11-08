@@ -39,9 +39,12 @@ async function main() {
   // ---- board reads the pushed pm-config.json ----
   const cfg = await GS.loadSiteConfig(GS.newContext(BASE));
   ok("pm-config.json is present and parsed", !!cfg && Array.isArray(cfg.columns), "cfg=" + JSON.stringify(cfg && cfg.columns && cfg.columns.map((c) => c.name)));
+  ok("pm-config.json carries the framework features", cfg && cfg.milestones === false && cfg.sprints === false, JSON.stringify(cfg && [cfg.milestones, cfg.sprints]));
+  ok("sidebar hides Milestones and Sprints under the minimal framework", JSON.stringify(GS.navFeaturesOff(cfg)) === '["milestones","sprints"]', JSON.stringify(GS.navFeaturesOff(cfg)));
+  ok("a kanban config hides Sprints alone, and no config hides both", JSON.stringify([GS.navFeaturesOff({ milestones: true, sprints: false }), GS.navFeaturesOff(null)]) === '[["sprints"],["milestones","sprints"]]');
   await route("#/board", true);
   const colHeads = findClass(viewNode, "board-col-name").map(textOf);
-  ok("board renders columns from config (kanban default)", colHeads.some((h) => h.startsWith("Backlog")) && colHeads.some((h) => h.startsWith("Done")), colHeads.join(" | "));
+  ok("board renders columns from config (minimal default)", colHeads.some((h) => h.startsWith("Open")) && colHeads.some((h) => h.startsWith("Closed")), colHeads.join(" | "));
 
   // ---- board group-by swimlane control ----
   const groupBy = findClass(viewNode, "filter-chip").map(textOf);
@@ -310,16 +313,16 @@ async function main() {
   // ---- board column collapse/hide + swimlane collapse + lane index ----
   await route("#/board", true);
   // Each column head carries a collapse caret and a hide control.
-  ok("each board column has a collapse toggle", findClass(viewNode, "board-col-toggle").length >= 4, "toggles=" + findClass(viewNode, "board-col-toggle").length);
-  ok("each board column has a hide control", findClass(viewNode, "board-col-hide").length >= 4, "hides=" + findClass(viewNode, "board-col-hide").length);
   const colsBefore = findClass(viewNode, "board-col").length;
-  const hideDone = findClass(viewNode, "board-col").map((c) => ({ c, name: textOf(findClass(c, "board-col-name")[0] || { _children: [] }) })).find((x) => x.name.startsWith("Done"));
-  const doneHide = hideDone && findClass(hideDone.c, "board-col-hide")[0];
-  fire(doneHide, "click"); await wait(30);
-  ok("hiding the Done column removes it and offers a restore chip", findClass(viewNode, "board-col").length === colsBefore - 1 && findClass(viewNode, "board-col-restore").some((r) => /Done/.test(textOf(r))), "cols=" + findClass(viewNode, "board-col").length);
-  const restore = findClass(viewNode, "board-col-restore").find((r) => /Done/.test(textOf(r)));
+  ok("each board column has a collapse toggle", colsBefore >= 2 && findClass(viewNode, "board-col-toggle").length === colsBefore, "toggles=" + findClass(viewNode, "board-col-toggle").length);
+  ok("each board column has a hide control", findClass(viewNode, "board-col-hide").length === colsBefore, "hides=" + findClass(viewNode, "board-col-hide").length);
+  const lastCol = findClass(viewNode, "board-col").map((c) => ({ c, name: textOf(findClass(c, "board-col-name")[0] || { _children: [] }).split(" ")[0] })).pop();
+  const lastHide = lastCol && findClass(lastCol.c, "board-col-hide")[0];
+  fire(lastHide, "click"); await wait(30);
+  ok("hiding the last column removes it and offers a restore chip", findClass(viewNode, "board-col").length === colsBefore - 1 && findClass(viewNode, "board-col-restore").some((r) => textOf(r).includes(lastCol.name)), "cols=" + findClass(viewNode, "board-col").length);
+  const restore = findClass(viewNode, "board-col-restore").find((r) => textOf(r).includes(lastCol.name));
   fire(restore, "click"); await wait(30);
-  ok("restoring brings the Done column back", findClass(viewNode, "board-col").length === colsBefore, "cols=" + findClass(viewNode, "board-col").length);
+  ok("restoring brings the last column back", findClass(viewNode, "board-col").length === colsBefore, "cols=" + findClass(viewNode, "board-col").length);
   const firstToggle = findClass(viewNode, "board-col-toggle")[0];
   fire(firstToggle, "click"); await wait(30);
   ok("collapsing a column slims it (board-col-collapsed) with no cards", findClass(viewNode, "board-col-collapsed").length === 1 && findClass(findClass(viewNode, "board-col-collapsed")[0], "board-card").length === 0, "collapsed=" + findClass(viewNode, "board-col-collapsed").length);
@@ -336,7 +339,7 @@ async function main() {
   for (let i = 0; i < 12; i++) many.push({ commit: { hash: (i + "").repeat(40).slice(0, 40), short: ("i" + i) }, header: { type: "issue", state: "open" }, content: "Issue " + i, author: "Ada", effectiveTime: i, versions: [] });
   const bb = GS.boardBody ? GS.boardBody(many, null) : null;
   if (bb) {
-    const backlog = findClass(bb, "board-col").find((c) => textOf(findClass(c, "board-col-name")[0] || { _children: [] }).startsWith("Backlog"));
+    const backlog = findClass(bb, "board-col")[0];
     const cards = findClass(backlog, "board-card").length;
     ok("a long column caps visible cards (≤7) with a 'show N more'", cards <= 7 && findClass(backlog, "board-more").length === 1, "cards=" + cards);
     const more = findClass(backlog, "board-more")[0];

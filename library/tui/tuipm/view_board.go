@@ -795,7 +795,7 @@ func (v *boardView) groupIssuesBySwimlane(swimlanes []string) map[string]map[str
 func (v *boardView) Title() string {
 	framework := pm.GetPMConfig(v.workdir).Framework
 	if framework == "" {
-		framework = "kanban"
+		framework = "minimal"
 	}
 	// Capitalize first letter
 	framework = strings.ToUpper(framework[:1]) + framework[1:]

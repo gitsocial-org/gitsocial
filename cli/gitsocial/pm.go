@@ -134,7 +134,7 @@ func newPMInitCmd() *cobra.Command {
 
 			branch := pm.PMBranch
 			if framework == "" {
-				framework = "kanban"
+				framework = "minimal"
 			}
 
 			// Validate framework
@@ -166,7 +166,7 @@ func newPMInitCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&framework, "framework", "f", "kanban", "Framework to use: minimal, kanban, scrum")
+	cmd.Flags().StringVarP(&framework, "framework", "f", "minimal", "Framework to use: minimal, kanban, scrum")
 
 	return cmd
 }

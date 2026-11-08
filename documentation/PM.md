@@ -73,7 +73,7 @@ Issues opened on a registered fork appear in `pm issue list` and create notifica
 ## Board
 
 ```
-gitsocial pm board          # a summary; the kanban board is in the TUI
+gitsocial pm board          # a summary; the board is in the TUI
 ```
 
 Columns come from a custom `boards` list or, if there is none, from the `framework` config (`minimal`, `kanban`, `scrum`) ([GITPM.md §2](../specs/GITPM.md#2-configuration)).

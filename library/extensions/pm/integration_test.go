@@ -905,7 +905,7 @@ func TestBoardAndConfig(t *testing.T) {
 		if config.Version != "0.1.0" {
 			t.Errorf("Version = %q", config.Version)
 		}
-		if config.Framework != "kanban" {
+		if config.Framework != "minimal" {
 			t.Errorf("Framework = %q", config.Framework)
 		}
 	})
@@ -1194,11 +1194,11 @@ func TestFrameworkIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		milestones, sprints := FrameworkFeatures(workdir)
-		if !milestones {
-			t.Error("kanban should have milestones")
+		if milestones {
+			t.Error("minimal should not have milestones")
 		}
 		if sprints {
-			t.Error("kanban should not have sprints")
+			t.Error("minimal should not have sprints")
 		}
 	})
 
@@ -1246,11 +1246,11 @@ func TestFrameworkIntegration(t *testing.T) {
 		workdir := cloneFixture(t)
 		SavePMConfig(workdir, PMConfig{Framework: "unknown"})
 		milestones, sprints := FrameworkFeatures(workdir)
-		if !milestones {
-			t.Error("unknown framework should default to kanban milestones")
+		if milestones {
+			t.Error("unknown framework should default to minimal milestones")
 		}
 		if sprints {
-			t.Error("unknown framework should default to kanban sprints")
+			t.Error("unknown framework should default to minimal sprints")
 		}
 	})
 }

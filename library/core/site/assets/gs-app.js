@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, hydrateItems, loadForkPulls, loadInteractionCounts, loadFilePages, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, routeTitle, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, loadAvatarManifest, setAvatarKeys, setGrammarBase, setRefContext, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, hydrateItems, loadForkPulls, loadInteractionCounts, loadFilePages, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, routeTitle, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, loadAvatarManifest, setAvatarKeys, setGrammarBase, setRefContext, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -496,6 +496,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     objectStore(ctx);
     // Not awaited: the counts fill in beside the nav and never hold the first route.
     updateNavCounts(ctx);
+    applyNavFeatures(ctx);
     publishFilePages(ctx).catch(() => {});
     wireNavSearch();
     wireCodeToggle(ctx);

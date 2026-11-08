@@ -10,8 +10,8 @@ func TestDefaultPMConfig(t *testing.T) {
 	if config.Version != "0.1.0" {
 		t.Errorf("Version = %q, want %q", config.Version, "0.1.0")
 	}
-	if config.Framework != "kanban" {
-		t.Errorf("Framework = %q, want %q", config.Framework, "kanban")
+	if config.Framework != "minimal" {
+		t.Errorf("Framework = %q, want %q", config.Framework, "minimal")
 	}
 }
 
@@ -20,11 +20,11 @@ func TestDefaultBoardConfig(t *testing.T) {
 	if board.ID != "default" {
 		t.Errorf("ID = %q, want %q", board.ID, "default")
 	}
-	if len(board.Columns) != 4 {
-		t.Errorf("len(Columns) = %d, want 4", len(board.Columns))
+	if len(board.Columns) != 2 {
+		t.Errorf("len(Columns) = %d, want 2", len(board.Columns))
 	}
-	if board.Columns[0].Name != "Backlog" {
-		t.Errorf("first column = %q, want %q", board.Columns[0].Name, "Backlog")
+	if board.Columns[0].Name != "Open" {
+		t.Errorf("first column = %q, want %q", board.Columns[0].Name, "Open")
 	}
 }
 

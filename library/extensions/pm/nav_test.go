@@ -41,12 +41,12 @@ func TestNavRegistration(t *testing.T) {
 		}
 
 		milestones := r.Get("pm.milestones")
-		if milestones == nil {
-			t.Fatal("pm.milestones should be registered (kanban default)")
+		if milestones != nil {
+			t.Error("pm.milestones should not be registered (minimal default)")
 		}
 		sprints := r.Get("pm.sprints")
 		if sprints != nil {
-			t.Error("pm.sprints should not be registered (kanban default)")
+			t.Error("pm.sprints should not be registered (minimal default)")
 		}
 	})
 

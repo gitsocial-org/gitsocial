@@ -18,8 +18,14 @@ const issues = [
   mk(D, 4, { type: "issue", state: "closed" }, "Delta"),
   mk(E, 5, { type: "issue", state: "closed", labels: "status/in-progress" }, "Epsilon"),
 ];
-const board = GS.buildBoard(issues);
-eq(board.columns.map((c) => c.name), ["Backlog", "In Progress", "Review", "Done"], "board column names mirror kanban framework");
+const kanban = { name: "Board", columns: [
+  { name: "Backlog", filter: "state:open" },
+  { name: "In Progress", filter: "status:in-progress", wip: 3 },
+  { name: "Review", filter: "status:review", wip: 3 },
+  { name: "Done", filter: "state:closed" },
+] };
+const board = GS.buildBoard(issues, kanban);
+eq(board.columns.map((c) => c.name), ["Backlog", "In Progress", "Review", "Done"], "board column names mirror the kanban framework");
 // board.go matchIssueToColumn PREFERS a status: label over a state: filter, so a
 // closed issue still carrying a status/in-progress label lands in In Progress
 // (Epsilon), not Done. This mirrors the shipped board (the spec's "closed
@@ -160,10 +166,10 @@ const bcfg = GS.buildBoard(issues, { name: "Minimal", columns: [{ name: "Open", 
 eq(bcfg.columns.map((c) => c.name), ["Open", "Closed"], "buildBoard honors a configured minimal board");
 eq(bcfg.name, "Minimal", "configured board name carried");
 eq(bcfg.columns.map((c) => c.issues.length), [3, 2], "minimal columns: open (A,B,C) / closed (D,E)");
-// malformed / empty config falls back to the kanban default
-eq(GS.buildBoard(issues, null).columns.map((c) => c.name), ["Backlog", "In Progress", "Review", "Done"], "null config -> kanban default");
-eq(GS.buildBoard(issues, { columns: [] }).columns.map((c) => c.name), ["Backlog", "In Progress", "Review", "Done"], "empty columns -> kanban default");
-eq(GS.buildBoard(issues, { columns: [{ name: "", filter: "" }] }).columns.map((c) => c.name), ["Backlog", "In Progress", "Review", "Done"], "columns with no name/filter -> kanban default");
+// malformed / empty config falls back to the minimal default
+eq(GS.buildBoard(issues, null).columns.map((c) => c.name), ["Open", "Closed"], "null config -> minimal default");
+eq(GS.buildBoard(issues, { columns: [] }).columns.map((c) => c.name), ["Open", "Closed"], "empty columns -> minimal default");
+eq(GS.buildBoard(issues, { columns: [{ name: "", filter: "" }] }).columns.map((c) => c.name), ["Open", "Closed"], "columns with no name/filter -> minimal default");
 // WIP coercion from a configured column
 eq(GS.buildBoard(issues, { columns: [{ name: "Doing", filter: "status:in-progress", wip: 2 }] }).columns[0].wip, 2, "configured WIP carried as a number");
 eq(GS.boardColumnsFrom({ columns: [{ name: "X", filter: "state:open", wip: -1 }] }).columns[0].wip, 0, "non-positive WIP coerced to 0 (no limit)");

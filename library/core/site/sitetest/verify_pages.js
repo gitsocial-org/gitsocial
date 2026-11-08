@@ -138,7 +138,7 @@ async function item6() {
   ok("config shows Repository configuration section", /Repository configuration/.test(vt));
   ok("pref reflects localStorage diffview=split", findClass(viewNode, "pref-btn").some((b) => textOf(b) === "split"), findClass(viewNode, "pref-btn").map(textOf).join(","));
   ok("config renders social ext config (branch)", /gitmsg\/social/.test(vt), vt.slice(0, 300));
-  ok("config renders pm framework=kanban value", /kanban/.test(vt));
+  ok("config renders pm framework=minimal value", /minimal/.test(vt));
   ok("release ext (no config ref) shows 'defaults'", /release[\s\S]{0,40}defaults/i.test(vt) || /defaults/.test(vt), vt);
   // localStorage change reflected on re-render
   global.localStorage.setItem("diffview", "unified");

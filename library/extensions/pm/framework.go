@@ -164,7 +164,7 @@ func FrameworkFeatures(workdir string) (milestones bool, sprints bool) {
 	config := GetPMConfig(workdir)
 	fw := GetFramework(config.Framework)
 	if fw == nil {
-		return FrameworkKanban.HasMilestones, FrameworkKanban.HasSprints
+		return FrameworkMinimal.HasMilestones, FrameworkMinimal.HasSprints
 	}
 	return fw.HasMilestones, fw.HasSprints
 }

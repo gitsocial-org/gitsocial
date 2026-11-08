@@ -3919,12 +3919,10 @@
     });
   }
 
-  // PM_BOARD_COLUMNS mirrors the shipped kanban framework board, the default a static reader falls back to.
+  // PM_BOARD_COLUMNS mirrors the shipped minimal framework board, the default a static reader falls back to.
   const PM_BOARD_COLUMNS = [
-    { name: "Backlog", filter: "state:open", wip: 0 },
-    { name: "In Progress", filter: "status:in-progress", wip: 3 },
-    { name: "Review", filter: "status:review", wip: 3 },
-    { name: "Done", filter: "state:closed", wip: 0 },
+    { name: "Open", filter: "state:open", wip: 0 },
+    { name: "Closed", filter: "state:closed", wip: 0 },
   ];
 
   // matchColumnFilter tests an issue header against a board filter expression, mirroring board.go matchFilter.
@@ -3951,15 +3949,15 @@
     return stateMatch;
   }
 
-  // boardColumnsFrom normalizes a resolved-board config into the column shape buildBoard groups against, else the kanban default.
+  // boardColumnsFrom normalizes a resolved-board config into the column shape buildBoard groups against, else the minimal default.
   function boardColumnsFrom(config) {
     const swimlane = (config && config.defaultSwimlane) || "";
     const cols = config && Array.isArray(config.columns) ? config.columns : null;
-    if (!cols || !cols.length) return { name: "Kanban Board", columns: PM_BOARD_COLUMNS, defaultSwimlane: swimlane };
+    if (!cols || !cols.length) return { name: "Board", columns: PM_BOARD_COLUMNS, defaultSwimlane: swimlane };
     const columns = cols
       .filter((c) => c && c.name && c.filter)
       .map((c) => ({ name: c.name, filter: c.filter, wip: (typeof c.wip === "number" && c.wip > 0) ? c.wip : 0 }));
-    if (!columns.length) return { name: "Kanban Board", columns: PM_BOARD_COLUMNS, defaultSwimlane: swimlane };
+    if (!columns.length) return { name: "Board", columns: PM_BOARD_COLUMNS, defaultSwimlane: swimlane };
     return { name: config.name || "Board", columns, defaultSwimlane: swimlane };
   }
 

@@ -1,4 +1,4 @@
-// board.go - Board configuration and kanban view logic
+// board.go - Board configuration and board view logic
 package pm
 
 import (
@@ -45,7 +45,7 @@ type BoardView struct {
 func DefaultPMConfig() PMConfig {
 	return PMConfig{
 		Version:   "0.1.0",
-		Framework: "kanban",
+		Framework: "minimal",
 	}
 }
 
@@ -55,10 +55,8 @@ func DefaultBoardConfig() BoardConfig {
 		ID:   "default",
 		Name: "Board",
 		Columns: []ColumnConfig{
-			{Name: "Backlog", Filter: "state:open"},
-			{Name: "In Progress", Filter: "status:in-progress"},
-			{Name: "Review", Filter: "status:review"},
-			{Name: "Done", Filter: "state:closed"},
+			{Name: "Open", Filter: "state:open"},
+			{Name: "Closed", Filter: "state:closed"},
 		},
 	}
 }

@@ -1,5 +1,5 @@
 // site_config_test.go - resolveSiteBoard mirrors pm.ResolveBoardConfig: a custom
-// board wins, else the framework columns, else the kanban default.
+// board wins, else the framework columns, else the minimal default.
 
 package site
 
@@ -30,10 +30,10 @@ func TestResolveSiteBoard(t *testing.T) {
 		return true
 	}
 
-	t.Run("empty config falls back to kanban default", func(t *testing.T) {
+	t.Run("empty config falls back to minimal default", func(t *testing.T) {
 		b := resolveSiteBoard(sitePMConfig{})
-		if !eq(colNames(b), []string{"Backlog", "In Progress", "Review", "Done"}) {
-			t.Fatalf("empty config columns = %v, want kanban default", colNames(b))
+		if !eq(colNames(b), []string{"Open", "Closed"}) {
+			t.Fatalf("empty config columns = %v, want minimal default", colNames(b))
 		}
 	})
 
@@ -51,10 +51,19 @@ func TestResolveSiteBoard(t *testing.T) {
 		}
 	})
 
-	t.Run("unknown framework falls back to kanban", func(t *testing.T) {
+	t.Run("unknown framework falls back to minimal", func(t *testing.T) {
 		b := resolveSiteBoard(sitePMConfig{Framework: "waterfall"})
-		if !eq(colNames(b), []string{"Backlog", "In Progress", "Review", "Done"}) {
-			t.Fatalf("unknown framework columns = %v, want kanban default", colNames(b))
+		if !eq(colNames(b), []string{"Open", "Closed"}) {
+			t.Fatalf("unknown framework columns = %v, want minimal default", colNames(b))
+		}
+	})
+
+	t.Run("framework features ride the artifact", func(t *testing.T) {
+		for name, want := range map[string][2]bool{"": {false, false}, "minimal": {false, false}, "kanban": {true, false}, "scrum": {true, true}, "waterfall": {false, false}} {
+			b := resolveSiteBoard(sitePMConfig{Framework: name, Boards: []sitePMBoard{{Columns: []sitePMColumn{{Name: "Todo", Filter: "state:open"}}}}})
+			if b.Milestones != want[0] || b.Sprints != want[1] {
+				t.Fatalf("%q features = %v/%v, want %v/%v", name, b.Milestones, b.Sprints, want[0], want[1])
+			}
 		}
 	})
 

@@ -200,7 +200,7 @@ The app reads the artifacts under `.gitsocial/site/`, and the bucket's ref list 
 | `site-config.json` | the customization values, and `avatarManifest`, the digest of `avatars.json`, which only the push sets |
 | `avatars/<key>` | the picture of one author, as the forge served it, under the avatar key of the email; written by `gitsocial import avatars` and by the push from the avatar store; `public, max-age=86400` |
 | `avatars.json` | `{"v":1,"keys":[...]}`, the sorted avatar keys that `avatars/` holds; written after the pictures by the import and the push; no-cache |
-| `pm-config.json` | the resolved PM board |
+| `pm-config.json` | the resolved PM board, and whether the framework has milestones and sprints; the sidebar hides the links of a feature the framework lacks |
 | `stats.json` | a stats blob written by the CLI from the workdir |
 | `tags.json` | each tag's commit, date, author, previous tag and its commit, the commit count since it, and whether its range document is written, in display order, from the local object database |
 | `ranges/v1/<prev>..<commit>.json` | one range document for each pair of adjacent tag commits: the merge base, the commits since the previous tag (up to 2,000) and the files changed (up to 1,000); immutable |
