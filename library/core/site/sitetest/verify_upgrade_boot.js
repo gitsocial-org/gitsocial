@@ -107,9 +107,12 @@ function mkBrowser(startURL) {
   };
   const state = { reloaded: false, hash: "", search: "", pathname: "", href: "" };
   const handlers = { popstate: [], hashchange: [] };
-  const fire = (ev) => { for (const h of handlers[ev].slice()) h(); };
+  // A reload ends the document, so no later event reaches its handlers.
+  const fire = (ev) => { if (state.reloaded) return; for (const h of handlers[ev].slice()) h(); };
   const loc = {
     reload: () => { state.reloaded = true; },
+    // location.replace with a fragment rewrites the current entry and fires hashchange; inside a traversal's popstate the browser folds it into the traversal's one hashchange.
+    replace: (h) => { const b = state.href.split("#")[0]; const v = h.charAt(0) === "#" ? h : "#" + h; stack[idx] = b + v; apply(b + v); if (traversing) traversing = "changed"; else fire("hashchange"); },
     get href() { return state.href; }, get search() { return state.search; }, get pathname() { return state.pathname; },
     get hash() { return state.hash; },
     // Setting location.hash in a browser rewrites the URL; when the hash CHANGES
@@ -127,9 +130,19 @@ function mkBrowser(startURL) {
   apply(startURL);
   const stack = [startURL];
   let idx = 0;
+  let traversing = false;
+  // The browser fires hashchange on a traversal only when the path is unchanged and the fragment differs.
+  const traverse = (to) => {
+    const from = parse(state.href);
+    idx = to; apply(stack[idx]); traversing = true; fire("popstate");
+    const changed = traversing === "changed" || (from.pathname === state.pathname && state.hash !== from.hash);
+    traversing = false;
+    if (changed) fire("hashchange");
+  };
   global.window = {
     get location() { return loc; },
     addEventListener: (ev, fn) => { if (handlers[ev]) handlers[ev].push(fn); },
+    dispatchEvent: (e) => { if (handlers[e.type]) fire(e.type); },
   };
   global.history = {
     replaceState: (_s, _t, u) => { stack[idx] = u; apply(u); },
@@ -140,9 +153,9 @@ function mkBrowser(startURL) {
     // navigate models an in-app hash render: the app sets location.hash, which
     // fires hashchange → the wired syncURL reflects the URL into history.
     navigate: (hash) => { loc.hash = hash; },
-    // back/forward move the history index and fire popstate, like the browser.
-    back: () => { if (idx > 0) { idx--; apply(stack[idx]); fire("popstate"); } },
-    forward: () => { if (idx < stack.length - 1) { idx++; apply(stack[idx]); fire("popstate"); } },
+    // back/forward move the history index and fire popstate, then hashchange when the fragment differs, like the browser.
+    back: () => { if (idx > 0) traverse(idx - 1); },
+    forward: () => { if (idx < stack.length - 1) traverse(idx + 1); },
     reloaded: () => state.reloaded,
     href: () => state.href,
   };
@@ -520,6 +533,10 @@ async function main() {
     UP.wireNav(base);
     UP.syncURL(base); // entry replaceState (keeps the item page URL, strips the hash)
     ok("boot on item page keeps the item URL", win.href() === itemURL, "href=" + win.href());
+    // The file-pages manifest arrives after the entry sync stripped the hash; its re-sync must keep the item URL.
+    UP.wireFilePages(base);
+    global.window.__gsOnFilePages();
+    ok("the file-pages re-sync keeps the item URL", win.href() === itemURL, "href=" + win.href());
     win.navigate("#/milestones");
     ok("nav to app-only route normalizes to entry (not the item path)", win.href() === base + "index.html#/milestones", "href=" + win.href());
     // Back must restore the item page URL; item pages have no derivable hash, so
@@ -530,6 +547,33 @@ async function main() {
     // Forward re-normalizes to the same entry URL (no duplicate entry, no path leak).
     win.forward();
     ok("forward re-normalizes to the same entry URL", win.href() === base + "index.html#/milestones", "href=" + win.href());
+  }
+
+  console.log("\n--- syncURL/wireNav: page → page → app-only → back ×2 → forward ×2 (one entry per step) ---");
+  {
+    const win = mkBrowser(base + "index.html");
+    UP._resetSync();
+    UP.wireNav(base);
+    UP.syncURL(base);
+    win.navigate("#/issues");
+    win.navigate("#/prs");
+    win.navigate("#/graph");
+    ok("each navigation adds one history entry", win.stack.length === 4, "stack=" + JSON.stringify(win.stack));
+    win.back();
+    ok("back from an app-only route lands on the previous page URL", win.href() === base + "prs/index.html" && win.stack.length === 4, "href=" + win.href() + " stack=" + win.stack.length);
+    win.back();
+    ok("a second back reaches the page before it", win.href() === base + "issues/index.html" && win.stack.length === 4, "href=" + win.href() + " stack=" + win.stack.length);
+    win.forward();
+    ok("forward returns to the page", win.href() === base + "prs/index.html", "href=" + win.href());
+    win.forward();
+    ok("forward returns to the app-only route", win.href() === base + "index.html#/graph", "href=" + win.href());
+    // The app routes on hashchange; a pop between two page URLs gets one from the handler, since the browser sends popstate alone.
+    let routed = 0;
+    global.window.addEventListener("hashchange", () => { routed++; });
+    win.back(); win.back(); win.back();
+    ok("each back routes the app once", routed === 3 && win.href() === base + "index.html", "routed=" + routed + " href=" + win.href());
+    win.forward();
+    ok("forward onto a page URL routes the app", routed === 4 && win.href() === base + "issues/index.html", "routed=" + routed + " href=" + win.href());
   }
 
   console.log("\n--- syncURL: type-list page → search normalizes; same-route no-dup ---");

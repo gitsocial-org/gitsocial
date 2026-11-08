@@ -334,11 +334,19 @@
   var firstSync = true;
   // servedRel is the path the document was served at, read on the first sync; only there does the gs-route meta name the current page.
   var servedRel = null;
-  // duringPop keeps a popstate-driven hashchange to a replaceState, so the pop's history position stands.
-  var duringPop = false;
-  // syncURL reflects the rendered route into history: the clean page URL when the route has a page, else the normalized entry URL; replace keeps the history entry.
-  function syncURL(base, replace) {
+  // lastHref is the URL after the last sync, so a popstate can tell whether the browser fires hashchange itself.
+  var lastHref = "";
+  // syncURL reflects the rendered route into history and records the URL it left.
+  function syncURL(base) {
+    reflectURL(base);
+    lastHref = window.location.href;
+  }
+
+  // reflectURL writes the clean page URL when the route has a page, else the normalized entry URL; the hash change that drove it already made the history entry, so every write is a replace.
+  function reflectURL(base) {
     var frag = (window.location.hash || "").replace(/^#/, "");
+    // An empty hash means the URL is already the reflection: a page URL whose route hash a sync stripped.
+    if (frag === "") { firstSync = false; return; }
     var q = overrideQuery(window.location.search);
     var anchor = routeAnchor(frag);
     var route = routeWithoutAnchor(frag);
@@ -366,31 +374,37 @@
     }
     var target = pageURL + q + anchor;
     if (window.location.href === target) { firstSync = false; return; }
-    try {
-      if (firstSync || duringPop || replace) history.replaceState({ gs: 1 }, "", target);
-      else history.pushState({ gs: 1 }, "", target);
-    } catch (e) { /* history unavailable — stay on the hash URL */ }
+    try { history.replaceState({ gs: 1 }, "", target); } catch (e) { /* history unavailable — stay on the hash URL */ }
     firstSync = false;
+  }
+
+  // fireHashchange dispatches the event the app routes on, for a pop the browser reports with popstate alone.
+  function fireHashchange() {
+    try { window.dispatchEvent(typeof HashChangeEvent === "function" ? new HashChangeEvent("hashchange") : new Event("hashchange")); } catch (e) { /* no event constructor — the hash still names the route on the next change */ }
   }
 
   // wireNav re-renders the app on popstate by deriving the hash from the URL; a URL with no derivable hash reloads.
   function wireNav(base) {
     window.addEventListener("popstate", function () {
+      var href = window.location.href;
       var frag = (window.location.hash || "").replace(/^#/, "");
-      var h = hashForPath(base, window.location.href);
+      var h = hashForPath(base, href);
       // A row anchor on a page URL is not a route, so re-drive that page's own route with the anchor as the grammar's suffix.
       var anchored = frag !== "" && h && /^[A-Za-z0-9][\w.-]*$/.test(frag) && COMMITS_ROUTE.test(h.slice(1) + ":" + frag);
-      if (frag !== "" && !anchored) return; // hash already drives the app
+      // The browser fires hashchange only when the path is unchanged; a pop between two page URLs gets the event here.
+      var browserFires = href.split("#")[0] === lastHref.split("#")[0] && frag !== (lastHref.split("#")[1] || "");
+      lastHref = href;
+      if (frag !== "" && !anchored) { if (!browserFires) fireHashchange(); return; }
       if (!h) { window.location.reload(); return; }
-      duringPop = true;
-      window.location.hash = anchored ? h + ":" + frag : h;
+      // A replace fires hashchange and keeps the pop's history position; a hash assignment would push and drop the forward entries.
+      window.location.replace(anchored ? h + ":" + frag : h);
     });
-    window.addEventListener("hashchange", function () { syncURL(base); duringPop = false; });
+    window.addEventListener("hashchange", function () { syncURL(base); });
   }
 
   // wireFilePages installs the hook gs-app calls once window.__gsFilePages is set, which reflects the current route in place.
   function wireFilePages(base) {
-    window.__gsOnFilePages = function () { syncURL(base, true); };
+    window.__gsOnFilePages = function () { syncURL(base); };
   }
 
   // boot runs the takeover and restores the served page on any failure, re-throwing so the caller can report it.
@@ -518,7 +532,7 @@
       routeAnchor: routeAnchor, entryFor: entryFor,
       syncURL: syncURL, wireNav: wireNav, wireFilePages: wireFilePages, boot: boot,
       // _resetSync returns the module to its just-loaded state, so a suite can drive one boot after another.
-      _resetSync: function () { firstSync = true; servedRel = null; duringPop = false; settled = false; undoChrome = null; entryHref = null; },
+      _resetSync: function () { firstSync = true; servedRel = null; lastHref = ""; settled = false; undoChrome = null; entryHref = null; },
       // _setBootMaxMs shortens both give-up watchdogs so a suite need not wait them out; Node only.
       _setBootMaxMs: function (ms) { BOOT_MAX_MS = ms; APP_MAX_MS = ms; },
     };
