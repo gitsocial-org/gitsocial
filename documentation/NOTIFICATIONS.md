@@ -15,6 +15,8 @@ gitsocial notifications unread <id> | unread-all
 
 `gitsocial fetch` reports the unread count when it finishes. In the TUI, `@` opens the feed.
 
+A fetch that brings new unread notifications sends a desktop message. Up to three new notifications give one message each, and more give one summary message. `gitsocial fetch --json` sends no message. The TUI sends messages only after an auto-fetch, so turn on `fetch.auto.enabled` to get messages from the TUI. To turn the messages off, run `gitsocial settings set notifications.desktop false`, or set `GITSOCIAL_DESKTOP_NOTIFICATIONS=false` on one machine. On macOS, the first message asks for permission for your terminal app; if you see no messages, allow notifications for the terminal app in the system settings.
+
 ## Types
 
 The scope of a type tells which repositories can create it. GitSocial does not notify you about your own actions.

@@ -12,13 +12,19 @@ import (
 // Settings is the runtime view of all configurable values. It's populated by
 // Load() from defaults + personal-config overlay; nothing writes it to disk.
 type Settings struct {
-	Fetch      FetchSettings
-	Output     OutputSettings
-	Log        LogSettings
-	Display    DisplaySettings
-	Extensions ExtensionsSettings
-	Identity   IdentitySettings
-	S3         S3Settings
+	Fetch         FetchSettings
+	Output        OutputSettings
+	Log           LogSettings
+	Display       DisplaySettings
+	Extensions    ExtensionsSettings
+	Identity      IdentitySettings
+	S3            S3Settings
+	Notifications NotificationsSettings
+}
+
+// NotificationsSettings controls the desktop messages of a fetch.
+type NotificationsSettings struct {
+	Desktop bool
 }
 
 // S3Settings controls the s3:// remote backend.
@@ -98,6 +104,9 @@ func DefaultSettings() *Settings {
 		S3: S3Settings{
 			Concurrency: 16,
 		},
+		Notifications: NotificationsSettings{
+			Desktop: true,
+		},
 	}
 }
 
@@ -173,6 +182,8 @@ func Get(s *Settings, key string) (string, bool) {
 		return strconv.FormatBool(s.Identity.DNSVerification), true
 	case "s3.concurrency":
 		return strconv.Itoa(s.S3.Concurrency), true
+	case "notifications.desktop":
+		return strconv.FormatBool(s.Notifications.Desktop), true
 	case "fetch.workspace_mode":
 		return "(per-repo)", true
 	default:
@@ -269,6 +280,11 @@ func Set(s *Settings, key, value string) error {
 			return fmt.Errorf("s3.concurrency must be a positive integer")
 		}
 		s.S3.Concurrency = n
+	case "notifications.desktop":
+		if value != "true" && value != "false" {
+			return fmt.Errorf("notifications.desktop must be true or false")
+		}
+		s.Notifications.Desktop = value == "true"
 	case "fetch.workspace_mode":
 		return fmt.Errorf("fetch.workspace_mode is per-repo: change it in the settings view")
 	default:
@@ -297,6 +313,7 @@ func ListKeys() []string {
 		"extensions.release",
 		"extensions.memo",
 		"identity.dns_verification",
+		"notifications.desktop",
 	}
 }
 
@@ -342,6 +359,7 @@ var EnumOptions = map[string][]string{
 	"extensions.review":         {"true", "false"},
 	"extensions.memo":           {"true", "false"},
 	"identity.dns_verification": {"false", "true"},
+	"notifications.desktop":     {"true", "false"},
 }
 
 // IsEnum checks if a setting has enumerated options.

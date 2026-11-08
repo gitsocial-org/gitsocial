@@ -3,6 +3,7 @@ package notifications
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -62,17 +63,30 @@ func RegisterProvider(name string, p Provider) {
 	providers = append(providers, namedProvider{name: name, provider: p})
 }
 
-// GetAll aggregates notifications from all registered providers, sorted by timestamp descending.
+// GetAll aggregates notifications from all registered providers, sorted by timestamp descending; a failing provider is skipped.
 func GetAll(workdir string, filter Filter) ([]Notification, error) {
+	all, _ := gather(workdir, filter)
+	return all, nil
+}
+
+// GetAllStrict aggregates like GetAll and also returns the errors of the providers that failed.
+func GetAllStrict(workdir string, filter Filter) ([]Notification, error) {
+	return gather(workdir, filter)
+}
+
+// gather collects, filters and sorts the notifications of every provider and joins the provider errors.
+func gather(workdir string, filter Filter) ([]Notification, error) {
 	mu.RLock()
 	snapshot := make([]namedProvider, len(providers))
 	copy(snapshot, providers)
 	mu.RUnlock()
 
 	var all []Notification
+	var failures []error
 	for _, np := range snapshot {
 		items, err := np.provider.GetNotifications(workdir, filter)
 		if err != nil {
+			failures = append(failures, fmt.Errorf("provider %s: %w", np.name, err))
 			continue
 		}
 		all = append(all, items...)
@@ -100,7 +114,7 @@ func GetAll(workdir string, filter Filter) ([]Notification, error) {
 		all = all[:filter.Limit]
 	}
 
-	return all, nil
+	return all, errors.Join(failures...)
 }
 
 // GetUnreadCount returns the total unread count across all providers.

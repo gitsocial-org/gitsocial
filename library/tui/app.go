@@ -1239,7 +1239,7 @@ func (m Model) startFetchWithMode(allBranches, auto bool) tea.Cmd {
 		// this fetch brought in across all sources (followed repos, forks, and
 		// the workspace re-sync) rather than just the social total.
 		before, _ := cache.CountCommitsByBranch()
-		result, forkStats := client.Fetch(m.workdir, m.cacheDir, client.FetchOptions{FetchAllBranches: allBranches})
+		result, forkStats, newUnread := client.Fetch(m.workdir, m.cacheDir, client.FetchOptions{FetchAllBranches: allBranches})
 		if !result.Success {
 			return tuisocial.FetchCompletedMsg{Err: fmt.Errorf("%s", result.Error.Text()), Auto: auto}
 		}
@@ -1248,7 +1248,7 @@ func (m Model) startFetchWithMode(allBranches, auto bool) tea.Cmd {
 		stats := result.Data
 		stats.Items = breakdownTotal(breakdown)
 		stats.Errors = append(stats.Errors, forkStats.Errors...)
-		return tuisocial.FetchCompletedMsg{Stats: stats, Breakdown: breakdown, Auto: auto}
+		return tuisocial.FetchCompletedMsg{Stats: stats, Breakdown: breakdown, Auto: auto, NewUnread: newUnread}
 	}
 }
 

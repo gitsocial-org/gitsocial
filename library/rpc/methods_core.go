@@ -438,7 +438,7 @@ func coreFetch(s *Server) HandlerFunc {
 					})
 				},
 			}
-			result, _ := client.Fetch(workdir, cacheDir, opts)
+			result, _, newUnread := client.Fetch(workdir, cacheDir, opts)
 			if result.Success {
 				errCount := len(result.Data.Errors)
 				s.Emit("fetch", "fetch.complete", map[string]any{
@@ -457,6 +457,9 @@ func coreFetch(s *Server) HandlerFunc {
 			s.Emit("notifications", "notifications.changed", map[string]any{
 				"unreadCount": count,
 			})
+			if result.Success {
+				client.NotifyDesktop(newUnread)
+			}
 		}()
 		return map[string]string{"fetchId": fetchID}, nil
 	}

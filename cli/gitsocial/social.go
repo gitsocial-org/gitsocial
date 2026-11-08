@@ -806,7 +806,7 @@ Examples:
 				}
 			}
 
-			result, _ := client.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
+			result, _, _ := client.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
 			if !result.Success {
 				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))

@@ -312,7 +312,11 @@ var sectionTitles = []struct {
 	{"display", "Display"},
 	{"extensions", "Extensions"},
 	{"s3", "S3"},
+	{"notifications", "Notifications"},
 }
+
+// settingsLabelWidth fits the longest key, notifications.desktop.
+const settingsLabelWidth = 22
 
 // keysOwnedElsewhere names the keys another view edits; the Identity view toggles DNS verification and applies it live.
 var keysOwnedElsewhere = map[string]bool{
@@ -473,7 +477,7 @@ func (v *SettingsView) Render(state *tuicore.State) string {
 		return wrapper.Render(content, footer)
 	}
 
-	rs := tuicore.DefaultRowStyles()
+	rs := tuicore.RowStylesWithWidths(settingsLabelWidth, 0)
 	innerHeight := state.InnerHeight()
 
 	var b strings.Builder

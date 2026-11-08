@@ -30,6 +30,7 @@ GitSocial reads an environment-scoped key from the environment and any other key
 | `fetch.auto.interval` | int | `300` | auto-fetch interval in seconds, minimum 60 |
 | `fetch.auto.backoff` | bool | `true` | slow auto-fetch while idle; reset when new items arrive |
 | `s3.concurrency` | int | `16` | concurrent uploads per s3 push; `GITSOCIAL_S3_CONCURRENCY` overrides |
+| `notifications.desktop` | bool | `true` | send a desktop message for new unread notifications after a fetch; `GITSOCIAL_DESKTOP_NOTIFICATIONS` overrides |
 
 `fetch.workspace_mode` is a map from each repository to `default` or `*`. The first-fetch prompt writes it, and `settings set` refuses it.
 
@@ -51,6 +52,7 @@ Repeat `init --remote` and `sync` on each machine. `personal sync` pushes and fe
 |---|---|
 | `XDG_CONFIG_HOME` | config root, default `~/.config` |
 | `GITSOCIAL_PERSONAL_REPO` | the personal repository path, default `~/.config/gitsocial/personal` |
+| `GITSOCIAL_DESKTOP_NOTIFICATIONS` | `true` or `false`: turn desktop messages on or off on this machine, with priority over `notifications.desktop` |
 | `GITSOCIAL_PPROF` | `cpu`, `mem` or `trace`: profile this run to `/tmp/gitsocial-*` |
 | `MEMO_SESSION_ID` | the active memo session id |
 | `MEMO_SESSION_DIR` | the memo session directory, default `~/.cache/gitsocial/memo/session` |

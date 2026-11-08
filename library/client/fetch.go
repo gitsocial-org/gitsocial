@@ -22,8 +22,9 @@ type FetchOptions struct {
 	OnProgress       func(repoURL string, processed, total int)
 }
 
-// Fetch runs the one sequence: subscribed repositories, registered forks, the workspace, then the memo tiers.
-func Fetch(workdir, cacheDir string, opts FetchOptions) (fetch.Result, fetch.Stats) {
+// Fetch runs the one sequence: subscribed repositories, registered forks, the workspace, then the memo tiers; it returns the notifications that became unread when desktop messages are on.
+func Fetch(workdir, cacheDir string, opts FetchOptions) (fetch.Result, fetch.Stats, []notifications.Notification) {
+	newUnread := WatchUnread(workdir)
 	result := social.Fetch(workdir, cacheDir, &social.FetchOptions{
 		ListID:           opts.ListID,
 		Parallel:         opts.Parallel,
@@ -40,7 +41,7 @@ func Fetch(workdir, cacheDir string, opts FetchOptions) (fetch.Result, fetch.Sta
 	if err := memo.SyncAllTierReposToCache(workdir); err != nil {
 		log.Debug("memo tier sync failed", "error", err)
 	}
-	return result, forkStats
+	return result, forkStats, newUnread()
 }
 
 // FetchRepository fetches one repository's history with every processor and hook.

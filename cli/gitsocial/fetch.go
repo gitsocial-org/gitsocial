@@ -57,10 +57,14 @@ For extension-specific options, use the extension's fetch command directly:
 				if err != nil {
 					slog.Debug("get unread count", "error", err)
 				}
+				newUnread := client.WatchUnread(cfg.WorkDir)
 				result := client.FetchRepository(cfg.CacheDir, repoURL, "", workspaceURL)
 				if !result.Success {
 					PrintError(cmd, result.Error.Text())
 					return exit(ExitCode(result.Error.Code))
+				}
+				if !cfg.JSONOutput {
+					client.NotifyDesktop(newUnread())
 				}
 
 				if cfg.JSONOutput {
@@ -86,7 +90,7 @@ For extension-specific options, use the extension's fetch command directly:
 				}
 			}
 
-			result, forkStats := runFullFetch(cmd, cfg, client.FetchOptions{
+			result, forkStats, newUnread := runFullFetch(cmd, cfg, client.FetchOptions{
 				ListID:   listID,
 				Parallel: parallel,
 			}, false, allBranches)
@@ -96,6 +100,9 @@ For extension-specific options, use the extension's fetch command directly:
 			if !result.Success {
 				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
+			}
+			if !cfg.JSONOutput {
+				client.NotifyDesktop(newUnread)
 			}
 
 			stats := result.Data
@@ -177,7 +184,7 @@ func resolveWorkspaceMode(cmd *cobra.Command, workdir string, jsonOutput, assume
 }
 
 // runFullFetch fetches the subscribed repos, the registered forks and the workspace.
-func runFullFetch(cmd *cobra.Command, cfg *Config, opts client.FetchOptions, assumeYes, allBranches bool) (fetch.Result, fetch.Stats) {
+func runFullFetch(cmd *cobra.Command, cfg *Config, opts client.FetchOptions, assumeYes, allBranches bool) (fetch.Result, fetch.Stats, []notifications.Notification) {
 	opts.FetchAllBranches = resolveWorkspaceMode(cmd, cfg.WorkDir, cfg.JSONOutput, assumeYes, allBranches)
 	return client.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
 }

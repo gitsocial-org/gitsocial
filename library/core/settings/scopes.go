@@ -91,6 +91,9 @@ var Registry = []KeySpec{
 	{Key: "s3.concurrency", Scope: ScopePersonalConfig, Type: KeyInt, Default: "16",
 		Desc: "Concurrent object uploads per s3:// push (overridden by GITSOCIAL_S3_CONCURRENCY)."},
 
+	{Key: "notifications.desktop", Scope: ScopePersonalConfig, Type: KeyBool, Default: "true",
+		Desc: "Send a desktop message for new unread notifications after a fetch (overridden by GITSOCIAL_DESKTOP_NOTIFICATIONS)."},
+
 	// fetch.workspace_mode is a per-repo-URL map; handled outside the Registry
 	// via Get/WriteWorkspaceMode (the personal config also stores the map, but
 	// the shape doesn't fit Manager.Write's scalar contract).
@@ -101,6 +104,8 @@ var Registry = []KeySpec{
 		Desc: "Override the personal bare repo path (default: ~/.config/gitsocial/personal)."},
 	{Key: "MEMO_SESSION_ID", Scope: ScopeEnv, Type: KeyString,
 		Desc: "Pin the active memo session id (default: auto-generated per process)."},
+	{Key: "GITSOCIAL_DESKTOP_NOTIFICATIONS", Scope: ScopeEnv, Type: KeyBool,
+		Desc: "Turn desktop messages on or off on this machine; has priority over notifications.desktop."},
 	{Key: "MEMO_SESSION_DIR", Scope: ScopeEnv, Type: KeyString,
 		Desc: "Override the memo session-repos parent directory (default: ~/.cache/gitsocial/memo/session)."},
 }
