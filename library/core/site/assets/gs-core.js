@@ -3430,6 +3430,19 @@
     return dropMergeCloses(out).sort((a, b) => b.effectiveTime - a.effectiveTime);
   }
 
+  // loadNotifyItems returns the newest items of each timeline lane by commit time, up to the timeline window, un-hydrated, with no action entry, code commit or orphan edit; it drops the memos of the mutable keys first, so each call reads the current bucket.
+  async function loadNotifyItems(ctx) {
+    Object.assign(ctx, { manifest: undefined, manifestText: undefined, itemsIndex: {}, bodyMaps: {}, bodyDocTexts: new Map(), refMisses: new Set(), walks: {} });
+    const lanes = await Promise.all(TIMELINE_SPECS.map(async (spec) => {
+      // The window is the newest commits, so an item with an older origin date that was just pushed is in it.
+      const items = timelineTyped(spec, (await resolveExtItems(ctx, spec.ext, TIMELINE_WINDOW)).items).filter((it) => !(it.commit.gitmsg && it.commit.gitmsg.edits))
+        .sort((a, b) => (b.commit.authorTime || 0) - (a.commit.authorTime || 0)).slice(0, TIMELINE_WINDOW);
+      for (const it of items) { it._ext = spec.ext; it._branch = spec.branch; }
+      return items;
+    }));
+    return [].concat(...lanes);
+  }
+
   // resolveExtItems returns an ext's resolved items un-hydrated, walking far enough to surface need items or exhaust the branch.
   async function resolveExtItems(ctx, ext, need) {
     const w = await extWalkState(ctx, ext);
@@ -5119,7 +5132,7 @@
   // iconColorClass returns the hue class for a resolved icon key, or "".
   function iconColorClass(key) { return ICON_COLOR[key] || ""; }
 
-  const core = {
+  const core = { loadNotifyItems, eqFold,
     deriveBase, repoTitle, fetchBytes, fetchText, fetchRange, inflate, parseLooseObject, objectKey,
     getObject, getContentObject, getStateObject, getPackedObject, objectStore, STORE_BYTE_BUDGET, STORE_COUNT_BUDGET, STORE_OBJECT_MAX, packNames, bucketIsPacked, packMapShard, packKey, registerForkPack, packIdxOpen, packIdxLookup, packIdxFind, applyDelta, parseCommit, cleanContent, parseGitmsg, resolveRef, resolveHead,
     walkHistory, startWalk, walkStep, walkedCommits, walkStateFor, refHash, anyRefHash, findRefItem, parseBranchField, resolveItems, adoptedOf,

@@ -145,6 +145,8 @@ A card has the shape of a post in a feed, on both renderers:
 5. The title of a titled item, alone on its line. A comment, quote or repost has no title.
 6. The excerpt, the body under a clamp of five lines, on every list, a search result included, or the text of a comment, quote or repost; until the body loads, a card shows the excerpt of its index entry, and a release headed by its tag leads its excerpt with its subject; then the quote box of a reply, a quote or a repost, which leads with a smaller avatar, the glyph and the author line of the quoted item. The glyph button at the right of a list heading switches every list to compact cards, which hide the excerpt, and back; the browser keeps one choice for all lists. Every other body takes the same clamp: a reply, a feedback and a quote box on an item page or a detail, and the text of a static entry. A fork pull request and a search result after the first 25 keep the excerpt of the index entry, because the bucket holds no fork body and search fills 25 bodies at a time. A branch, a tag, a board tile, a member row and a list row have no excerpt.
 
+The bell in the sidebar header of the app opens the panel of [browser notifications](NOTIFICATIONS.md#in-the-browser), on the panel surface and tokens of the sidebar; a generated page shows the bell when the app starts on it.
+
 The tokens are declared once, in `pages-core.css`; `site_pages_tokens_test.go` fails on a spacing value off the scale or a token declared elsewhere. `sitetest/parity_fixtures.json` records the markup and wording that the page layer and the app share. A visual change includes its golden and baseline update in the same commit.
 
 ## Testing
@@ -207,6 +209,13 @@ The app reads the artifacts under `.gitsocial/site/`, and the bucket's ref list 
 | `push-state` | skip digest for push-time maintenance |
 | `.gitsocial/forks/` | the fork area: `manifest.json` lists the open pull requests of registered forks, each entry with the fields of a shard entry, the fork URL, the head and its pack; `pack/pack-<hash>.{pack,idx}` holds the objects of one head that no bucket ref reaches; `lock` freezes the area for the push |
 
+The app keeps two keys for [browser notifications](NOTIFICATIONS.md#in-the-browser) in the localStorage of the browser, and works without them.
+
+| Key | Content |
+|---|---|
+| `gs-notify-email` | the email of the reader, one per origin |
+| `gs-notify-seen:<base>` | `["<hash12>",...]`: the items of the newest window of each lane, then the older seen items, 500 at most, one per site base |
+
 ### Invariants
 
 The shell and the pages:
@@ -260,6 +269,11 @@ Page entry:
 Browser notifications:
 
 - The app asks the browser for notification permission only from the button of the bell panel, never on load. `unit_notify_permission.js` pins it.
+- With an email, the app shows the new items that mention it, assign an issue to it or request its review, and the comments on its posts, never an item by that email; without an email it shows every new item. A comment on a post outside the newest window, and a reply to a comment of the reader, give no notification. Up to three items give one notification each, more give one summary. `unit_notify_filter.js` pins it.
+- Each item shows once per browser. An item is new when the seen mark does not hold its hash, whatever its date. A run writes the mark after the load and after the notifications show, and a failed load keeps the mark as it was. The first run in a browser with no mark writes it and shows nothing; a grant with a mark shows the items after it. `unit_notify_seen.js` pins it.
+- With permission granted, the notifier runs once after the page loads and after each change of `.gitsocial/refs.json`, on one context for the life of the tab. A change during a run gives one more run after it. Without permission it does not run. `unit_notify_poll.js` pins it.
+- The body of a notification has one definition in two places, `notificationBody` in `gs-render.js` and `desktopBody` in `core/notifications/desktop_text.go`, and `notificationBodies` in `parity_fixtures.json` pins the two.
+- The app reads `.gitsocial/refs.json` for notifications only while permission is granted and the tab is visible, once a minute, and a page load makes no request for them. The notification code names no host; `verify_site_features.js` checks it.
 
 Index maintenance:
 

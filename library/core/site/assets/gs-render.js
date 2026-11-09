@@ -4,7 +4,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, CONCURRENCY, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, anyRefHash, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, findForkPull, hydrateForkPull, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, parseTagger, peelTag, tagsByCommit, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, AVATARS_DIR, avatarKey, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseInline, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, loadFilePages, filePageHref, headSubject, releaseVersionChip, pageHeadChips, rowHeadChips, itemChips, refExt, relationChips, indexSubject, indexType, chipClass, chipLead, chipText, HEADER_REF_RE, searchHref, chipStateClass, resolveAncestors, resolvePath, resolveShortSha, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
+  const { COMMIT_VIEW, CONCURRENCY, eqFold, DETAIL_WALK_CAP, THREAD_MAX_DEPTH, activityBuckets, anchorFeedback, anyRefHash, buildBoard, buildHunks, buildIssueHierarchy, commitRef, compareRef, resolveCompareRef, commitTree, diffLines, diffTrees, authorLabel, effectiveAuthor, effectiveAuthorEmail, embeddedRefs, subjectText, feedbackVerdict, feedbackAnchorLabel, fileDiff, findItemDeep, findForkPull, hydrateForkPull, headFor, flattenThread, getObject, getContentObject, getTree, groupPM, groupThread, hashEq, headBranchName, hunkLineKeys, hydrateItems, iconColorClass, iconName, intraLine, isBinary, isLFSPointer, isBodyOnly, facetType, isMarkdownPath, isMDXPath, stripMDX, stripFrontMatter, itemSubject, stripLinkRefDefs, listBranches, listTags, orderedTags, parseTagger, peelTag, tagsByCommit, listMemberRef, loadTagRange, tagRangeWindow, tagRangeFiles, loadAnalyticsData, loadSiteStats, loadBranchLogWindow, loadCommitsPage, loadCompareCommitsWindow, loadGraphWindow, assignGraphLanes, loadExtConfig, loadExtItemsAll, loadExtItemsUpTo, loadForks, loadListDetail, loadListsSummary, loadSearchWindow, manifestFor, forkRefNames, loadSiteConfig, loadSiteCustomization, siteFaviconHref, AVATARS_DIR, avatarKey, countsFor, fullSearchBytes, resolveMergeBase, parseBranchField, parseCommit, parseInline, parseMarkdown, parentRef, parentQuote, pmParentHash, pmProgress, prFeedback, quotedRefFor, refBranch, refHash, refRepoUrl, refTip, releaseAssets, itemBodyBlocks, HOME_ROWS, compactCount, loadNavCounts, loadFilePages, filePageHref, headSubject, releaseVersionChip, pageHeadChips, rowHeadChips, itemChips, refExt, relationChips, indexSubject, indexType, chipClass, chipLead, chipText, HEADER_REF_RE, searchHref, chipStateClass, resolveAncestors, resolvePath, resolveShortSha, reviewSummary, searchItemsFaceted, stateCounts, typeGlyph, suggestionBody, topItemAuthors, walkHistory, parseRoute, SWIMLANE_FIELDS, SWIMLANE_LABELS, swimlaneOrder, groupBySwimlane, swimlaneLabel } = NS;
 
   // listLink links a detail page to the list its item lives in, named, as the pre-rendered pages do in their footer; the browser's own Back is the return trip.
   function listLink(tab) {
@@ -4746,6 +4746,97 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return repo ? text + " · " + repo : text;
   }
 
+  // NOTIFY_CAP is the most new items that get one notification each; more get one summary, as on the desktop.
+  const NOTIFY_CAP = 3;
+
+  // NOTIFY_SEEN_KEY prefixes the localStorage key of the seen mark of one site base.
+  const NOTIFY_SEEN_KEY = "gs-notify-seen:";
+
+  // NOTIFY_SEEN_MAX bounds the seen mark: the hashes of the newest window of the lanes, then the hashes of the mark before it.
+  const NOTIFY_SEEN_MAX = 500;
+
+  // notifyRun loads the items, shows those whose hash the seen mark of base does not hold, then writes the mark; with no mark it writes the baseline and shows nothing, and a failed load or storage leaves the mark as it was.
+  async function notifyRun(store, base, load, show) {
+    if (!store) return [];
+    const key = NOTIFY_SEEN_KEY + base;
+    let raw;
+    try { raw = store.getItem(key); } catch (e) { return []; }
+    let seen = null;
+    try { seen = JSON.parse(raw || "null"); } catch (e) { seen = null; }
+    const known = Array.isArray(seen) ? new Set(seen) : null;
+    const items = await load();
+    const fresh = known ? items.filter((it) => !known.has(it.commit.short)) : [];
+    if (fresh.length) await show(fresh, items);
+    const shorts = Array.from(new Set(items.map((it) => it.commit.short)));
+    const held = new Set(shorts);
+    const next = shorts.concat((known ? Array.from(known) : []).filter((h) => !held.has(h))).slice(0, NOTIFY_SEEN_MAX);
+    try { store.setItem(key, JSON.stringify(next)); } catch (e) { /* the next run shows these items again */ }
+    return fresh;
+  }
+
+  // notifyType returns the notification type that ties an item to the email, or ""; byShort finds the post that a comment answers.
+  function notifyType(item, email, byShort) {
+    const h = item.header || {};
+    const listed = (field) => String(h[field] || "").split(",").some((v) => eqFold(v, email));
+    for (const m of String(item.content || "").matchAll(MENTION_RE)) if (eqFold(m[2], email)) return "mention";
+    if (item._ext === "pm" && listed("assignees")) return "issue-assigned";
+    if (item._ext === "review" && listed("reviewers")) return "review-requested";
+    if (facetType(item, item._ext) === "comment") {
+      const original = byShort.get(anyRefHash(h.original || ""));
+      if (original && eqFold(effectiveAuthorEmail(original.commit, original.header), email)) return "comment";
+    }
+    return "";
+  }
+
+  // pickNotifyItems keeps the new items for the reader as { item, type }: with an email, those that mention it, assign it, request its review or answer its post, and never its own; without one, every new item with no type.
+  function pickNotifyItems(fresh, all, email) {
+    const want = String(email || "").trim();
+    if (!want) return fresh.map((item) => ({ item, type: "" }));
+    const byShort = new Map(all.map((it) => [it.commit.short, it]));
+    const out = [];
+    for (const item of fresh) {
+      if (eqFold(effectiveAuthorEmail(item.commit, item.header), want)) continue;
+      const type = notifyType(item, want, byShort);
+      if (type) out.push({ item, type });
+    }
+    return out;
+  }
+
+  // NEW_ITEM_VERBS is the phrase after the actor of a new item that no notification type names, by item type.
+  const NEW_ITEM_VERBS = { post: "posted", comment: "commented", repost: "reposted a post", quote: "quoted a post", issue: "opened an issue", milestone: "added a milestone", sprint: "added a sprint", "pull-request": "opened a pull request", release: "published a release" };
+
+  // newItemBody returns the text of a new item without a type: the actor, the kind of the item and the repository.
+  function newItemBody(item, repo) {
+    const verb = NEW_ITEM_VERBS[facetType(item, item._ext)] || "added an item";
+    const text = item.author ? item.author + " " + verb : verb;
+    return repo ? text + " · " + repo : text;
+  }
+
+  // notifyMessages returns one message per picked item, or one summary over the cap; a message has a title, a body, the route a click opens and a tag.
+  function notifyMessages(picked, title, repo) {
+    if (picked.length > NOTIFY_CAP) return [{ title, body: picked.length + " new notifications", route: "#/timeline", tag: "" }];
+    return picked.map(({ item, type }) => ({
+      title, body: type ? notificationBody(type, item.author, repo) : newItemBody(item, repo),
+      route: "#commit:" + item.commit.short, tag: item.commit.short,
+    }));
+  }
+
+  // showNotifications shows each message as a browser notification; a click focuses the tab and opens the route of the message in it.
+  function showNotifications(messages, iconHref) {
+    for (const m of messages) {
+      const opts = { body: m.body };
+      if (iconHref) opts.icon = iconHref;
+      if (m.tag) opts.tag = m.tag;
+      let n;
+      try { n = new window.Notification(m.title, opts); } catch (e) { continue; }
+      n.onclick = () => {
+        try { window.focus(); } catch (e) { /* the route still opens */ }
+        location.hash = m.route;
+        if (typeof n.close === "function") n.close();
+      };
+    }
+  }
+
   // NOTIFY_EMAIL_KEY is the localStorage key of the reader's email, one per origin.
   const NOTIFY_EMAIL_KEY = "gs-notify-email";
 
@@ -4835,6 +4926,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, routeTitle, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, notificationBody, notifyPanel, notifyState, notifyStorage, readNotifyEmail, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, relativeHref, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures, navFeaturesOff });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, routeTitle, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, notificationBody, notifyPanel, notifyState, notifyStorage, readNotifyEmail, notifyRun, pickNotifyItems, notifyMessages, showNotifications, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, relativeHref, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures, navFeaturesOff });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

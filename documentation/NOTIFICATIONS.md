@@ -59,6 +59,20 @@ Each message is one POST with `Content-Type: application/json`. A summary has no
 | after the retry | a debug log line; the message is not sent again |
 | batch | the posts of one fetch run at the same time, and the batch ends after two timeouts and the retry delay |
 
+### In the browser
+
+The static site, on a bucket or under `gitsocial serve`, shows browser notifications from an open tab. When no tab of the site is open, nothing shows; there is no push server.
+
+1. Click the bell in the sidebar header.
+2. Click **Turn on notifications** and allow them in the prompt of the browser. The site asks only after this click.
+3. To filter, type your email in **Notify me about items for**.
+
+With an email, the tab shows the new items that mention the email, assign an issue to it, request its review, or comment on a post that it wrote. An item by that email does not show. Without an email, the tab shows each new post, comment, issue, pull request and release.
+
+When you open the site, and then each minute while the tab is visible and when you go back to the tab, the tab reads the ref list of the site. Each item shows once per browser, and the items that arrived while no tab was open show when you open the site again. The first time a browser turns notifications on, it records the current items and shows nothing. Up to three new items give one notification each, and more give one summary, the same as on the desktop. A click opens the item in the same tab, and a click on the summary opens the timeline.
+
+The browser keeps the email and the seen items in its local storage for the site. Without local storage, on a page that is not https or localhost, or in a browser with no Notification API, the panel tells why and has no button. Safari on iOS gives the Notification API only to a web app on the home screen, and Chrome on Android shows a notification only through a service worker, which the site does not have.
+
 ## Types
 
 The scope of a type tells which repositories can create it. GitSocial does not notify you about your own actions.

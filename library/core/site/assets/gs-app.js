@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, hydrateItems, loadForkPulls, loadInteractionCounts, loadFilePages, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, routeTitle, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, loadAvatarManifest, setAvatarKeys, setGrammarBase, setRefContext, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures, notifyPanel } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, hydrateItems, loadForkPulls, loadInteractionCounts, loadFilePages, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, routeTitle, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, loadAvatarManifest, setAvatarKeys, setGrammarBase, setRefContext, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures, notifyPanel, notifyState, notifyStorage, readNotifyEmail, loadNotifyItems, notifyRun, pickNotifyItems, notifyMessages, showNotifications } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -363,6 +363,9 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   // siteName is the site title the header shows and each route title ends with.
   let siteName = "";
 
+  // customTitle is the site title of the site customization, "" when it has none.
+  let customTitle = "";
+
   // titled is the route and subject the tab title names on a page entry, so a later site name titles it again.
   let titled = null;
 
@@ -436,7 +439,8 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   async function applySiteCustomization(ctx, fallbackName) {
     let cfg = null;
     try { cfg = await loadSiteCustomization(ctx); } catch { cfg = null; }
-    if (cfg && typeof cfg.title === "string" && cfg.title.trim()) setDocTitle(cfg.title.trim());
+    customTitle = cfg && typeof cfg.title === "string" ? cfg.title.trim() : "";
+    if (customTitle) setDocTitle(customTitle);
     else setDocTitle(fallbackName);
     if (cfg) { applyAccent(cfg.accent, cfg.accentDark); applyFavicon(ctx.base, cfg.favicon); }
     if (cfg && typeof cfg.avatarManifest === "string" && cfg.avatarManifest) {
@@ -444,12 +448,38 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     }
   }
 
-  // startFreshnessWatch surfaces a maintainer's push in a long-lived tab: on return
-  // to the tab (focus / visibility) refs.json is re-read (a no-cache key, a cheap
-  // 304 when unchanged) and any change raises a reload pill. The baseline is the
-  // body the route already loaded (ctx.manifestText).
-  function startFreshnessWatch(ctx) {
-    let baseline = null, lastCheck = 0, pill = null;
+  // NOTIFY_POLL_MS is the period of the refs read while browser notifications are on and the tab is visible.
+  const NOTIFY_POLL_MS = 60000;
+
+  // startNotifier runs the browser notifications of the tab on one context; a change during a run asks for one more run after it, and load replaces the item lanes in a test.
+  function startNotifier(ctx, load) {
+    const nctx = newContext(ctx.base);
+    const loadItems = load || (() => loadNotifyItems(nctx));
+    let busy = false, pending = false;
+    const on = () => notifyState() === "granted";
+    const show = async (fresh, all) => {
+      const email = readNotifyEmail();
+      if (email) await hydrateItems(nctx, fresh);
+      const icon = typeof document !== "undefined" && document.querySelector ? document.querySelector("link[rel=icon]") : null;
+      showNotifications(notifyMessages(pickNotifyItems(fresh, all, email), customTitle || "GitSocial", repoTitle(ctx.base)), icon ? icon.getAttribute("href") : "");
+    };
+    const run = async () => {
+      if (!on()) return;
+      if (busy) { pending = true; return; }
+      busy = true;
+      try {
+        do {
+          pending = false;
+          try { await notifyRun(notifyStorage(), ctx.base, loadItems, show); } catch (e) { /* the mark stays, and the next change tries again */ }
+        } while (pending && on());
+      } finally { busy = false; }
+    };
+    return { on, run };
+  }
+
+  // startFreshnessWatch re-reads refs.json on focus, on visibility and, with notifications on, each minute while visible; a change raises the reload pill and runs the notifier.
+  function startFreshnessWatch(ctx, notifier) {
+    let baseline = null, last = null, lastCheck = 0, pill = null, timer = null;
     const showPill = () => {
       if (pill) return;
       pill = el("button", { class: "update-pill", type: "button" }, ["New updates · Refresh"]);
@@ -457,20 +487,28 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
       document.body.append(pill);
     };
     const check = async () => {
-      if (pill) return;
-      if (baseline === null && typeof ctx.manifestText === "string") { baseline = ctx.manifestText; return; }
+      if (pill && !notifier.on()) return;
+      if (baseline === null && typeof ctx.manifestText === "string") { baseline = last = ctx.manifestText; notifier.run(); return; }
       const now = Date.now();
       if (now - lastCheck < 30000) return;
       lastCheck = now;
       let cur = null;
       try { cur = await NS.fetchText(ctx.base, ".gitsocial/refs.json"); } catch { return; }
       if (cur === null) return;
-      if (baseline === null) baseline = cur;
-      else if (cur !== baseline) showPill();
+      if (baseline === null) { baseline = last = cur; notifier.run(); return; }
+      if (cur !== baseline) showPill();
+      if (cur !== last) { last = cur; notifier.run(); }
+    };
+    // poll starts the timer once notifications are on; a hidden tab reads nothing.
+    const poll = () => {
+      if (timer || !notifier.on()) return;
+      timer = setInterval(() => { if (document.visibilityState === "visible" && notifier.on()) check(); }, NOTIFY_POLL_MS);
     };
     setTimeout(check, 3000);
     window.addEventListener("focus", check);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); });
+    poll();
+    return poll;
   }
 
   // wireNotifyBell opens and closes the notification panel under the sidebar header; onGranted runs after the panel gets permission.
@@ -516,8 +554,10 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     publishFilePages(ctx).catch(() => {});
     wireNavSearch();
     wireCodeToggle(ctx);
-    startFreshnessWatch(ctx);
-    wireNotifyBell(null);
+    const notifier = startNotifier(ctx);
+    const poll = startFreshnessWatch(ctx, notifier);
+    // A grant shows the items after the seen mark; a browser with no mark only sets it.
+    wireNotifyBell(() => { notifier.run(); poll(); });
     const run = () => route(ctx);
     window.addEventListener("hashchange", run);
     if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("keydown", onGlobalKey);
@@ -525,7 +565,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     Promise.race([applying, new Promise((resolve) => setTimeout(resolve, CUSTOMIZATION_WAIT_MS))]).then(() => { if (routeGen === 0) route(ctx, entryHash, pageEntry()); });
   }
 
-  Object.assign(NS, { route, init, applySiteCustomization, applyAccent, applyFavicon });
+  Object.assign(NS, { route, init, applySiteCustomization, applyAccent, applyFavicon, startNotifier, startFreshnessWatch, wireNotifyBell });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();
 if (typeof document !== "undefined") (typeof globalThis !== "undefined" ? globalThis : this).GS.init();

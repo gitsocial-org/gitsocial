@@ -17,6 +17,7 @@
 //   memo and release cards carry the shared enrichment chip row (labels/origin)
 //   board columns collapse/hide, swimlanes collapse + lane index, per-cell item cap
 //   a board card is its subject alone on one title line, with no glyph
+//   the notification code names no host
 require("./shim.js");
 const SHELL = require("./shellrev.js");
 require("../assets/icons.js");
@@ -455,6 +456,14 @@ async function main() {
     }
     const other = GS.prFeedback([fb("#unknown:aaaaaaaaaaaa")], PR);
     ok("prFeedback ignores feedback for another pull request", other.all.length === 0, "matched " + other.all.length);
+  }
+
+  // The notification code is the same on every bucket: no function of it names a host, an address or the host of the page.
+  {
+    const NOTIFY_FNS = ["notificationBody", "notifyPanel", "notifyState", "notifyStorage", "readNotifyEmail", "loadNotifyItems", "notifyRun", "pickNotifyItems", "notifyMessages", "showNotifications", "startNotifier", "startFreshnessWatch", "wireNotifyBell"];
+    const HOST_RE = /[a-z]+:\/\/|\b[a-z0-9-]+\.(?:org|com|net|io|dev|app|site)\b|location\.(?:host|hostname|origin)\b|gitsocial\.org/i;
+    const named = NOTIFY_FNS.filter((name) => typeof GS[name] !== "function" || HOST_RE.test(String(GS[name])));
+    ok("the notification code names no host", named.length === 0, named.join(", "));
   }
 
   // A heading key that is not its own route: the configuration page is #/config, and compare needs two refs.
