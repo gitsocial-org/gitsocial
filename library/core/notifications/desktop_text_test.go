@@ -2,6 +2,7 @@
 package notifications
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -71,35 +72,20 @@ func TestDesktopMessages_summaryOverThree(t *testing.T) {
 	}
 }
 
-// parityBodies is the body of each documented type for the actor Alice on owner/repo; the site carrier says the same.
-var parityBodies = map[string]string{
-	"mention":           "Alice mentioned you · owner/repo",
-	"reference":         "Alice referenced your item · owner/repo",
-	"edit":              "Alice edited your item · owner/repo",
-	"comment":           "Alice commented · owner/repo",
-	"repost":            "Alice reposted your post · owner/repo",
-	"quote":             "Alice quoted your post · owner/repo",
-	"follow":            "Alice followed you · owner/repo",
-	"issue-assigned":    "Alice assigned you an issue · owner/repo",
-	"issue-closed":      "Alice closed your issue · owner/repo",
-	"issue-reopened":    "Alice reopened your issue · owner/repo",
-	"fork-issue":        "Alice opened an issue on a fork · owner/repo",
-	"fork-pr":           "Alice opened a pull request · owner/repo",
-	"review-requested":  "Alice requested your review · owner/repo",
-	"feedback":          "Alice gave feedback on a pull request · owner/repo",
-	"approved":          "Alice approved a pull request · owner/repo",
-	"changes-requested": "Alice requested changes · owner/repo",
-	"pr-merged":         "Alice merged your pull request · owner/repo",
-	"pr-closed":         "Alice closed your pull request · owner/repo",
-	"pr-ready":          "Alice marked a pull request ready · owner/repo",
-	"head-advanced":     "The head branch of a pull request advanced · owner/repo",
-	"base-advanced":     "The base branch of a pull request advanced · owner/repo",
-	"head-deleted":      "The head branch of a pull request is not on its remote · owner/repo",
-	"base-deleted":      "The base branch of a pull request is not on its remote · owner/repo",
-	"new-release":       "Alice published a release · owner/repo",
-	"memo-comment":      "Alice commented on your memo · owner/repo",
-	"inherited-policy":  "Alice added a critical memo · owner/repo",
-	"branch-diverged":   "A local gitmsg branch diverged from origin · owner/repo",
+// parityBodies returns the body of each documented type for the actor Alice on owner/repo, from the fixture that the site carrier is checked against.
+func parityBodies(t *testing.T) map[string]string {
+	t.Helper()
+	data, err := os.ReadFile("../site/sitetest/parity_fixtures.json")
+	if err != nil {
+		t.Fatalf("read the parity fixture: %v", err)
+	}
+	var fixture struct {
+		NotificationBodies map[string]string `json:"notificationBodies"`
+	}
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		t.Fatalf("parse the parity fixture: %v", err)
+	}
+	return fixture.NotificationBodies
 }
 
 // documentedTypes returns the notification types of the table in the guide.
@@ -124,13 +110,14 @@ func documentedTypes(t *testing.T) []string {
 
 func TestNotificationText_parity(t *testing.T) {
 	types := documentedTypes(t)
-	if len(types) != len(parityBodies) {
-		t.Errorf("the guide lists %d types and the golden list %d, want the same set", len(types), len(parityBodies))
+	golden := parityBodies(t)
+	if len(types) != len(golden) {
+		t.Errorf("the guide lists %d types and the fixture %d, want the same set", len(types), len(golden))
 	}
 	for _, typ := range types {
-		want, ok := parityBodies[typ]
+		want, ok := golden[typ]
 		if !ok {
-			t.Errorf("type %s is not in the golden list", typ)
+			t.Errorf("type %s is not in the fixture", typ)
 			continue
 		}
 		got := bodies([]Notification{{Type: typ, Actor: Actor{Name: "Alice"}, RepoURL: "https://example.com/owner/repo"}})

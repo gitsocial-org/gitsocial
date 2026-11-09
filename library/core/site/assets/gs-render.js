@@ -4714,6 +4714,39 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, routeTitle, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, relativeHref, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures, navFeaturesOff });
+  // ---- Browser notifications ----
+
+  // NOTIFY_SENTENCES is the full text of each notification type with no actor. Mirrors desktopSentence in core/notifications/desktop_text.go.
+  const NOTIFY_SENTENCES = {
+    "head-advanced": "The head branch of a pull request advanced",
+    "base-advanced": "The base branch of a pull request advanced",
+    "head-deleted": "The head branch of a pull request is not on its remote",
+    "base-deleted": "The base branch of a pull request is not on its remote",
+    "branch-diverged": "A local gitmsg branch diverged from origin",
+  };
+
+  // NOTIFY_VERBS is the phrase that follows the actor for each notification type. Mirrors desktopVerb in core/notifications/desktop_text.go.
+  const NOTIFY_VERBS = {
+    mention: "mentioned you", reference: "referenced your item", edit: "edited your item", comment: "commented",
+    repost: "reposted your post", quote: "quoted your post", follow: "followed you",
+    "issue-assigned": "assigned you an issue", "issue-closed": "closed your issue", "issue-reopened": "reopened your issue",
+    "fork-issue": "opened an issue on a fork", "fork-pr": "opened a pull request", "review-requested": "requested your review",
+    feedback: "gave feedback on a pull request", approved: "approved a pull request", "changes-requested": "requested changes",
+    "pr-merged": "merged your pull request", "pr-closed": "closed your pull request", "pr-ready": "marked a pull request ready",
+    "new-release": "published a release", "memo-comment": "commented on your memo", "inherited-policy": "added a critical memo",
+  };
+
+  // notificationBody returns the text of a notification: the actor and the verb of the type, or the sentence of a type with no actor, then the repository. Mirrors desktopBody in Go; parity_fixtures.json pins the two.
+  function notificationBody(type, actor, repo) {
+    let text = NOTIFY_SENTENCES[type] || "";
+    if (!text) {
+      text = Object.prototype.hasOwnProperty.call(NOTIFY_VERBS, type) ? NOTIFY_VERBS[type] : type;
+      if (actor) text = actor + " " + text;
+    }
+    return repo ? text + " · " + repo : text;
+  }
+
+
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, routeTitle, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, notificationBody, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, relativeHref, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures, navFeaturesOff });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

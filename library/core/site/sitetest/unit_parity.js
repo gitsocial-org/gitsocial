@@ -401,6 +401,9 @@ console.log("=== parity invariant: the href of a relative markdown link ===");
   for (const c of L.cases) eq(GS.relativeHref(c.raw, mdctx), c.expect, c.name + ": href");
 }
 
+console.log("=== parity invariant: notification text ===");
+for (const [type, body] of Object.entries(FIX.notificationBodies)) eq(GS.notificationBody(type, "Alice", "owner/repo"), body, "notification body: " + type);
+
 console.log("=== parity invariant: tag display order ===");
 (async () => {
   for (const c of FIX.tagOrder) {
