@@ -13,7 +13,8 @@
 #                    full credential set present. Fails fast before anything ships.
 #   2. Tag         — create vX.Y.Z locally (skip if it exists).
 #   3. Build       — `goreleaser release --clean`: all-platform archives +
-#                    checksums.txt + SBOMs into dist/, sign darwin binaries,
+#                    checksums.txt + SBOMs into dist/, sign darwin binaries
+#                    and GitSocial.app (scripts/bundle-darwin.sh),
 #                    publish to GitHub Releases, update Homebrew/Scoop taps
 #                    (skip if the GitHub release already exists); then notarize
 #                    the darwin zips.
@@ -150,14 +151,14 @@ preflight() {
   log "Preflight: $TAG"
 
   # Tooling.
-  for tool in git go goreleaser syft rcodesign curl node; do
+  for tool in git go goreleaser syft rcodesign xcrun curl node; do
     have "$tool" || fail "required tool not found on PATH: $tool"
   done
   # Chrome is never on PATH by name, so it resolves the way the style suite does.
   chrome="$(node -e 'process.stdout.write(require(process.argv[1]).find())' \
     "$root/library/core/site/sitetest/chrome.js" 2>/dev/null || true)"
   [ -n "$chrome" ] || fail "Chrome not found for the style-assertion suite; set CHROME to its path"
-  info "tools checked: git go goreleaser syft rcodesign curl node"
+  info "tools checked: git go goreleaser syft rcodesign xcrun curl node"
 
   # Credentials (documented in the header). Report everything missing at once.
   MISSING=""

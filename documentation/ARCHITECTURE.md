@@ -164,6 +164,7 @@ Internal helpers                      return error
 ```
 gitsocial/                     # module github.com/gitsocial-org/gitsocial
 ├── cli/gitsocial/             # the CLI; builds the binary
+├── cli/gitsocial-notifier/    # the executable of GitSocial.app; cgo on darwin only
 ├── library/
 │   ├── core/
 │   │   ├── git/               # git operations
@@ -187,7 +188,7 @@ gitsocial/                     # module github.com/gitsocial-org/gitsocial
 │   ├── tui/                   # TUI
 │   └── internal/testutil/     # shared test fixtures
 ├── documentation/
-├── scripts/                   # check.sh, prose-check.sh, import-graph.sh, test.sh, coverage.sh, release.sh, install.sh, site-test.sh, site-coverage.sh
+├── scripts/                   # check.sh, prose-check.sh, import-graph.sh, test.sh, coverage.sh, release.sh, bundle-darwin.sh, install.sh, site-test.sh, site-coverage.sh
 └── specs/
 ```
 

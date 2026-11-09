@@ -15,7 +15,20 @@ builds:
     goarch: [amd64, arm64]
     hooks:
       post:
-        - 'rcodesign sign --p12-file=/tmp/cert.p12 --p12-password={{ .Env.APPLE_CERT_PASSWORD }} --code-signature-flags=runtime {{ .Path }}'
+        - 'scripts/bundle-darwin.sh {{ .Path }} {{ .Arch }} {{ .Version }}'
+  - id: darwin-notifier
+    main: ./cli/gitsocial-notifier
+    binary: gitsocial-notifier
+    env: [CGO_ENABLED=1]
+    flags: [-trimpath]
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    ldflags:
+      - -s -w
+    goos: [darwin]
+    goarch: [amd64, arm64]
+    hooks:
+      post:
+        - 'scripts/bundle-darwin.sh {{ .Path }} {{ .Arch }} {{ .Version }}'
   - id: other
     main: ./cli/gitsocial
     binary: gitsocial
@@ -34,6 +47,9 @@ archives:
   - id: darwin
     ids: [darwin]
     formats: [zip]
+    files:
+      - src: 'dist/bundle/{{ .Arch }}/GitSocial.app'
+        dst: GitSocial.app
   - id: other
     ids: [other]
     formats: [tar.gz]
@@ -57,6 +73,8 @@ homebrew_casks:
   - name: gitsocial
     binaries:
       - gitsocial
+    custom_block: |
+      app "GitSocial.app" if OS.mac?
     repository:
       owner: gitsocial-org
       name: homebrew-tap
