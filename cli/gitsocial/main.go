@@ -143,6 +143,7 @@ func buildRootCmd() *cobra.Command {
 		newIDCmd(),
 		newPersonalCmd(),
 		newGitRemoteS3Cmd(),
+		newNotifyWaitCmd(),
 	)
 
 	// Extension commands (auto-registered via init())

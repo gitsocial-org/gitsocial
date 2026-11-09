@@ -24,6 +24,7 @@ A click on a message opens the item on the site. When `gitsocial serve` runs for
 | OS | Sender | Install |
 |---|---|---|
 | macOS | `GitSocial.app` | the app in `~/Applications` or `/Applications`; the Homebrew cask installs it |
+| Linux | `notify-send` | libnotify 0.7.9 or later for the click; the first message writes the icon to `~/.local/share/icons` |
 
 On macOS without the app, or when the app cannot post, the message comes from `osascript`, under the name of Script Editor, with no click. The first message asks for permission. If you see no messages, allow notifications for GitSocial in the system settings.
 

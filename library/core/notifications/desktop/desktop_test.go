@@ -98,6 +98,34 @@ func TestSend_textIsAnArgument(t *testing.T) {
 			}
 		}
 	}
+	opened := filepath.Join(dir, "opened")
+	stubNotifySend(t, out, opened, true)
+	body := "-u critical <b>&</b>"
+	if err := notifyWait(testHost(), title, body, "https://site.example/"); err != nil {
+		t.Fatalf("notifyWait: %v", err)
+	}
+	want := []string{"--app-name=GitSocial", "--action=open=Open", "--wait", "--", title, "-u critical &lt;b&gt;&amp;&lt;/b&gt;"}
+	if got := readArgs(t, out); strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("notify-send arguments = %q, want %q", got, want)
+	}
+}
+
+// stubNotifySend puts a notify-send first on PATH that records its arguments to out, prints help with or without --action, sleeps on --wait and then prints the open action, and an xdg-open that records its URL to opened.
+func stubNotifySend(t *testing.T, out, opened string, action bool) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("stub tools are shell scripts")
+	}
+	help := "  --urgency=LEVEL"
+	if action {
+		help += "\\n  --action=[NAME=]Text"
+	}
+	bin := t.TempDir()
+	writeStub(t, filepath.Join(bin, "notify-send"), `[ "$1" = --help ] && { printf '`+help+`\\n'; exit 0; }
+`+recordArgs(out)+`
+for arg in "$@"; do [ "$arg" = --wait ] && { /bin/sleep 1; echo open; }; done; exit 0`)
+	writeStub(t, filepath.Join(bin, "xdg-open"), recordArgs(opened))
+	t.Setenv("PATH", bin)
 }
 
 // waitForFile polls for a file for ten seconds and reports whether it exists.
@@ -108,6 +136,44 @@ func waitForFile(path string) bool {
 		}
 	}
 	return false
+}
+
+func TestSend_actionWaitIsDetached(t *testing.T) {
+	dir := t.TempDir()
+	out, opened, childArgs := filepath.Join(dir, "args"), filepath.Join(dir, "opened"), filepath.Join(dir, "child")
+	stubNotifySend(t, out, opened, true)
+	self := filepath.Join(dir, "gitsocial")
+	writeStub(t, self, `/bin/sleep 3; `+recordArgs(childArgs))
+	h := host{self: self, dataDir: filepath.Join(dir, "data"), timeout: sendTimeout}
+	if err := linuxSend(h, batch("GitSocial", "-u body", "https://site.example/")); err != nil {
+		t.Fatalf("linuxSend: %v", err)
+	}
+	if _, err := os.Stat(childArgs); err == nil {
+		t.Error("the child finished before linuxSend returned")
+	}
+	if !waitForFile(childArgs) {
+		t.Fatal("the detached child did not run")
+	}
+	if got := strings.Join(readArgs(t, childArgs), "|"); got != "notify-wait|--|GitSocial|-u body|https://site.example/" {
+		t.Errorf("child arguments = %q, want notify-wait, --, the title, the body and the URL", got)
+	}
+	if err := notifyWait(h, "GitSocial", "-u body", "https://site.example/"); err != nil {
+		t.Fatalf("notifyWait: %v", err)
+	}
+	icon, err := os.ReadFile(filepath.Join(dir, "data", "icons", "hicolor", "512x512", "apps", "gitsocial.png"))
+	if err != nil || string(icon) != string(iconPNG) {
+		t.Errorf("icon in the data directory after the child: %v, want the embedded icon", err)
+	}
+	if got := readArgs(t, opened); len(got) != 1 || got[0] != "https://site.example/" {
+		t.Errorf("xdg-open arguments = %q, want the URL after the click", got)
+	}
+	stubNotifySend(t, out, opened, false)
+	if err := linuxSend(h, batch("GitSocial", "body", "https://site.example/")); err != nil {
+		t.Fatalf("linuxSend without --action: %v", err)
+	}
+	if got := strings.Join(readArgs(t, out), " "); strings.Contains(got, "--wait") || strings.Contains(got, "--action") {
+		t.Errorf("notify-send without --action got %q, want no action and no wait", got)
+	}
 }
 
 func TestSend_timeout(t *testing.T) {

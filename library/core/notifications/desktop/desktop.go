@@ -3,6 +3,7 @@ package desktop
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"os"
@@ -21,6 +22,15 @@ const sendTimeout = 5 * time.Second
 // notifierGrace is how long the sender waits for the darwin notifier to fail before it leaves the notifier to finish alone.
 const notifierGrace = 500 * time.Millisecond
 
+// waitTimeout bounds the wait of a Linux message for its click.
+const waitTimeout = time.Hour
+
+// linuxIconName is the name of the icon in the hicolor theme of the user.
+const linuxIconName = "gitsocial"
+
+//go:embed gitsocial-icon.png
+var iconPNG []byte
+
 // notifierName is the executable of GitSocial.app that posts under the GitSocial name and icon.
 const notifierName = "gitsocial-notifier"
 
@@ -38,10 +48,11 @@ $text.Item(1).AppendChild($template.CreateTextNode($env:` + windowsBodyEnv + `))
 $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
 [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe').Show($toast)`
 
-// host is what a sender reads from the machine: its own executable, the directories that can hold GitSocial.app and the timeout.
+// host is what a sender reads from the machine: its own executable, the directories that can hold GitSocial.app, the data directory and the timeout.
 type host struct {
 	self    string
 	appDirs []string
+	dataDir string
 	timeout time.Duration
 }
 
@@ -51,9 +62,12 @@ func currentHost() host {
 	if resolved, err := filepath.EvalSymlinks(self); err == nil {
 		self = resolved
 	}
-	h := host{self: self, timeout: sendTimeout}
+	h := host{self: self, dataDir: os.Getenv("XDG_DATA_HOME"), timeout: sendTimeout}
 	if home, err := os.UserHomeDir(); err == nil {
 		h.appDirs = append(h.appDirs, filepath.Join(home, "Applications"))
+		if h.dataDir == "" {
+			h.dataDir = filepath.Join(home, ".local", "share")
+		}
 	}
 	h.appDirs = append(h.appDirs, "/Applications")
 	return h
@@ -64,17 +78,22 @@ func Send(messages []notifications.DesktopMessage) error {
 	return send(currentHost(), messages)
 }
 
+// NotifyWait shows one message on Linux, waits for its click or its close, and opens url on a click; the hidden notify-wait command runs it in a detached process.
+func NotifyWait(title, body, url string) error {
+	return notifyWait(currentHost(), title, body, url)
+}
+
 // send runs the sender of the OS for a batch of messages; a failure of one message does not stop the others.
 func send(h host, messages []notifications.DesktopMessage) error {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		return linuxSend(h, messages)
+	}
 	var errs []error
 	for _, m := range messages {
-		switch runtime.GOOS {
-		case "darwin":
+		if runtime.GOOS == "darwin" {
 			errs = append(errs, darwinSend(h, m))
-		case "windows":
+		} else {
 			errs = append(errs, run(h.timeout, lookPath("powershell"), []string{"-NoProfile", "-NonInteractive", "-Command", windowsScript}, []string{windowsTitleEnv + "=" + m.Title, windowsBodyEnv + "=" + m.Body}))
-		default:
-			errs = append(errs, run(h.timeout, lookPath("notify-send"), []string{"--", m.Title, escapeMarkup(m.Body)}, nil))
 		}
 	}
 	return errors.Join(errs...)
@@ -90,6 +109,94 @@ func darwinSend(h host, m notifications.DesktopMessage) error {
 		log.Debug("darwin notifier failed, using osascript", "error", err)
 	}
 	return run(h.timeout, lookPath("osascript"), []string{"-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", m.Title, m.Body}, nil)
+}
+
+// linuxSend shows messages with notify-send; a message with a URL, when notify-send has --action, goes to a detached child of self that waits for the click so the caller does not.
+func linuxSend(h host, messages []notifications.DesktopMessage) error {
+	tool := lookPath("notify-send")
+	if tool == "" {
+		return nil
+	}
+	action := false
+	for _, m := range messages {
+		if m.URL != "" && h.self != "" {
+			action = hasAction(tool)
+			break
+		}
+	}
+	var errs []error
+	var direct []notifications.DesktopMessage
+	for _, m := range messages {
+		if action && m.URL != "" {
+			errs = append(errs, startDetached(0, h.self, "notify-wait", "--", m.Title, m.Body, m.URL))
+			continue
+		}
+		direct = append(direct, m)
+	}
+	if len(direct) > 0 {
+		icon := linuxIcon(h.dataDir)
+		for _, m := range direct {
+			errs = append(errs, run(h.timeout, tool, linuxArgs(icon, false, m.Title, m.Body), nil))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// notifyWait runs notify-send with the open action until the click or the close and opens url with xdg-open on a click.
+func notifyWait(h host, title, body, url string) error {
+	tool := lookPath("notify-send")
+	if tool == "" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, tool, linuxArgs(linuxIcon(h.dataDir), true, title, body)...).Output()
+	if err != nil {
+		return fmt.Errorf("notify-send: %w", err)
+	}
+	opener := lookPath("xdg-open")
+	if strings.TrimSpace(string(out)) != "open" || opener == "" {
+		return nil
+	}
+	return run(h.timeout, opener, []string{url}, nil)
+}
+
+// linuxArgs returns the arguments of notify-send; with wait, also the open action and the wait for it.
+func linuxArgs(icon string, wait bool, title, body string) []string {
+	args := []string{"--app-name=GitSocial"}
+	if icon != "" {
+		args = append(args, "--icon="+icon)
+	}
+	if wait {
+		args = append(args, "--action=open=Open", "--wait")
+	}
+	return append(args, "--", title, escapeMarkup(body))
+}
+
+// hasAction reports whether notify-send has --action, which libnotify has from 0.7.9.
+func hasAction(tool string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), sendTimeout)
+	defer cancel()
+	out, _ := exec.CommandContext(ctx, tool, "--help").Output() // no help output means no action
+	return strings.Contains(string(out), "--action")
+}
+
+// linuxIcon writes the icon into the hicolor theme under dataDir when it is missing and returns its name, or "" when it cannot.
+func linuxIcon(dataDir string) string {
+	if dataDir == "" {
+		return ""
+	}
+	path := filepath.Join(dataDir, "icons", "hicolor", "512x512", "apps", linuxIconName+".png")
+	if _, err := os.Stat(path); err == nil {
+		return linuxIconName
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return ""
+	}
+	if err := os.WriteFile(path, iconPNG, 0o644); err != nil {
+		return ""
+	}
+	return linuxIconName
 }
 
 // startDetached starts path with args in its own session with the standard streams on the null device, waits up to grace for it to fail, and reaps it in the background.
