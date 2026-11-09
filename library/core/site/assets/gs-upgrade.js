@@ -93,6 +93,7 @@
     '  <aside class="nav">',
     '    <div class="nav-header">',
     '      <a class="repo-title" id="repo-title" href="#/">repository</a>',
+    '      <button id="notify-bell" class="theme-icon" aria-label="Notifications" title="Notifications" aria-expanded="false" aria-controls="notify-panel"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M5 8a5 5 0 0 1 10 0v4l2 3H3l2-3z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /><path d="M8 17.5a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg></button>',
     '      <button id="theme-toggle" class="theme-icon" aria-label="Toggle dark mode" title="Toggle theme"><svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="moon-icon"><mask id="moon-mask"><rect width="20" height="20" fill="white" /><circle cx="16" cy="7" r="10" fill="black" /></mask><circle cx="10" cy="10" r="10" fill="currentColor" mask="url(#moon-mask)" /></g><g id="sun-icon" style="display: none;"><circle cx="10" cy="10" r="3" fill="currentColor" /><path d="M10 1V3M10 17V19M19 10H17M3 10H1M16.5 3.5L15.1 4.9M4.9 15.1L3.5 16.5M16.5 16.5L15.1 15.1M4.9 4.9L3.5 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></g></svg></button>',
     '      <button id="width-toggle" class="nav-collapse" aria-label="Toggle layout width" title="Toggle fixed/full width">↔</button>',
     '      <button id="nav-collapse" class="nav-collapse" aria-label="Collapse navigation" title="Collapse navigation">«</button>',

@@ -6,7 +6,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
 (function () {
   const root = (typeof globalThis !== "undefined") ? globalThis : (typeof window !== "undefined" ? window : this);
   const NS = root.GS || (root.GS = {});
-  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, hydrateItems, loadForkPulls, loadInteractionCounts, loadFilePages, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, routeTitle, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, loadAvatarManifest, setAvatarKeys, setGrammarBase, setRefContext, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures } = NS;
+  const { COMMIT_VIEW, LIST_EMPTY, deriveBase, findForkPull, findRefItem, repoTitle, loadExtItemsAll, loadExtItemsWindow, hydrateItems, loadForkPulls, loadInteractionCounts, loadFilePages, countsFor, manifestFor, loadSiteCustomization, siteFaviconHref, loadTimelineWindow, mdSlug, newContext, objectStore, parseRoute, readRefMode, routeTitle, PR_STATES, analyticsView, autoScrollListView, boardView, branchLogView, branchesView, commitsView, compareView, highlightsSettled, loadAvatarManifest, setAvatarKeys, setGrammarBase, setRefContext, graphView, codeView, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, issuesBody, milestonesBody, sprintsBody, itemDetail, listDetailView, listsView, memoCard, pagedListView, prCard, releaseCard, renderList, revokeObjectUrls, searchIconEl, searchView, spinner, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures, notifyPanel } = NS;
 
   // pendingTreeFocus defers focusing the file-tree search until after a Code
   // route renders (when the magnifier is clicked from a non-code view).
@@ -473,6 +473,22 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); });
   }
 
+  // wireNotifyBell opens and closes the notification panel under the sidebar header; onGranted runs after the panel gets permission.
+  function wireNotifyBell(onGranted) {
+    const bell = typeof document !== "undefined" && document.getElementById ? document.getElementById("notify-bell") : null;
+    if (!bell || !bell.addEventListener) return;
+    let panel = null;
+    bell.addEventListener("click", () => {
+      if (panel) { panel.remove(); panel = null; } else {
+        panel = notifyPanel(onGranted);
+        const header = bell.parentNode;
+        if (header && header.parentNode) header.parentNode.insertBefore(panel, header.nextSibling);
+        else document.body.append(panel);
+      }
+      bell.setAttribute("aria-expanded", panel ? "true" : "false");
+    });
+  }
+
   // publishFilePages hands the page entry the file pages of the default branch, path to key, and asks it to reflect the URL again.
   async function publishFilePages(ctx) {
     const pages = await loadFilePages(ctx);
@@ -501,6 +517,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     wireNavSearch();
     wireCodeToggle(ctx);
     startFreshnessWatch(ctx);
+    wireNotifyBell(null);
     const run = () => route(ctx);
     window.addEventListener("hashchange", run);
     if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("keydown", onGlobalKey);

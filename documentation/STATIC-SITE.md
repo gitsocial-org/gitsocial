@@ -257,6 +257,10 @@ Page entry:
 - A `location.hash` that names a route has priority over the page's own route; a bare anchor stays on the page.
 - A file route on the default branch shows the URL of its page when `pages.json` has a record for the path, with a section anchor as `#md-<slug>`. A line range, another branch or a path with no page keeps the hash URL. A page that starts the app keeps its own URL. In the app, a relative markdown link, a file tree row, a home row and a file search row that point to such a file carry its page URL, and a plain click on one opens the file route in the app.
 
+Browser notifications:
+
+- The app asks the browser for notification permission only from the button of the bell panel, never on load. `unit_notify_permission.js` pins it.
+
 Index maintenance:
 
 - Each extension keeps two append-only corpora, `items/<ext>/` and `bodies/<ext>/`: content-hash-keyed full shards, a mutable head and a manifest. The code index keeps the same two, `items/code/` and `bodies/code/`, in the same write order.

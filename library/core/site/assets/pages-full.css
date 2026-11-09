@@ -115,6 +115,16 @@
   .theme-icon:hover, .nav-collapse:hover { color: var(--text); }
   .theme-icon svg { width: 13px; height: 13px; display: block; }
   .nav-collapse { font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-md); }
+  /* The notification panel opens under the sidebar header from the bell. */
+  .notify-panel {
+    display: flex; flex-direction: column; gap: var(--sp-2);
+    padding: var(--pad-row); margin-bottom: var(--sp-3);
+    border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--panel);
+    font-family: var(--mono); letter-spacing: var(--mono-ls); font-size: var(--fs-ui); color: var(--muted);
+  }
+  .notify-panel .pref-btn { color: var(--text); align-self: flex-start; }
+  .notify-label { display: flex; flex-direction: column; gap: var(--sp-1); }
+  .notify-email { padding: var(--pad-ctl); }
   .nav-handle {
     display: none; position: fixed; top: var(--sp-3); left: var(--sp-3); z-index: 6;
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-ctl);

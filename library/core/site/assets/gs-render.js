@@ -4746,7 +4746,95 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return repo ? text + " · " + repo : text;
   }
 
+  // NOTIFY_EMAIL_KEY is the localStorage key of the reader's email, one per origin.
+  const NOTIFY_EMAIL_KEY = "gs-notify-email";
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, routeTitle, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, notificationBody, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, relativeHref, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures, navFeaturesOff });
+  // NOTIFY_PROBE_KEY is the key a storage probe writes and removes.
+  const NOTIFY_PROBE_KEY = "gs-notify-probe";
+
+  // storageProbe is the storage the probe tested and whether it took a write, so a page writes the probe key once.
+  let storageProbe = null;
+
+  // notifyStorage returns localStorage when it accepts a write, else null.
+  function notifyStorage() {
+    try {
+      const store = typeof localStorage !== "undefined" ? localStorage : null;
+      if (!store) return null;
+      if (!storageProbe || storageProbe.store !== store) {
+        let ok = true;
+        try { store.setItem(NOTIFY_PROBE_KEY, "1"); store.removeItem(NOTIFY_PROBE_KEY); } catch (e) { ok = false; }
+        storageProbe = { store, ok };
+      }
+      return storageProbe.ok ? store : null;
+    } catch (e) { return null; }
+  }
+
+  // readNotifyEmail returns the reader's email, or "" when none is kept.
+  function readNotifyEmail() {
+    try { return (notifyStorage() && localStorage.getItem(NOTIFY_EMAIL_KEY)) || ""; } catch (e) { return ""; }
+  }
+
+  // writeNotifyEmail keeps the reader's email, and removes it when the value is empty.
+  function writeNotifyEmail(value) {
+    const email = String(value || "").trim();
+    try {
+      if (email) localStorage.setItem(NOTIFY_EMAIL_KEY, email);
+      else localStorage.removeItem(NOTIFY_EMAIL_KEY);
+    } catch (e) { /* the panel already says the browser keeps no settings */ }
+  }
+
+  // notifyState returns the state of browser notifications on this page: unsupported, insecure, nostore, default, granted or denied.
+  function notifyState() {
+    const api = typeof window !== "undefined" ? window.Notification : undefined;
+    if (!api) return "unsupported";
+    if (window.isSecureContext === false) return "insecure";
+    if (!notifyStorage()) return "nostore";
+    return api.permission === "granted" || api.permission === "denied" ? api.permission : "default";
+  }
+
+  // NOTIFY_STATE_TEXT is the line the panel shows for each state.
+  const NOTIFY_STATE_TEXT = {
+    unsupported: "This browser cannot show notifications.",
+    insecure: "Notifications need a page on https.",
+    nostore: "This browser cannot keep notification settings for this site.",
+    default: "Notifications are off.",
+    granted: "Notifications are on while this tab is open.",
+    denied: "The browser blocks notifications for this site. Allow them in the browser settings.",
+  };
+
+  // requestNotifyPermission asks the browser for permission and calls done once with the result; only a click on the panel button calls it.
+  function requestNotifyPermission(done) {
+    let called = false;
+    const once = (perm) => { if (called) return; called = true; done(perm); };
+    let pending = null;
+    try { pending = window.Notification.requestPermission(once); } catch (e) { once(notifyState()); return; }
+    if (pending && typeof pending.then === "function") pending.then(once, () => once(notifyState()));
+  }
+
+  // notifyPanel builds the notification panel: the state line, the button that asks for permission, and the email filter; onGranted runs after the browser grants permission.
+  function notifyPanel(onGranted) {
+    const state = notifyState();
+    const line = el("div", { class: "notify-state" }, [NOTIFY_STATE_TEXT[state]]);
+    const panel = el("div", { id: "notify-panel", class: "notify-panel" }, [line]);
+    if (state === "default") {
+      const btn = el("button", { class: "pref-btn", type: "button" }, ["Turn on notifications"]);
+      btn.addEventListener("click", () => requestNotifyPermission((perm) => {
+        const now = notifyState();
+        line.textContent = NOTIFY_STATE_TEXT[now];
+        if (now !== "default") btn.remove();
+        if (perm === "granted" && onGranted) onGranted();
+      }));
+      panel.append(btn);
+    }
+    if (state === "default" || state === "granted" || state === "denied") {
+      const input = el("input", { class: "search-input notify-email", type: "email", autocomplete: "email", placeholder: "empty for all new items", value: readNotifyEmail() });
+      input.addEventListener("change", () => writeNotifyEmail(input.value));
+      panel.append(el("label", { class: "notify-label" }, ["Notify me about items for", input]));
+    }
+    return panel;
+  }
+
+
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, routeTitle, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, notificationBody, notifyPanel, notifyState, notifyStorage, readNotifyEmail, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, relativeHref, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures, navFeaturesOff });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

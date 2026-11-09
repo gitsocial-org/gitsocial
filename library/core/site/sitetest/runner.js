@@ -24,6 +24,7 @@ const DEFAULT = [
   "unit_object_store.js",
   "unit_pack_probe.js",
   "unit_fetch_abort.js",
+  "unit_notify_permission.js",
   "verify_403.js",
   "verify_threads.js",
   "verify_memos.js",
