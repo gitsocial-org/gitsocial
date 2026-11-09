@@ -554,6 +554,13 @@ func TestFlows(t *testing.T) {
 	// The priority label keeps a label on the issue through its move to Done; a second move of one issue waits for the next second.
 	t.Run("BoardMoves", func(t *testing.T) {
 		iso := SetupFixture(t)
+		flow := []pm.ColumnConfig{
+			{Name: "Backlog", Filter: "state:open"}, {Name: "In Progress", Filter: "status:in-progress"},
+			{Name: "Review", Filter: "status:review"}, {Name: "Done", Filter: "state:closed"},
+		}
+		if err := pm.SetBoardConfig(iso.Workdir, pm.BoardConfig{ID: "triage", Name: "Triage", Columns: flow}); err != nil {
+			t.Fatalf("SetBoardConfig: %v", err)
+		}
 		labels := []pm.Label{{Scope: "priority", Value: "high"}}
 		if res := pm.UpdateIssue(iso.Workdir, iso.IssueID, pm.UpdateIssueOptions{Labels: &labels}); !res.Success {
 			t.Fatalf("UpdateIssue: %s", res.Error.Message)
@@ -609,6 +616,9 @@ func TestFlows(t *testing.T) {
 	})
 	t.Run("BoardFiltersAndScroll", func(t *testing.T) {
 		iso := SetupFixture(t)
+		if err := pm.SavePMConfig(iso.Workdir, pm.PMConfig{Framework: "kanban"}); err != nil {
+			t.Fatalf("SavePMConfig: %v", err)
+		}
 		for _, subject := range []string{"Fork one", "Fork two"} {
 			opts := pm.CreateIssueOptions{Labels: []pm.Label{{Scope: "priority", Value: "low"}, {Scope: "kind", Value: "chore"}}}
 			if subject == "Fork one" {
@@ -888,7 +898,7 @@ func TestFlows(t *testing.T) {
 		}
 		for _, want := range []string{
 			"/analytics", "/social/repository/branches", "/social/repository/tags", "/lists", "/social/list", "/social/followers", "/social/explore",
-			"/pm/issues", "/pm/milestones", "/review/prs", "/release/list", "/memo/inherited", "/memo/personal", "/memo/session", "/memo/list",
+			"/pm/issues", "/review/prs", "/release/list", "/memo/inherited", "/memo/personal", "/memo/session", "/memo/list",
 			"/config/forks", "/pm/config", "/config/site", "/config/identity", "/cache", "/settings", "/errorlog",
 		} {
 			if !seen[want] {
