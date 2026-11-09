@@ -2,7 +2,7 @@
 
 Notifications from all extensions are in one feed, with the newest first.
 
-[Commands](#commands) · [Types](#types)
+[Commands](#commands) · [Desktop notifications](#desktop-notifications) · [Types](#types)
 
 ## Commands
 
@@ -15,7 +15,19 @@ gitsocial notifications unread <id> | unread-all
 
 `gitsocial fetch` reports the unread count when it finishes. In the TUI, `@` opens the feed.
 
-A fetch that brings new unread notifications sends a desktop message. Up to three new notifications give one message each, and more give one summary message. `gitsocial fetch --json` sends no message. The TUI sends messages only after an auto-fetch, so turn on `fetch.auto.enabled` to get messages from the TUI. To turn the messages off, run `gitsocial settings set notifications.desktop false`, or set `GITSOCIAL_DESKTOP_NOTIFICATIONS=false` on one machine. On macOS, the first message asks for permission for your terminal app; if you see no messages, allow notifications for the terminal app in the system settings.
+## Desktop notifications
+
+A fetch that brings new unread notifications sends a desktop message. Up to three new notifications give one message each, and more give one summary message. `gitsocial fetch --json` sends no message. The TUI sends messages only after an auto-fetch, so turn on `fetch.auto.enabled` to get messages from the TUI.
+
+A click on a message opens the item on the site. When `gitsocial serve` runs for the workspace, the click opens the served site; else it opens the `site.url` of the workspace. With neither, the message has no click. A summary, and an item of another repository, open the start page of the site.
+
+| OS | Sender | Install |
+|---|---|---|
+| macOS | `GitSocial.app` | the app in `~/Applications` or `/Applications`; the Homebrew cask installs it |
+
+On macOS without the app, or when the app cannot post, the message comes from `osascript`, under the name of Script Editor, with no click. The first message asks for permission. If you see no messages, allow notifications for GitSocial in the system settings.
+
+To turn the messages off, run `gitsocial settings set notifications.desktop false`, or set `GITSOCIAL_DESKTOP_NOTIFICATIONS=false` on one machine.
 
 ## Types
 
