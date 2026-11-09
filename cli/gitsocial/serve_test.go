@@ -320,7 +320,7 @@ func TestServe_portInUse(t *testing.T) {
 	}
 	defer ln.Close()
 	dir := initCLITestRepo(t)
-	err = runServe(context.Background(), &Config{WorkDir: dir, CacheDir: t.TempDir()}, ln.Addr().String(), io.Discard, io.Discard)
+	err = runServe(context.Background(), &Config{WorkDir: dir, CacheDir: t.TempDir()}, ln.Addr().String(), 0, io.Discard, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "--addr") {
 		t.Fatalf("runServe on a taken port = %v, want an error naming --addr", err)
 	}
@@ -361,6 +361,31 @@ func TestServeWatch_Coalesces(t *testing.T) {
 	watchRefs(ctx, 5*time.Millisecond, "", snapshot, push)
 	if pushes != 2 {
 		t.Errorf("pushes = %d, want 2: the first for the change, one more for the changes during it", pushes)
+	}
+}
+
+// TestServeFetch_loop: the loop fetches at once, then on each interval, and stops with the context.
+func TestServeFetch_loop(t *testing.T) {
+	t.Parallel()
+	var mu sync.Mutex
+	runs := 0
+	ctx, cancel := context.WithCancel(context.Background())
+	fetch := func() {
+		mu.Lock()
+		defer mu.Unlock()
+		runs++
+		if runs == 3 {
+			cancel()
+		}
+	}
+	fetchLoop(ctx, 5*time.Millisecond, fetch)
+	mu.Lock()
+	defer mu.Unlock()
+	if runs != 3 {
+		t.Errorf("runs = %d, want 3: one at once and one per interval until the context ends", runs)
+	}
+	if serveFetchInterval(false) != 0 {
+		t.Error("a fetch that is off has an interval")
 	}
 }
 

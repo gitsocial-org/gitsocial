@@ -61,11 +61,12 @@ gitsocial push --site-only     # rebuild the site from the refs in the bucket, s
 
 ### gitsocial serve
 
-Shows the site of the workspace in a browser. It starts a loopback bucket in the process, pushes the workspace to it and serves the site app from the bucket. A change to a branch, a tag or a state ref pushes again, and a failed push keeps the last build served. The site has no HTML pages. Ctrl-C stops it.
+Shows the site of the workspace in a browser. It starts a loopback bucket in the process, pushes the workspace to it and serves the site app from the bucket. A change to a branch, a tag or a state ref pushes again, and a failed push keeps the last build served. It fetches on start and then on the `fetch.auto.interval`, the same sequence as `gitsocial fetch`, so a new item from `origin` or a followed repository reaches the site while it runs; a code branch of `origin` shows after you pull it. The site has no HTML pages. Ctrl-C stops it.
 
 ```
 gitsocial serve                      # serving http://127.0.0.1:4747/gitsocial/<repo>/
 gitsocial serve --addr 127.0.0.1:8080
+gitsocial serve --fetch=false        # push on ref changes only, no fetch
 ```
 
 | Item | Value |
@@ -75,6 +76,7 @@ gitsocial serve --addr 127.0.0.1:8080
 | push | forced: a rewritten branch, tag or state ref replaces that of the bucket, and no merge is written to the workspace |
 | git hooks | not run: `core.hooksPath` is the null device in the environment of the serve process |
 | poll | `git for-each-ref refs/heads refs/tags refs/gitmsg` every 2 s; one push at a time |
+| fetch | on start and every `fetch.auto.interval` seconds (default 300); a failed fetch prints one line and the loop goes on; no desktop message, the open tab notifies; `--fetch=false` turns it off |
 | tracking refs | `refs/remotes/gitsocial-serve/*` and `refs/gitsocial/tracking/gitsocial-serve/*`, deleted on exit and written again from the bucket at the next start |
 | pictures | the avatar store of the `origin` URL, which `gitsocial import avatars` fills ([import](#import)) |
 

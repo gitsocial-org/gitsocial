@@ -61,7 +61,7 @@ Each message is one POST with `Content-Type: application/json`. A summary has no
 
 ### In the browser
 
-The static site, on a bucket or under `gitsocial serve`, shows browser notifications from an open tab. When no tab of the site is open, nothing shows; there is no push server.
+The static site, on a bucket or under `gitsocial serve`, shows browser notifications from an open tab. When no tab of the site is open, nothing shows; there is no push server. `serve` fetches on the `fetch.auto.interval` and sends no desktop message itself, so a reader with the TUI open gets each item once.
 
 1. Click the bell in the sidebar header.
 2. Click **Turn on notifications** and allow them in the prompt of the browser. The site asks only after this click.

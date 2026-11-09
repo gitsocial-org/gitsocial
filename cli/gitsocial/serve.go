@@ -22,6 +22,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
 	"github.com/gitsocial-org/gitsocial/library/core/objstore/localbucket"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/settings"
 )
 
 const (
@@ -34,13 +36,17 @@ const (
 // newServeCmd creates the serve command.
 func newServeCmd() *cobra.Command {
 	var addr string
+	var fetchOn bool
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve the site of the workspace on loopback",
 		Long: `Show the site of the workspace in a browser. serve starts a loopback
 bucket in the process, pushes the workspace to it and serves the site
 app from the bucket. A change to a branch, a tag or a state ref pushes
-again. The site has no HTML pages. Ctrl-C stops it.
+again. It fetches on start and then every fetch.auto.interval seconds,
+so a new item from origin or a followed repository reaches the site;
+--fetch=false turns the fetch off. The site has no HTML pages. Ctrl-C
+stops it.
 
 The bucket is at <cache-dir>/serve/<hash>/ and stays between runs, so
 the next start pushes the difference. The remote gitsocial-serve is in
@@ -51,7 +57,8 @@ replaces the branch of the bucket.
 
 Examples:
   gitsocial serve                     # serving http://127.0.0.1:4747/gitsocial/<repo>/
-  gitsocial serve --addr 127.0.0.1:8080`,
+  gitsocial serve --addr 127.0.0.1:8080
+  gitsocial serve --fetch=false       # push on ref changes only`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
@@ -59,7 +66,7 @@ Examples:
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			if err := runServe(ctx, GetConfig(cmd), addr, cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {
+			if err := runServe(ctx, GetConfig(cmd), addr, serveFetchInterval(fetchOn), cmd.OutOrStdout(), cmd.ErrOrStderr()); err != nil {
 				PrintError(cmd, err.Error())
 				return exit(ExitError)
 			}
@@ -67,11 +74,24 @@ Examples:
 		},
 	}
 	cmd.Flags().StringVar(&addr, "addr", serveDefaultAddr, "Listen address")
+	cmd.Flags().BoolVar(&fetchOn, "fetch", true, "Fetch on start and every fetch.auto.interval seconds")
 	return cmd
 }
 
-// runServe serves the bucket on addr, pushes the workspace to it and again on each ref change until ctx ends, then drops the tracking refs.
-func runServe(ctx context.Context, cfg *Config, addr string, out, errOut io.Writer) error {
+// serveFetchInterval returns the fetch interval of serve from the fetch.auto.interval setting, or zero when the fetch is off.
+func serveFetchInterval(on bool) time.Duration {
+	if !on {
+		return 0
+	}
+	s, err := settings.Load("")
+	if err != nil || s.Fetch.AutoInterval <= 0 {
+		return 300 * time.Second
+	}
+	return time.Duration(s.Fetch.AutoInterval) * time.Second
+}
+
+// runServe serves the bucket on addr, pushes the workspace to it and again on each ref change until ctx ends, then drops the tracking refs; a fetchEvery above zero fetches on start and on that interval.
+func runServe(ctx context.Context, cfg *Config, addr string, fetchEvery time.Duration, out, errOut io.Writer) error {
 	root, err := git.GetRootDir(cfg.WorkDir)
 	if err != nil {
 		return fmt.Errorf("resolve the workspace root: %w", err)
@@ -103,6 +123,9 @@ func runServe(ctx context.Context, cfg *Config, addr string, out, errOut io.Writ
 	last := refsSnapshot(root)
 	push()
 	fmt.Fprint(out, serveBanner(siteURL, out == io.Writer(os.Stdout) && isatty.IsTerminal(os.Stdout.Fd()), os.Getenv("NO_COLOR") == ""))
+	if fetchEvery > 0 {
+		go fetchLoop(ctx, fetchEvery, func() { serveFetch(root, cfg.CacheDir, errOut) })
+	}
 	watchRefs(ctx, serveInterval, last, func() string { return refsSnapshot(root) }, push)
 	client.DeleteTrackingRefs(root, serveRemote)
 	return nil
@@ -160,6 +183,32 @@ func watchRefs(ctx context.Context, interval time.Duration, last string, snapsho
 		}
 		last = current
 		push()
+	}
+}
+
+// fetchLoop runs fetch at once and then every interval until ctx ends.
+func fetchLoop(ctx context.Context, interval time.Duration, fetch func()) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		fetch()
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// serveFetch runs the fetch sequence in the workspace mode of the origin and reports a failure; the new items reach the site through the ref watch, and no desktop message is sent.
+func serveFetch(root, cacheDir string, errOut io.Writer) {
+	allBranches := false
+	if originURL := protocol.NormalizeURL(git.GetOriginURL(root)); originURL != "" {
+		allBranches = settings.GetWorkspaceMode(originURL) == "*"
+	}
+	res, _, _ := client.Fetch(root, cacheDir, client.FetchOptions{FetchAllBranches: allBranches})
+	if !res.Success && res.Error != nil {
+		fmt.Fprintf(errOut, "gitsocial: fetch: %s\n", res.Error.Message)
 	}
 }
 
