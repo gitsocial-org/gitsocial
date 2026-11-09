@@ -3,8 +3,11 @@ package client
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -130,7 +133,7 @@ func TestFetch_newUnreadInResult(t *testing.T) {
 		t.Fatalf("new unread = %+v, want the one mention by Ada", newUnread)
 	}
 	send, sent := recordSends()
-	notifyNew(workdir, t.TempDir(), newUnread, send)
+	notifyNew(workdir, t.TempDir(), newUnread, send, http.DefaultClient)
 	if len(*sent) != 1 {
 		t.Errorf("sent %q with the setting on, want one message", *sent)
 	}
@@ -150,9 +153,20 @@ func TestFetch_desktopOffSendsNothing(t *testing.T) {
 	if after, _ := notifications.GetAll(workdir, notifications.Filter{UnreadOnly: true}); len(after) == 0 {
 		t.Fatal("the fetch brought no unread mention, the fixture is broken")
 	}
-	notifyNew(workdir, t.TempDir(), newUnread, send)
-	if len(*sent) != 0 {
-		t.Errorf("a desktop message was sent with the setting off")
+	var posts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { posts.Add(1) }))
+	defer server.Close()
+	notifyNew(workdir, t.TempDir(), newUnread, send, server.Client())
+	if len(*sent) != 0 || posts.Load() != 0 {
+		t.Errorf("sent %d desktop messages and %d webhook posts with the setting off and no webhook, want none", len(*sent), posts.Load())
+	}
+	if err := settings.NewManager().Write("notifications.webhook", server.URL); err != nil {
+		t.Fatalf("write webhook: %v", err)
+	}
+	after, _ := notifications.GetAll(workdir, notifications.Filter{UnreadOnly: true})
+	notifyNew(workdir, t.TempDir(), after, send, server.Client())
+	if len(*sent) != 0 || int(posts.Load()) != len(after) {
+		t.Errorf("sent %d desktop messages and %d webhook posts with a webhook and desktop off, want 0 and %d", len(*sent), posts.Load(), len(after))
 	}
 }
 
@@ -170,7 +184,7 @@ func TestFetch_snapshotErrorSendsNothing(t *testing.T) {
 	if after, _ := notifications.GetAll(workdir, notifications.Filter{UnreadOnly: true}); len(after) == 0 {
 		t.Fatal("the fetch brought no unread mention, the fixture is broken")
 	}
-	notifyNew(workdir, t.TempDir(), newUnread, send)
+	notifyNew(workdir, t.TempDir(), newUnread, send, http.DefaultClient)
 	if len(*sent) != 0 {
 		t.Errorf("a desktop message was sent after a provider failed")
 	}

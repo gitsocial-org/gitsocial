@@ -92,6 +92,9 @@ func TestSettingsEditActsOnRowUnderCursor(t *testing.T) {
 			v.cursor = row
 			v.editOrCycleSetting()
 			if v.IsInputActive() {
+				if v.input.Value() == "" {
+					v.input.SetValue("https://example.com/hook") // a key with an empty default writes nothing until it has a value
+				}
 				v.saveCurrentSetting()
 			}
 			if v.err != "" {

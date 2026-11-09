@@ -22,9 +22,10 @@ type Settings struct {
 	Notifications NotificationsSettings
 }
 
-// NotificationsSettings controls the desktop messages of a fetch.
+// NotificationsSettings controls the desktop messages and the webhook of a fetch.
 type NotificationsSettings struct {
 	Desktop bool
+	Webhook string
 }
 
 // S3Settings controls the s3:// remote backend.
@@ -184,6 +185,8 @@ func Get(s *Settings, key string) (string, bool) {
 		return strconv.Itoa(s.S3.Concurrency), true
 	case "notifications.desktop":
 		return strconv.FormatBool(s.Notifications.Desktop), true
+	case "notifications.webhook":
+		return s.Notifications.Webhook, true
 	case "fetch.workspace_mode":
 		return "(per-repo)", true
 	default:
@@ -285,6 +288,11 @@ func Set(s *Settings, key, value string) error {
 			return fmt.Errorf("notifications.desktop must be true or false")
 		}
 		s.Notifications.Desktop = value == "true"
+	case "notifications.webhook":
+		if err := Validate(key, value); err != nil {
+			return err
+		}
+		s.Notifications.Webhook = value
 	case "fetch.workspace_mode":
 		return fmt.Errorf("fetch.workspace_mode is per-repo: change it in the settings view")
 	default:
@@ -314,6 +322,7 @@ func ListKeys() []string {
 		"extensions.memo",
 		"identity.dns_verification",
 		"notifications.desktop",
+		"notifications.webhook",
 	}
 }
 

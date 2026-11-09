@@ -7,6 +7,7 @@ package settings
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 )
 
@@ -93,6 +94,8 @@ var Registry = []KeySpec{
 
 	{Key: "notifications.desktop", Scope: ScopePersonalConfig, Type: KeyBool, Default: "true",
 		Desc: "Send a desktop message for new unread notifications after a fetch (overridden by GITSOCIAL_DESKTOP_NOTIFICATIONS)."},
+	{Key: "notifications.webhook", Scope: ScopePersonalConfig, Type: KeyString, Default: "",
+		Desc: "An http or https URL that receives each new unread notification of a fetch as JSON."},
 
 	// fetch.workspace_mode is a per-repo-URL map; handled outside the Registry
 	// via Get/WriteWorkspaceMode (the personal config also stores the map, but
@@ -120,6 +123,15 @@ func Lookup(key string) (KeySpec, bool) {
 	return KeySpec{}, false
 }
 
+// validWebhookURL reports whether v is empty, which turns the webhook off, or an http or https URL with a host.
+func validWebhookURL(v string) bool {
+	if v == "" {
+		return true
+	}
+	u, err := url.Parse(v)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
+
 // Validate checks that value conforms to the key's declared type (bool/int/enum).
 // Unregistered keys return an error. KeyString accepts anything.
 func Validate(key, value string) error {
@@ -140,6 +152,10 @@ func Validate(key, value string) error {
 		}
 		if key == "fetch.auto.interval" && n < 60 {
 			return fmt.Errorf("fetch.auto.interval must be at least 60 seconds")
+		}
+	case KeyString:
+		if key == "notifications.webhook" && !validWebhookURL(value) {
+			return fmt.Errorf("notifications.webhook must be an http or https URL")
 		}
 	case KeyEnum:
 		for _, opt := range spec.Enum {

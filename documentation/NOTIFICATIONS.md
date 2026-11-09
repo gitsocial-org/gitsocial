@@ -31,6 +31,34 @@ On macOS without the app, or when the app cannot post, the message comes from `o
 
 To turn the messages off, run `gitsocial settings set notifications.desktop false`, or set `GITSOCIAL_DESKTOP_NOTIFICATIONS=false` on one machine.
 
+### Webhook
+
+`notifications.webhook` is a URL that receives each message as JSON, for a relay that shows it on a phone or in a chat. The webhook gets the messages also when `notifications.desktop` is off.
+
+```bash
+gitsocial settings set notifications.webhook https://relay.example/hook
+```
+
+Each message is one POST with `Content-Type: application/json`. A summary has no `type`, `repo` or `hash`.
+
+```json
+{
+  "title": "GitSocial",
+  "body": "Alice mentioned you · owner/repo",
+  "url": "https://site.example/index.html#commit:0123456789ab",
+  "type": "mention",
+  "repo": "https://example.com/owner/repo",
+  "hash": "0123456789abcdef0123456789abcdef01234567"
+}
+```
+
+| Request | Value |
+|---|---|
+| timeout | 5 s |
+| retry | one, 1 s after a network error or a 5xx status |
+| after the retry | a debug log line; the message is not sent again |
+| batch | the posts of one fetch run at the same time, and the batch ends after two timeouts and the retry delay |
+
 ## Types
 
 The scope of a type tells which repositories can create it. GitSocial does not notify you about your own actions.

@@ -60,7 +60,7 @@ func NewManager() *Manager {
 
 // Resolve returns the effective value for key using the resolution chain:
 // env (when the key is env-scoped) → personal-config ref → registry default.
-// Returns ("", false) for unregistered keys.
+// Returns ("", false) for unregistered keys; an empty default is a value.
 func (m *Manager) Resolve(key string) (string, bool) {
 	spec, ok := Lookup(key)
 	if !ok {
@@ -72,10 +72,7 @@ func (m *Manager) Resolve(key string) (string, bool) {
 	if v, ok := m.personal.Get(key); ok && v != "" {
 		return v, true
 	}
-	if spec.Default != "" {
-		return spec.Default, true
-	}
-	return "", false
+	return spec.Default, true
 }
 
 // Write persists value for key, dispatched to the backend named by the

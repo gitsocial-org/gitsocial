@@ -31,6 +31,7 @@ GitSocial reads an environment-scoped key from the environment and any other key
 | `fetch.auto.backoff` | bool | `true` | slow auto-fetch while idle; reset when new items arrive |
 | `s3.concurrency` | int | `16` | concurrent uploads per s3 push; `GITSOCIAL_S3_CONCURRENCY` overrides |
 | `notifications.desktop` | bool | `true` | send a desktop message for new unread notifications after a fetch; `GITSOCIAL_DESKTOP_NOTIFICATIONS` overrides |
+| `notifications.webhook` | string | | an http or https URL that receives each new unread notification of a fetch as JSON ([NOTIFICATIONS.md](NOTIFICATIONS.md#webhook)) |
 
 `fetch.workspace_mode` is a map from each repository to `default` or `*`. The first-fetch prompt writes it, and `settings set` refuses it.
 

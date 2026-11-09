@@ -36,14 +36,14 @@ func notificationKey(n Notification) string {
 	return n.RepoURL + "\x00" + n.Hash
 }
 
-// DesktopMessage is one message of a fetch: the text, the click target and the item it names; a summary names no item.
+// DesktopMessage is one message of a fetch, and the JSON document of the webhook: the text, the click target and the item it names; a summary names no item.
 type DesktopMessage struct {
-	Title string
-	Body  string
-	URL   string
-	Type  string
-	Repo  string
-	Hash  string
+	Title string `json:"title"`
+	Body  string `json:"body"`
+	URL   string `json:"url"`
+	Type  string `json:"type,omitempty"`
+	Repo  string `json:"repo,omitempty"`
+	Hash  string `json:"hash,omitempty"`
 }
 
 // DesktopMessages returns one message per new item, or one summary over the cap; itemURL gives the click target of an item and summaryURL that of the summary.

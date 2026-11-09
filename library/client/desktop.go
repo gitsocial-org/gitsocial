@@ -1,8 +1,9 @@
-// desktop.go - The desktop messages a thin client sends for the new unread notifications of a fetch.
+// desktop.go - The desktop messages and the webhook posts a thin client sends for the new unread notifications of a fetch.
 package client
 
 import (
 	"errors"
+	"net/http"
 	"os"
 	"strconv"
 
@@ -23,24 +24,36 @@ func DesktopEnabled() bool {
 	return value != "false"
 }
 
-// NotifyNew sends the desktop messages of new items with their click targets; WatchUnread gives items only when the setting is on.
-func NotifyNew(workdir, cacheDir string, items []notifications.Notification) {
-	notifyNew(workdir, cacheDir, items, desktop.Send)
+// webhookURL reads notifications.webhook; an empty value turns the webhook off.
+func webhookURL() string {
+	value, _ := settings.NewManager().Resolve("notifications.webhook")
+	return value
 }
 
-// notifyNew sends the messages of new items through send and logs a failure.
-func notifyNew(workdir, cacheDir string, items []notifications.Notification, send func([]notifications.DesktopMessage) error) {
+// NotifyNew sends the messages of new items with their click targets: to the desktop when the setting is on, and to the webhook when it has a URL.
+func NotifyNew(workdir, cacheDir string, items []notifications.Notification) {
+	notifyNew(workdir, cacheDir, items, desktop.Send, &http.Client{Timeout: webhookTimeout})
+}
+
+// notifyNew sends the messages of new items through send and posts each with httpClient, and logs a failure.
+func notifyNew(workdir, cacheDir string, items []notifications.Notification, send func([]notifications.DesktopMessage) error, httpClient *http.Client) {
 	if len(items) == 0 {
 		return
 	}
-	if err := send(messages(workdir, cacheDir, items)); err != nil {
-		log.Debug("desktop notification failed", "error", err)
+	all := messages(workdir, cacheDir, items)
+	if DesktopEnabled() {
+		if err := send(all); err != nil {
+			log.Debug("desktop notification failed", "error", err)
+		}
+	}
+	if url := webhookURL(); url != "" {
+		postWebhook(httpClient, url, all, webhookRetryDelay)
 	}
 }
 
-// WatchUnread snapshots the unread set when desktop messages are on and returns a function that gives the items unread since.
+// WatchUnread snapshots the unread set when desktop messages or the webhook are on and returns a function that gives the items unread since.
 func WatchUnread(workdir string) func() []notifications.Notification {
-	if !DesktopEnabled() {
+	if !DesktopEnabled() && webhookURL() == "" {
 		return func() []notifications.Notification { return nil }
 	}
 	before, beforeErr := notifications.GetAllStrict(workdir, notifications.Filter{UnreadOnly: true})
