@@ -34,26 +34,13 @@ var iconPNG []byte
 // notifierName is the executable of GitSocial.app that posts under the GitSocial name and icon.
 const notifierName = "gitsocial-notifier"
 
-const (
-	windowsTitleEnv = "GITSOCIAL_NOTIFY_TITLE"
-	windowsBodyEnv  = "GITSOCIAL_NOTIFY_BODY"
-)
-
-// windowsScript shows a toast; it reads the text from the environment because powershell joins trailing arguments into the script.
-const windowsScript = `[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
-$template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-$text = $template.GetElementsByTagName('text')
-$text.Item(0).AppendChild($template.CreateTextNode($env:` + windowsTitleEnv + `)) > $null
-$text.Item(1).AppendChild($template.CreateTextNode($env:` + windowsBodyEnv + `)) > $null
-$toast = [Windows.UI.Notifications.ToastNotification]::new($template)
-[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe').Show($toast)`
-
-// host is what a sender reads from the machine: its own executable, the directories that can hold GitSocial.app, the data directory and the timeout.
+// host is what a sender reads from the machine: its own executable, the directories that can hold GitSocial.app, the data directory, the Start Menu and the timeout.
 type host struct {
-	self    string
-	appDirs []string
-	dataDir string
-	timeout time.Duration
+	self      string
+	appDirs   []string
+	dataDir   string
+	startMenu string
+	timeout   time.Duration
 }
 
 // currentHost returns the host of this process.
@@ -70,6 +57,9 @@ func currentHost() host {
 		}
 	}
 	h.appDirs = append(h.appDirs, "/Applications")
+	if appData := os.Getenv("APPDATA"); appData != "" {
+		h.startMenu = filepath.Join(appData, "Microsoft", "Windows", "Start Menu", "Programs")
+	}
 	return h
 }
 
@@ -93,7 +83,7 @@ func send(h host, messages []notifications.DesktopMessage) error {
 		if runtime.GOOS == "darwin" {
 			errs = append(errs, darwinSend(h, m))
 		} else {
-			errs = append(errs, run(h.timeout, lookPath("powershell"), []string{"-NoProfile", "-NonInteractive", "-Command", windowsScript}, []string{windowsTitleEnv + "=" + m.Title, windowsBodyEnv + "=" + m.Body}))
+			errs = append(errs, windowsSend(h, m))
 		}
 	}
 	return errors.Join(errs...)

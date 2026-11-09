@@ -108,6 +108,20 @@ func TestSend_textIsAnArgument(t *testing.T) {
 	if got := readArgs(t, out); strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("notify-send arguments = %q, want %q", got, want)
 	}
+	url := "https://site.example/'; Remove-Item C:/ #"
+	for _, script := range []string{windowsToastScript, windowsShortcutScript} {
+		for _, arg := range windowsArgs(script) {
+			if strings.Contains(arg, body) || strings.Contains(arg, url) {
+				t.Errorf("the text is in the powershell argument %q", arg)
+			}
+		}
+	}
+	env := strings.Join(windowsEnv(title, body, url, windowsAppID), "\n")
+	for _, value := range []string{windowsBodyEnv + "=" + body, windowsURLEnv + "=" + url, windowsAppIDEnv + "=GitSocial.GitSocial"} {
+		if !strings.Contains(env, value) {
+			t.Errorf("toast environment = %q, want %q", env, value)
+		}
+	}
 }
 
 // stubNotifySend puts a notify-send first on PATH that records its arguments to out, prints help with or without --action, sleeps on --wait and then prints the open action, and an xdg-open that records its URL to opened.
