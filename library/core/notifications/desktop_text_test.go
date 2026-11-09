@@ -33,27 +33,73 @@ func TestNewUnread_ignoresBranch(t *testing.T) {
 	}
 }
 
+// noURL gives no click target.
+func noURL(Notification) string { return "" }
+
+// bodies returns the bodies of the messages of items.
+func bodies(items []Notification) []string {
+	all := DesktopMessages(items, noURL, "")
+	out := make([]string, 0, len(all))
+	for _, m := range all {
+		out = append(out, m.Body)
+	}
+	return out
+}
+
 func TestDesktopMessages_summaryOverThree(t *testing.T) {
 	three := []Notification{unread("a"), unread("b"), unread("c")}
-	bodies := DesktopBodies(three)
-	if len(bodies) != 3 {
-		t.Fatalf("three items gave %d messages, want 3", len(bodies))
+	messages := DesktopMessages(three, func(n Notification) string { return "https://site.example/" + n.Hash }, "https://site.example/")
+	if len(messages) != 3 {
+		t.Fatalf("three items gave %d messages, want 3", len(messages))
 	}
-	if bodies[0] != "Alice mentioned you · owner/repo" {
-		t.Errorf("body = %q", bodies[0])
+	want := DesktopMessage{Title: "GitSocial", Body: "Alice mentioned you · owner/repo", URL: "https://site.example/a", Type: "mention", Repo: "https://example.com/owner/repo", Hash: "a"}
+	if messages[0] != want {
+		t.Errorf("message = %+v, want %+v", messages[0], want)
 	}
 	five := []Notification{unread("a"), unread("b"), unread("c"), unread("d"), unread("e")}
-	if got := DesktopBodies(five); len(got) != 1 || got[0] != "5 new notifications" {
-		t.Errorf("five items gave %q, want one summary", got)
+	summary := DesktopMessages(five, noURL, "https://site.example/")
+	if len(summary) != 1 || summary[0] != (DesktopMessage{Title: "GitSocial", Body: "5 new notifications", URL: "https://site.example/"}) {
+		t.Errorf("five items gave %+v, want one summary with the summary URL and no item", summary)
 	}
-	unknown := DesktopBodies([]Notification{{Type: "new-kind"}})
+	unknown := bodies([]Notification{{Type: "new-kind"}})
 	if len(unknown) != 1 || !strings.Contains(unknown[0], "new-kind") {
 		t.Errorf("an unmapped type gave %q, want the type name", unknown)
 	}
-	branch := DesktopBodies([]Notification{{Type: "head-advanced", RepoURL: "https://example.com/owner/repo"}})
+	branch := bodies([]Notification{{Type: "head-advanced", RepoURL: "https://example.com/owner/repo"}})
 	if len(branch) != 1 || branch[0] != "The head branch of a pull request advanced · owner/repo" {
 		t.Errorf("a type with no actor gave %q", branch)
 	}
+}
+
+// parityBodies is the body of each documented type for the actor Alice on owner/repo; the site carrier says the same.
+var parityBodies = map[string]string{
+	"mention":           "Alice mentioned you · owner/repo",
+	"reference":         "Alice referenced your item · owner/repo",
+	"edit":              "Alice edited your item · owner/repo",
+	"comment":           "Alice commented · owner/repo",
+	"repost":            "Alice reposted your post · owner/repo",
+	"quote":             "Alice quoted your post · owner/repo",
+	"follow":            "Alice followed you · owner/repo",
+	"issue-assigned":    "Alice assigned you an issue · owner/repo",
+	"issue-closed":      "Alice closed your issue · owner/repo",
+	"issue-reopened":    "Alice reopened your issue · owner/repo",
+	"fork-issue":        "Alice opened an issue on a fork · owner/repo",
+	"fork-pr":           "Alice opened a pull request · owner/repo",
+	"review-requested":  "Alice requested your review · owner/repo",
+	"feedback":          "Alice gave feedback on a pull request · owner/repo",
+	"approved":          "Alice approved a pull request · owner/repo",
+	"changes-requested": "Alice requested changes · owner/repo",
+	"pr-merged":         "Alice merged your pull request · owner/repo",
+	"pr-closed":         "Alice closed your pull request · owner/repo",
+	"pr-ready":          "Alice marked a pull request ready · owner/repo",
+	"head-advanced":     "The head branch of a pull request advanced · owner/repo",
+	"base-advanced":     "The base branch of a pull request advanced · owner/repo",
+	"head-deleted":      "The head branch of a pull request is not on its remote · owner/repo",
+	"base-deleted":      "The base branch of a pull request is not on its remote · owner/repo",
+	"new-release":       "Alice published a release · owner/repo",
+	"memo-comment":      "Alice commented on your memo · owner/repo",
+	"inherited-policy":  "Alice added a critical memo · owner/repo",
+	"branch-diverged":   "A local gitmsg branch diverged from origin · owner/repo",
 }
 
 // documentedTypes returns the notification types of the table in the guide.
@@ -76,15 +122,20 @@ func documentedTypes(t *testing.T) []string {
 	return types
 }
 
-func TestDesktopBodies_everyDocumentedType(t *testing.T) {
+func TestNotificationText_parity(t *testing.T) {
 	types := documentedTypes(t)
-	if len(types) < 20 {
-		t.Fatalf("the guide lists %d types, want the full table", len(types))
+	if len(types) != len(parityBodies) {
+		t.Errorf("the guide lists %d types and the golden list %d, want the same set", len(types), len(parityBodies))
 	}
 	for _, typ := range types {
-		body := DesktopBodies([]Notification{{Type: typ, Actor: Actor{Name: "Alice"}}})
-		if len(body) != 1 || strings.HasSuffix(body[0], " "+typ) || body[0] == typ {
-			t.Errorf("type %s gave %q, want a sentence", typ, body)
+		want, ok := parityBodies[typ]
+		if !ok {
+			t.Errorf("type %s is not in the golden list", typ)
+			continue
+		}
+		got := bodies([]Notification{{Type: typ, Actor: Actor{Name: "Alice"}, RepoURL: "https://example.com/owner/repo"}})
+		if len(got) != 1 || got[0] != want {
+			t.Errorf("type %s gave %q, want %q", typ, got, want)
 		}
 	}
 }

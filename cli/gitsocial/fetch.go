@@ -64,7 +64,7 @@ For extension-specific options, use the extension's fetch command directly:
 					return exit(ExitCode(result.Error.Code))
 				}
 				if !cfg.JSONOutput {
-					client.NotifyDesktop(newUnread())
+					client.NotifyNew(cfg.WorkDir, cfg.CacheDir, newUnread())
 				}
 
 				if cfg.JSONOutput {
@@ -102,7 +102,7 @@ For extension-specific options, use the extension's fetch command directly:
 				return exit(ExitCode(result.Error.Code))
 			}
 			if !cfg.JSONOutput {
-				client.NotifyDesktop(newUnread)
+				client.NotifyNew(cfg.WorkDir, cfg.CacheDir, newUnread)
 			}
 
 			stats := result.Data

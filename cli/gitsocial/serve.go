@@ -19,7 +19,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gitsocial-org/gitsocial/library/client"
-	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
 	"github.com/gitsocial-org/gitsocial/library/core/objstore/localbucket"
@@ -81,7 +80,7 @@ func runServe(ctx context.Context, cfg *Config, addr string, out, errOut io.Writ
 	if err != nil {
 		return fmt.Errorf("listen on %s: choose another port with --addr: %w", addr, err)
 	}
-	bucketRoot := filepath.Join(cfg.CacheDir, "serve", fetch.URLHash(root))
+	bucketRoot := client.ServeDir(cfg.CacheDir, root)
 	if err := os.MkdirAll(bucketRoot, 0o755); err != nil {
 		ln.Close()
 		return fmt.Errorf("create %s: %w", bucketRoot, err)
@@ -94,13 +93,32 @@ func runServe(ctx context.Context, cfg *Config, addr string, out, errOut io.Writ
 	if err := applyServeEnv(host, "s3://"+host+"/"+path); err != nil {
 		return err
 	}
+	siteURL := "http://" + host + "/" + path + "/"
+	removeURL, err := writeServeURL(client.ServeURLPath(cfg.CacheDir, root), siteURL)
+	if err != nil {
+		return err
+	}
+	defer removeURL()
 	push := func() { servePush(ctx, root, cfg.CacheDir, errOut) }
 	last := refsSnapshot(root)
 	push()
-	fmt.Fprint(out, serveBanner("http://"+host+"/"+path+"/", out == io.Writer(os.Stdout) && isatty.IsTerminal(os.Stdout.Fd()), os.Getenv("NO_COLOR") == ""))
+	fmt.Fprint(out, serveBanner(siteURL, out == io.Writer(os.Stdout) && isatty.IsTerminal(os.Stdout.Fd()), os.Getenv("NO_COLOR") == ""))
 	watchRefs(ctx, serveInterval, last, func() string { return refsSnapshot(root) }, push)
 	client.DeleteTrackingRefs(root, serveRemote)
 	return nil
+}
+
+// writeServeURL writes the pid and the served base URL to path for the click target of a desktop message, and returns the function that removes the file while it holds this entry.
+func writeServeURL(path, url string) (func(), error) {
+	entry := client.ServeURLEntry(os.Getpid(), url)
+	if err := os.WriteFile(path, []byte(entry), 0o644); err != nil {
+		return nil, fmt.Errorf("write %s: %w", path, err)
+	}
+	return func() {
+		if data, err := os.ReadFile(path); err == nil && string(data) == entry {
+			_ = os.Remove(path) // a file that is gone already is the goal
+		}
+	}, nil
 }
 
 // serveBanner returns the line that tells the site URL: a block on a terminal, with colors when color is set, and the plain serving line for a pipe.

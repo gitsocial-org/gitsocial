@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
@@ -23,22 +22,15 @@ func isolateDesktopSetting(t *testing.T) {
 	t.Setenv(desktopEnv, "")
 }
 
-// stubDesktopTools puts recording stubs of the OS tools first on PATH and returns the file they write.
-func stubDesktopTools(t *testing.T) string {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("stub tools are shell scripts")
-	}
-	dir := t.TempDir()
-	record := filepath.Join(dir, "sent")
-	for _, tool := range []string{"osascript", "notify-send"} {
-		script := "#!/bin/sh\necho \"$@\" >> '" + record + "'\n"
-		if err := os.WriteFile(filepath.Join(dir, tool), []byte(script), 0o755); err != nil {
-			t.Fatalf("write stub %s: %v", tool, err)
+// recordSends returns a sender that records the body of each message, and the list it fills.
+func recordSends() (func([]notifications.DesktopMessage) error, *[]string) {
+	var sent []string
+	return func(messages []notifications.DesktopMessage) error {
+		for _, m := range messages {
+			sent = append(sent, m.Body)
 		}
-	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	return record
+		return nil
+	}, &sent
 }
 
 // failingProviderMarker is the file in the git dir of a workspace that makes the test provider fail.
@@ -132,14 +124,15 @@ func TestDesktopEnabled_envOverridesKey(t *testing.T) {
 
 func TestFetch_newUnreadInResult(t *testing.T) {
 	isolateDesktopSetting(t)
-	newUnread := fetchNewUnread(t, mentionWorkspace(t))
+	workdir := mentionWorkspace(t)
+	newUnread := fetchNewUnread(t, workdir)
 	if len(newUnread) != 1 || newUnread[0].Type != "mention" || newUnread[0].Actor.Name != "Ada" {
 		t.Fatalf("new unread = %+v, want the one mention by Ada", newUnread)
 	}
-	record := stubDesktopTools(t)
-	NotifyDesktop(newUnread)
-	if _, err := os.Stat(record); err != nil {
-		t.Errorf("no desktop message sent with the setting on: %v", err)
+	send, sent := recordSends()
+	notifyNew(workdir, t.TempDir(), newUnread, send)
+	if len(*sent) != 1 {
+		t.Errorf("sent %q with the setting on, want one message", *sent)
 	}
 }
 
@@ -148,7 +141,7 @@ func TestFetch_desktopOffSendsNothing(t *testing.T) {
 	if err := settings.NewManager().Write("notifications.desktop", "false"); err != nil {
 		t.Fatalf("write key: %v", err)
 	}
-	record := stubDesktopTools(t)
+	send, sent := recordSends()
 	workdir := mentionWorkspace(t)
 	newUnread := fetchNewUnread(t, workdir)
 	if len(newUnread) != 0 {
@@ -157,15 +150,15 @@ func TestFetch_desktopOffSendsNothing(t *testing.T) {
 	if after, _ := notifications.GetAll(workdir, notifications.Filter{UnreadOnly: true}); len(after) == 0 {
 		t.Fatal("the fetch brought no unread mention, the fixture is broken")
 	}
-	NotifyDesktop(newUnread)
-	if _, err := os.Stat(record); !os.IsNotExist(err) {
+	notifyNew(workdir, t.TempDir(), newUnread, send)
+	if len(*sent) != 0 {
 		t.Errorf("a desktop message was sent with the setting off")
 	}
 }
 
 func TestFetch_snapshotErrorSendsNothing(t *testing.T) {
 	isolateDesktopSetting(t)
-	record := stubDesktopTools(t)
+	send, sent := recordSends()
 	workdir := mentionWorkspace(t)
 	if err := os.WriteFile(filepath.Join(workdir, ".git", failingProviderMarker), nil, 0o644); err != nil {
 		t.Fatalf("write marker: %v", err)
@@ -177,8 +170,8 @@ func TestFetch_snapshotErrorSendsNothing(t *testing.T) {
 	if after, _ := notifications.GetAll(workdir, notifications.Filter{UnreadOnly: true}); len(after) == 0 {
 		t.Fatal("the fetch brought no unread mention, the fixture is broken")
 	}
-	NotifyDesktop(newUnread)
-	if _, err := os.Stat(record); !os.IsNotExist(err) {
+	notifyNew(workdir, t.TempDir(), newUnread, send)
+	if len(*sent) != 0 {
 		t.Errorf("a desktop message was sent after a provider failed")
 	}
 }

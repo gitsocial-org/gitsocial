@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/objstore"
@@ -218,6 +219,39 @@ func TestServe_LoopbackDefault(t *testing.T) {
 	}
 	if status, body := httpGet(t, c.url); status != 200 || !strings.Contains(body, "<title>gitsocial</title>") {
 		t.Errorf("GET %s = %d, want 200 with the app shell", c.url, status)
+	}
+}
+
+// TestServe_urlFile: serve writes its pid and URL to the file the click target reads on start, and removes it on exit only while the entry is its own.
+func TestServe_urlFile(t *testing.T) {
+	t.Parallel()
+	dir, cacheDir := serveRepo(t)
+	root, err := git.GetRootDir(dir)
+	if err != nil {
+		t.Fatalf("root of %s: %v", dir, err)
+	}
+	path := client.ServeURLPath(cacheDir, root)
+	c := startServe(t, dir, cacheDir)
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != client.ServeURLEntry(c.cmd.Process.Pid, c.url) {
+		t.Errorf("URL file = %q (%v), want the pid %d and %q", data, err, c.cmd.Process.Pid, c.url)
+	}
+	stopServe(t, c)
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("URL file after exit: %v, want it removed", err)
+	}
+	other := filepath.Join(t.TempDir(), "url")
+	remove, err := writeServeURL(other, "http://127.0.0.1:1/")
+	if err != nil {
+		t.Fatalf("writeServeURL: %v", err)
+	}
+	foreign := client.ServeURLEntry(os.Getpid()+1, "http://127.0.0.1:2/")
+	if err := os.WriteFile(other, []byte(foreign), 0o644); err != nil {
+		t.Fatalf("write a foreign entry: %v", err)
+	}
+	remove()
+	if data, err := os.ReadFile(other); err != nil || string(data) != foreign {
+		t.Errorf("URL file of a later serve = %q (%v), want it kept", data, err)
 	}
 }
 

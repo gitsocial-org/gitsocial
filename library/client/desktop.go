@@ -23,19 +23,18 @@ func DesktopEnabled() bool {
 	return value != "false"
 }
 
-// NotifyDesktop sends the desktop messages for new items when the OS tool exists; WatchUnread gives items only when the setting is on.
-func NotifyDesktop(items []notifications.Notification) {
+// NotifyNew sends the desktop messages of new items with their click targets; WatchUnread gives items only when the setting is on.
+func NotifyNew(workdir, cacheDir string, items []notifications.Notification) {
+	notifyNew(workdir, cacheDir, items, desktop.Send)
+}
+
+// notifyNew sends the messages of new items through send and logs a failure.
+func notifyNew(workdir, cacheDir string, items []notifications.Notification, send func([]notifications.DesktopMessage) error) {
 	if len(items) == 0 {
 		return
 	}
-	if !desktop.Available() {
-		log.Debug("desktop notification tool not found")
-		return
-	}
-	for _, body := range notifications.DesktopBodies(items) {
-		if err := desktop.Send(notifications.DesktopTitle, body); err != nil {
-			log.Debug("desktop notification failed", "error", err)
-		}
+	if err := send(messages(workdir, cacheDir, items)); err != nil {
+		log.Debug("desktop notification failed", "error", err)
 	}
 }
 

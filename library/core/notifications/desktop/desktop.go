@@ -3,12 +3,15 @@ package desktop
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 )
 
 const sendTimeout = 5 * time.Second
@@ -54,23 +57,26 @@ func escapeMarkup(text string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(text)
 }
 
-// Available reports whether the notification tool of the OS is on PATH.
-func Available() bool {
-	_, err := exec.LookPath(toolName())
-	return err == nil
+// Send shows each message; a missing tool is not an error, and a failure of one message does not stop the others.
+func Send(messages []notifications.DesktopMessage) error {
+	return send(sendTimeout, messages)
 }
 
-// Send shows one message; a missing tool is not an error.
-func Send(title, body string) error {
-	return send(sendTimeout, title, body)
-}
-
-// send runs the tool and kills it after the timeout.
-func send(timeout time.Duration, title, body string) error {
+// send runs the tool for each message.
+func send(timeout time.Duration, messages []notifications.DesktopMessage) error {
 	path, err := exec.LookPath(toolName())
 	if err != nil {
 		return nil
 	}
+	var errs []error
+	for _, m := range messages {
+		errs = append(errs, run(timeout, path, m.Title, m.Body))
+	}
+	return errors.Join(errs...)
+}
+
+// run runs the tool for one message and kills it after the timeout.
+func run(timeout time.Duration, path, title, body string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, toolArgs(title, body)...)

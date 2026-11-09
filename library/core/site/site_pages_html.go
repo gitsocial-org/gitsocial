@@ -623,6 +623,14 @@ func siteRootPageHref(hash string, types map[string]string) string {
 	return "../i/" + hash + ".html"
 }
 
+// ItemRoute returns the app route, relative to the site root, that opens the item of a commit hash through the item indexes and the fork area; "" for a hash too short.
+func ItemRoute(hash string) string {
+	if len(hash) < 7 {
+		return ""
+	}
+	return "index.html#commit:" + hash[:min(len(hash), 12)]
+}
+
 // sitePageDescription extracts a meta description: the text, else the subject, stripped of markdown and truncated.
 func sitePageDescription(text, fallback string) string {
 	collapsed := strings.Join(strings.Fields(siteMarkdownPlainText(text)), " ")

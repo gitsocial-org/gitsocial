@@ -386,17 +386,17 @@ func handleFetchCompleted(msg FetchCompletedMsg, ctx tuicore.AppContext) (bool, 
 		// Auto-fetch stays silent when there's nothing new — no toast spam.
 		msgCmd = ctx.Host().SetMessageWithTimeout("Already up to date", tuicore.MessageTypeSuccess, 5*time.Second)
 	}
-	return true, tea.Batch(ctx.Host().RefreshView(), ctx.LoadUnreadCount(), msgCmd, desktopNotifyCmd(msg))
+	return true, tea.Batch(ctx.Host().RefreshView(), ctx.LoadUnreadCount(), msgCmd, desktopNotifyCmd(msg, ctx.Workdir(), ctx.CacheDir()))
 }
 
 // desktopNotifyCmd sends the desktop messages of an auto-fetch; a manual fetch has the footer toast.
-func desktopNotifyCmd(msg FetchCompletedMsg) tea.Cmd {
+func desktopNotifyCmd(msg FetchCompletedMsg, workdir, cacheDir string) tea.Cmd {
 	if !msg.Auto || len(msg.NewUnread) == 0 {
 		return nil
 	}
 	items := msg.NewUnread
 	return func() tea.Msg {
-		client.NotifyDesktop(items)
+		client.NotifyNew(workdir, cacheDir, items)
 		return nil
 	}
 }

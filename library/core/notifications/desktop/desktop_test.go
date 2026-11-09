@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 )
 
 // stubTool puts a shell script named as the OS tool first on PATH.
@@ -25,12 +27,14 @@ func stubTool(t *testing.T, script string) {
 	t.Setenv("PATH", dir)
 }
 
+// batch returns one message as a batch.
+func batch(title, body, url string) []notifications.DesktopMessage {
+	return []notifications.DesktopMessage{{Title: title, Body: body, URL: url}}
+}
+
 func TestSend_missingToolIsNotAnError(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	if Available() {
-		t.Fatal("Available() = true with an empty PATH")
-	}
-	if err := Send("GitSocial", "Alice mentioned you"); err != nil {
+	if err := Send(batch("GitSocial", "Alice mentioned you", "")); err != nil {
 		t.Errorf("Send without a tool = %v, want nil", err)
 	}
 }
@@ -39,12 +43,9 @@ func TestSend_textIsAnArgument(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "args")
 	stubTool(t, `for arg in "$@"; do printf '%s\n' "$arg"; done > '`+out+`'`)
-	if !Available() {
-		t.Fatal("Available() = false with the stub on PATH")
-	}
 	title := `Git"Social`
 	for _, body := range []string{`Alice "; touch pwned; $(whoami) ' <b>&</b>`, "-u critical"} {
-		if err := Send(title, body); err != nil {
+		if err := Send(batch(title, body, "")); err != nil {
 			t.Fatalf("Send: %v", err)
 		}
 		data, err := os.ReadFile(out)
@@ -73,7 +74,7 @@ func TestSend_textIsAnArgument(t *testing.T) {
 func TestSend_timeout(t *testing.T) {
 	stubTool(t, "exec /bin/sleep 10")
 	start := time.Now()
-	err := send(200*time.Millisecond, "GitSocial", "body")
+	err := send(200*time.Millisecond, batch("GitSocial", "body", ""))
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("send with a hanging tool = %v, want a deadline error", err)
 	}

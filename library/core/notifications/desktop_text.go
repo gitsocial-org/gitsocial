@@ -7,8 +7,8 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
-// DesktopTitle is the title of each desktop message.
-const DesktopTitle = "GitSocial"
+// desktopTitle is the title of each desktop message.
+const desktopTitle = "GitSocial"
 
 // desktopMessageCap is the most new items that get one message each; more get one summary.
 const desktopMessageCap = 3
@@ -36,16 +36,26 @@ func notificationKey(n Notification) string {
 	return n.RepoURL + "\x00" + n.Hash
 }
 
-// DesktopBodies returns one message body per new item, or one summary over the cap.
-func DesktopBodies(items []Notification) []string {
+// DesktopMessage is one message of a fetch: the text, the click target and the item it names; a summary names no item.
+type DesktopMessage struct {
+	Title string
+	Body  string
+	URL   string
+	Type  string
+	Repo  string
+	Hash  string
+}
+
+// DesktopMessages returns one message per new item, or one summary over the cap; itemURL gives the click target of an item and summaryURL that of the summary.
+func DesktopMessages(items []Notification, itemURL func(Notification) string, summaryURL string) []DesktopMessage {
 	if len(items) > desktopMessageCap {
-		return []string{fmt.Sprintf("%d new notifications", len(items))}
+		return []DesktopMessage{{Title: desktopTitle, Body: fmt.Sprintf("%d new notifications", len(items)), URL: summaryURL}}
 	}
-	bodies := make([]string, 0, len(items))
+	messages := make([]DesktopMessage, 0, len(items))
 	for _, n := range items {
-		bodies = append(bodies, desktopBody(n))
+		messages = append(messages, DesktopMessage{Title: desktopTitle, Body: desktopBody(n), URL: itemURL(n), Type: n.Type, Repo: n.RepoURL, Hash: n.Hash})
 	}
-	return bodies
+	return messages
 }
 
 // desktopBody returns the actor and the verb of the type, or a sentence for a type with no actor, then the short repository name.
