@@ -23,7 +23,7 @@ A click on a message opens the item on the site. When `gitsocial serve` runs for
 
 | OS | Sender | Install |
 |---|---|---|
-| macOS | `GitSocial.app` | the app in `~/Applications` or `/Applications`; the Homebrew cask installs it, and the darwin release zip has it |
+| macOS | `GitSocial.app` | the app in `~/Applications` or `/Applications`; the Homebrew cask and the install script place it, and the darwin release zip has it |
 | Linux | `notify-send` | libnotify 0.7.9 or later for the click; the first message writes the icon to `~/.local/share/icons` |
 | Windows | a PowerShell toast | nothing; the first message writes a GitSocial shortcut into the Start Menu |
 

@@ -3,9 +3,12 @@
 # Usage: curl -fsSL https://gitsocial.org/install.sh | sh
 # Resolves the version from artifacts/latest.txt and downloads archives +
 # checksums from artifacts/<version>/ (no GitHub dependency).
+# On macOS it also places GitSocial.app, which posts the desktop notifications.
 set -e
 
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+APP_DIR="${GITSOCIAL_APP_DIR:-$HOME/Applications}"
+APP="GitSocial.app"
 BASE_URL="${GITSOCIAL_INSTALL_BASE:-https://gitsocial.org/}"
 case "$BASE_URL" in */) ;; *) BASE_URL="${BASE_URL}/" ;; esac
 BINARY="gitsocial"
@@ -82,6 +85,8 @@ fi
 
 if [ "$EXT" = "zip" ]; then
   unzip -q -o "${TMPDIR}/${ARCHIVE}" "${BINARY}" -d "${TMPDIR}"
+  # A release before the app has no bundle in the zip.
+  unzip -q -o "${TMPDIR}/${ARCHIVE}" "${APP}/*" -d "${TMPDIR}" 2>/dev/null || true
 else
   tar -xzf "${TMPDIR}/${ARCHIVE}" -C "${TMPDIR}" "${BINARY}"
 fi
@@ -97,3 +102,10 @@ else
 fi
 
 echo "Installed ${BINARY} ${VERSION} to ${INSTALL_DIR}/${BINARY}"
+
+if [ -d "${TMPDIR}/${APP}" ]; then
+  mkdir -p "$APP_DIR"
+  rm -rf "${APP_DIR:?}/${APP}"
+  mv "${TMPDIR}/${APP}" "${APP_DIR}/${APP}"
+  echo "Installed ${APP} to ${APP_DIR}/${APP}"
+fi
