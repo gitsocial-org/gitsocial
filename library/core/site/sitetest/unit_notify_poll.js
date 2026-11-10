@@ -1,4 +1,4 @@
-// unit_notify_poll.js - the notifier runs once on load with permission, folds a change during a run into one more run, and does not run without permission
+// unit_notify_poll.js - the notifier runs once on load with permission, folds a change during a run into one more run, does not run without permission, and registers the site worker
 require("./shim.js");
 let pass = 0, fail = 0;
 const ok = (n, c, e) => { (c ? pass++ : fail++); console.log((c ? "PASS " : "FAIL ") + n + (!c && e ? " :: " + e : "")); };
@@ -56,6 +56,40 @@ async function main() {
   await off.run();
   await wait(3300);
   ok("without permission the notifier never loads", offLoads === 0, "loads=" + offLoads);
+
+  // Worker: the register, the activation, a null that is not kept, and the routes the worker sends.
+  const registered = [], listeners = [];
+  let answer = null;
+  const container = { register: (url, opts) => { registered.push([url, opts.updateViaCache]); return answer(); }, addEventListener: (ev, fn) => { if (ev === "message") listeners.push(fn); } };
+  Object.defineProperty(globalThis, "navigator", { value: { serviceWorker: container }, configurable: true, writable: true });
+  const active = { active: {} };
+  answer = () => Promise.resolve(active);
+  ok("the worker registers at the stable key with no HTTP cache and resolves the active registration", (await GS.notifyWorker("https://poll.example/d/")) === active && JSON.stringify(registered[0]) === JSON.stringify(["https://poll.example/d/.gitsocial/site/gs-sw.js", "none"]), JSON.stringify(registered));
+  answer = () => Promise.reject(new Error("SecurityError"));
+  ok("a refused register resolves null", (await GS.notifyWorker("https://poll.example/d/")) === null);
+  const installing = (end) => { const w = { state: "installing", fns: [], addEventListener(ev, fn) { this.fns.push(fn); } }; setTimeout(() => { w.state = end; w.fns.forEach((fn) => fn()); }, 5); return { active: null, installing: w }; };
+  const fresh = installing("activated");
+  answer = () => Promise.resolve(fresh);
+  ok("a new worker resolves once it is active", (await GS.notifyWorker("https://poll.example/d/")) === fresh);
+  answer = () => Promise.resolve(installing("redundant"));
+  ok("a redundant worker resolves null", (await GS.notifyWorker("https://poll.example/d/")) === null);
+
+  global.window.Notification = fakeNotification("granted");
+  registered.length = 0;
+  answer = () => Promise.reject(new Error("offline"));
+  const retry = GS.startNotifier({ base: "https://poll.example/e/" }, async () => []);
+  await retry.run();
+  await wait(5);
+  answer = () => Promise.resolve(active);
+  await retry.run();
+  await wait(5);
+  await retry.run();
+  ok("a failed register tries again on the next run, and an active one is kept", registered.length === 2, "registers=" + registered.length);
+  global.location.hash = "#/";
+  listeners[listeners.length - 1]({ data: { route: "#commit:aaaaaaaaaaa1" } });
+  const opened = global.location.hash;
+  listeners[listeners.length - 1]({ data: { route: "javascript:void 0" } });
+  ok("a route from the worker opens in the tab, and a route that is not a hash does not", opened === "#commit:aaaaaaaaaaa1" && global.location.hash === "#commit:aaaaaaaaaaa1", opened + " " + global.location.hash);
 
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);

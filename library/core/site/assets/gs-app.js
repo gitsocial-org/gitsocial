@@ -451,22 +451,69 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
   // NOTIFY_POLL_MS is the period of the refs read while browser notifications are on.
   const NOTIFY_POLL_MS = 60000;
 
+  // NOTIFY_WORKER_KEY is the key of the site worker under the base; the key is the same for each shell, so a site has one registration.
+  const NOTIFY_WORKER_KEY = ".gitsocial/site/gs-sw.js";
+
+  // NOTIFY_WORKER_WAIT_MS is how long a new worker can take to activate before the tab shows through the page.
+  const NOTIFY_WORKER_WAIT_MS = 5000;
+
+  // activeRegistration resolves a registration when its worker is active, or null when the worker fails or is slower than the wait.
+  function activeRegistration(reg) {
+    if (reg.active) return reg;
+    const worker = reg.installing || reg.waiting;
+    if (!worker) return null;
+    return new Promise((resolve) => {
+      setTimeout(() => resolve(reg.active ? reg : null), NOTIFY_WORKER_WAIT_MS);
+      worker.addEventListener("statechange", () => { if (worker.state === "activated") resolve(reg); else if (worker.state === "redundant") resolve(null); });
+    });
+  }
+
+  // siteWorkers returns the service worker container of the browser, or null.
+  function siteWorkers() {
+    const sw = typeof navigator !== "undefined" ? navigator.serviceWorker : null;
+    return sw && typeof sw.register === "function" ? sw : null;
+  }
+
+  // notifyWorker registers the site worker and resolves its active registration, or null when the browser has none or the register fails.
+  function notifyWorker(base) {
+    const sw = siteWorkers();
+    if (!sw) return Promise.resolve(null);
+    return Promise.resolve().then(() => sw.register(base + NOTIFY_WORKER_KEY, { updateViaCache: "none" })).then(activeRegistration).catch(() => null);
+  }
+
+  // listenWorkerRoutes opens in the tab each route that the site worker sends, so a click finds every tab of the site, also one that did not show the notification.
+  function listenWorkerRoutes() {
+    const sw = siteWorkers();
+    if (!sw) return;
+    sw.addEventListener("message", (e) => {
+      const route = e.data && e.data.route;
+      if (typeof route === "string" && route.startsWith("#")) location.hash = route;
+    });
+  }
+
   // startNotifier runs the browser notifications of the tab on one context; a change during a run asks for one more run after it, and load replaces the item lanes in a test.
   function startNotifier(ctx, load) {
     const nctx = newContext(ctx.base);
     const loadItems = load || (() => loadNotifyItems(nctx));
-    let busy = false, pending = false;
+    let busy = false, pending = false, worker = null;
     const on = () => notifyState() === "granted";
+    // A null registration is not kept, so a slow first install or a failed register tries again on the next run.
+    const registration = () => worker || (worker = notifyWorker(ctx.base).then((reg) => { if (!reg) worker = null; return reg; }));
+    listenWorkerRoutes();
     const show = async (fresh, all) => {
       const email = readNotifyEmail();
       if (email) await hydrateItems(nctx, fresh);
       const icon = typeof document !== "undefined" && document.querySelector ? document.querySelector("link[rel=icon]") : null;
-      showNotifications(notifyMessages(pickNotifyItems(fresh, all, email), customTitle || "GitSocial", repoTitle(ctx.base)), icon ? icon.getAttribute("href") : "");
+      const href = icon ? icon.getAttribute("href") : "";
+      let iconHref = "";
+      try { iconHref = href ? new URL(href, location.href).href : ""; } catch (e) { /* no icon */ }
+      await showNotifications(notifyMessages(pickNotifyItems(fresh, all, email), customTitle || "GitSocial", repoTitle(ctx.base)), iconHref, await registration(), String(location.href).split("#")[0]);
     };
     const run = async () => {
       if (!on()) return;
       if (busy) { pending = true; return; }
       busy = true;
+      registration();
       try {
         do {
           pending = false;
@@ -565,7 +612,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     Promise.race([applying, new Promise((resolve) => setTimeout(resolve, CUSTOMIZATION_WAIT_MS))]).then(() => { if (routeGen === 0) route(ctx, entryHash, pageEntry()); });
   }
 
-  Object.assign(NS, { route, init, applySiteCustomization, applyAccent, applyFavicon, startNotifier, startFreshnessWatch, wireNotifyBell });
+  Object.assign(NS, { route, init, applySiteCustomization, applyAccent, applyFavicon, startNotifier, startFreshnessWatch, wireNotifyBell, notifyWorker });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();
 if (typeof document !== "undefined") (typeof globalThis !== "undefined" ? globalThis : this).GS.init();

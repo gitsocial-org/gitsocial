@@ -184,3 +184,32 @@ func TestSiteShellUpload_sweepsOldRevisions(t *testing.T) {
 		t.Error("index.html must stay at the root")
 	}
 }
+
+// TestUploadSiteFiles_serviceWorkerStableKey: the worker is at its stable key and not in the shell directory, a failed worker put leaves no index.html, and the sweep of a shell change leaves it.
+func TestUploadSiteFiles_serviceWorkerStableKey(t *testing.T) {
+	client, bucket := testClient(t)
+	bucket.FailPut("repo/" + siteWorkerKey)
+	if err := uploadSiteFiles(client, "repo/"); err == nil {
+		t.Fatal("uploadSiteFiles succeeded with a failed worker put")
+	}
+	if _, ok := bucket.Object("repo/index.html"); ok {
+		t.Error("index.html was written before the worker")
+	}
+	client, bucket = testClient(t)
+	bucket.Seed("repo/"+siteVersionKey, []byte("feedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed\n"))
+	bucket.Seed("repo/"+siteShellPrevKey, []byte(siteShellPrefix+"cafecafecafe/\n"))
+	bucket.Seed("repo/"+siteShellPrefix+"cafecafecafe/gs-app.js", []byte("previous"))
+	if err := uploadSiteFiles(client, "repo/"); err != nil {
+		t.Fatalf("uploadSiteFiles: %v", err)
+	}
+	version, err := siteVersion()
+	if err != nil {
+		t.Fatalf("siteVersion: %v", err)
+	}
+	if _, ok := bucket.Object("repo/" + siteWorkerKey); !ok {
+		t.Error("the worker is not at its stable key")
+	}
+	if _, ok := bucket.Object("repo/" + shellDirFor(version) + siteWorkerName); ok {
+		t.Error("the worker is also in the shell directory")
+	}
+}

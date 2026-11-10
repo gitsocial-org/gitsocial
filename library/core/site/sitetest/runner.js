@@ -28,6 +28,7 @@ const DEFAULT = [
   "unit_notify_filter.js",
   "unit_notify_seen.js",
   "unit_notify_poll.js",
+  "unit_notify_sw.js",
   "verify_403.js",
   "verify_threads.js",
   "verify_memos.js",

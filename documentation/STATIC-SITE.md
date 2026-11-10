@@ -173,6 +173,7 @@ The pages are at the prefix root, next to the shell; the cache classes are in [S
 | Key | Content | Cache |
 |---|---|---|
 | `index.html` | front page while the page layer is on, otherwise the shell; its asset references carry the shell revision | no-cache |
+| `.gitsocial/site/gs-sw.js` | the service worker of browser notifications, at the same key for all shells, so a site has one registration; written before the index flip | no-cache |
 | `.gitsocial/site/shell/<rev>/` | the shell assets of one binary version; the current and previous revisions are kept, older ones swept on a shell change | immutable |
 | `i/<short>.html` | one page per top-level item | no-cache |
 | `issues/`, `prs/`, `posts/`, `releases/`, `memos/` | `index.html` head plus full `<n>.html` pages | head no-cache, full pages immutable |
@@ -272,6 +273,7 @@ Browser notifications:
 - With an email, the app shows the new items that mention it, assign an issue to it or request its review, and the comments on its posts, never an item by that email; without an email it shows every new item. A comment on a post outside the newest window, and a reply to a comment of the reader, give no notification. Up to three items give one notification each, more give one summary. `unit_notify_filter.js` pins it.
 - Each item shows once per browser. An item is new when the seen mark does not hold its hash, whatever its date. A run writes the mark after the load and after the notifications show, and a failed load keeps the mark as it was. The first run in a browser with no mark writes it and shows nothing; a grant with a mark shows the items after it. `unit_notify_seen.js` pins it.
 - With permission granted, the notifier runs once after the page loads and after each change of `.gitsocial/refs.json`, on one context for the life of the tab. A change during a run gives one more run after it. Without permission it does not run. `unit_notify_poll.js` pins it.
+- The app shows a notification through the registration of `.gitsocial/site/gs-sw.js` when its worker is active, else through the page, also when the worker refuses it. A register that fails or a worker that is not active in 5 seconds gives the page path for that run, and the next run tries again. A click on a worker notification focuses the tab whose URL without its hash is the page that showed it and sends it the route, or opens that page at the route; each tab of the app takes the route. `unit_notify_filter.js`, `unit_notify_sw.js`, `unit_notify_poll.js` and `TestUploadSiteFiles_serviceWorkerStableKey` pin it.
 - The body of a notification has one definition in two places, `notificationBody` in `gs-render.js` and `desktopBody` in `core/notifications/desktop_text.go`, and `notificationBodies` in `parity_fixtures.json` pins the two.
 - The app reads `.gitsocial/refs.json` for notifications only while permission is granted, once a minute, also from a background tab, and a page load makes no request for them. The notification code names no host; `verify_site_features.js` checks it.
 

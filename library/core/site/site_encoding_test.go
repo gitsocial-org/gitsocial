@@ -74,6 +74,9 @@ func TestShellAssetsStoredBrotli(t *testing.T) {
 			t.Fatalf("read embedded %s: %v", name, err)
 		}
 		key := "repo/" + shellDir + name
+		if name == siteWorkerName {
+			key = "repo/" + siteWorkerKey
+		}
 		if name == "index.html" {
 			// The flip lives at the root with substituted references, checked by its own test.
 			key = "repo/index.html"

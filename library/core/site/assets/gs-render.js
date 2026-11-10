@@ -4821,20 +4821,29 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     }));
   }
 
-  // showNotifications shows each message as a browser notification; a click focuses the tab and opens the route of the message in it.
-  function showNotifications(messages, iconHref) {
+  // pageNotification shows one message through the page; a click focuses the tab and opens the route of the message in it.
+  function pageNotification(m, opts) {
+    let n;
+    try { n = new window.Notification(m.title, opts); } catch (e) { return; }
+    n.onclick = () => {
+      try { window.focus(); } catch (e) { /* the route still opens */ }
+      location.hash = m.route;
+      if (typeof n.close === "function") n.close();
+    };
+  }
+
+  // showNotifications shows each message through the registration of the site worker, which keeps it after the tab closes, else or on a refusal through the page; page is the URL of the tab without its hash.
+  function showNotifications(messages, iconHref, registration, page) {
+    const shown = [];
     for (const m of messages) {
       const opts = { body: m.body };
       if (iconHref) opts.icon = iconHref;
       if (m.tag) opts.tag = m.tag;
-      let n;
-      try { n = new window.Notification(m.title, opts); } catch (e) { continue; }
-      n.onclick = () => {
-        try { window.focus(); } catch (e) { /* the route still opens */ }
-        location.hash = m.route;
-        if (typeof n.close === "function") n.close();
-      };
+      if (!registration) { pageNotification(m, opts); continue; }
+      const withData = Object.assign({}, opts, { data: { page, route: m.route } });
+      shown.push(Promise.resolve().then(() => registration.showNotification(m.title, withData)).catch(() => pageNotification(m, opts)));
     }
+    return Promise.all(shown);
   }
 
   // NOTIFY_EMAIL_KEY is the localStorage key of the reader's email, one per origin.

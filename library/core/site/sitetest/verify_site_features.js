@@ -460,10 +460,12 @@ async function main() {
 
   // The notification code is the same on every bucket: no function of it names a host, an address or the host of the page.
   {
-    const NOTIFY_FNS = ["notificationBody", "notifyPanel", "notifyState", "notifyStorage", "readNotifyEmail", "loadNotifyItems", "notifyRun", "pickNotifyItems", "notifyMessages", "showNotifications", "startNotifier", "startFreshnessWatch", "wireNotifyBell"];
+    const NOTIFY_FNS = ["notificationBody", "notifyPanel", "notifyState", "notifyStorage", "readNotifyEmail", "loadNotifyItems", "notifyRun", "pickNotifyItems", "notifyMessages", "showNotifications", "startNotifier", "startFreshnessWatch", "wireNotifyBell", "notifyWorker"];
     const HOST_RE = /[a-z]+:\/\/|\b[a-z0-9-]+\.(?:org|com|net|io|dev|app|site)\b|location\.(?:host|hostname|origin)\b|gitsocial\.org/i;
     const named = NOTIFY_FNS.filter((name) => typeof GS[name] !== "function" || HOST_RE.test(String(GS[name])));
     ok("the notification code names no host", named.length === 0, named.join(", "));
+    const worker = require("fs").readFileSync(require("path").join(__dirname, "../assets/gs-sw.js"), "utf8").split("\n").filter((l) => !l.startsWith("//")).join("\n");
+    ok("the service worker names no host", !HOST_RE.test(worker));
   }
 
   // A heading key that is not its own route: the configuration page is #/config, and compare needs two refs.

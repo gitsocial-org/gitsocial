@@ -30,6 +30,10 @@ const (
 	siteShellPrefix = ".gitsocial/site/shell/"
 	// siteShellPrevKey records the outgoing shell revision across a version change, so an interrupted sweep retries on later passes.
 	siteShellPrevKey = ".gitsocial/site/shellprev"
+	// siteWorkerKey holds the service worker outside the shell, so a site keeps one registration across shell versions.
+	siteWorkerKey = ".gitsocial/site/gs-sw.js"
+	// siteWorkerName is the embedded name of the service worker.
+	siteWorkerName = "gs-sw.js"
 )
 
 // shellDirFor returns the versioned shell directory a site version's assets live under.
@@ -119,13 +123,13 @@ func putSiteAsset(client *objstore.Client, key, name string, data []byte) error 
 	return nil
 }
 
-// uploadShellFile puts one embedded site file into the versioned shell directory.
-func uploadShellFile(client *objstore.Client, prefix, shellDir, name string) error {
+// uploadSiteFile puts one embedded site file at a key.
+func uploadSiteFile(client *objstore.Client, key, name string) error {
 	data, err := siteFiles.ReadFile("assets/" + name)
 	if err != nil {
 		return fmt.Errorf("read embedded %s: %w", name, err)
 	}
-	return putSiteAsset(client, prefix+shellDir+name, name, data)
+	return putSiteAsset(client, key, name, data)
 }
 
 // siteIndexHTML returns the embedded index.html with its asset references
@@ -184,10 +188,13 @@ func uploadSiteFiles(client *objstore.Client, prefix string) error {
 	previous, _ := client.Get(prefix + siteVersionKey)
 	// The shell is dozens of small files, each a round trip, so they upload through the pool.
 	if err := objstore.FirstError(objstore.RunParallel(len(names), func(i int) error {
-		if names[i] == "index.html" {
+		switch names[i] {
+		case "index.html":
 			return nil // the flip below, after every target exists
+		case siteWorkerName:
+			return uploadSiteFile(client, prefix+siteWorkerKey, names[i])
 		}
-		return uploadShellFile(client, prefix, shellDir, names[i])
+		return uploadSiteFile(client, prefix+shellDir+names[i], names[i])
 	})); err != nil {
 		return err
 	}

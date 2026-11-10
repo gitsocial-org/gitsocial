@@ -53,5 +53,18 @@ let threw = null;
 try { GS.showNotifications(three, ""); } catch (e) { threw = e; }
 eq(threw, null, "a browser that refuses the constructor shows nothing without a throw");
 
-console.log(pass + " passed, " + fail + " failed");
-process.exit(fail ? 1 : 0);
+const viaWorker = [];
+const registration = { showNotification: (title, opts) => { viaWorker.push({ title, opts }); return Promise.resolve(); } };
+const PAGE = "https://site.example/a/";
+global.window.Notification = function () { throw new Error("the page constructor ran with a registration"); };
+GS.showNotifications(three, "https://site.example/icon.svg", registration, PAGE).then(() => {
+  eq(viaWorker.map((n) => [n.title, n.opts.body, n.opts.icon, n.opts.tag, n.opts.data]), three.map((m) => [m.title, m.body, "https://site.example/icon.svg", m.route.slice("#commit:".length), { page: PAGE, route: m.route }]),
+    "with a registration each message goes through the worker with its tag, the page and the route");
+  notes.length = 0;
+  global.window.Notification = function (title, opts) { notes.push({ title, opts }); };
+  return GS.showNotifications(three, "", { showNotification: () => Promise.reject(new TypeError("no active worker")) }, PAGE);
+}).then(() => {
+  eq(notes.map((n) => n.opts.body), three.map((m) => m.body), "a refused worker notification shows through the page");
+  console.log(pass + " passed, " + fail + " failed");
+  process.exit(fail ? 1 : 0);
+});
