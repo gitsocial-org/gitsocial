@@ -46,6 +46,7 @@ library/tui/test/
 ├── stack_test.go         # stacked pull requests
 ├── proposal_test.go      # cross-repo proposals
 ├── anchors_test.go       # detail card anchors against its links
+├── click_test.go         # a click on a desktop message
 └── testdata/             # fixture-repo.tar.gz, fixture-fork.tar.gz, fixture.json, *.golden
 ```
 
@@ -125,6 +126,7 @@ The cache is filled with `client.SyncWorkspace`, workspace first and fork second
 | `stack_test.go` | `TestStackDisplay/BadgeOnPRList`, `TestStackBindings`, `TestStackNavigationBackend` | the stack badge, the stack keys, and `GetStack` and `getDependents` behind them |
 | `proposal_test.go` | `TestProposalDisplay/{IssueListMarker,IssueDetailBanner,HistoryRow,HistoryFooterOffersAcceptAndDecline}`, `TestProposalAccept`, `TestProposalDecline` | the ✎ marker, the banner, the history row, and `A` and `X` that accept or decline a proposal, on an isolated fixture |
 | `anchors_test.go` | `Test{Issue,PR,Milestone,Sprint,Release,Memo,Post}Detail_anchorsMatchLinks` | the n-th anchor a detail card marks has the location of the n-th entry of its `Links()`, on each detail view with a body that holds a ref, a url and a mention; the issue carries an assignee, a label and a citing commit, the pull request a foreign head with a tip, a dependency, a reviewer, a label and a closed issue |
+| `click_test.go` | `TestClick_{sameTargetAsFeed,movedBranch,guardKeepsView,duringFetch,expiredIsDropped,refFallback}` | a `tuicore.ClickMsg` through `Update`: the view that Enter on the feed row opens, also for a ref on another branch, with the row and the count read; no change with an input or a choice dialog open or after 2 s; a change during a fetch; `LocRef` for a ref with no notification and the feed for an empty ref |
 
 ## Notes
 

@@ -30,25 +30,38 @@ func webhookURL() string {
 	return value
 }
 
-// NotifyNew sends the messages of new items with their click targets: to the desktop when the setting is on, and to the webhook when it has a URL.
-func NotifyNew(workdir, cacheDir string, items []notifications.Notification) {
-	notifyNew(workdir, cacheDir, items, desktop.Send, &http.Client{Timeout: webhookTimeout})
+// NotifyNew sends the messages of new items with their click targets: to the desktop when the setting is on, and to the webhook when it has a URL; a TUI gives its click socket, other callers "".
+func NotifyNew(workdir, cacheDir, socket string, items []notifications.Notification) {
+	notifyNew(workdir, cacheDir, socket, items, desktop.Send, &http.Client{Timeout: webhookTimeout})
 }
 
 // notifyNew sends the messages of new items through send and posts each with httpClient, and logs a failure.
-func notifyNew(workdir, cacheDir string, items []notifications.Notification, send func([]notifications.DesktopMessage) error, httpClient *http.Client) {
+func notifyNew(workdir, cacheDir, socket string, items []notifications.Notification, send func([]notifications.DesktopMessage) error, httpClient *http.Client) {
 	if len(items) == 0 {
 		return
 	}
 	all := messages(workdir, cacheDir, items)
 	if DesktopEnabled() {
-		if err := send(all); err != nil {
+		if err := send(desktopCopy(all, socket)); err != nil {
 			log.Debug("desktop notification failed", "error", err)
 		}
 	}
 	if url := webhookURL(); url != "" {
 		postWebhook(httpClient, url, all, webhookRetryDelay)
 	}
+}
+
+// desktopCopy returns the messages for the desktop sender: with a socket, each names it and has no URL, so a click goes to that TUI.
+func desktopCopy(all []notifications.DesktopMessage, socket string) []notifications.DesktopMessage {
+	if socket == "" {
+		return all
+	}
+	out := make([]notifications.DesktopMessage, 0, len(all))
+	for _, m := range all {
+		m.Socket, m.URL = socket, ""
+		out = append(out, m)
+	}
+	return out
 }
 
 // WatchUnread snapshots the unread set when desktop messages or the webhook are on and returns a function that gives the items unread since.

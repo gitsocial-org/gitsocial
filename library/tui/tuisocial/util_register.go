@@ -23,6 +23,8 @@ type socialHost interface {
 	SetDisplayItems([]tuicore.DisplayItem)
 	UpdateDisplayItem(tuicore.DisplayItem)
 	RemoveDisplayItem(string)
+	ViewAt(string) tuicore.View
+	IsInputActive() bool
 }
 
 // init registers the social views, card renderers, dimmed checkers, nav targets and message handler.
@@ -240,6 +242,10 @@ func handleSocialMessages(msg tea.Msg, ctx tuicore.AppContext) (bool, tea.Cmd) {
 		return handleListCreated(msg, ctx)
 	case tuicore.InteractionCountsRefreshedMsg:
 		return handleInteractionCountsRefreshed(msg, ctx)
+	case tuicore.ClickMsg:
+		return handleClick(msg, ctx)
+	case clickResolvedMsg:
+		return handleClickResolved(msg, ctx)
 	}
 	return false, nil
 }
@@ -386,17 +392,17 @@ func handleFetchCompleted(msg FetchCompletedMsg, ctx tuicore.AppContext) (bool, 
 		// Auto-fetch stays silent when there's nothing new — no toast spam.
 		msgCmd = ctx.Host().SetMessageWithTimeout("Already up to date", tuicore.MessageTypeSuccess, 5*time.Second)
 	}
-	return true, tea.Batch(ctx.Host().RefreshView(), ctx.LoadUnreadCount(), msgCmd, desktopNotifyCmd(msg, ctx.Workdir(), ctx.CacheDir()))
+	return true, tea.Batch(ctx.Host().RefreshView(), ctx.LoadUnreadCount(), msgCmd, desktopNotifyCmd(msg, ctx.Workdir(), ctx.CacheDir(), ctx.Host().State().ClickSocket))
 }
 
-// desktopNotifyCmd sends the desktop messages of an auto-fetch; a manual fetch has the footer toast.
-func desktopNotifyCmd(msg FetchCompletedMsg, workdir, cacheDir string) tea.Cmd {
+// desktopNotifyCmd sends the desktop messages of an auto-fetch, whose click goes to socket; a manual fetch has the footer toast.
+func desktopNotifyCmd(msg FetchCompletedMsg, workdir, cacheDir, socket string) tea.Cmd {
 	if !msg.Auto || len(msg.NewUnread) == 0 {
 		return nil
 	}
 	items := msg.NewUnread
 	return func() tea.Msg {
-		client.NotifyNew(workdir, cacheDir, items)
+		client.NotifyNew(workdir, cacheDir, socket, items)
 		return nil
 	}
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/identity"
 	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
+	"github.com/gitsocial-org/gitsocial/library/core/notifications/click"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
 	"github.com/gitsocial-org/gitsocial/library/core/storage"
@@ -1728,10 +1729,17 @@ func Run(workdir, cacheDir string) error {
 	}
 	tuicore.SetDarkBackground(dark)
 
-	p := tea.NewProgram(
-		NewModel(workdir, cacheDir),
-		tea.WithFPS(120),
-	)
+	model := NewModel(workdir, cacheDir)
+	model.host.State().ClickSocket = click.SocketPath(cacheDir, os.Getpid(), time.Now())
+	p := tea.NewProgram(model, tea.WithFPS(120))
+	if runtime.GOOS == "darwin" {
+		stop, err := click.Listen(model.host.State().ClickSocket, clickHandler(activateTerminal, p.Send))
+		if err != nil {
+			log.Warn("click socket", "error", err)
+		} else {
+			defer stop()
+		}
+	}
 	_, err := p.Run()
 	return err
 }

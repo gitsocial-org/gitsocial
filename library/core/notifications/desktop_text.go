@@ -38,12 +38,14 @@ func notificationKey(n Notification) string {
 
 // DesktopMessage is one message of a fetch, and the JSON document of the webhook: the text, the click target and the item it names; a summary names no item.
 type DesktopMessage struct {
-	Title string `json:"title"`
-	Body  string `json:"body"`
-	URL   string `json:"url"`
-	Type  string `json:"type,omitempty"`
-	Repo  string `json:"repo,omitempty"`
-	Hash  string `json:"hash,omitempty"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	URL    string `json:"url"`
+	Type   string `json:"type,omitempty"`
+	Repo   string `json:"repo,omitempty"`
+	Hash   string `json:"hash,omitempty"`
+	Socket string `json:"-"`
+	Ref    string `json:"-"`
 }
 
 // DesktopMessages returns one message per new item, or one summary over the cap; itemURL gives the click target of an item and summaryURL that of the summary.
@@ -53,9 +55,17 @@ func DesktopMessages(items []Notification, itemURL func(Notification) string, su
 	}
 	messages := make([]DesktopMessage, 0, len(items))
 	for _, n := range items {
-		messages = append(messages, DesktopMessage{Title: desktopTitle, Body: desktopBody(n), URL: itemURL(n), Type: n.Type, Repo: n.RepoURL, Hash: n.Hash})
+		messages = append(messages, DesktopMessage{Title: desktopTitle, Body: desktopBody(n), URL: itemURL(n), Type: n.Type, Repo: n.RepoURL, Hash: n.Hash, Ref: desktopRef(n)})
 	}
 	return messages
+}
+
+// desktopRef returns the commit ref of the item of a notification, or "" for a follow.
+func desktopRef(n Notification) string {
+	if n.Type == "follow" {
+		return ""
+	}
+	return protocol.CreateRef(protocol.RefTypeCommit, n.Hash, n.RepoURL, n.Branch)
 }
 
 // desktopBody returns the actor and the verb of the type, or a sentence for a type with no actor, then the short repository name.

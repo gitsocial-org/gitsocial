@@ -4,6 +4,7 @@ package desktop
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -277,5 +278,39 @@ func TestDarwinSender_detachedAndFallback(t *testing.T) {
 	}
 	if got := readArgs(t, fellBack); len(got) < 2 || got[len(got)-1] != "body" {
 		t.Errorf("osascript arguments = %q, want the fallback with the body", got)
+	}
+}
+
+func TestDarwinSender_clickArgs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub tools are shell scripts")
+	}
+	root := t.TempDir()
+	bundled := filepath.Join(root, "GitSocial.app", "Contents", "MacOS")
+	h := host{self: filepath.Join(bundled, "gitsocial"), timeout: sendTimeout}
+	ref := "https://example.com/owner/repo#commit:0123456789ab@main"
+	for i, c := range []struct {
+		message notifications.DesktopMessage
+		want    string
+	}{
+		{notifications.DesktopMessage{Title: "GitSocial", Body: "body", URL: "https://site.example/", Ref: ref}, "notify|GitSocial|body|https://site.example/"},
+		{notifications.DesktopMessage{Title: "GitSocial", Body: "body", Socket: "/tmp/click/1-2.sock", Ref: ref}, "notify|GitSocial|body||/tmp/click/1-2.sock|" + ref},
+		{notifications.DesktopMessage{Title: "GitSocial", Body: "5 new notifications", Socket: "/tmp/click/1-2.sock"}, "notify|GitSocial|5 new notifications||/tmp/click/1-2.sock|"},
+	} {
+		out := filepath.Join(root, fmt.Sprintf("args%d", i))
+		writeStub(t, filepath.Join(bundled, notifierName), `for arg in "$@"; do printf '%s|' "$arg"; done > '`+out+`.tmp'; mv '`+out+`.tmp' '`+out+`'`)
+		if err := darwinSend(h, c.message); err != nil {
+			t.Fatalf("darwinSend: %v", err)
+		}
+		if !waitForFile(out) {
+			t.Fatal("the notifier did not run")
+		}
+		data, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatalf("read notifier arguments: %v", err)
+		}
+		if got := strings.TrimSuffix(string(data), "|"); got != c.want {
+			t.Errorf("notifier arguments = %q, want %q", got, c.want)
+		}
 	}
 }

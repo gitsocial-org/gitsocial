@@ -50,6 +50,9 @@ type State struct {
 	CacheDir string
 	GitRoot  string // pre-computed git root to avoid subprocess on hot paths
 
+	// ClickSocket is the socket that a click on a desktop message of this TUI writes to
+	ClickSocket string
+
 	// User info
 	UserEmail string
 

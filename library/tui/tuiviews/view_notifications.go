@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/log"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
@@ -224,20 +225,15 @@ func (v *NotificationsView) navigateToSelected() tea.Cmd {
 		v.meta[idx].IsRead = true
 		v.cardlist.SetDimmed(idx, true)
 	}
-	if m.Type == "follow" {
-		return func() tea.Msg {
-			return tuicore.NavigateMsg{
-				Location: tuicore.LocRepository(m.ActorRepo, m.Branch),
-				Action:   tuicore.NavPush,
-			}
-		}
-	}
 	item, ok := v.cardlist.SelectedItem()
 	if !ok {
 		return nil
 	}
+	loc := NotificationTarget(m, item)
+	if m.Type == "follow" {
+		return func() tea.Msg { return tuicore.NavigateMsg{Location: loc, Action: tuicore.NavPush} }
+	}
 	items := v.cardlist.Items()
-	loc := tuicore.GetNavTarget(item)
 	return func() tea.Msg {
 		return tuicore.NavigateMsg{
 			Location:    loc,
@@ -245,6 +241,24 @@ func (v *NotificationsView) navigateToSelected() tea.Cmd {
 			SourcePath:  "/notifications",
 			SourceIndex: v.cardlist.Selected(),
 			SourceTotal: len(items),
+		}
+	}
+}
+
+// NotificationTarget returns the location a notification opens: the repository of a follow, else the target of its item.
+func NotificationTarget(meta tuicore.NotificationMeta, item tuicore.DisplayItem) tuicore.Location {
+	if meta.Type == "follow" {
+		return tuicore.LocRepository(meta.ActorRepo, meta.Branch)
+	}
+	return tuicore.GetNavTarget(item)
+}
+
+// MarkReadByHash marks the rows of a repository and a hash read, whatever their branch.
+func (v *NotificationsView) MarkReadByHash(repoURL, hash string) {
+	for i, m := range v.meta {
+		if protocol.NormalizeURL(m.RepoURL) == protocol.NormalizeURL(repoURL) && m.Hash == hash {
+			v.meta[i].IsRead = true
+			v.cardlist.SetDimmed(i, true)
 		}
 	}
 }

@@ -53,7 +53,7 @@ func TestDesktopMessages_summaryOverThree(t *testing.T) {
 	if len(messages) != 3 {
 		t.Fatalf("three items gave %d messages, want 3", len(messages))
 	}
-	want := DesktopMessage{Title: "GitSocial", Body: "Alice mentioned you · owner/repo", URL: "https://site.example/a", Type: "mention", Repo: "https://example.com/owner/repo", Hash: "a"}
+	want := DesktopMessage{Title: "GitSocial", Body: "Alice mentioned you · owner/repo", URL: "https://site.example/a", Type: "mention", Repo: "https://example.com/owner/repo", Hash: "a", Ref: "https://example.com/owner/repo#commit:a@gitmsg/social"}
 	if messages[0] != want {
 		t.Errorf("message = %+v, want %+v", messages[0], want)
 	}

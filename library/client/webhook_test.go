@@ -47,7 +47,7 @@ func webhookRecorder(t *testing.T, fail func(doc map[string]any, seen int) int) 
 }
 
 func TestWebhook_payloadAndRetry(t *testing.T) {
-	item := notifications.DesktopMessage{Title: "GitSocial", Body: "Alice mentioned you · owner/repo", URL: "https://site.example/index.html#commit:0123456789ab", Type: "mention", Repo: "https://example.com/owner/repo", Hash: "0123456789abcdef"}
+	item := notifications.DesktopMessage{Title: "GitSocial", Body: "Alice mentioned you · owner/repo", URL: "https://site.example/index.html#commit:0123456789ab", Type: "mention", Repo: "https://example.com/owner/repo", Hash: "0123456789abcdef", Socket: "/tmp/click/1-2.sock", Ref: "https://example.com/owner/repo#commit:0123456789ab"}
 	summary := notifications.DesktopMessage{Title: "GitSocial", Body: "5 new notifications", URL: "https://site.example/"}
 	server, docs := webhookRecorder(t, func(doc map[string]any, seen int) int {
 		if doc["body"] == item.Body && seen == 0 {
@@ -67,6 +67,9 @@ func TestWebhook_payloadAndRetry(t *testing.T) {
 			continue
 		}
 		items++
+		if len(doc) != len(want) {
+			t.Errorf("item post = %v, want only the keys %v", doc, want)
+		}
 		for key, value := range want {
 			if doc[key] != value {
 				t.Errorf("item post %s = %v, want %v", key, doc[key], value)

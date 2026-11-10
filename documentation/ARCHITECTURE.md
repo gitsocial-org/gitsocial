@@ -206,6 +206,7 @@ Outside the tree:
 ├── repositories/              # bare clones of followed repositories
 ├── forks/                     # bare clones of registered forks
 ├── imports/                   # per repository URL: the import mapping, the avatar memo and the avatar store
+├── click/                     # <pid>-<start>.sock of each running TUI on macOS, the target of a click on its desktop message
 └── memo/session/              # session memo repos
 ```
 
@@ -225,6 +226,7 @@ Outside the tree:
 | `core/search`<br>Cross-extension search | | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |
 | `core/result`<br>Result type | `Result[T]`, `Error` | `Ok`, `Err`, `ErrWithDetails` |
 | `core/notifications`<br>Notification aggregation | `Notification`, `Provider`, `Filter` | `RegisterProvider`, `GetAll`, `GetUnreadCount`, `MarkAsRead`, `MarkAsUnread`, `MarkAllAsRead`, `MarkAllAsUnread`, `MentionProcessor`, `ExtractMentions`, `TrailerProcessor` |
+| `core/notifications/click`<br>Click socket of a TUI | | `SocketPath`, `Listen`, `Send` |
 | `core/identity`<br>Identity verification | `Identity`, `ResolvedIdentity`, `DNSIdentity`, `Binding`, `Source`, `VerifyCandidate` | `VerifyBinding`, `IsVerified`, `IsVerifiedCommit`, `LookupBinding`, `VerifyCandidates`, `NormalizeSignerKey`, `NormalizeEmail`, `ResolveIdentity` |
 | `core/identity/forge`<br>Forge adapters | `Forge`, `GPGKey`, `CommitVerification` | `Forge`, `Register`, `Lookup`, `LookupForRepo`, `ParseRepoURL`, `NewGitHub`, `GPGKey`, `CommitVerification` |
 | `extensions/social`<br>Posts, lists, timeline | `Post`, `SocialItem` | `GetPosts`, `CreatePost`, `CreateComment`, `GetComments`, `Fetch` |

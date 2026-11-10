@@ -19,7 +19,23 @@ gitsocial notifications unread <id> | unread-all
 
 A fetch that brings new unread notifications sends a desktop message. Up to three new notifications give one message each, and more give one summary message. `gitsocial fetch --json` sends no message. The TUI sends messages only after an auto-fetch, so turn on `fetch.auto.enabled` to get messages from the TUI.
 
-A click on a message opens the item on the site. When `gitsocial serve` runs for the workspace, the click opens the served site; else it opens the `site.url` of the workspace. With neither, the message has no click. A summary, and an item of another repository, open the start page of the site.
+A click on a message goes to the process that sent it.
+
+| Sender | macOS | Linux and Windows |
+|---|---|---|
+| the TUI | brings the terminal app of the TUI to the front and opens the item in the TUI | no click |
+| the CLI (`gitsocial fetch`), RPC | opens the item on the site | opens the item on the site |
+
+In the TUI, the click opens the view that Enter on the row of the feed opens, and marks the notification read. A summary opens the feed. Back goes to the view before the click.
+
+A click of `gitsocial fetch` or RPC opens the served site when `gitsocial serve` runs for the workspace, else the `site.url` of the workspace. With neither, the message has no click. A summary, and an item of another repository, open the start page of the site.
+
+Known cases of a click on a message of the TUI:
+
+- When the TUI exited, the click does nothing.
+- When an input or a dialog is open in the TUI, or the TUI does not answer for 2 s (for example, an editor is open), the terminal comes to the front and the view does not change.
+- A `follow` opens the feed, not the repository.
+- A `GitSocial.app` older than the TUI cannot take the click: the message comes from `osascript` with no click until you update the app.
 
 | OS | Sender | Install |
 |---|---|---|

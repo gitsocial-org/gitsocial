@@ -9,7 +9,7 @@ import (
 )
 
 // notify reports on stderr that this build posts nothing and fails.
-func notify(_, _, _ string) int {
+func notify(_, _, _, _, _ string) int {
 	fmt.Fprintln(os.Stderr, "gitsocial-notifier: this build has no notification support")
 	return 1
 }

@@ -89,10 +89,14 @@ func send(h host, messages []notifications.DesktopMessage) error {
 	return errors.Join(errs...)
 }
 
-// darwinSend starts the notifier of GitSocial.app detached, and falls back to osascript, which has no click, when the notifier is missing or fails.
+// darwinSend starts the notifier of GitSocial.app detached, and falls back to osascript, which has no click, when the notifier is missing or fails; a message with a socket also gives the socket and the ref.
 func darwinSend(h host, m notifications.DesktopMessage) error {
 	if notifier := darwinNotifier(h.self, h.appDirs); notifier != "" {
-		err := startDetached(notifierGrace, notifier, "notify", m.Title, m.Body, m.URL)
+		args := []string{"notify", m.Title, m.Body, m.URL}
+		if m.Socket != "" {
+			args = append(args, m.Socket, m.Ref)
+		}
+		err := startDetached(notifierGrace, notifier, args...)
 		if err == nil {
 			return nil
 		}

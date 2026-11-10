@@ -458,7 +458,7 @@ func coreFetch(s *Server) HandlerFunc {
 				"unreadCount": count,
 			})
 			if result.Success {
-				client.NotifyNew(workdir, cacheDir, newUnread)
+				client.NotifyNew(workdir, cacheDir, "", newUnread)
 			}
 		}()
 		return map[string]string{"fetchId": fetchID}, nil

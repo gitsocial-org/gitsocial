@@ -229,6 +229,12 @@ type ExportArtifactMsg struct {
 	Filename string
 }
 
+// ClickMsg is a click on a desktop message of this TUI: the commit ref of its item, "" for a summary or a follow, and the time it arrived.
+type ClickMsg struct {
+	Ref string
+	At  time.Time
+}
+
 // HeaderPart is a segment of a card subtitle, optionally linked to a navigation target.
 type HeaderPart struct {
 	Text string

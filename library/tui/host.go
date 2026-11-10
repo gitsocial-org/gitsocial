@@ -371,6 +371,11 @@ func (h *Host) CurrentView() tuicore.View {
 	return h.resolveView()
 }
 
+// ViewAt returns the view registered for a pattern, or nil.
+func (h *Host) ViewAt(pattern string) tuicore.View {
+	return h.views[pattern]
+}
+
 // resolveView finds the view matching the current route.
 func (h *Host) resolveView() tuicore.View {
 	loc := h.state.Router.Location()

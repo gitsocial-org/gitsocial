@@ -79,13 +79,13 @@ func TestFormatPushCompletion_OneLinePerRemote(t *testing.T) {
 
 func TestFetchCompleted_desktopOnAutoOnly(t *testing.T) {
 	items := []notifications.Notification{{RepoURL: "https://example.com/owner/repo", Hash: "a1", Type: "mention"}}
-	if cmd := desktopNotifyCmd(FetchCompletedMsg{NewUnread: items}, "", ""); cmd != nil {
+	if cmd := desktopNotifyCmd(FetchCompletedMsg{NewUnread: items}, "", "", ""); cmd != nil {
 		t.Error("a manual fetch with new items returned a desktop command")
 	}
-	if cmd := desktopNotifyCmd(FetchCompletedMsg{Auto: true}, "", ""); cmd != nil {
+	if cmd := desktopNotifyCmd(FetchCompletedMsg{Auto: true}, "", "", ""); cmd != nil {
 		t.Error("an auto-fetch with no new items returned a desktop command")
 	}
-	if cmd := desktopNotifyCmd(FetchCompletedMsg{Auto: true, NewUnread: items}, "", ""); cmd == nil {
+	if cmd := desktopNotifyCmd(FetchCompletedMsg{Auto: true, NewUnread: items}, "", "", ""); cmd == nil {
 		t.Error("an auto-fetch with new items returned no desktop command")
 	}
 }
