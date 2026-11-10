@@ -273,7 +273,7 @@ Browser notifications:
 - Each item shows once per browser. An item is new when the seen mark does not hold its hash, whatever its date. A run writes the mark after the load and after the notifications show, and a failed load keeps the mark as it was. The first run in a browser with no mark writes it and shows nothing; a grant with a mark shows the items after it. `unit_notify_seen.js` pins it.
 - With permission granted, the notifier runs once after the page loads and after each change of `.gitsocial/refs.json`, on one context for the life of the tab. A change during a run gives one more run after it. Without permission it does not run. `unit_notify_poll.js` pins it.
 - The body of a notification has one definition in two places, `notificationBody` in `gs-render.js` and `desktopBody` in `core/notifications/desktop_text.go`, and `notificationBodies` in `parity_fixtures.json` pins the two.
-- The app reads `.gitsocial/refs.json` for notifications only while permission is granted and the tab is visible, once a minute, and a page load makes no request for them. The notification code names no host; `verify_site_features.js` checks it.
+- The app reads `.gitsocial/refs.json` for notifications only while permission is granted, once a minute, also from a background tab, and a page load makes no request for them. The notification code names no host; `verify_site_features.js` checks it.
 
 Index maintenance:
 

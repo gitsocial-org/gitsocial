@@ -448,7 +448,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     }
   }
 
-  // NOTIFY_POLL_MS is the period of the refs read while browser notifications are on and the tab is visible.
+  // NOTIFY_POLL_MS is the period of the refs read while browser notifications are on.
   const NOTIFY_POLL_MS = 60000;
 
   // startNotifier runs the browser notifications of the tab on one context; a change during a run asks for one more run after it, and load replaces the item lanes in a test.
@@ -477,7 +477,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
     return { on, run };
   }
 
-  // startFreshnessWatch re-reads refs.json on focus, on visibility and, with notifications on, each minute while visible; a change raises the reload pill and runs the notifier.
+  // startFreshnessWatch re-reads refs.json on focus, on visibility and, with notifications on, each minute; a change raises the reload pill and runs the notifier.
   function startFreshnessWatch(ctx, notifier) {
     let baseline = null, last = null, lastCheck = 0, pill = null, timer = null;
     const showPill = () => {
@@ -499,10 +499,10 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
       if (cur !== baseline) showPill();
       if (cur !== last) { last = cur; notifier.run(); }
     };
-    // poll starts the timer once notifications are on; a hidden tab reads nothing.
+    // poll starts the timer once notifications are on; a background tab reads too.
     const poll = () => {
       if (timer || !notifier.on()) return;
-      timer = setInterval(() => { if (document.visibilityState === "visible" && notifier.on()) check(); }, NOTIFY_POLL_MS);
+      timer = setInterval(() => { if (notifier.on()) check(); }, NOTIFY_POLL_MS);
     };
     setTimeout(check, 3000);
     window.addEventListener("focus", check);
