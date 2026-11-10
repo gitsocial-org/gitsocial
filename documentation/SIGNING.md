@@ -16,6 +16,8 @@ Darwin release binaries are signed with an Apple Developer ID Application certif
 
 [`rcodesign`](https://github.com/indygreg/apple-platform-rs) runs on all operating systems, but the notifier build needs cgo and the icon needs `actool`, so the release runs on a Mac with the Xcode command line tools.
 
+Notification Center records the icon of a bundle identifier at its first authorization and keeps it. The bundle must be complete, with its icon, in `~/Applications` or `/Applications` before its first message; if not, the placeholder icon stays until a logout.
+
 Keep the signing in the build hook. Do not use the `signs:` or `binary_signs:` blocks: they register each archive two times, and the GitHub upload then fails with `422 already_exists`.
 
 ## Credentials
