@@ -1,4 +1,4 @@
-// click.go - The handler of the click socket: it brings the terminal tab of the TUI to the front and gives the click to the model.
+// click.go - The handler of the click socket: it brings the terminal tab of the TUI to the front on macOS and gives the click to the model.
 package tui
 
 import (
@@ -91,8 +91,11 @@ func processTTY() string {
 	return "/dev/" + name
 }
 
-// activateTerminal returns the function that brings the terminal of this process to the front: the tab of tty in a terminal with a focus script, else the app; with no bundle id it does nothing.
-func activateTerminal(tty string) func() {
+// activateTerminal returns the function that brings the terminal of this process to the front on macOS: the tab of tty in a terminal with a focus script, else the app; on another OS or with no bundle id it does nothing.
+func activateTerminal(goos, tty string) func() {
+	if goos != "darwin" {
+		return func() {}
+	}
 	return func() {
 		id := os.Getenv("__CFBundleIdentifier")
 		if id == "" {

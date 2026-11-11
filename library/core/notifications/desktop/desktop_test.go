@@ -1,4 +1,4 @@
-// desktop_test.go - Tests for the desktop sender: a missing tool, the text as an argument and the timeout.
+// desktop_test.go - Tests for the desktop sender: a missing tool, the text as an argument, the timeout and the click of each OS.
 package desktop
 
 import (
@@ -13,11 +13,20 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
+	"github.com/gitsocial-org/gitsocial/library/core/notifications/click"
 )
 
 // testHost returns a host with no bundle, so no test posts through a GitSocial.app of the machine.
 func testHost() host {
-	return host{timeout: sendTimeout}
+	return host{timeout: sendTimeout, replyTimeout: sendTimeout}
+}
+
+// noBus points the session bus variables at a directory with no bus, so no test reaches the bus of the machine.
+func noBus(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path="+filepath.Join(dir, "bus"))
+	t.Setenv("XDG_RUNTIME_DIR", dir)
 }
 
 // writeStub writes an executable shell script.
@@ -44,6 +53,7 @@ func stubTool(t *testing.T, script string) {
 	dir := t.TempDir()
 	writeStub(t, filepath.Join(dir, tool), script)
 	t.Setenv("PATH", dir)
+	noBus(t)
 }
 
 // recordArgs returns a script that writes its arguments to out, one per line.
@@ -68,6 +78,7 @@ func batch(title, body, url string) []notifications.DesktopMessage {
 
 func TestSend_missingToolIsNotAnError(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
+	noBus(t)
 	if err := send(testHost(), batch("GitSocial", "Alice mentioned you", "")); err != nil {
 		t.Errorf("Send without a tool = %v, want nil", err)
 	}
@@ -99,13 +110,12 @@ func TestSend_textIsAnArgument(t *testing.T) {
 			}
 		}
 	}
-	opened := filepath.Join(dir, "opened")
-	stubNotifySend(t, out, opened, true)
+	stubNotifySend(t, out, filepath.Join(dir, "opened"))
 	body := "-u critical <b>&</b>"
-	if err := notifyWait(testHost(), title, body, "https://site.example/"); err != nil {
+	if err := notifyWait(testHost(), title, body, "https://site.example/", "", ""); err != nil {
 		t.Fatalf("notifyWait: %v", err)
 	}
-	want := []string{"--app-name=GitSocial", "--action=open=Open", "--wait", "--", title, "-u critical &lt;b&gt;&amp;&lt;/b&gt;"}
+	want := []string{"--app-name=GitSocial", "--", title, "-u critical &lt;b&gt;&amp;&lt;/b&gt;"}
 	if got := readArgs(t, out); strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("notify-send arguments = %q, want %q", got, want)
 	}
@@ -125,22 +135,17 @@ func TestSend_textIsAnArgument(t *testing.T) {
 	}
 }
 
-// stubNotifySend puts a notify-send first on PATH that records its arguments to out, prints help with or without --action, sleeps on --wait and then prints the open action, and an xdg-open that records its URL to opened.
-func stubNotifySend(t *testing.T, out, opened string, action bool) {
+// stubNotifySend puts a notify-send first on PATH that records its arguments to out, and an xdg-open that records its URL to opened, with no session bus.
+func stubNotifySend(t *testing.T, out, opened string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("stub tools are shell scripts")
 	}
-	help := "  --urgency=LEVEL"
-	if action {
-		help += "\\n  --action=[NAME=]Text"
-	}
 	bin := t.TempDir()
-	writeStub(t, filepath.Join(bin, "notify-send"), `[ "$1" = --help ] && { printf '`+help+`\\n'; exit 0; }
-`+recordArgs(out)+`
-for arg in "$@"; do [ "$arg" = --wait ] && { /bin/sleep 1; echo open; }; done; exit 0`)
+	writeStub(t, filepath.Join(bin, "notify-send"), recordArgs(out))
 	writeStub(t, filepath.Join(bin, "xdg-open"), recordArgs(opened))
 	t.Setenv("PATH", bin)
+	noBus(t)
 }
 
 // waitForFile polls for a file for ten seconds and reports whether it exists.
@@ -154,12 +159,16 @@ func waitForFile(path string) bool {
 }
 
 func TestSend_actionWaitIsDetached(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub tools are shell scripts")
+	}
+	noBus(t)
+	t.Setenv("PATH", t.TempDir())
 	dir := t.TempDir()
-	out, opened, childArgs := filepath.Join(dir, "args"), filepath.Join(dir, "opened"), filepath.Join(dir, "child")
-	stubNotifySend(t, out, opened, true)
+	childArgs := filepath.Join(dir, "child")
 	self := filepath.Join(dir, "gitsocial")
 	writeStub(t, self, `/bin/sleep 3; `+recordArgs(childArgs))
-	h := host{self: self, dataDir: filepath.Join(dir, "data"), timeout: sendTimeout}
+	h := host{self: self, timeout: sendTimeout}
 	if err := linuxSend(h, batch("GitSocial", "-u body", "https://site.example/")); err != nil {
 		t.Fatalf("linuxSend: %v", err)
 	}
@@ -167,28 +176,158 @@ func TestSend_actionWaitIsDetached(t *testing.T) {
 		t.Error("the child finished before linuxSend returned")
 	}
 	if !waitForFile(childArgs) {
-		t.Fatal("the detached child did not run")
+		t.Fatal("the detached child did not run with no notify-send on PATH")
 	}
 	if got := strings.Join(readArgs(t, childArgs), "|"); got != "notify-wait|--|GitSocial|-u body|https://site.example/" {
 		t.Errorf("child arguments = %q, want notify-wait, --, the title, the body and the URL", got)
 	}
-	if err := notifyWait(h, "GitSocial", "-u body", "https://site.example/"); err != nil {
-		t.Fatalf("notifyWait: %v", err)
+	out := filepath.Join(dir, "args")
+	stubNotifySend(t, out, filepath.Join(dir, "opened"))
+	if err := linuxSend(h, batch("GitSocial", "-u body", "")); err != nil {
+		t.Fatalf("linuxSend with no click: %v", err)
 	}
-	icon, err := os.ReadFile(filepath.Join(dir, "data", "icons", "hicolor", "512x512", "apps", "gitsocial.png"))
-	if err != nil || string(icon) != string(iconPNG) {
-		t.Errorf("icon in the data directory after the child: %v, want the embedded icon", err)
+	if got := strings.Join(readArgs(t, out), "|"); got != "--app-name=GitSocial|--|GitSocial|-u body" {
+		t.Errorf("notify-send arguments = %q, want the message with no action and no wait", got)
+	}
+}
+
+func TestLinuxSender_socketArgs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub tools are shell scripts")
+	}
+	noBus(t)
+	t.Setenv("PATH", t.TempDir())
+	dir := t.TempDir()
+	ref := "https://example.com/owner/repo#commit:0123456789ab@main"
+	for i, c := range []struct {
+		message notifications.DesktopMessage
+		want    string
+	}{
+		{notifications.DesktopMessage{Title: "GitSocial", Body: "body", Socket: "/tmp/click/1-2.sock", Ref: ref}, "notify-wait|--|GitSocial|body||/tmp/click/1-2.sock|" + ref},
+		{notifications.DesktopMessage{Title: "GitSocial", Body: "5 new notifications", Socket: "/tmp/click/1-2.sock"}, "notify-wait|--|GitSocial|5 new notifications||/tmp/click/1-2.sock|"},
+	} {
+		out := filepath.Join(dir, fmt.Sprintf("child%d", i))
+		self := filepath.Join(dir, "gitsocial")
+		writeStub(t, self, `for arg in "$@"; do printf '%s|' "$arg"; done > '`+out+`.tmp'; /bin/mv '`+out+`.tmp' '`+out+`'`)
+		if err := linuxSend(host{self: self, timeout: sendTimeout}, []notifications.DesktopMessage{c.message}); err != nil {
+			t.Fatalf("linuxSend: %v", err)
+		}
+		if !waitForFile(out) {
+			t.Fatal("the detached child did not run")
+		}
+		data, err := os.ReadFile(out)
+		if err != nil {
+			t.Fatalf("read child arguments: %v", err)
+		}
+		if got := strings.TrimSuffix(string(data), "|"); got != c.want {
+			t.Errorf("child arguments = %q, want %q", got, c.want)
+		}
+	}
+}
+
+// clickBus starts a fake bus that sends the messages after Notify and points the session bus variables at it.
+func clickBus(t *testing.T, messages ...[]byte) {
+	t.Helper()
+	socket, _ := fakeBus(t, "OK 0123\r\n", answerNotify(messages...))
+	useBus(t, socket)
+}
+
+// assertNoFile fails the test when path exists.
+func assertNoFile(t *testing.T, path, what string) {
+	t.Helper()
+	if _, err := os.Stat(path); err == nil {
+		t.Errorf("%s ran, want none", what)
+	}
+}
+
+func TestNotifyWait_socketClick(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the click socket is a Unix socket")
+	}
+	cacheDir, err := os.MkdirTemp("/tmp", "gsclick")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(cacheDir) })
+	socket := click.SocketPath(cacheDir, os.Getpid(), time.Now())
+	lines := make(chan string, 2)
+	stop, err := click.Listen(socket, func(line string) { lines <- line })
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer stop()
+	dir := t.TempDir()
+	out, opened := filepath.Join(dir, "args"), filepath.Join(dir, "opened")
+	stubNotifySend(t, out, opened)
+	clickBus(t, signalUS("ActionInvoked", testID, clickAction), closedSignal(testID))
+	ref := "https://example.com/owner/repo#commit:0123456789ab@main"
+	if err := notifyWait(testHost(), "GitSocial", "body", "https://site.example/", socket, ref); err != nil {
+		t.Fatalf("notifyWait with a click: %v", err)
+	}
+	select {
+	case line := <-lines:
+		if line != "open "+ref {
+			t.Errorf("line = %q, want open and the ref", line)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the socket got no line after the click")
+	}
+	assertNoFile(t, opened, "xdg-open for a message with a socket")
+	assertNoFile(t, out, "notify-send for a message on the bus")
+	clickBus(t, closedSignal(testID))
+	if err := notifyWait(testHost(), "GitSocial", "body", "", socket, ref); err != nil {
+		t.Fatalf("notifyWait with a close: %v", err)
+	}
+	select {
+	case line := <-lines:
+		t.Errorf("line after a close = %q, want none", line)
+	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+func TestNotifyWait_urlClick(t *testing.T) {
+	dir := t.TempDir()
+	out, opened := filepath.Join(dir, "args"), filepath.Join(dir, "opened")
+	stubNotifySend(t, out, opened)
+	clickBus(t, signalUS("ActionInvoked", testID, clickAction))
+	if err := notifyWait(testHost(), "GitSocial", "body", "https://site.example/", "", ""); err != nil {
+		t.Fatalf("notifyWait: %v", err)
 	}
 	if got := readArgs(t, opened); len(got) != 1 || got[0] != "https://site.example/" {
 		t.Errorf("xdg-open arguments = %q, want the URL after the click", got)
 	}
-	stubNotifySend(t, out, opened, false)
-	if err := linuxSend(h, batch("GitSocial", "body", "https://site.example/")); err != nil {
-		t.Fatalf("linuxSend without --action: %v", err)
+	assertNoFile(t, out, "notify-send for a message on the bus")
+}
+
+func TestNotifyWait_noBus(t *testing.T) {
+	dir := t.TempDir()
+	out, opened := filepath.Join(dir, "args"), filepath.Join(dir, "opened")
+	stubNotifySend(t, out, opened)
+	h := testHost()
+	h.dataDir = filepath.Join(dir, "data")
+	if err := notifyWait(h, "GitSocial", "-u body", "https://site.example/", "", ""); err != nil {
+		t.Fatalf("notifyWait: %v", err)
 	}
-	if got := strings.Join(readArgs(t, out), " "); strings.Contains(got, "--wait") || strings.Contains(got, "--action") {
-		t.Errorf("notify-send without --action got %q, want no action and no wait", got)
+	if got := strings.Join(readArgs(t, out), "|"); got != "--app-name=GitSocial|--icon=gitsocial|--|GitSocial|-u body" {
+		t.Errorf("notify-send arguments = %q, want the message with the icon and no action", got)
 	}
+	icon, err := os.ReadFile(filepath.Join(dir, "data", "icons", "hicolor", "512x512", "apps", "gitsocial.png"))
+	if err != nil || string(icon) != string(iconPNG) {
+		t.Errorf("icon in the data directory: %v, want the embedded icon", err)
+	}
+	assertNoFile(t, opened, "xdg-open with no click")
+}
+
+func TestNotifyWait_noSecondMessage(t *testing.T) {
+	dir := t.TempDir()
+	out, opened := filepath.Join(dir, "args"), filepath.Join(dir, "opened")
+	stubNotifySend(t, out, opened)
+	clickBus(t)
+	if err := notifyWait(testHost(), "GitSocial", "body", "https://site.example/", "", ""); err == nil {
+		t.Error("notifyWait after a closed connection = nil, want the error of the wait")
+	}
+	assertNoFile(t, out, "notify-send after an accepted Notify")
+	assertNoFile(t, opened, "xdg-open with no click")
 }
 
 func TestSend_timeout(t *testing.T) {

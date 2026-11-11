@@ -2,6 +2,9 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -68,5 +71,28 @@ func TestFocusScript_byTerminal(t *testing.T) {
 	}
 	if script := focusScript("com.example.terminal", "/dev/ttys007"); script != "" {
 		t.Errorf("focusScript of an unknown terminal = %q, want none", script)
+	}
+}
+
+func TestActivateTerminal_otherOS(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub tools are shell scripts")
+	}
+	bin := t.TempDir()
+	ran := filepath.Join(bin, "ran")
+	for _, tool := range []string{"osascript", "open"} {
+		if err := os.WriteFile(filepath.Join(bin, tool), []byte("#!/bin/sh\necho "+tool+" >> '"+ran+"'\n"), 0o755); err != nil {
+			t.Fatalf("write stub: %v", err)
+		}
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("__CFBundleIdentifier", "com.apple.Terminal")
+	activateTerminal("linux", "/dev/pts/3")()
+	if _, err := os.Stat(ran); err == nil {
+		t.Error("the activation on linux ran a tool, want none")
+	}
+	activateTerminal("darwin", "/dev/ttys007")()
+	if _, err := os.Stat(ran); err != nil {
+		t.Errorf("the activation on darwin ran no tool: %v", err)
 	}
 }

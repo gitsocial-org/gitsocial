@@ -206,7 +206,7 @@ Outside the tree:
 ├── repositories/              # bare clones of followed repositories
 ├── forks/                     # bare clones of registered forks
 ├── imports/                   # per repository URL: the import mapping, the avatar memo and the avatar store
-├── click/                     # <pid>-<start>.sock of each running TUI on macOS, the target of a click on its desktop message
+├── click/                     # <pid>-<start>.sock of each running TUI on macOS and Linux, the target of a click on its desktop message
 └── memo/session/              # session memo repos
 ```
 

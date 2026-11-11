@@ -15,6 +15,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
+	"github.com/gitsocial-org/gitsocial/library/core/notifications/click"
 )
 
 const sendTimeout = 5 * time.Second
@@ -25,6 +26,9 @@ const notifierGrace = 500 * time.Millisecond
 // waitTimeout bounds the wait of a Linux message for its click.
 const waitTimeout = time.Hour
 
+// clickAction is the action name that a notification service calls for a click on the message itself; any other name is a button.
+const clickAction = "default"
+
 // linuxIconName is the name of the icon in the hicolor theme of the user.
 const linuxIconName = "gitsocial"
 
@@ -34,13 +38,14 @@ var iconPNG []byte
 // notifierName is the executable of GitSocial.app that posts under the GitSocial name and icon.
 const notifierName = "gitsocial-notifier"
 
-// host is what a sender reads from the machine: its own executable, the directories that can hold GitSocial.app, the data directory, the Start Menu and the timeout.
+// host is what a sender reads from the machine: its own executable, the directories that can hold GitSocial.app, the data directory, the Start Menu, the timeout and the reply timeout of the session bus.
 type host struct {
-	self      string
-	appDirs   []string
-	dataDir   string
-	startMenu string
-	timeout   time.Duration
+	self         string
+	appDirs      []string
+	dataDir      string
+	startMenu    string
+	timeout      time.Duration
+	replyTimeout time.Duration
 }
 
 // currentHost returns the host of this process.
@@ -49,7 +54,7 @@ func currentHost() host {
 	if resolved, err := filepath.EvalSymlinks(self); err == nil {
 		self = resolved
 	}
-	h := host{self: self, dataDir: os.Getenv("XDG_DATA_HOME"), timeout: sendTimeout}
+	h := host{self: self, dataDir: os.Getenv("XDG_DATA_HOME"), timeout: sendTimeout, replyTimeout: sendTimeout}
 	if home, err := os.UserHomeDir(); err == nil {
 		h.appDirs = append(h.appDirs, filepath.Join(home, "Applications"))
 		if h.dataDir == "" {
@@ -68,9 +73,9 @@ func Send(messages []notifications.DesktopMessage) error {
 	return send(currentHost(), messages)
 }
 
-// NotifyWait shows one message on Linux, waits for its click or its close, and opens url on a click; the hidden notify-wait command runs it in a detached process.
-func NotifyWait(title, body, url string) error {
-	return notifyWait(currentHost(), title, body, url)
+// NotifyWait shows one message on Linux, waits for its click or its close, and on a click sends ref to socket when socket is set, else opens url; the hidden notify-wait command runs it in a detached process.
+func NotifyWait(title, body, url, socket, ref string) error {
+	return notifyWait(currentHost(), title, body, url, socket, ref)
 }
 
 // send runs the sender of the OS for a batch of messages; a failure of one message does not stop the others.
@@ -105,74 +110,66 @@ func darwinSend(h host, m notifications.DesktopMessage) error {
 	return run(h.timeout, lookPath("osascript"), []string{"-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", m.Title, m.Body}, nil)
 }
 
-// linuxSend shows messages with notify-send; a message with a URL, when notify-send has --action, goes to a detached child of self that waits for the click so the caller does not.
+// linuxSend gives each message with a click to a detached child of self that shows it and waits for the click, so the caller does not; it shows a message with no click with notify-send.
 func linuxSend(h host, messages []notifications.DesktopMessage) error {
-	tool := lookPath("notify-send")
-	if tool == "" {
-		return nil
-	}
-	action := false
-	for _, m := range messages {
-		if m.URL != "" && h.self != "" {
-			action = hasAction(tool)
-			break
-		}
-	}
 	var errs []error
 	var direct []notifications.DesktopMessage
 	for _, m := range messages {
-		if action && m.URL != "" {
-			errs = append(errs, startDetached(0, h.self, "notify-wait", "--", m.Title, m.Body, m.URL))
+		if hasClick(m) && h.self != "" {
+			args := []string{"notify-wait", "--", m.Title, m.Body, m.URL}
+			if m.Socket != "" {
+				args = append(args, m.Socket, m.Ref)
+			}
+			errs = append(errs, startDetached(0, h.self, args...))
 			continue
 		}
 		direct = append(direct, m)
 	}
-	if len(direct) > 0 {
+	tool := lookPath("notify-send")
+	if len(direct) > 0 && tool != "" {
 		icon := linuxIcon(h.dataDir)
 		for _, m := range direct {
-			errs = append(errs, run(h.timeout, tool, linuxArgs(icon, false, m.Title, m.Body), nil))
+			errs = append(errs, run(h.timeout, tool, linuxArgs(icon, m.Title, m.Body), nil))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-// notifyWait runs notify-send with the open action until the click or the close and opens url with xdg-open on a click.
-func notifyWait(h host, title, body, url string) error {
-	tool := lookPath("notify-send")
-	if tool == "" {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, tool, linuxArgs(linuxIcon(h.dataDir), true, title, body)...).Output()
-	if err != nil {
-		return fmt.Errorf("notify-send: %w", err)
-	}
-	opener := lookPath("xdg-open")
-	if strings.TrimSpace(string(out)) != "open" || opener == "" {
-		return nil
-	}
-	return run(h.timeout, opener, []string{url}, nil)
+// hasClick reports whether a click on the message has a target: a URL or the socket of a TUI.
+func hasClick(m notifications.DesktopMessage) bool {
+	return m.URL != "" || m.Socket != ""
 }
 
-// linuxArgs returns the arguments of notify-send; with wait, also the open action and the wait for it.
-func linuxArgs(icon string, wait bool, title, body string) []string {
+// notifyWait shows the message over the session bus with the click action and waits for the click or the close; on a click it sends ref to socket when socket is set, else opens url with xdg-open. A message that the service did not get goes to notify-send with no click.
+func notifyWait(h host, title, body, url, socket, ref string) error {
+	icon := linuxIcon(h.dataDir)
+	sent, clicked, err := dbusNotify(h, busAddress(os.Getenv("DBUS_SESSION_BUS_ADDRESS"), os.Getenv("XDG_RUNTIME_DIR")), title, body, icon)
+	if !sent {
+		log.Debug("session bus not usable, using notify-send", "error", err)
+		return run(h.timeout, lookPath("notify-send"), linuxArgs(icon, title, body), nil)
+	}
+	if err != nil {
+		return fmt.Errorf("desktop message: %w", err)
+	}
+	if !clicked {
+		return nil
+	}
+	if socket != "" {
+		if err := click.Send(socket, ref); err != nil {
+			return fmt.Errorf("send click: %w", err)
+		}
+		return nil
+	}
+	return run(h.timeout, lookPath("xdg-open"), []string{url}, nil)
+}
+
+// linuxArgs returns the arguments of notify-send.
+func linuxArgs(icon, title, body string) []string {
 	args := []string{"--app-name=GitSocial"}
 	if icon != "" {
 		args = append(args, "--icon="+icon)
 	}
-	if wait {
-		args = append(args, "--action=open=Open", "--wait")
-	}
 	return append(args, "--", title, escapeMarkup(body))
-}
-
-// hasAction reports whether notify-send has --action, which libnotify has from 0.7.9.
-func hasAction(tool string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), sendTimeout)
-	defer cancel()
-	out, _ := exec.CommandContext(ctx, tool, "--help").Output() // no help output means no action
-	return strings.Contains(string(out), "--action")
 }
 
 // linuxIcon writes the icon into the hicolor theme under dataDir when it is missing and returns its name, or "" when it cannot.
@@ -238,7 +235,7 @@ func lookPath(tool string) string {
 	return path
 }
 
-// escapeMarkup escapes the characters that notify-send reads as markup in the body.
+// escapeMarkup escapes the characters that the notification service reads as markup in the body.
 func escapeMarkup(text string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(text)
 }

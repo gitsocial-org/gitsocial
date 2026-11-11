@@ -21,10 +21,10 @@ A fetch that brings new unread notifications sends a desktop message. Up to thre
 
 A click on a message goes to the process that sent it.
 
-| Sender | macOS | Linux and Windows |
-|---|---|---|
-| the TUI | brings the terminal of the TUI to the front and opens the item in the TUI | no click |
-| the CLI (`gitsocial fetch`), RPC | opens the item on the site | opens the item on the site |
+| Sender | macOS | Linux | Windows |
+|---|---|---|---|
+| the TUI | brings the terminal of the TUI to the front and opens the item in the TUI | opens the item in the TUI; the terminal does not come to the front | no click |
+| the CLI (`gitsocial fetch`), RPC | opens the item on the site | opens the item on the site | opens the item on the site |
 
 In the TUI, the click opens the view that Enter on the row of the feed opens, and marks the notification read. A summary opens the feed. Back goes to the view before the click. In Ghostty, Terminal and iTerm2, the tab of the TUI comes to the front; in another terminal app, or inside tmux, only the app comes to the front.
 
@@ -33,14 +33,16 @@ A click of `gitsocial fetch` or RPC opens the served site when `gitsocial serve`
 Known cases of a click on a message of the TUI:
 
 - When the TUI exited, the click does nothing.
-- When an input or a dialog is open in the TUI, or the TUI does not answer for 2 s (for example, an editor is open), the terminal comes to the front and the view does not change.
+- When an input or a dialog is open in the TUI, or the TUI does not answer for 2 s (for example, an editor is open), the view does not change. On macOS the terminal comes to the front.
 - A `follow` opens the feed, not the repository.
 - A `GitSocial.app` older than the TUI cannot take the click: the message comes from `osascript` with no click until you update the app.
+- On Linux, a message has a click only when the session D-Bus is usable. Without it, `notify-send` shows the message with no click.
+- On Linux, a click works for one hour after the message, the same as the click that opens the site. After the hour, the click does nothing.
 
 | OS | Sender | Install |
 |---|---|---|
 | macOS | `GitSocial.app` | the app in `~/Applications` or `/Applications`; the Homebrew cask and the install script place it, and the darwin release zip has it |
-| Linux | `notify-send` | libnotify 0.7.9 or later for the click; the first message writes the icon to `~/.local/share/icons` |
+| Linux | the notification service on the session D-Bus; `notify-send` for a message with no click | a session D-Bus for the click; the first message writes the icon to `~/.local/share/icons` |
 | Windows | a PowerShell toast | nothing; the first message writes a GitSocial shortcut into the Start Menu |
 
 On macOS without the app, or when the app cannot post, the message comes from `osascript`, under the name of Script Editor, with no click. The first message asks for permission. If you see no messages, allow notifications for GitSocial in the system settings.

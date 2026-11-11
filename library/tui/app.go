@@ -1732,8 +1732,8 @@ func Run(workdir, cacheDir string) error {
 	model := NewModel(workdir, cacheDir)
 	model.host.State().ClickSocket = click.SocketPath(cacheDir, os.Getpid(), time.Now())
 	p := tea.NewProgram(model, tea.WithFPS(120))
-	if runtime.GOOS == "darwin" {
-		stop, err := click.Listen(model.host.State().ClickSocket, clickHandler(activateTerminal(processTTY()), p.Send))
+	if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
+		stop, err := click.Listen(model.host.State().ClickSocket, clickHandler(activateTerminal(runtime.GOOS, processTTY()), p.Send))
 		if err != nil {
 			log.Warn("click socket", "error", err)
 		} else {
