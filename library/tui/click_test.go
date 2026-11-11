@@ -1,7 +1,8 @@
-// click_test.go - Tests for the handler of the click socket: the lines it takes and the order of its steps.
+// click_test.go - Tests for the handler of the click socket: the lines it takes, the order of its steps and the script that selects its tab.
 package tui
 
 import (
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -55,5 +56,17 @@ func TestClickHandler_activatesFirst(t *testing.T) {
 		if got := steps(); len(got) != 2 || got[0] != "activate" || got[1] != "send "+c.ref {
 			t.Errorf("steps for %q = %q, want activate, then send of the ref", c.line, got)
 		}
+	}
+}
+
+func TestFocusScript_byTerminal(t *testing.T) {
+	for _, bundle := range []string{"com.mitchellh.ghostty", "com.apple.Terminal", "com.googlecode.iterm2"} {
+		script := focusScript(bundle, "/dev/ttys007")
+		if !strings.Contains(script, `application id "`+bundle+`"`) || !strings.Contains(script, `is "/dev/ttys007"`) {
+			t.Errorf("focusScript(%s) = %q, want a script for the app that names the tty", bundle, script)
+		}
+	}
+	if script := focusScript("com.example.terminal", "/dev/ttys007"); script != "" {
+		t.Errorf("focusScript of an unknown terminal = %q, want none", script)
 	}
 }

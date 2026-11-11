@@ -1,9 +1,10 @@
-// click.go - The handler of the click socket: it brings the terminal to the front and gives the click to the model.
+// click.go - The handler of the click socket: it brings the terminal tab of the TUI to the front and gives the click to the model.
 package tui
 
 import (
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,13 +41,72 @@ func clickRef(line string) (string, bool) {
 	return ref, parsed.Type == protocol.RefTypeCommit && parsed.Value != ""
 }
 
-// activateTerminal brings the terminal app that started this process to the front; with no bundle id it does nothing.
-func activateTerminal() {
-	id := os.Getenv("__CFBundleIdentifier")
-	if id == "" {
-		return
+// focusScript returns the AppleScript that selects the tab of tty in the terminal app of a bundle id, or "" for an app with none.
+func focusScript(bundle, tty string) string {
+	switch bundle {
+	case "com.mitchellh.ghostty":
+		return `tell application id "` + bundle + `" to focus (first terminal whose tty is "` + tty + `")`
+	case "com.apple.Terminal":
+		return `tell application id "` + bundle + `"
+repeat with w in windows
+repeat with t in tabs of w
+if tty of t is "` + tty + `" then
+set selected of t to true
+set frontmost of w to true
+activate
+return
+end if
+end repeat
+end repeat
+error "no tab has the tty"
+end tell`
+	case "com.googlecode.iterm2":
+		return `tell application id "` + bundle + `"
+repeat with w in windows
+repeat with t in tabs of w
+repeat with s in sessions of t
+if tty of s is "` + tty + `" then
+select w
+select t
+select s
+activate
+return
+end if
+end repeat
+end repeat
+end repeat
+error "no session has the tty"
+end tell`
 	}
-	if err := exec.Command("open", "-b", id).Run(); err != nil {
-		log.Debug("activate terminal", "error", err)
+	return ""
+}
+
+// processTTY returns the device path of the terminal of this process, or "".
+func processTTY() string {
+	out, err := exec.Command("ps", "-o", "tty=", "-p", strconv.Itoa(os.Getpid())).Output()
+	name := strings.TrimSpace(string(out))
+	if err != nil || name == "" || name == "??" {
+		return ""
+	}
+	return "/dev/" + name
+}
+
+// activateTerminal returns the function that brings the terminal of this process to the front: the tab of tty in a terminal with a focus script, else the app; with no bundle id it does nothing.
+func activateTerminal(tty string) func() {
+	return func() {
+		id := os.Getenv("__CFBundleIdentifier")
+		if id == "" {
+			return
+		}
+		if script := focusScript(id, tty); script != "" && tty != "" {
+			out, err := exec.Command("osascript", "-e", script).CombinedOutput()
+			if err == nil {
+				return
+			}
+			log.Debug("select the terminal tab", "bundle", id, "error", err, "output", strings.TrimSpace(string(out)))
+		}
+		if err := exec.Command("open", "-b", id).Run(); err != nil {
+			log.Debug("activate terminal", "error", err)
+		}
 	}
 }

@@ -23,10 +23,10 @@ A click on a message goes to the process that sent it.
 
 | Sender | macOS | Linux and Windows |
 |---|---|---|
-| the TUI | brings the terminal app of the TUI to the front and opens the item in the TUI | no click |
+| the TUI | brings the terminal of the TUI to the front and opens the item in the TUI | no click |
 | the CLI (`gitsocial fetch`), RPC | opens the item on the site | opens the item on the site |
 
-In the TUI, the click opens the view that Enter on the row of the feed opens, and marks the notification read. A summary opens the feed. Back goes to the view before the click.
+In the TUI, the click opens the view that Enter on the row of the feed opens, and marks the notification read. A summary opens the feed. Back goes to the view before the click. In Ghostty, Terminal and iTerm2, the tab of the TUI comes to the front; in another terminal app, or inside tmux, only the app comes to the front.
 
 A click of `gitsocial fetch` or RPC opens the served site when `gitsocial serve` runs for the workspace, else the `site.url` of the workspace. With neither, the message has no click. A summary, and an item of another repository, open the start page of the site.
 
