@@ -149,6 +149,8 @@ func stubNotifySend(t *testing.T, out, opened string) {
 	t.Setenv("PTYXIS_VERSION", "")
 	t.Setenv("TERM_PROGRAM", "")
 	t.Setenv("GHOSTTY_SURFACE_ID", "")
+	t.Setenv("GNOME_TERMINAL_SERVICE", "")
+	t.Setenv("GNOME_TERMINAL_SCREEN", "")
 	noBus(t)
 }
 
@@ -321,28 +323,58 @@ func TestNotifyWait_urlClickNoActivate(t *testing.T) {
 }
 
 func TestTerminalCall_byEnvironment(t *testing.T) {
-	for _, c := range []struct{ name, termProgram, surface, ptyxis, want string }{
-		{"Ghostty with a surface", "ghostty", "0xa2680fb67d38fbf2", "", "com.mitchellh.ghostty ActivateAction"},
-		{"Ghostty started from Ptyxis", "ghostty", "0x0000000000000001", "50.1", "com.mitchellh.ghostty ActivateAction"},
-		{"Ghostty with no surface", "ghostty", "", "50.1", ""},
-		{"Ghostty with surface zero", "ghostty", "0x0000000000000000", "", ""},
-		{"Ghostty with a bad surface", "ghostty", "surface", "", ""},
-		{"Ptyxis", "", "", "50.1", "org.gnome.Ptyxis Activate"},
-		{"a stale surface in another terminal", "", "0xa2680fb67d38fbf2", "", ""},
-		{"another terminal", "WezTerm", "", "", ""},
+	screen := "/org/gnome/Terminal/screen/40a8cc32_b75e_4b5e_a9b7_95dd6d352c3d"
+	gnome := ":1.272 Activate|:1.272 ActivateResult"
+	for _, c := range []struct{ name, termProgram, surface, service, screen, ptyxis, want string }{
+		{"Ghostty with a surface", "ghostty", "0xa2680fb67d38fbf2", "", "", "", "com.mitchellh.ghostty ActivateAction"},
+		{"Ghostty started from Ptyxis", "ghostty", "0x0000000000000001", "", "", "50.1", "com.mitchellh.ghostty ActivateAction"},
+		{"Ghostty with no surface", "ghostty", "", "", "", "50.1", ""},
+		{"Ghostty with no surface started from GNOME Terminal", "ghostty", "", ":1.272", screen, "", ""},
+		{"Ghostty with surface zero", "ghostty", "0x0000000000000000", "", "", "", ""},
+		{"Ghostty with a bad surface", "ghostty", "surface", "", "", "", ""},
+		{"GNOME Terminal", "", "", ":1.272", screen, "", gnome},
+		{"GNOME Terminal started from Ptyxis", "", "", ":1.272", screen, "50.1", gnome},
+		{"GNOME Terminal with no service", "", "", "", screen, "50.1", "org.gnome.Ptyxis Activate"},
+		{"a screen with another prefix in Ptyxis", "", "", ":1.272", "/org/gnome/Other/screen/40a8cc32", "50.1", "org.gnome.Ptyxis Activate"},
+		{"a screen with another prefix", "", "", ":1.272", "/org/gnome/Other/screen/40a8cc32", "", ""},
+		{"a screen with no UUID in Ptyxis", "", "", ":1.272", "/org/gnome/Terminal/screen/", "50.1", "org.gnome.Ptyxis Activate"},
+		{"a screen with no UUID", "", "", ":1.272", "/org/gnome/Terminal/screen/", "", ""},
+		{"Ptyxis", "", "", "", "", "50.1", "org.gnome.Ptyxis Activate"},
+		{"a stale surface in another terminal", "", "0xa2680fb67d38fbf2", "", "", "", ""},
+		{"another terminal", "WezTerm", "", "", "", "", ""},
 	} {
-		build := terminalCall(c.termProgram, c.surface, c.ptyxis)
-		got := ""
+		build := terminalCall(c.termProgram, c.surface, c.service, c.screen, c.ptyxis)
+		var calls []string
 		if build != nil {
-			m, ok, err := readBusMessage(bytes.NewReader(build("token")))
-			if err != nil || !ok {
-				t.Fatalf("%s: readBusMessage = %v, %v", c.name, ok, err)
+			for reader := bytes.NewReader(build("token")); reader.Len() > 0; {
+				m, ok, err := readBusMessage(reader)
+				if err != nil || !ok {
+					t.Fatalf("%s: readBusMessage = %v, %v", c.name, ok, err)
+				}
+				calls = append(calls, m.destination+" "+m.member)
 			}
-			got = m.destination + " " + m.member
 		}
-		if got != c.want {
-			t.Errorf("%s: call = %q, want %q", c.name, got, c.want)
+		if got := strings.Join(calls, "|"); got != c.want {
+			t.Errorf("%s: calls = %q, want %q", c.name, got, c.want)
 		}
+	}
+	reader := bytes.NewReader(terminalCall("", "", ":1.272", screen, "")("token"))
+	activate, _, err := readBusMessage(reader)
+	if err != nil {
+		t.Fatalf("read Activate: %v", err)
+	}
+	result, _, err := readBusMessage(reader)
+	if err != nil {
+		t.Fatalf("read ActivateResult: %v", err)
+	}
+	if activate.serial != 4 || activate.destination != ":1.272" || activate.member != "Activate" || activate.path != "/org/gnome/Terminal" {
+		t.Errorf("first call = %d %s %s %s, want Activate of /org/gnome/Terminal on :1.272 with serial 4", activate.serial, activate.destination, activate.member, activate.path)
+	}
+	if result.serial != 5 || result.destination != ":1.272" || result.member != "ActivateResult" || result.path != "/org/gnome/Terminal/SearchProvider" {
+		t.Errorf("second call = %d %s %s %s, want ActivateResult of /org/gnome/Terminal/SearchProvider on :1.272 with serial 5", result.serial, result.destination, result.member, result.path)
+	}
+	if !strings.Contains(string(result.body), "40a8cc32-b75e-4b5e-a9b7-95dd6d352c3d\x00") {
+		t.Errorf("ActivateResult body = %q, want the UUID of the tab with hyphens", result.body)
 	}
 }
 

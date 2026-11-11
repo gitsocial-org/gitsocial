@@ -147,7 +147,7 @@ func notifyWait(h host, title, body, url, socket, ref string) error {
 	var activate func(token string) []byte
 	onClick := func() error { return run(h.timeout, lookPath("xdg-open"), []string{url}, nil) }
 	if socket != "" {
-		activate = terminalCall(os.Getenv("TERM_PROGRAM"), os.Getenv("GHOSTTY_SURFACE_ID"), os.Getenv("PTYXIS_VERSION"))
+		activate = terminalCall(os.Getenv("TERM_PROGRAM"), os.Getenv("GHOSTTY_SURFACE_ID"), os.Getenv("GNOME_TERMINAL_SERVICE"), os.Getenv("GNOME_TERMINAL_SCREEN"), os.Getenv("PTYXIS_VERSION"))
 		onClick = func() error {
 			if err := click.Send(socket, ref); err != nil {
 				return fmt.Errorf("send click: %w", err)
@@ -166,8 +166,8 @@ func notifyWait(h host, title, body, url, socket, ref string) error {
 	return err
 }
 
-// terminalCall returns the builder of the call that brings the terminal of this process to the front from a token: the surface in Ghostty, the app in Ptyxis, nil for a terminal with no tested call.
-func terminalCall(termProgram, ghosttySurface, ptyxisVersion string) func(token string) []byte {
+// terminalCall returns the builder of the calls that bring the terminal of this process to the front from a token: the surface in Ghostty, the tab in GNOME Terminal, the app in Ptyxis, nil for a terminal with no tested call.
+func terminalCall(termProgram, ghosttySurface, gnomeService, gnomeScreen, ptyxisVersion string) func(token string) []byte {
 	if termProgram == "ghostty" {
 		surface, err := strconv.ParseUint(strings.TrimPrefix(ghosttySurface, "0x"), 16, 64)
 		if err != nil || surface == 0 {
@@ -175,8 +175,16 @@ func terminalCall(termProgram, ghosttySurface, ptyxisVersion string) func(token 
 		}
 		return func(token string) []byte { return presentSurfaceCall(4, "com.mitchellh.ghostty", surface, token) }
 	}
+	if screen, ok := strings.CutPrefix(gnomeScreen, "/org/gnome/Terminal/screen/"); ok && screen != "" && gnomeService != "" {
+		uuid := strings.ReplaceAll(screen, "_", "-")
+		return func(token string) []byte {
+			return append(activateCall(4, gnomeService, "/org/gnome/Terminal", token), activateResultCall(5, gnomeService, uuid)...)
+		}
+	}
 	if ptyxisVersion != "" {
-		return func(token string) []byte { return activateCall(4, "org.gnome.Ptyxis", token) }
+		return func(token string) []byte {
+			return activateCall(4, "org.gnome.Ptyxis", appPath("org.gnome.Ptyxis"), token)
+		}
 	}
 	return nil
 }

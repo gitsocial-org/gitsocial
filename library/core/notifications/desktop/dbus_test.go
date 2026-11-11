@@ -127,7 +127,7 @@ func answerAndRecord(calls chan busMessage, messages ...[]byte) func(net.Conn, b
 
 // ptyxisCall builds the Activate call of Ptyxis, the call of a TUI message in that terminal.
 func ptyxisCall(token string) []byte {
-	return activateCall(4, "org.gnome.Ptyxis", token)
+	return activateCall(4, "org.gnome.Ptyxis", appPath("org.gnome.Ptyxis"), token)
 }
 
 // clickSent is an onClick that succeeds.
@@ -432,7 +432,7 @@ func TestDBusNotify_tokenOfOtherMessage(t *testing.T) {
 }
 
 func TestActivateCall_bytes(t *testing.T) {
-	b := activateCall(4, "org.gnome.Ptyxis", "to\x00k1")
+	b := activateCall(4, "org.gnome.Ptyxis", "/org/gnome/Ptyxis", "to\x00k1")
 	if b[0] != 'l' || b[1] != kindCall || b[2] != 0x3 || b[3] != 1 || binary.LittleEndian.Uint32(b[8:]) != 4 {
 		t.Errorf("header = %q, want little-endian, a call, flags 0x3, version 1 and serial 4", b[:12])
 	}
@@ -451,6 +451,24 @@ func TestActivateCall_bytes(t *testing.T) {
 	}
 	if got := binary.LittleEndian.Uint32(b[4:]); got != uint32(len(want)) {
 		t.Errorf("body length = %d, want %d", got, len(want))
+	}
+}
+
+func TestActivateResultCall_bytes(t *testing.T) {
+	b := activateResultCall(5, ":1.272", "40a8cc32-b75e-4b5e-a9b7-95dd6d352c3d")
+	if b[2] != 0x3 || binary.LittleEndian.Uint32(b[8:]) != 5 {
+		t.Errorf("header = %q, want flags 0x3 and serial 5", b[:12])
+	}
+	m, ok, err := readBusMessage(bytes.NewReader(b))
+	if err != nil || !ok {
+		t.Fatalf("readBusMessage = %v, %v", ok, err)
+	}
+	if m.destination != ":1.272" || m.path != "/org/gnome/Terminal/SearchProvider" || m.iface != "org.gnome.Shell.SearchProvider2" || m.member != "ActivateResult" || m.signature != "sasu" {
+		t.Errorf("fields = %s %s %s.%s(%s), want ActivateResult of the GNOME Terminal search provider", m.destination, m.path, m.iface, m.member, m.signature)
+	}
+	want := "\x24\x00\x00\x0040a8cc32-b75e-4b5e-a9b7-95dd6d352c3d\x00" + "\x00\x00\x00" + "\x00\x00\x00\x00" + "\x00\x00\x00\x00"
+	if string(m.body) != want {
+		t.Errorf("body = %q, want %q", m.body, want)
 	}
 }
 

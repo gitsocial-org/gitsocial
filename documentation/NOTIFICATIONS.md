@@ -23,7 +23,7 @@ A click on a message goes to the process that sent it.
 
 | Sender | macOS | Linux | Windows |
 |---|---|---|---|
-| the TUI | brings the terminal of the TUI to the front and opens the item in the TUI | opens the item in the TUI; in Ghostty 1.4 or later the tab of the TUI comes to the front; in Ptyxis the Ptyxis window that was used last comes to the front, and the tab is not selected; in another terminal the window stays behind | no click |
+| the TUI | brings the terminal of the TUI to the front and opens the item in the TUI | opens the item in the TUI; in Ghostty 1.4 or later and in GNOME Terminal the tab of the TUI comes to the front; in Ptyxis the Ptyxis window that was used last comes to the front, and the tab is not selected; in another terminal the window stays behind | no click |
 | the CLI (`gitsocial fetch`), RPC | opens the item on the site | opens the item on the site | opens the item on the site |
 
 In the TUI, the click opens the view that Enter on the row of the feed opens, and marks the notification read. A summary opens the feed. Back goes to the view before the click. In Ghostty, Terminal and iTerm2, the tab of the TUI comes to the front; in another terminal app, or inside tmux, only the app comes to the front.
@@ -33,7 +33,7 @@ A click of `gitsocial fetch` or RPC opens the served site when `gitsocial serve`
 Known cases of a click on a message of the TUI:
 
 - When the TUI exited, the click does nothing.
-- When an input or a dialog is open in the TUI, or the TUI does not answer for 2 s (for example, an editor is open), the view does not change. On macOS, and on Linux in Ghostty and Ptyxis, the terminal comes to the front.
+- When an input or a dialog is open in the TUI, or the TUI does not answer for 2 s (for example, an editor is open), the view does not change. On macOS, and on Linux in Ghostty, GNOME Terminal and Ptyxis, the terminal comes to the front.
 - A `follow` opens the feed, not the repository.
 - A `GitSocial.app` older than the TUI cannot take the click: the message comes from `osascript` with no click until you update the app.
 - On Linux, a message has a click only when the session D-Bus is usable. Without it, `notify-send` shows the message with no click.

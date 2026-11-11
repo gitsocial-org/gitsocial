@@ -359,10 +359,18 @@ func notifyBody(title, body, icon string) []byte {
 	return appendUint32(b, 0xFFFFFFFF)
 }
 
-// activateCall returns the Activate call of the application app with token as its activation token, with no reply and no auto start.
-func activateCall(serial uint32, app, token string) []byte {
+// activateCall returns the Activate call of the application at path on dest with token as its activation token, with no reply and no auto start.
+func activateCall(serial uint32, dest, path, token string) []byte { //nolint:unparam
 	token = busText(token)
-	b := methodCall(serial, app, appPath(app), applicationName, "Activate", "a{sv}", appendStringVariants(nil, [][2]string{{"activation-token", token}, {"desktop-startup-id", token}}))
+	b := methodCall(serial, busText(dest), path, applicationName, "Activate", "a{sv}", appendStringVariants(nil, [][2]string{{"activation-token", token}, {"desktop-startup-id", token}}))
+	b[2] = noReplyNoAutoStart
+	return b
+}
+
+// activateResultCall returns the ActivateResult call that asks the GNOME Terminal server dest to select and present the tab with uuid, with no reply and no auto start.
+func activateResultCall(serial uint32, dest, uuid string) []byte {
+	body := appendUint32(appendStrings(appendString(nil, busText(uuid)), nil), 0)
+	b := methodCall(serial, busText(dest), "/org/gnome/Terminal/SearchProvider", "org.gnome.Shell.SearchProvider2", "ActivateResult", "sasu", body)
 	b[2] = noReplyNoAutoStart
 	return b
 }
