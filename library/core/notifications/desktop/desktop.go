@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -140,27 +141,44 @@ func hasClick(m notifications.DesktopMessage) bool {
 	return m.URL != "" || m.Socket != ""
 }
 
-// notifyWait shows the message over the session bus with the click action and waits for the click or the close; on a click it sends ref to socket when socket is set, else opens url with xdg-open. A message that the service did not get goes to notify-send with no click.
+// notifyWait shows the message over the session bus with the click action and waits for the click or the close; on a click it sends ref to socket and brings the terminal app to the front when socket is set, else opens url with xdg-open. A message that the service did not get goes to notify-send with no click.
 func notifyWait(h host, title, body, url, socket, ref string) error {
 	icon := linuxIcon(h.dataDir)
-	sent, clicked, err := dbusNotify(h, busAddress(os.Getenv("DBUS_SESSION_BUS_ADDRESS"), os.Getenv("XDG_RUNTIME_DIR")), title, body, icon)
+	var activate func(token string) []byte
+	onClick := func() error { return run(h.timeout, lookPath("xdg-open"), []string{url}, nil) }
+	if socket != "" {
+		activate = terminalCall(os.Getenv("TERM_PROGRAM"), os.Getenv("GHOSTTY_SURFACE_ID"), os.Getenv("PTYXIS_VERSION"))
+		onClick = func() error {
+			if err := click.Send(socket, ref); err != nil {
+				return fmt.Errorf("send click: %w", err)
+			}
+			return nil
+		}
+	}
+	sent, clicked, err := dbusNotify(h, busAddress(os.Getenv("DBUS_SESSION_BUS_ADDRESS"), os.Getenv("XDG_RUNTIME_DIR")), activate, title, body, icon, onClick)
 	if !sent {
 		log.Debug("session bus not usable, using notify-send", "error", err)
 		return run(h.timeout, lookPath("notify-send"), linuxArgs(icon, title, body), nil)
 	}
-	if err != nil {
+	if err != nil && !clicked {
 		return fmt.Errorf("desktop message: %w", err)
 	}
-	if !clicked {
-		return nil
-	}
-	if socket != "" {
-		if err := click.Send(socket, ref); err != nil {
-			return fmt.Errorf("send click: %w", err)
+	return err
+}
+
+// terminalCall returns the builder of the call that brings the terminal of this process to the front from a token: the surface in Ghostty, the app in Ptyxis, nil for a terminal with no tested call.
+func terminalCall(termProgram, ghosttySurface, ptyxisVersion string) func(token string) []byte {
+	if termProgram == "ghostty" {
+		surface, err := strconv.ParseUint(strings.TrimPrefix(ghosttySurface, "0x"), 16, 64)
+		if err != nil || surface == 0 {
+			return nil
 		}
-		return nil
+		return func(token string) []byte { return presentSurfaceCall(4, "com.mitchellh.ghostty", surface, token) }
 	}
-	return run(h.timeout, lookPath("xdg-open"), []string{url}, nil)
+	if ptyxisVersion != "" {
+		return func(token string) []byte { return activateCall(4, "org.gnome.Ptyxis", token) }
+	}
+	return nil
 }
 
 // linuxArgs returns the arguments of notify-send.

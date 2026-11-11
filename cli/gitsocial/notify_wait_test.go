@@ -12,6 +12,8 @@ func TestNotifyWait_args(t *testing.T) {
 	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path="+filepath.Join(runtimeDir, "bus"))
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("PTYXIS_VERSION", "")
+	t.Setenv("TERM_PROGRAM", "")
 	dir, cacheDir := t.TempDir(), t.TempDir()
 	for _, c := range []struct {
 		args []string

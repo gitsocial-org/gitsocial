@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gitsocial-org/gitsocial/library/core/log"
 )
 
 const (
@@ -21,6 +23,7 @@ const (
 	busPath           = "/org/freedesktop/DBus"
 	notificationsName = "org.freedesktop.Notifications"
 	notificationsPath = "/org/freedesktop/Notifications"
+	applicationName   = "org.freedesktop.Application"
 )
 
 const (
@@ -40,14 +43,20 @@ const (
 	fieldSignature   byte = 8
 )
 
+// noReplyNoAutoStart is the header flags NO_REPLY_EXPECTED and NO_AUTO_START.
+const noReplyNoAutoStart byte = 0x1 | 0x2
+
 // maxBody and maxFields bound the parts of a message that the client reads; a larger message is dropped.
 const maxBody, maxFields = 1 << 20, 64 << 10
 
 // busMessage is the part of a received message that the client reads.
 type busMessage struct {
 	kind        byte
+	flags       byte
 	serial      uint32
 	replySerial uint32
+	path        string
+	destination string
 	iface       string
 	member      string
 	errName     string
@@ -87,8 +96,8 @@ func busAddress(value, runtimeDir string) string {
 	return ""
 }
 
-// dbusNotify shows one message with the click action on the bus at address and waits for its click, its close or waitTimeout; sent is false when the service did not get or refused the message.
-func dbusNotify(h host, address, title, body, icon string) (sent, clicked bool, err error) {
+// dbusNotify shows one message with the click action on the bus at address and waits for its click, its close or waitTimeout; on a click it runs onClick and, after a good onClick with a token, writes the call that activate builds from the token. sent is false when the service did not get or refused the message.
+func dbusNotify(h host, address string, activate func(token string) []byte, title, body, icon string, onClick func() error) (sent, clicked bool, err error) {
 	if address == "" {
 		return false, false, errors.New("no session bus address")
 	}
@@ -122,8 +131,19 @@ func dbusNotify(h host, address, title, body, icon string) (sent, clicked bool, 
 	if reply.signature != "u" || len(reply.body) < 4 {
 		return true, false, errors.New("notify: reply has no id")
 	}
-	clicked, err = busWaitClick(conn, reader, binary.LittleEndian.Uint32(reply.body), time.Now().Add(waitTimeout))
-	return true, clicked, err
+	clicked, token, err := busWaitClick(conn, reader, binary.LittleEndian.Uint32(reply.body), time.Now().Add(waitTimeout))
+	if err != nil || !clicked {
+		return true, clicked, err
+	}
+	if err := onClick(); err != nil {
+		return true, true, err
+	}
+	if activate != nil && token != "" {
+		if err := busWrite(conn, h.replyTimeout, activate(token)); err != nil {
+			log.Debug("activate terminal failed", "error", err)
+		}
+	}
+	return true, true, nil
 }
 
 // busAuth runs the EXTERNAL auth with the uid of this process and starts the message stream.
@@ -187,37 +207,41 @@ func busReply(conn net.Conn, reader *bufio.Reader, timeout time.Duration, serial
 	}
 }
 
-// busWaitClick reads until ActionInvoked with the click action or NotificationClosed for id, or until deadline, and reports a click.
-func busWaitClick(conn net.Conn, reader *bufio.Reader, id uint32, deadline time.Time) (bool, error) {
+// busWaitClick reads until ActionInvoked with the click action or NotificationClosed for id, or until deadline, and reports a click with the last ActivationToken for id.
+func busWaitClick(conn net.Conn, reader *bufio.Reader, id uint32, deadline time.Time) (bool, string, error) {
 	if err := conn.SetReadDeadline(deadline); err != nil {
-		return false, fmt.Errorf("set bus deadline: %w", err)
+		return false, "", fmt.Errorf("set bus deadline: %w", err)
 	}
+	token := ""
 	for {
 		m, ok, err := readBusMessage(reader)
 		if errors.Is(err, os.ErrDeadlineExceeded) {
-			return false, nil
+			return false, "", nil
 		}
 		if err != nil {
-			return false, fmt.Errorf("wait for click: %w", err)
+			return false, "", fmt.Errorf("wait for click: %w", err)
 		}
 		if !ok || m.kind != kindSignal || m.iface != notificationsName {
 			continue
 		}
-		if m.member == "ActionInvoked" && m.signature == "us" {
-			signalID, action, err := decodeUintString(m.body)
+		if (m.member == "ActionInvoked" || m.member == "ActivationToken") && m.signature == "us" {
+			signalID, value, err := decodeUintString(m.body)
 			if err != nil {
-				return false, err
+				return false, "", err
 			}
-			if signalID == id && action == clickAction {
-				return true, nil
+			if signalID == id && m.member == "ActivationToken" {
+				token = value
+			}
+			if signalID == id && m.member == "ActionInvoked" && value == clickAction {
+				return true, token, nil
 			}
 		}
 		if m.member == "NotificationClosed" && m.signature == "uu" {
 			if len(m.body) < 8 {
-				return false, errors.New("short NotificationClosed signal")
+				return false, "", errors.New("short NotificationClosed signal")
 			}
 			if binary.LittleEndian.Uint32(m.body) == id {
-				return false, nil
+				return false, "", nil
 			}
 		}
 	}
@@ -249,7 +273,7 @@ func readBusMessage(reader io.Reader) (busMessage, bool, error) {
 	if _, err := io.ReadFull(reader, rest); err != nil {
 		return busMessage{}, false, fmt.Errorf("read message: %w", err)
 	}
-	m := busMessage{kind: head[1], serial: binary.LittleEndian.Uint32(head[8:]), body: rest[padded:]}
+	m := busMessage{kind: head[1], flags: head[2], serial: binary.LittleEndian.Uint32(head[8:]), body: rest[padded:]}
 	return parseHeaderFields(rest[:fieldsLen], m)
 }
 
@@ -276,6 +300,10 @@ func parseHeaderFields(fields []byte, m busMessage) (busMessage, bool, error) {
 			value := string(fields[p+4 : p+4+int(size)])
 			p += 5 + int(size)
 			switch code {
+			case fieldPath:
+				m.path = value
+			case fieldDestination:
+				m.destination = value
 			case fieldInterface:
 				m.iface = value
 			case fieldMember:
@@ -329,6 +357,46 @@ func notifyBody(title, body, icon string) []byte {
 	b = appendStrings(b, []string{clickAction, "Open"})
 	b = padTo(appendUint32(b, 0), 8)
 	return appendUint32(b, 0xFFFFFFFF)
+}
+
+// activateCall returns the Activate call of the application app with token as its activation token, with no reply and no auto start.
+func activateCall(serial uint32, app, token string) []byte {
+	token = busText(token)
+	b := methodCall(serial, app, appPath(app), applicationName, "Activate", "a{sv}", appendStringVariants(nil, [][2]string{{"activation-token", token}, {"desktop-startup-id", token}}))
+	b[2] = noReplyNoAutoStart
+	return b
+}
+
+// presentSurfaceCall returns the ActivateAction call that asks the application app to present its surface with token, with no reply and no auto start.
+func presentSurfaceCall(serial uint32, app string, surface uint64, token string) []byte {
+	token = busText(token)
+	body := appendUint32(appendString(nil, "present-surface"), 0)
+	start := len(body)
+	body = binary.LittleEndian.AppendUint64(padTo(appendSignature(body, "t"), 8), surface)
+	binary.LittleEndian.PutUint32(body[start-4:], uint32(len(body)-start))
+	body = appendStringVariants(body, [][2]string{{"activation-token", token}, {"desktop-startup-id", token}})
+	b := methodCall(serial, app, appPath(app), applicationName, "ActivateAction", "sava{sv}", body)
+	b[2] = noReplyNoAutoStart
+	return b
+}
+
+// appPath returns the object path of an application from its bus name: "." to "/" and "-" to "_".
+func appPath(app string) string {
+	return "/" + strings.NewReplacer(".", "/", "-", "_").Replace(app)
+}
+
+// appendStringVariants appends a dict of signature a{sv} whose values are variants of strings.
+func appendStringVariants(b []byte, entries [][2]string) []byte {
+	b = appendUint32(b, 0)
+	at := len(b) - 4
+	b = padTo(b, 8)
+	start := len(b)
+	for _, entry := range entries {
+		b = appendString(padTo(b, 8), entry[0])
+		b = appendString(appendSignature(b, "s"), entry[1])
+	}
+	binary.LittleEndian.PutUint32(b[at:], uint32(len(b)-start))
+	return b
 }
 
 // busText returns s as a string that the bus accepts: valid UTF-8 with no NUL.

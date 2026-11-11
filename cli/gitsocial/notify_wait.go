@@ -16,10 +16,11 @@ func newNotifyWaitCmd() *cobra.Command {
 		Short: "Show a desktop message and wait for its click",
 		Long: `Show one desktop message through the session D-Bus and wait for its
 click or its close. On a click, send the ref to the socket of the TUI
-when the message names a socket, else open the URL. With no usable
-session bus, show the message with notify-send and no click. The desktop
-sender of a fetch starts it in its own session; it is not a command to
-run by hand.`,
+when the message names a socket, else open the URL. In Ghostty and
+Ptyxis, a click that the TUI gets also brings the terminal to the front. With no
+usable session bus, show the message with notify-send and no click. The
+desktop sender of a fetch starts it in its own session; it is not a
+command to run by hand.`,
 		Hidden: true,
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) != 3 && len(args) != 5 {

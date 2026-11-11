@@ -2,6 +2,7 @@
 package desktop
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -135,7 +136,7 @@ func TestSend_textIsAnArgument(t *testing.T) {
 	}
 }
 
-// stubNotifySend puts a notify-send first on PATH that records its arguments to out, and an xdg-open that records its URL to opened, with no session bus.
+// stubNotifySend puts a notify-send first on PATH that records its arguments to out, and an xdg-open that records its URL to opened, with no session bus and no Ptyxis.
 func stubNotifySend(t *testing.T, out, opened string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -145,6 +146,9 @@ func stubNotifySend(t *testing.T, out, opened string) {
 	writeStub(t, filepath.Join(bin, "notify-send"), recordArgs(out))
 	writeStub(t, filepath.Join(bin, "xdg-open"), recordArgs(opened))
 	t.Setenv("PATH", bin)
+	t.Setenv("PTYXIS_VERSION", "")
+	t.Setenv("TERM_PROGRAM", "")
+	t.Setenv("GHOSTTY_SURFACE_ID", "")
 	noBus(t)
 }
 
@@ -228,7 +232,7 @@ func TestLinuxSender_socketArgs(t *testing.T) {
 // clickBus starts a fake bus that sends the messages after Notify and points the session bus variables at it.
 func clickBus(t *testing.T, messages ...[]byte) {
 	t.Helper()
-	socket, _ := fakeBus(t, "OK 0123\r\n", answerNotify(messages...))
+	socket, _, _ := fakeBus(t, "OK 0123\r\n", answerNotify(messages...))
 	useBus(t, socket)
 }
 
@@ -297,6 +301,89 @@ func TestNotifyWait_urlClick(t *testing.T) {
 		t.Errorf("xdg-open arguments = %q, want the URL after the click", got)
 	}
 	assertNoFile(t, out, "notify-send for a message on the bus")
+}
+
+func TestNotifyWait_urlClickNoActivate(t *testing.T) {
+	dir := t.TempDir()
+	out, opened := filepath.Join(dir, "args"), filepath.Join(dir, "opened")
+	stubNotifySend(t, out, opened)
+	t.Setenv("PTYXIS_VERSION", "50.1")
+	calls := make(chan busMessage, 4)
+	socket, _, done := fakeBus(t, "OK 0123\r\n", answerAndRecord(calls, signalUS("ActivationToken", testID, "token"), signalUS("ActionInvoked", testID, clickAction)))
+	useBus(t, socket)
+	if err := notifyWait(testHost(), "GitSocial", "body", "https://site.example/", "", ""); err != nil {
+		t.Fatalf("notifyWait: %v", err)
+	}
+	if got := readArgs(t, opened); len(got) != 1 || got[0] != "https://site.example/" {
+		t.Errorf("xdg-open arguments = %q, want the URL after the click", got)
+	}
+	assertNoCall(t, "URL message in Ptyxis", calls, done)
+}
+
+func TestTerminalCall_byEnvironment(t *testing.T) {
+	for _, c := range []struct{ name, termProgram, surface, ptyxis, want string }{
+		{"Ghostty with a surface", "ghostty", "0xa2680fb67d38fbf2", "", "com.mitchellh.ghostty ActivateAction"},
+		{"Ghostty started from Ptyxis", "ghostty", "0x0000000000000001", "50.1", "com.mitchellh.ghostty ActivateAction"},
+		{"Ghostty with no surface", "ghostty", "", "50.1", ""},
+		{"Ghostty with surface zero", "ghostty", "0x0000000000000000", "", ""},
+		{"Ghostty with a bad surface", "ghostty", "surface", "", ""},
+		{"Ptyxis", "", "", "50.1", "org.gnome.Ptyxis Activate"},
+		{"a stale surface in another terminal", "", "0xa2680fb67d38fbf2", "", ""},
+		{"another terminal", "WezTerm", "", "", ""},
+	} {
+		build := terminalCall(c.termProgram, c.surface, c.ptyxis)
+		got := ""
+		if build != nil {
+			m, ok, err := readBusMessage(bytes.NewReader(build("token")))
+			if err != nil || !ok {
+				t.Fatalf("%s: readBusMessage = %v, %v", c.name, ok, err)
+			}
+			got = m.destination + " " + m.member
+		}
+		if got != c.want {
+			t.Errorf("%s: call = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestNotifyWait_socketClickActivates(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the click socket is a Unix socket")
+	}
+	cacheDir, err := os.MkdirTemp("/tmp", "gsclick")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(cacheDir) })
+	socket := click.SocketPath(cacheDir, os.Getpid(), time.Now())
+	lines := make(chan string, 2)
+	stop, err := click.Listen(socket, func(line string) { lines <- line })
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer stop()
+	dir := t.TempDir()
+	stubNotifySend(t, filepath.Join(dir, "args"), filepath.Join(dir, "opened"))
+	t.Setenv("TERM_PROGRAM", "ghostty")
+	t.Setenv("GHOSTTY_SURFACE_ID", "0xa2680fb67d38fbf2")
+	calls := make(chan busMessage, 4)
+	bus, _, done := fakeBus(t, "OK 0123\r\n", answerAndRecord(calls, signalUS("ActivationToken", testID, "token"), signalUS("ActionInvoked", testID, clickAction)))
+	useBus(t, bus)
+	if err := notifyWait(testHost(), "GitSocial", "body", "", socket, "#commit:0123456789ab"); err != nil {
+		t.Fatalf("notifyWait: %v", err)
+	}
+	if line := <-lines; line != "open #commit:0123456789ab" {
+		t.Errorf("line = %q, want open and the ref", line)
+	}
+	<-done
+	select {
+	case call := <-calls:
+		if call.destination != "com.mitchellh.ghostty" || call.member != "ActivateAction" {
+			t.Errorf("call = %s %s, want ActivateAction of com.mitchellh.ghostty", call.destination, call.member)
+		}
+	default:
+		t.Error("no call to the terminal after the click")
+	}
 }
 
 func TestNotifyWait_noBus(t *testing.T) {
