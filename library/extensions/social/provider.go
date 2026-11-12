@@ -47,8 +47,3 @@ func (p *notificationProvider) GetNotifications(workdir string, filter notificat
 	}
 	return result, nil
 }
-
-// GetUnreadCount returns the social unread notification count.
-func (p *notificationProvider) GetUnreadCount(workdir string) (int, error) {
-	return getUnreadCount(workdir)
-}

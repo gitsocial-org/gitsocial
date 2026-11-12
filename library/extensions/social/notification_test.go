@@ -3,6 +3,7 @@ package social
 
 import (
 	"database/sql"
+	"sort"
 	"testing"
 	"time"
 
@@ -59,13 +60,13 @@ func TestSortNotificationsByTime_unsorted(t *testing.T) {
 
 func TestMarkAsRead_viaCoreNotifications(t *testing.T) {
 	setupTestDB(t)
-	if err := notifications.MarkAsRead("https://github.com/a/b", "abc123", "main"); err != nil {
+	if err := notifications.MarkAsRead("https://github.com/a/b", "abc123"); err != nil {
 		t.Fatalf("MarkAsRead() error = %v", err)
 	}
 	count, err := cache.QueryLocked(func(db *sql.DB) (int, error) {
 		var c int
-		err := db.QueryRow(`SELECT COUNT(*) FROM core_notification_reads WHERE repo_url = ? AND hash = ? AND branch = ?`,
-			"https://github.com/a/b", "abc123", "main").Scan(&c)
+		err := db.QueryRow(`SELECT COUNT(*) FROM core_notification_state WHERE repo_url = ? AND hash = ? AND read_at IS NOT NULL`,
+			"https://github.com/a/b", "abc123").Scan(&c)
 		return c, err
 	})
 	if err != nil {
@@ -78,14 +79,14 @@ func TestMarkAsRead_viaCoreNotifications(t *testing.T) {
 
 func TestMarkAsUnread_viaCoreNotifications(t *testing.T) {
 	setupTestDB(t)
-	notifications.MarkAsRead("https://github.com/a/b", "abc123", "main")
-	if err := notifications.MarkAsUnread("https://github.com/a/b", "abc123", "main"); err != nil {
+	notifications.MarkAsRead("https://github.com/a/b", "abc123")
+	if err := notifications.MarkAsUnread("https://github.com/a/b", "abc123"); err != nil {
 		t.Fatalf("MarkAsUnread() error = %v", err)
 	}
 	count, _ := cache.QueryLocked(func(db *sql.DB) (int, error) {
 		var c int
-		err := db.QueryRow(`SELECT COUNT(*) FROM core_notification_reads WHERE repo_url = ? AND hash = ? AND branch = ?`,
-			"https://github.com/a/b", "abc123", "main").Scan(&c)
+		err := db.QueryRow(`SELECT COUNT(*) FROM core_notification_state WHERE repo_url = ? AND hash = ? AND read_at IS NOT NULL`,
+			"https://github.com/a/b", "abc123").Scan(&c)
 		return c, err
 	})
 	if count != 0 {
@@ -95,13 +96,13 @@ func TestMarkAsUnread_viaCoreNotifications(t *testing.T) {
 
 func TestMarkAsRead_idempotent_viaCoreNotifications(t *testing.T) {
 	setupTestDB(t)
-	notifications.MarkAsRead("https://github.com/a/b", "abc123", "main")
-	if err := notifications.MarkAsRead("https://github.com/a/b", "abc123", "main"); err != nil {
+	notifications.MarkAsRead("https://github.com/a/b", "abc123")
+	if err := notifications.MarkAsRead("https://github.com/a/b", "abc123"); err != nil {
 		t.Fatalf("second MarkAsRead() error = %v", err)
 	}
 	count, _ := cache.QueryLocked(func(db *sql.DB) (int, error) {
 		var c int
-		err := db.QueryRow(`SELECT COUNT(*) FROM core_notification_reads WHERE repo_url = ?`, "https://github.com/a/b").Scan(&c)
+		err := db.QueryRow(`SELECT COUNT(*) FROM core_notification_state WHERE repo_url = ?`, "https://github.com/a/b").Scan(&c)
 		return c, err
 	})
 	if count != 1 {
@@ -157,13 +158,46 @@ func TestGetFollowNotifications_unreadOnly(t *testing.T) {
 	followerURL := "https://github.com/fol-unread/repo"
 	_ = insertFollower(followerURL, wsURL, "list1", "", time.Now())
 	// Mark as read
-	_ = notifications.MarkAsRead(followerURL, "follow", "")
+	_ = notifications.MarkAsRead(followerURL, "follow")
 	notifs, err := getFollowNotifications(wsURL, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(notifs) != 0 {
 		t.Errorf("expected 0 unread follow notifications, got %d", len(notifs))
+	}
+}
+
+// TestFollow_markByKey checks that one follow is marked read and unread by its key, and that a second follow keeps its state.
+func TestFollow_markByKey(t *testing.T) {
+	setupTestDB(t)
+	wsURL := "https://github.com/ws/fol-key"
+	first, second := "https://github.com/fol-key/first", "https://github.com/fol-key/second"
+	_ = insertFollower(first, wsURL, "list1", "", time.Now())
+	_ = insertFollower(second, wsURL, "list1", "", time.Now())
+	unreadRepos := func() []string {
+		notifs, err := getFollowNotifications(wsURL, true)
+		if err != nil {
+			t.Fatalf("getFollowNotifications() error = %v", err)
+		}
+		repos := make([]string, 0, len(notifs))
+		for _, n := range notifs {
+			repos = append(repos, n.ActorRepo)
+		}
+		sort.Strings(repos)
+		return repos
+	}
+	if err := notifications.MarkAsRead(first, "follow"); err != nil {
+		t.Fatalf("MarkAsRead() error = %v", err)
+	}
+	if got := unreadRepos(); len(got) != 1 || got[0] != second {
+		t.Errorf("unread follows after the mark = %v, want only %s", got, second)
+	}
+	if err := notifications.MarkAsUnread(first, "follow"); err != nil {
+		t.Fatalf("MarkAsUnread() error = %v", err)
+	}
+	if got := unreadRepos(); len(got) != 2 {
+		t.Errorf("unread follows after the unread mark = %v, want both", got)
 	}
 }
 
@@ -266,7 +300,13 @@ func TestNotifications_excludesStaleComment(t *testing.T) {
 	if notifs, err := getNotifications(workdir, notificationFilter{}); err != nil || len(notifs) != 0 {
 		t.Errorf("getNotifications() after the stale mark = %+v, %v, want none", notifs, err)
 	}
-	if count, err := getUnreadCount(workdir); err != nil || count != 0 {
-		t.Errorf("getUnreadCount() = %d, %v, want 0", count, err)
+	if count, err := unreadOf(&notificationProvider{}, workdir); err != nil || count != 0 {
+		t.Errorf("unread count = %d, %v, want 0", count, err)
 	}
+}
+
+// unreadOf returns the number of unread notifications of one provider.
+func unreadOf(p notifications.Provider, workdir string) (int, error) {
+	items, err := p.GetNotifications(workdir, notifications.Filter{UnreadOnly: true})
+	return len(items), err
 }

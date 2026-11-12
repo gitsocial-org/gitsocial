@@ -206,7 +206,7 @@ func serveFetch(root, cacheDir string, errOut io.Writer) {
 	if originURL := protocol.NormalizeURL(git.GetOriginURL(root)); originURL != "" {
 		allBranches = settings.GetWorkspaceMode(originURL) == "*"
 	}
-	res, _, _ := client.Fetch(root, cacheDir, client.FetchOptions{FetchAllBranches: allBranches})
+	res, _ := client.Fetch(root, cacheDir, client.FetchOptions{FetchAllBranches: allBranches})
 	if !res.Success && res.Error != nil {
 		fmt.Fprintf(errOut, "gitsocial: fetch: %s\n", res.Error.Message)
 	}

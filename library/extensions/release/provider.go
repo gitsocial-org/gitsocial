@@ -44,15 +44,6 @@ func (p *releaseNotificationProvider) GetNotifications(workdir string, filter no
 	return getNewReleaseNotifications(workspaceURL, workdir, filter.UnreadOnly, filter.Limit)
 }
 
-// GetUnreadCount returns the total unread release notification count.
-func (p *releaseNotificationProvider) GetUnreadCount(workdir string) (int, error) {
-	workspaceURL := gitmsg.ResolveRepoURL(workdir)
-	if workspaceURL == "" {
-		return 0, nil
-	}
-	return countUnreadReleases(workspaceURL, workdir)
-}
-
 // getNewReleaseNotifications returns notifications for releases from repos in user's lists.
 func getNewReleaseNotifications(workspaceURL, workdir string, unreadOnly bool, limit int) ([]notifications.Notification, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]notifications.Notification, error) {
@@ -62,7 +53,7 @@ func getNewReleaseNotifications(workspaceURL, workdir string, unreadOnly bool, l
 			       v.tag, v.version, v.prerelease,
 			       nr.repo_url
 			FROM release_items_resolved v
-			LEFT JOIN core_notification_reads nr ON v.repo_url = nr.repo_url AND v.hash = nr.hash AND v.branch = nr.branch
+			` + cache.ReadStateJoin("nr", "v.repo_url", "v.hash") + `
 			WHERE v.repo_url != ?
 			  AND v.repo_url IN (SELECT lr.repo_url FROM core_list_repositories lr
 			                     JOIN core_lists l ON lr.list_id = l.id WHERE l.workdir = ?)
@@ -135,22 +126,5 @@ func getNewReleaseNotifications(workspaceURL, workdir string, unreadOnly bool, l
 			})
 		}
 		return result, rows.Err()
-	})
-}
-
-// countUnreadReleases counts unread release notifications.
-func countUnreadReleases(workspaceURL, workdir string) (int, error) {
-	return cache.QueryLocked(func(db *sql.DB) (int, error) {
-		var count int
-		err := db.QueryRow(`
-			SELECT COUNT(*) FROM release_items_resolved v
-			LEFT JOIN core_notification_reads nr ON v.repo_url = nr.repo_url AND v.hash = nr.hash AND v.branch = nr.branch
-			WHERE v.repo_url != ?
-			  AND v.repo_url IN (SELECT lr.repo_url FROM core_list_repositories lr
-			                     JOIN core_lists l ON lr.list_id = l.id WHERE l.workdir = ?)
-			  AND `+cache.LiveItemFilter+`
-			  AND nr.repo_url IS NULL
-		`, workspaceURL, workdir).Scan(&count)
-		return count, err
 	})
 }

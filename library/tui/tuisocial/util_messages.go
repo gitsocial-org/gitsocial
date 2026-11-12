@@ -6,7 +6,6 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
-	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
 
@@ -121,8 +120,9 @@ type FetchCompletedMsg struct {
 	// (keys: social, pm, review, release, memo, code), used for the summary toast.
 	Breakdown map[string]int
 	// Auto is true when the periodic auto-fetch timer started this fetch.
-	Auto      bool
-	NewUnread []notifications.Notification
+	Auto bool
+	// Unread is the unread count after the delivery of this fetch.
+	Unread int
 }
 
 // PushCompletedMsg carries one result per remote in push order, and Err names the failures.

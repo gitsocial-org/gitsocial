@@ -983,8 +983,7 @@ Result: `int`
 
 Params:
 - `repoURL` (string, required): Notification repository URL
-- `hash` (string, required): Notification hash
-- `branch` (string, required): Notification branch
+- `hash` (string, required): Notification hash, or `follow` for a follow
 
 Result: `true`
 
@@ -1305,7 +1304,7 @@ Tagged type. Every field is always present.
 
 ### Notification
 
-`RepoURL`, `Hash`, `Branch`, `Type` ([NOTIFICATIONS.md](NOTIFICATIONS.md#types)), `Source` (`social`, `pm`, `review`, `release`, `memo`, `core`), `Item` (the extension's own notification object), `Actor`, `ActorRepo`, `Timestamp`, `IsRead`.
+`RepoURL`, `Hash`, `Branch`, `Type` ([NOTIFICATIONS.md](NOTIFICATIONS.md#types)), `Source` (`social`, `pm`, `review`, `release`, `memo`, `core`), `Item` (the extension's own notification object), `Actor`, `ActorRepo`, `Timestamp`, `IsRead`, `Condition` (true for a [condition](NOTIFICATIONS.md#types), which has no read state).
 
 ### MessageVersion
 

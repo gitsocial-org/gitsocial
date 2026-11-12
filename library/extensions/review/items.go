@@ -542,7 +542,7 @@ func scanResolvedRow(s cache.RowScanner) (*ReviewItem, error) {
 	return scanReviewRow(s, nil)
 }
 
-// scanReviewRow scans a resolved review row; readDest takes the read marker when the query has one.
+// scanReviewRow scans a resolved review row; readDest takes the read state when the query has one.
 func scanReviewRow(s cache.RowScanner, readDest *sql.NullString) (*ReviewItem, error) {
 	var item ReviewItem
 	dest := []any{

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 )
 
 // Notification represents a unified notification from any extension.
@@ -18,13 +19,14 @@ type Notification struct {
 	RepoURL   string
 	Hash      string
 	Branch    string
-	Type      string // "comment", "repost", "quote", "follow", "mention", "reference"
-	Source    string // "social", "core", "pm", "review"
+	Type      string // a type of the table in NOTIFICATIONS.md
+	Source    string // "core", "gitmsg-divergence", or the name of an extension
 	Item      any
 	Actor     Actor
 	ActorRepo string
 	Timestamp time.Time
 	IsRead    bool
+	Condition bool // true until someone repairs it: no read state, no message
 }
 
 // Actor identifies who triggered the notification.
@@ -43,7 +45,6 @@ type Filter struct {
 // Provider supplies notifications from a specific source.
 type Provider interface {
 	GetNotifications(workdir string, filter Filter) ([]Notification, error)
-	GetUnreadCount(workdir string) (int, error)
 }
 
 var (
@@ -74,7 +75,7 @@ func GetAllStrict(workdir string, filter Filter) ([]Notification, error) {
 	return gather(workdir, filter)
 }
 
-// gather collects, filters and sorts the notifications of every provider and joins the provider errors.
+// gather reads each provider with no limit, applies the type filter, keeps one event per commit, sorts by time and cuts to the limit; it joins the provider errors.
 func gather(workdir string, filter Filter) ([]Notification, error) {
 	mu.RLock()
 	snapshot := make([]namedProvider, len(providers))
@@ -84,7 +85,7 @@ func gather(workdir string, filter Filter) ([]Notification, error) {
 	var all []Notification
 	var failures []error
 	for _, np := range snapshot {
-		items, err := np.provider.GetNotifications(workdir, filter)
+		items, err := np.provider.GetNotifications(workdir, Filter{UnreadOnly: filter.UnreadOnly})
 		if err != nil {
 			failures = append(failures, fmt.Errorf("provider %s: %w", np.name, err))
 			continue
@@ -105,8 +106,9 @@ func gather(workdir string, filter Filter) ([]Notification, error) {
 		}
 		all = filtered
 	}
+	all = onePerKey(all, gitmsg.ResolveRepoURL(workdir))
 
-	sort.Slice(all, func(i, j int) bool {
+	sort.SliceStable(all, func(i, j int) bool {
 		return all[i].Timestamp.After(all[j].Timestamp)
 	})
 
@@ -117,102 +119,140 @@ func gather(workdir string, filter Filter) ([]Notification, error) {
 	return all, errors.Join(failures...)
 }
 
-// GetUnreadCount returns the total unread count across all providers.
+// onePerKey keeps one event per commit hash, and per repository for a follow: the row of the workspace first, then the lowest rank, then the first; a condition has no key and stays.
+func onePerKey(items []Notification, workspaceURL string) []Notification {
+	type key struct{ repoURL, hash string }
+	// order puts the row of the workspace before a copy of the commit in a fork.
+	order := func(n Notification) int {
+		if n.RepoURL == workspaceURL {
+			return typeRank(n)
+		}
+		return typeRank(n) + 10
+	}
+	kept := make(map[key]int, len(items))
+	out := items[:0]
+	for _, n := range items {
+		k := key{hash: n.Hash}
+		if n.Hash == "follow" {
+			k.repoURL = n.RepoURL
+		}
+		i, seen := kept[k]
+		switch {
+		case n.Condition || !seen:
+			if !n.Condition {
+				kept[k] = len(out)
+			}
+			out = append(out, n)
+		case order(n) < order(out[i]):
+			out[i] = n
+		}
+	}
+	return out
+}
+
+// typeRank orders the types that one commit can have: an extension type, then a comment of social, then a mention, a reference and an edit.
+func typeRank(n Notification) int {
+	switch {
+	case n.Source == "core" && n.Type == "edit":
+		return 4
+	case n.Source == "core" && n.Type == "reference":
+		return 3
+	case n.Source == "core":
+		return 2
+	case n.Source == "social":
+		return 1
+	}
+	return 0
+}
+
+// GetUnreadCount returns the number of unread events and conditions, the same rows as the unread feed.
 func GetUnreadCount(workdir string) (int, error) {
-	mu.RLock()
-	snapshot := make([]namedProvider, len(providers))
-	copy(snapshot, providers)
-	mu.RUnlock()
-
-	total := 0
-	for _, np := range snapshot {
-		count, err := np.provider.GetUnreadCount(workdir)
-		if err != nil {
-			continue
-		}
-		total += count
-	}
-	return total, nil
+	items, _ := gather(workdir, Filter{UnreadOnly: true}) // a failing provider is skipped, as in GetAll
+	return len(items), nil
 }
 
-// MarkAsRead marks a single notification as read in core_notification_reads.
-func MarkAsRead(repoURL, hash, branch string) error {
-	now := time.Now().UTC().Format(time.RFC3339)
-	return cache.ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec(`
-			INSERT INTO core_notification_reads (repo_url, hash, branch, read_at) VALUES (?, ?, ?, ?)
-			ON CONFLICT(repo_url, hash, branch) DO NOTHING
-		`, repoURL, hash, branch, now)
-		return err
-	})
+// MarkAsRead marks one event as read; an event with no state row gets one, so it is never sent after.
+func MarkAsRead(repoURL, hash string) error {
+	return markRead([]Notification{{RepoURL: repoURL, Hash: hash}})
 }
 
-// MarkAsUnread marks a single notification as unread by removing from core_notification_reads.
-func MarkAsUnread(repoURL, hash, branch string) error {
-	return cache.ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec(`
-			DELETE FROM core_notification_reads WHERE repo_url = ? AND hash = ? AND branch = ?
-		`, repoURL, hash, branch)
-		return err
-	})
+// MarkAsUnread marks one event as unread; the state row stays, so the event is not sent again.
+func MarkAsUnread(repoURL, hash string) error {
+	return markUnread([]Notification{{RepoURL: repoURL, Hash: hash}})
 }
 
-// MarkAllAsRead marks all current notifications as read.
+// MarkAllAsRead marks each unread event as read; a condition has no read state.
 func MarkAllAsRead(workdir string) error {
-	items, _ := GetAll(workdir, Filter{UnreadOnly: true})
+	items, _ := GetAll(workdir, Filter{UnreadOnly: true}) // GetAll returns no error
+	return markRead(events(items))
+}
+
+// MarkAllAsUnread marks each event as unread.
+func MarkAllAsUnread(workdir string) error {
+	items, _ := GetAll(workdir, Filter{}) // GetAll returns no error
+	return markUnread(events(items))
+}
+
+// Claim writes a state row for each event that has none and returns the events whose row this call wrote, so one process sends each event.
+func Claim(items []Notification) ([]Notification, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	var claimed []Notification
+	err := cache.ExecLocked(func(db *sql.DB) error {
+		for _, n := range events(items) {
+			res, err := db.Exec(`INSERT INTO core_notification_state (repo_url, hash, sent_at)
+				SELECT ?1, ?2, ?3 WHERE NOT EXISTS (SELECT 1 FROM core_notification_state WHERE `+cache.EventStateMatch("?1", "?2")+`)
+				ON CONFLICT(repo_url, hash) DO NOTHING`, n.RepoURL, n.Hash, now)
+			if err != nil {
+				return fmt.Errorf("claim %s: %w", n.Hash, err)
+			}
+			if rows, _ := res.RowsAffected(); rows == 1 {
+				claimed = append(claimed, n)
+			}
+		}
+		return nil
+	})
+	return claimed, err
+}
+
+// events returns the notifications that are not conditions.
+func events(items []Notification) []Notification {
+	out := make([]Notification, 0, len(items))
+	for _, n := range items {
+		if !n.Condition {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// markRead writes the read time of each event, with a state row for an event that has none.
+func markRead(items []Notification) error {
 	if len(items) == 0 {
 		return nil
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	return cache.ExecLocked(func(db *sql.DB) error {
-		const batchSize = 100
-		for i := 0; i < len(items); i += batchSize {
-			end := i + batchSize
-			if end > len(items) {
-				end = len(items)
-			}
-			batch := items[i:end]
-			placeholders := make([]string, len(batch))
-			args := make([]interface{}, 0, len(batch)*4)
-			for j, n := range batch {
-				placeholders[j] = "(?, ?, ?, ?)"
-				args = append(args, n.RepoURL, n.Hash, n.Branch, now)
-			}
-			query := "INSERT INTO core_notification_reads (repo_url, hash, branch, read_at) VALUES " +
-				strings.Join(placeholders, ",") +
-				" ON CONFLICT(repo_url, hash, branch) DO NOTHING"
-			if _, err := db.Exec(query, args...); err != nil {
-				return fmt.Errorf("mark read batch: %w", err)
+		for _, n := range items {
+			if _, err := db.Exec(`INSERT INTO core_notification_state (repo_url, hash, sent_at, read_at) VALUES (?, ?, ?, ?)
+				ON CONFLICT(repo_url, hash) DO UPDATE SET read_at = excluded.read_at WHERE read_at IS NULL`,
+				n.RepoURL, n.Hash, now, now); err != nil {
+				return fmt.Errorf("mark read %s: %w", n.Hash, err)
 			}
 		}
 		return nil
 	})
 }
 
-// MarkAllAsUnread marks all current notifications as unread.
-func MarkAllAsUnread(workdir string) error {
-	items, _ := GetAll(workdir, Filter{})
+// markUnread clears the read time of each event and keeps its state row.
+func markUnread(items []Notification) error {
 	if len(items) == 0 {
 		return nil
 	}
 	return cache.ExecLocked(func(db *sql.DB) error {
-		const batchSize = 100
-		for i := 0; i < len(items); i += batchSize {
-			end := i + batchSize
-			if end > len(items) {
-				end = len(items)
-			}
-			batch := items[i:end]
-			placeholders := make([]string, len(batch))
-			args := make([]interface{}, 0, len(batch)*3)
-			for j, n := range batch {
-				placeholders[j] = "(?, ?, ?)"
-				args = append(args, n.RepoURL, n.Hash, n.Branch)
-			}
-			query := "DELETE FROM core_notification_reads WHERE (repo_url, hash, branch) IN (" +
-				strings.Join(placeholders, ",") + ")"
-			if _, err := db.Exec(query, args...); err != nil {
-				return fmt.Errorf("mark unread batch: %w", err)
+		for _, n := range items {
+			if _, err := db.Exec(`UPDATE core_notification_state SET read_at = NULL WHERE `+cache.EventStateMatch("?1", "?2"),
+				n.RepoURL, n.Hash); err != nil {
+				return fmt.Errorf("mark unread %s: %w", n.Hash, err)
 			}
 		}
 		return nil

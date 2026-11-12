@@ -337,10 +337,9 @@ func handleNotificationMarkedUnread(msg tuiviews.NotificationMarkedUnreadMsg, ct
 	return true, ctx.Host().Update(msg)
 }
 
-// handleNotificationsAllMarkedRead clears the unread badge.
+// handleNotificationsAllMarkedRead reads the unread badge again, because a condition stays unread.
 func handleNotificationsAllMarkedRead(msg tuiviews.NotificationsAllMarkedReadMsg, ctx tuicore.AppContext) (bool, tea.Cmd) {
-	ctx.Nav().SetUnreadCount(0)
-	return true, ctx.Host().Update(msg)
+	return true, tea.Batch(ctx.Host().Update(msg), ctx.LoadUnreadCount())
 }
 
 // handleNotificationsAllMarkedUnread restores the unread badge to the full count.
@@ -392,19 +391,9 @@ func handleFetchCompleted(msg FetchCompletedMsg, ctx tuicore.AppContext) (bool, 
 		// Auto-fetch stays silent when there's nothing new — no toast spam.
 		msgCmd = ctx.Host().SetMessageWithTimeout("Already up to date", tuicore.MessageTypeSuccess, 5*time.Second)
 	}
-	return true, tea.Batch(ctx.Host().RefreshView(), ctx.LoadUnreadCount(), msgCmd, desktopNotifyCmd(msg, ctx.Workdir(), ctx.CacheDir(), ctx.Host().State().ClickSocket))
-}
-
-// desktopNotifyCmd sends the desktop messages of an auto-fetch, whose click goes to socket; a manual fetch has the footer toast.
-func desktopNotifyCmd(msg FetchCompletedMsg, workdir, cacheDir, socket string) tea.Cmd {
-	if !msg.Auto || len(msg.NewUnread) == 0 {
-		return nil
-	}
-	items := msg.NewUnread
-	return func() tea.Msg {
-		client.NotifyNew(workdir, cacheDir, socket, items)
-		return nil
-	}
+	// The delivery of the fetch counted the unread feed, so the badge needs no second read.
+	ctx.Nav().SetUnreadCount(msg.Unread)
+	return true, tea.Batch(ctx.Host().RefreshView(), msgCmd)
 }
 
 // fetchExtLabels maps extension keys to friendly plural labels for the fetch

@@ -218,8 +218,8 @@ func (v *NotificationsView) navigateToSelected() tea.Cmd {
 		return nil
 	}
 	m := v.meta[idx]
-	if v.markReadFn != nil && !m.IsRead {
-		if err := v.markReadFn(m.RepoURL, m.Hash, m.Branch); err != nil {
+	if v.markReadFn != nil && !m.IsRead && !m.Condition {
+		if err := v.markReadFn(m.RepoURL, m.Hash); err != nil {
 			log.Warn("failed to mark notification as read", "error", err)
 		}
 		v.meta[idx].IsRead = true
@@ -253,10 +253,10 @@ func NotificationTarget(meta tuicore.NotificationMeta, item tuicore.DisplayItem)
 	return tuicore.GetNavTarget(item)
 }
 
-// MarkReadByHash marks the rows of a repository and a hash read, whatever their branch.
+// MarkReadByHash marks the event row of a repository and a hash read; a condition of the same pull request stays.
 func (v *NotificationsView) MarkReadByHash(repoURL, hash string) {
 	for i, m := range v.meta {
-		if protocol.NormalizeURL(m.RepoURL) == protocol.NormalizeURL(repoURL) && m.Hash == hash {
+		if !m.Condition && protocol.NormalizeURL(m.RepoURL) == protocol.NormalizeURL(repoURL) && m.Hash == hash {
 			v.meta[i].IsRead = true
 			v.cardlist.SetDimmed(i, true)
 		}
@@ -309,13 +309,16 @@ func (v *NotificationsView) markRead() tea.Cmd {
 		return nil
 	}
 	m := v.meta[idx]
+	if m.Condition {
+		return nil
+	}
 	markFn := v.markReadFn
 	newCount := v.countUnread()
 	if !m.IsRead {
 		newCount--
 	}
 	return func() tea.Msg {
-		err := markFn(m.RepoURL, m.Hash, m.Branch)
+		err := markFn(m.RepoURL, m.Hash)
 		return NotificationMarkedReadMsg{Index: idx, Err: err, UnreadCount: newCount}
 	}
 }
@@ -347,6 +350,9 @@ func (v *NotificationsView) handleMarkedUnread(msg NotificationMarkedUnreadMsg, 
 // handleAllMarkedRead updates state after marking all read.
 func (v *NotificationsView) handleAllMarkedRead() {
 	for i := range v.meta {
+		if v.meta[i].Condition {
+			continue
+		}
 		v.meta[i].IsRead = true
 		v.cardlist.SetDimmed(i, true)
 	}
@@ -390,8 +396,8 @@ func (v *NotificationsView) markAllRead() tea.Cmd {
 	}
 	return func() tea.Msg {
 		for _, m := range meta {
-			if !m.IsRead {
-				if err := markFn(m.RepoURL, m.Hash, m.Branch); err != nil {
+			if !m.IsRead && !m.Condition {
+				if err := markFn(m.RepoURL, m.Hash); err != nil {
 					log.Warn("failed to mark notification as read", "repo", m.RepoURL, "error", err)
 				}
 			}
@@ -410,13 +416,16 @@ func (v *NotificationsView) markUnread() tea.Cmd {
 		return nil
 	}
 	m := v.meta[idx]
+	if m.Condition {
+		return nil
+	}
 	markFn := v.markUnreadFn
 	newCount := v.countUnread()
 	if m.IsRead {
 		newCount++
 	}
 	return func() tea.Msg {
-		err := markFn(m.RepoURL, m.Hash, m.Branch)
+		err := markFn(m.RepoURL, m.Hash)
 		return NotificationMarkedUnreadMsg{Index: idx, Err: err, UnreadCount: newCount}
 	}
 }
@@ -442,7 +451,7 @@ func (v *NotificationsView) markAllUnread() tea.Cmd {
 	return func() tea.Msg {
 		for _, m := range meta {
 			if m.IsRead {
-				if err := markFn(m.RepoURL, m.Hash, m.Branch); err != nil {
+				if err := markFn(m.RepoURL, m.Hash); err != nil {
 					log.Warn("failed to mark notification as unread", "repo", m.RepoURL, "error", err)
 				}
 			}

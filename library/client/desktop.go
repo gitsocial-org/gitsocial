@@ -1,8 +1,7 @@
-// desktop.go - The desktop messages and the webhook posts a thin client sends for the new unread notifications of a fetch.
+// desktop.go - The delivery of the unread events that no process sent: the desktop messages and the webhook posts of a thin client.
 package client
 
 import (
-	"errors"
 	"net/http"
 	"os"
 	"strconv"
@@ -30,23 +29,39 @@ func webhookURL() string {
 	return value
 }
 
-// NotifyNew sends the messages of new items with their click targets: to the desktop when the setting is on, and to the webhook when it has a URL; a TUI gives its click socket, other callers "".
-func NotifyNew(workdir, cacheDir, socket string, items []notifications.Notification) {
-	notifyNew(workdir, cacheDir, socket, items, desktop.Send, &http.Client{Timeout: webhookTimeout})
+// Deliver claims the unread events that no process sent and sends them: to the desktop when onDesktop is true and the setting is on, and to the webhook when it has a URL; it returns the unread count. A TUI gives its click socket, other callers "".
+func Deliver(workdir, cacheDir, socket string, onDesktop bool) int {
+	return deliver(workdir, cacheDir, socket, onDesktop, desktop.Send, &http.Client{Timeout: webhookTimeout})
 }
 
-// notifyNew sends the messages of new items through send and posts each with httpClient, and logs a failure.
-func notifyNew(workdir, cacheDir, socket string, items []notifications.Notification, send func([]notifications.DesktopMessage) error, httpClient *http.Client) {
-	if len(items) == 0 {
+// deliver sends the claimed events through send and posts each with httpClient, and logs a failure; with both channels off it claims nothing.
+func deliver(workdir, cacheDir, socket string, onDesktop bool, send func([]notifications.DesktopMessage) error, httpClient *http.Client) int {
+	unread, _ := notifications.GetAll(workdir, notifications.Filter{UnreadOnly: true}) // GetAll returns no error
+	url := webhookURL()
+	if len(unread) == 0 || (!DesktopEnabled() && url == "") {
+		return len(unread)
+	}
+	// The claim is before the send: a send before it lets two processes send one event.
+	claimed, err := notifications.Claim(unread)
+	if err != nil {
+		log.Debug("notification claim failed", "error", err)
+	}
+	sendClaimed(workdir, cacheDir, socket, onDesktop, claimed, url, send, httpClient)
+	return len(unread)
+}
+
+// sendClaimed sends the messages of the claimed events with their click targets to the desktop and to the webhook.
+func sendClaimed(workdir, cacheDir, socket string, onDesktop bool, claimed []notifications.Notification, url string, send func([]notifications.DesktopMessage) error, httpClient *http.Client) {
+	if len(claimed) == 0 {
 		return
 	}
-	all := messages(workdir, cacheDir, items)
-	if DesktopEnabled() {
+	all := messages(workdir, cacheDir, claimed)
+	if onDesktop && DesktopEnabled() {
 		if err := send(desktopCopy(all, socket)); err != nil {
 			log.Debug("desktop notification failed", "error", err)
 		}
 	}
-	if url := webhookURL(); url != "" {
+	if url != "" {
 		postWebhook(httpClient, url, all, webhookRetryDelay)
 	}
 }
@@ -62,20 +77,4 @@ func desktopCopy(all []notifications.DesktopMessage, socket string) []notificati
 		out = append(out, m)
 	}
 	return out
-}
-
-// WatchUnread snapshots the unread set when desktop messages or the webhook are on and returns a function that gives the items unread since.
-func WatchUnread(workdir string) func() []notifications.Notification {
-	if !DesktopEnabled() && webhookURL() == "" {
-		return func() []notifications.Notification { return nil }
-	}
-	before, beforeErr := notifications.GetAllStrict(workdir, notifications.Filter{UnreadOnly: true})
-	return func() []notifications.Notification {
-		after, afterErr := notifications.GetAllStrict(workdir, notifications.Filter{UnreadOnly: true})
-		if err := errors.Join(beforeErr, afterErr); err != nil {
-			log.Debug("unread notifications snapshot failed", "error", err)
-			return nil
-		}
-		return notifications.NewUnread(before, after)
-	}
 }

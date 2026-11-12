@@ -259,7 +259,7 @@ func TestTrailerProvider_oneEntryPerTrailer(t *testing.T) {
 	if len(items) != 1 {
 		t.Errorf("notifications = %d, want 1", len(items))
 	}
-	count, err := p.GetUnreadCount(workdir)
+	count, err := unreadOf(p, workdir)
 	if err != nil {
 		t.Fatalf("GetUnreadCount() error = %v", err)
 	}

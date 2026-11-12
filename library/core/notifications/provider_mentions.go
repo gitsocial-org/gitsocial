@@ -31,7 +31,7 @@ func (p *mentionProvider) GetNotifications(workdir string, filter Filter) ([]Not
 			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END as is_read
 			FROM core_mentions m
 			JOIN core_commits c ON m.repo_url = c.repo_url AND m.hash = c.hash AND m.branch = c.branch
-			LEFT JOIN core_notification_reads r ON m.repo_url = r.repo_url AND m.hash = r.hash AND m.branch = r.branch
+			` + cache.ReadStateJoin("r", "m.repo_url", "m.hash") + `
 			WHERE m.email = ?
 			  AND c.author_email != ?
 			  AND c.stale_since IS NULL
@@ -82,27 +82,5 @@ func (p *mentionProvider) GetNotifications(workdir string, filter Filter) ([]Not
 			})
 		}
 		return results, rows.Err()
-	})
-}
-
-// GetUnreadCount returns the number of unread mention notifications.
-func (p *mentionProvider) GetUnreadCount(workdir string) (int, error) {
-	userEmail := strings.ToLower(git.GetUserEmail(workdir))
-	if userEmail == "" {
-		return 0, nil
-	}
-
-	return cache.QueryLocked(func(db *sql.DB) (int, error) {
-		var count int
-		err := db.QueryRow(`
-			SELECT COUNT(*) FROM core_mentions m
-			JOIN core_commits c ON m.repo_url = c.repo_url AND m.hash = c.hash AND m.branch = c.branch
-			LEFT JOIN core_notification_reads r ON m.repo_url = r.repo_url AND m.hash = r.hash AND m.branch = r.branch
-			WHERE m.email = ?
-			  AND c.author_email != ?
-			  AND c.stale_since IS NULL
-			  AND r.repo_url IS NULL
-		`, userEmail, userEmail).Scan(&count)
-		return count, err
 	})
 }

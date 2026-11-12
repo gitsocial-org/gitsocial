@@ -580,7 +580,7 @@ func MarkCommitsStaleByRepo(repoURL string, liveHashes map[string]bool) (int, er
 	})
 }
 
-// MarkCommitsStaleByHome marks each row stale whose branch is not the home of its commit, and live again when it is; a read marker follows a commit to its new home, and the rows of the settled branches are not read.
+// MarkCommitsStaleByHome marks each row stale whose branch is not the home of its commit, and live again when it is; the rows of the settled branches are not read.
 func MarkCommitsStaleByHome(repoURL string, homes map[string]string, settled []string) (int, error) {
 	repoURL = protocol.NormalizeURL(repoURL)
 	return QueryLocked(func(db *sql.DB) (int, error) {
@@ -624,16 +624,6 @@ func MarkCommitsStaleByHome(repoURL string, homes map[string]string, settled []s
 				now, repoURL, k.hash, k.branch); err != nil {
 				return 0, fmt.Errorf("mark stale %s: %w", k.hash, err)
 			}
-			home := homes[k.hash]
-			if home == "" {
-				continue
-			}
-			if _, err := db.Exec(
-				`INSERT OR IGNORE INTO core_notification_reads (repo_url, hash, branch, read_at)
-				 SELECT repo_url, hash, ?, read_at FROM core_notification_reads WHERE repo_url = ? AND hash = ? AND branch = ?`,
-				home, repoURL, k.hash, k.branch); err != nil {
-				return 0, fmt.Errorf("move read marker %s: %w", k.hash, err)
-			}
 		}
 		for _, k := range toUnstale {
 			if _, err := db.Exec(
@@ -670,7 +660,7 @@ func unsettledBranches(db *sql.DB, repoURL string, settled []string) ([]string, 
 	return out, rows.Err()
 }
 
-// ResetRepositoryData deletes the commits and extension rows of a repository, when its follow mode changes or a memo session is collected; the repository itself and its list memberships stay.
+// ResetRepositoryData deletes the commits and extension rows of a repository when a memo session is collected; the repository itself and its list memberships stay.
 func ResetRepositoryData(repoURL string) error {
 	repoURL = protocol.NormalizeURL(repoURL)
 	return ExecLocked(func(db *sql.DB) error {

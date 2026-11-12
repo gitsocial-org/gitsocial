@@ -102,6 +102,6 @@ func branchStateNotif(prRef string, pr PullRequest, notifType, branchRef,
 		Actor:     notifications.Actor{Name: pr.Author.Name, Email: pr.Author.Email},
 		ActorRepo: pr.Repository,
 		Timestamp: pr.Timestamp,
-		IsRead:    false,
+		Condition: true,
 	}
 }

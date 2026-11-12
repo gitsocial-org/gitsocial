@@ -22,11 +22,11 @@ func init() {
 	notifications.RegisterProvider("review", &reviewNotificationProvider{})
 }
 
-// notificationSelectFromView is baseSelectFromView with the read marker as a trailing column.
+// notificationSelectFromView is baseSelectFromView with the read state as a trailing column.
 var notificationSelectFromView = cache.ResolvedSelect("review_items_resolved",
 	reviewExtColumns+`,
        nr.repo_url`) + `
-	LEFT JOIN core_notification_reads nr ON v.repo_url = nr.repo_url AND v.hash = nr.hash AND v.branch = nr.branch
+	` + cache.ReadStateJoin("nr", "v.repo_url", "v.hash") + `
 `
 
 // ReviewNotification holds review-specific notification data.
@@ -59,6 +59,12 @@ func (p *reviewNotificationProvider) GetNotifications(workdir string, filter not
 
 	var result []notifications.Notification
 
+	// A fork pull request that asks the user for a review stays as review-requested: the first entry of a commit wins.
+	rrNotifs, err := getReviewRequestedNotifications(userEmail, filter.UnreadOnly)
+	if err == nil {
+		result = append(result, rrNotifs...)
+	}
+
 	forkNotifs, err := getForkPRNotifications(workspaceURL, userEmail, forks, filter.UnreadOnly)
 	if err == nil {
 		result = append(result, forkNotifs...)
@@ -67,11 +73,6 @@ func (p *reviewNotificationProvider) GetNotifications(workdir string, filter not
 	fbNotifs, err := getFeedbackNotifications(workspaceURL, userEmail, filter.UnreadOnly)
 	if err == nil {
 		result = append(result, fbNotifs...)
-	}
-
-	rrNotifs, err := getReviewRequestedNotifications(userEmail, filter.UnreadOnly)
-	if err == nil {
-		result = append(result, rrNotifs...)
 	}
 
 	scNotifs, err := getPRStateChangeNotifications(userEmail, filter.UnreadOnly)
@@ -90,39 +91,6 @@ func (p *reviewNotificationProvider) GetNotifications(workdir string, filter not
 		result = result[:filter.Limit]
 	}
 	return result, nil
-}
-
-// GetUnreadCount returns the total unread review notification count.
-func (p *reviewNotificationProvider) GetUnreadCount(workdir string) (int, error) {
-	workspaceURL := gitmsg.ResolveRepoURL(workdir)
-	if workspaceURL == "" {
-		return 0, nil
-	}
-	userEmail := git.GetUserEmail(workdir)
-	forks := gitmsg.GetForks(workdir)
-
-	forkCount, err := countUnreadForkPRs(workspaceURL, userEmail, forks)
-	if err != nil {
-		forkCount = 0
-	}
-	fbCount := 0
-	if fbNotifs, err := getFeedbackNotifications(workspaceURL, userEmail, true); err == nil {
-		fbCount = len(fbNotifs)
-	}
-	rrCount, err := countUnreadReviewRequested(userEmail)
-	if err != nil {
-		rrCount = 0
-	}
-	scCount := 0
-	if scNotifs, err := getPRStateChangeNotifications(userEmail, true); err == nil {
-		scCount = len(scNotifs)
-	}
-	drCount := 0
-	if drNotifs, err := getDraftReadyNotifications(workdir, workspaceURL, userEmail, forks, true); err == nil {
-		drCount = len(drNotifs)
-	}
-	bsCount := len(getBranchStateNotifications(workdir, workspaceURL, userEmail, forks))
-	return forkCount + fbCount + rrCount + scCount + drCount + bsCount, nil
 }
 
 // getForkPRNotifications returns notifications for PRs created on fork repos targeting the workspace.
@@ -273,19 +241,6 @@ func getFeedbackNotifications(workspaceURL, userEmail string, unreadOnly bool) (
 	})
 }
 
-// countUnreadForkPRs counts unread fork PR notifications.
-func countUnreadForkPRs(workspaceURL, userEmail string, forkURLs []string) (int, error) {
-	if len(forkURLs) == 0 {
-		return 0, nil
-	}
-	// Use query + post-filter approach since we need to check base ref targeting
-	notifs, err := getForkPRNotifications(workspaceURL, userEmail, forkURLs, true)
-	if err != nil {
-		return 0, err
-	}
-	return len(notifs), nil
-}
-
 // getReviewRequestedNotifications returns notifications for PRs where the user is a requested reviewer.
 func getReviewRequestedNotifications(userEmail string, unreadOnly bool) ([]notifications.Notification, error) {
 	if userEmail == "" {
@@ -348,18 +303,6 @@ func getReviewRequestedNotifications(userEmail string, unreadOnly bool) ([]notif
 	})
 }
 
-// countUnreadReviewRequested counts unread review-requested notifications.
-func countUnreadReviewRequested(userEmail string) (int, error) {
-	if userEmail == "" {
-		return 0, nil
-	}
-	notifs, err := getReviewRequestedNotifications(userEmail, true)
-	if err != nil {
-		return 0, err
-	}
-	return len(notifs), nil
-}
-
 // getPRStateChangeNotifications returns one notification per edit whose action merges or closes a pull request the user authored.
 func getPRStateChangeNotifications(userEmail string, unreadOnly bool) ([]notifications.Notification, error) {
 	if userEmail == "" {
@@ -380,7 +323,7 @@ func getPRStateChangeNotifications(userEmail string, unreadOnly bool) ([]notific
 			JOIN review_items ri ON cv.edit_repo_url = ri.repo_url AND cv.edit_hash = ri.hash AND cv.edit_branch = ri.branch
 			JOIN review_items_resolved pr ON cv.canonical_repo_url = pr.repo_url AND cv.canonical_hash = pr.hash
 			 AND pr.branch = ` + cache.LiveItemBranch("review_items", "cv.canonical_repo_url", "cv.canonical_hash") + `
-			LEFT JOIN core_notification_reads nr ON ec.repo_url = nr.repo_url AND ec.hash = nr.hash AND ec.branch = nr.branch
+			` + cache.ReadStateJoin("nr", "ec.repo_url", "ec.hash") + `
 			WHERE cv.edit_branch = ` + cache.LiveItemBranch("review_items", "cv.edit_repo_url", "cv.edit_hash") + `
 			  AND ec.action IN ('merged', 'closed')
 			  AND pr.type = 'pull-request'
@@ -515,7 +458,7 @@ func draftReadyNotif(pr PullRequest, edit PRVersion, userEmail string, unreadOnl
 	if originTime, err := time.Parse(time.RFC3339, edit.Fields["origin-time"]); err == nil {
 		timestamp = originTime
 	}
-	isRead := isNotificationRead(edit.RepoURL, edit.CommitHash, edit.Branch)
+	isRead := isNotificationRead(edit.RepoURL, edit.CommitHash)
 	if unreadOnly && isRead {
 		return notifications.Notification{}, false
 	}
@@ -549,12 +492,12 @@ func draftReadyNotif(pr PullRequest, edit PRVersion, userEmail string, unreadOnl
 	}, true
 }
 
-// isNotificationRead reports whether a commit key carries a read marker.
-func isNotificationRead(repoURL, hash, branch string) bool {
+// isNotificationRead reports whether the event of a commit is read.
+func isNotificationRead(repoURL, hash string) bool {
 	read, err := cache.QueryLocked(func(db *sql.DB) (bool, error) {
 		var count int
-		err := db.QueryRow(`SELECT COUNT(*) FROM core_notification_reads
-			WHERE repo_url = ? AND hash = ? AND branch = ?`, repoURL, hash, branch).Scan(&count)
+		err := db.QueryRow(`SELECT COUNT(*) FROM core_notification_state
+			WHERE `+cache.EventStateMatch("?1", "?2")+` AND read_at IS NOT NULL`, repoURL, hash).Scan(&count)
 		return count > 0, err
 	})
 	return err == nil && read
@@ -570,7 +513,7 @@ func hasEmail(addresses []string, email string) bool {
 	return false
 }
 
-// scanResolvedRowWithRead scans a notificationSelectFromView row and its read marker.
+// scanResolvedRowWithRead scans a notificationSelectFromView row and its read state.
 func scanResolvedRowWithRead(s cache.RowScanner) (*ReviewItem, bool, error) {
 	var readRepoURL sql.NullString
 	item, err := scanReviewRow(s, &readRepoURL)

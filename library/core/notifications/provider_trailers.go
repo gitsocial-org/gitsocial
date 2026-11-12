@@ -33,7 +33,7 @@ func (p *trailerProvider) GetNotifications(workdir string, filter Filter) ([]Not
 			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END as is_read
 			FROM core_trailer_refs t
 			JOIN core_commits c ON t.repo_url = c.repo_url AND t.hash = c.hash AND t.branch = c.branch
-			LEFT JOIN core_notification_reads r ON t.repo_url = r.repo_url AND t.hash = r.hash AND t.branch = r.branch
+			` + cache.ReadStateJoin("r", "t.repo_url", "t.hash") + `
 			WHERE ` + targetAuthoredBy + `
 			  AND c.author_email != ?
 			  AND c.stale_since IS NULL
@@ -79,26 +79,5 @@ func (p *trailerProvider) GetNotifications(workdir string, filter Filter) ([]Not
 			})
 		}
 		return results, rows.Err()
-	})
-}
-
-// GetUnreadCount returns the number of unread trailer reference notifications.
-func (p *trailerProvider) GetUnreadCount(workdir string) (int, error) {
-	userEmail := strings.ToLower(git.GetUserEmail(workdir))
-	if userEmail == "" {
-		return 0, nil
-	}
-	return cache.QueryLocked(func(db *sql.DB) (int, error) {
-		var count int
-		err := db.QueryRow(`
-			SELECT COUNT(*) FROM core_trailer_refs t
-			JOIN core_commits c ON t.repo_url = c.repo_url AND t.hash = c.hash AND t.branch = c.branch
-			LEFT JOIN core_notification_reads r ON t.repo_url = r.repo_url AND t.hash = r.hash AND t.branch = r.branch
-			WHERE `+targetAuthoredBy+`
-			  AND c.author_email != ?
-			  AND c.stale_since IS NULL
-			  AND r.repo_url IS NULL
-		`, userEmail, userEmail).Scan(&count)
-		return count, err
 	})
 }

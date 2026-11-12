@@ -127,7 +127,7 @@ func TestDivergenceProvider_countsDivergedBranches(t *testing.T) {
 	workdir := divergedRepo(t)
 
 	p := &divergenceProvider{}
-	count, err := p.GetUnreadCount(workdir)
+	count, err := unreadOf(p, workdir)
 	if err != nil {
 		t.Fatalf("GetUnreadCount() error = %v", err)
 	}
@@ -159,11 +159,11 @@ func TestDivergenceProvider_convergedRepositoryOneProcess(t *testing.T) {
 	calls := countingExecutor(t)
 
 	p := &divergenceProvider{}
-	if _, err := p.GetUnreadCount(workdir); err != nil {
+	if _, err := unreadOf(p, workdir); err != nil {
 		t.Fatalf("GetUnreadCount() error = %v", err)
 	}
 	warm := calls.Load()
-	count, err := p.GetUnreadCount(workdir)
+	count, err := unreadOf(p, workdir)
 	if err != nil {
 		t.Fatalf("GetUnreadCount() error = %v", err)
 	}

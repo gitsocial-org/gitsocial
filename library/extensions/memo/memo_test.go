@@ -1084,7 +1084,7 @@ func TestMemoNotificationProvider_inheritedPolicy(t *testing.T) {
 	}
 
 	// Marking the commit as read should drop it from UnreadOnly.
-	if err := notifications.MarkAsRead(inheritedURL, hash, MemoBranch); err != nil {
+	if err := notifications.MarkAsRead(inheritedURL, hash); err != nil {
 		t.Fatalf("MarkAsRead: %v", err)
 	}
 	notes2, _ := provider.GetNotifications(dir, notifications.Filter{UnreadOnly: true})

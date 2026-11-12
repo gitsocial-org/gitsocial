@@ -1,4 +1,4 @@
-// desktop_text_test.go - Tests for the new unread items of a fetch and the text of their desktop messages.
+// desktop_text_test.go - Tests for the text of the desktop messages.
 package notifications
 
 import (
@@ -12,26 +12,6 @@ import (
 // unread returns one unread mention on a commit.
 func unread(hash string) Notification {
 	return Notification{RepoURL: "https://example.com/owner/repo", Hash: hash, Branch: "gitmsg/social", Type: "mention", Actor: Actor{Name: "Alice"}}
-}
-
-func TestNewUnread_excludesPriorUnread(t *testing.T) {
-	before := []Notification{unread("a1")}
-	after := []Notification{unread("a1"), unread("b2"), unread("b2")}
-	fresh := NewUnread(before, after)
-	if len(fresh) != 1 || fresh[0].Hash != "b2" {
-		t.Errorf("NewUnread = %+v, want only b2 once", fresh)
-	}
-	if got := NewUnread(after, after); len(got) != 0 {
-		t.Errorf("NewUnread with no change = %+v, want none", got)
-	}
-}
-
-func TestNewUnread_ignoresBranch(t *testing.T) {
-	moved := unread("a1")
-	moved.Branch = "main"
-	if fresh := NewUnread([]Notification{unread("a1")}, []Notification{moved}); len(fresh) != 0 {
-		t.Errorf("NewUnread for a row that moved branch = %+v, want none", fresh)
-	}
 }
 
 // noURL gives no click target.

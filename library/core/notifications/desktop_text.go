@@ -1,4 +1,4 @@
-// desktop_text.go - The new unread notifications of a fetch and the text of their desktop messages.
+// desktop_text.go - The text of the desktop messages of the events that a delivery claimed.
 package notifications
 
 import (
@@ -12,29 +12,6 @@ const desktopTitle = "GitSocial"
 
 // desktopMessageCap is the most new items that get one message each; more get one summary.
 const desktopMessageCap = 3
-
-// NewUnread returns the items of after whose (repo, hash) is not in before, each key once.
-func NewUnread(before, after []Notification) []Notification {
-	seen := make(map[string]bool, len(before)+len(after))
-	for _, n := range before {
-		seen[notificationKey(n)] = true
-	}
-	var fresh []Notification
-	for _, n := range after {
-		key := notificationKey(n)
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		fresh = append(fresh, n)
-	}
-	return fresh
-}
-
-// notificationKey joins the repository and the hash; the branch is not in it because the live row moves between branches.
-func notificationKey(n Notification) string {
-	return n.RepoURL + "\x00" + n.Hash
-}
 
 // DesktopMessage is one message of a fetch, and the JSON document of the webhook: the text, the click target and the item it names; a summary names no item.
 type DesktopMessage struct {

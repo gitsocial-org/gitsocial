@@ -40,7 +40,7 @@ func TestNewReleaseNotifications_excludesStaleCommit(t *testing.T) {
 	if got, err := getNewReleaseNotifications(workspaceURL, workdir, false, 0); err != nil || len(got) != 0 {
 		t.Errorf("getNewReleaseNotifications() after the stale mark = %d, %v, want 0", len(got), err)
 	}
-	if count, err := countUnreadReleases(workspaceURL, workdir); err != nil || count != 0 {
-		t.Errorf("countUnreadReleases() = %d, %v, want 0", count, err)
+	if got, err := getNewReleaseNotifications(workspaceURL, workdir, true, 0); err != nil || len(got) != 0 {
+		t.Errorf("getNewReleaseNotifications(unread) after the stale mark = %d, %v, want 0", len(got), err)
 	}
 }

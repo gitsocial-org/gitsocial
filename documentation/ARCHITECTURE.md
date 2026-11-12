@@ -34,7 +34,7 @@ bin/gitsocial tui
 - Give each parallel build a different output name, so one build does not overwrite the output of another.
 - Put a review fix into the branch commit that it corrects; a fix for a change that is already pushed is a separate commit.
 - Before the fast-forward, squash the branch to one commit per unit that a reader would revert alone: a change under about 30 lines that extends the previous commit folds into it, and the guide row goes into the commit that adds the behavior.
-- If a branch changes the cache schema, run it with its own `--cache-dir`: the first binary that opens the shared `~/.cache/gitsocial/cache.db` reseeds it at the new version and keeps only the read markers, and older binaries then refuse it. To rebuild, delete the cache.
+- If a branch changes the cache schema, run it with its own `--cache-dir`: the first binary that opens the shared `~/.cache/gitsocial/cache.db` reseeds it at the new version and keeps only the notification state, and older binaries then refuse it. To rebuild, delete the cache.
 
 ### Test and lint
 
@@ -225,7 +225,7 @@ Outside the tree:
 | `core/settings`<br>User settings | | `Get`, `Set`, `ListAll` |
 | `core/search`<br>Cross-extension search | | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |
 | `core/result`<br>Result type | `Result[T]`, `Error` | `Ok`, `Err`, `ErrWithDetails` |
-| `core/notifications`<br>Notification aggregation | `Notification`, `Provider`, `Filter` | `RegisterProvider`, `GetAll`, `GetUnreadCount`, `MarkAsRead`, `MarkAsUnread`, `MarkAllAsRead`, `MarkAllAsUnread`, `MentionProcessor`, `ExtractMentions`, `TrailerProcessor` |
+| `core/notifications`<br>Notification aggregation | `Notification`, `Provider`, `Filter` | `RegisterProvider`, `GetAll`, `GetUnreadCount`, `Claim`, `MarkAsRead`, `MarkAsUnread`, `MarkAllAsRead`, `MarkAllAsUnread`, `MentionProcessor`, `ExtractMentions`, `TrailerProcessor` |
 | `core/notifications/click`<br>Click socket of a TUI | | `SocketPath`, `Listen`, `Send` |
 | `core/identity`<br>Identity verification | `Identity`, `ResolvedIdentity`, `DNSIdentity`, `Binding`, `Source`, `VerifyCandidate` | `VerifyBinding`, `IsVerified`, `IsVerifiedCommit`, `LookupBinding`, `VerifyCandidates`, `NormalizeSignerKey`, `NormalizeEmail`, `ResolveIdentity` |
 | `core/identity/forge`<br>Forge adapters | `Forge`, `GPGKey`, `CommitVerification` | `Forge`, `Register`, `Lookup`, `LookupForRepo`, `ParseRepoURL`, `NewGitHub`, `GPGKey`, `CommitVerification` |
@@ -234,7 +234,7 @@ Outside the tree:
 | `extensions/release`<br>Releases | `Release`, `ReleaseItem`, `ReleaseNotification` | `CreateRelease`, `EditRelease`, `GetReleases`, `GetSingleRelease`, `MessageToReleaseItem`, `FetchRepository`, `Processors` |
 | `extensions/review`<br>Pull requests, feedback | `PullRequest`, `Feedback`, `ReviewSummary`, `StackEntry`, `ReviewNotification` | `CreatePR`, `GetPR`, `UpdatePR`, `MergePR`, `ClosePR`, `RetractPR`, `MarkReady`, `ConvertToDraft`, `UpdatePRTips`, `SyncPRBranch`, `GetPRVersions`, `ComparePRVersions`, `GetVersionAwareReviews`, `CreateFeedback`, `GetReviewSummary`, `MessageToReviewItem`, `GetPullRequests`, `GetPullRequestsWithForks`, `OpenForkPulls`, `OpenForkHeads`, `FetchMissingForkHeads`, `ResolvePRDiff`, `GetStack`, `RebaseStack`, `Processors` |
 | `extensions/memo`<br>Memos across tiers | `Memo`, `MemoItem`, `Tier`, `SessionInfo` | `CreateMemo`, `EditMemo`, `RetractMemo`, `PromoteMemo`, `ListMemos`, `GetSingleMemo`, `InitProject`, `InitPersonal`, `InitSession`, `ListSessions`, `GCSession`, `PushPersonal`, `FetchPersonal`, `PushSession`, `FetchSession`, `SyncAllTierReposToCache`, `AddInherit`, `RemoveInherit`, `ListInherits`, `IsInherited` |
-| `client`<br>Fetch and push sequences | `FetchOptions`, `Options`, `Result`, `SiteOutcome` | `Fetch`, `SyncWorkspace`, `ResolveRemotes`, `Preview`, `Push`, `PushAll`, `PublishSite`, `DeleteTrackingRefs` |
+| `client`<br>Fetch and push sequences | `FetchOptions`, `Options`, `Result`, `SiteOutcome` | `Fetch`, `Deliver`, `SyncWorkspace`, `ResolveRemotes`, `Preview`, `Push`, `PushAll`, `PublishSite`, `DeleteTrackingRefs` |
 | `proposals`<br>Cross-repo proposals | `Outcome` | `Accept`, `Decline` |
 | `import`<br>Forge import | `SourceAdapter`, `Stats`, `MappingFile` | `Run`, `SourceAdapter`, `ReadMapping`, `WriteMapping`, `MappingKey`, `ResolveHost`, `MapLabels` |
 | `import/github`<br>GitHub adapter | | `New`, `CheckGH`, `Adapter.FetchPM`, `Adapter.FetchReleases`, `Adapter.FetchReview`, `Adapter.FetchSocial` |
@@ -269,6 +269,7 @@ Each open pool holds `cache.lock` shared for its life, and a reseed holds it exc
 | Two processes that open an older cache together reseed it once | `TestOpen_concurrentReseedOnce` |
 | A reseed is refused while another process holds the cache open | `TestOpen_reseedRefusedWhileOpen` |
 | A leftover `cache.lock` is not an error | `TestOpen_staleLockFile` |
+| A reseed keeps the notification state; a read marker of version 7 becomes a row that is sent and read | `TestOpen_reseedKeepsNotificationState` |
 
 ### Schema
 
@@ -279,7 +280,8 @@ Every extension table is keyed by `(repo_url, hash, branch)` into `core_commits`
 - `core_repositories`, `core_repository_meta`, `core_sync_tips`: followed and workspace repositories, their metadata, and the tips of the last workspace fetch
 - `core_lists`, `core_list_repositories`: lists and their members
 - `core_fetch_ranges`: fetched time windows per repository
-- `core_notification_reads`, `core_mentions`, `core_labels`, `core_trailer_refs`: read markers, `@` mentions, labels, and `Closes:`/`Refs:` trailers per commit
+- `core_notification_state(repo_url, hash, sent_at, read_at)`: one row per notification event that was sent or read; the state of a commit holds for its hash, with no branch and in each repository ([NOTIFICATIONS.md](NOTIFICATIONS.md#types))
+- `core_mentions`, `core_labels`, `core_trailer_refs`: `@` mentions, labels, and `Closes:`/`Refs:` trailers per commit
 - `core_identity_dns` (24 h TTL), `core_verified_bindings`: identity caches ([IDENTITY.md](IDENTITY.md))
 - `core_edit_acceptances`, `core_edit_declines`: outcomes of cross-repo proposals
 - `social_items`, `social_interactions` (recounted on every write from the items that are not retracted), `social_followers`, `social_repo_lists`, `social_repo_list_repositories`
@@ -362,7 +364,7 @@ Fork refs sit outside `refs/gitmsg/`, keyed by `fetch.URLHash` of the fork ident
 | Followed on one branch | full history, incremental | persistent |
 | Not followed | a 30-day window | may be deleted at any time |
 
-All-branch following stores each commit under its real refname. Deduplication and stale marking of a followed repository work per repository through `FilterUnfetchedCommitsByRepo` and `MarkCommitsStaleByRepo`. Switching a repository between one branch and `*` runs `cache.ResetRepositoryData`, and the next fetch rebuilds the data of the repository.
+All-branch following stores each commit under its real refname. Deduplication and stale marking of a followed repository work per repository through `FilterUnfetchedCommitsByRepo` and `MarkCommitsStaleByRepo`.
 
 ### Workspace home branch
 
@@ -376,7 +378,7 @@ The workspace sync stores each commit under one branch, its home, and the home i
 | Home | the first branch that reaches the commit: the default branch, then each `gitmsg/*` branch by name, then each other branch | `TestHomeBranch_precedence` |
 | Order of the other branches | a branch whose tips another branch reaches comes first; unrelated branches sort by name | `TestHomeBranch_stackAncestorFirst` |
 | Live row | the row whose branch is the home; each other row of the hash is stale | `TestWorkspaceSync_mergeMovesHome`, `TestWorkspaceSync_selfHeals` |
-| Read marker | copied to the new home when a row goes stale | `TestMarkCommitsStaleByHome_readMarkerFollowsTheCommit` |
+| Read state | found by the hash, so it holds on each row of the commit | `TestReadState_branchFree` |
 | Gate | the names, tips and symrefs of the walked refs, in `core_sync_tips` | `TestWorkspaceSync_gateEqualsWalkSet` |
 | Stable branches | the default branch and the `gitmsg/*` branches; the sync reads only the commits after their last tips | `TestWorkspaceSync_rewindTakesTheFullPath` |
 | Full comparison | on a first build, a tip from older code, a stable branch that lost a commit, or a new set of stable branches; it reads each row | `TestWorkspaceSync_rewindTakesTheFullPath`, `TestSyncTip_oldFormatTriggersSync` |

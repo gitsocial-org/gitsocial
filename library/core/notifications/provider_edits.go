@@ -31,9 +31,7 @@ var editNotificationsFrom = `FROM core_commits_version v
 	JOIN core_commits ec ON v.edit_repo_url = ec.repo_url
 	                    AND v.edit_hash = ec.hash
 	                    AND v.edit_branch = ec.branch
-	LEFT JOIN core_notification_reads r ON v.edit_repo_url = r.repo_url
-	                                   AND v.edit_hash = r.hash
-	                                   AND v.edit_branch = r.branch
+	` + cache.ReadStateJoin("r", "v.edit_repo_url", "v.edit_hash") + `
 	WHERE v.edit_branch = ` + cache.LiveBranch("v.edit_repo_url", "v.edit_hash") + `
 	  AND EXISTS (SELECT 1 FROM core_commits cc WHERE cc.repo_url = v.canonical_repo_url AND cc.hash = v.canonical_hash AND cc.author_email = ?)
 	  AND ec.author_email != ?`
@@ -110,21 +108,5 @@ func (p *editProvider) GetNotifications(workdir string, filter Filter) ([]Notifi
 			})
 		}
 		return results, rows.Err()
-	})
-}
-
-// GetUnreadCount returns the number of unread edit notifications.
-func (p *editProvider) GetUnreadCount(workdir string) (int, error) {
-	userEmail := strings.ToLower(git.GetUserEmail(workdir))
-	if userEmail == "" {
-		return 0, nil
-	}
-	return cache.QueryLocked(func(db *sql.DB) (int, error) {
-		var count int
-		err := db.QueryRow(`
-			SELECT COUNT(*) `+editNotificationsFrom+`
-			  AND r.repo_url IS NULL
-		`, userEmail, userEmail).Scan(&count)
-		return count, err
 	})
 }

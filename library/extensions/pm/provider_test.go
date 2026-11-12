@@ -66,7 +66,7 @@ func TestGetNotifications_everySource(t *testing.T) {
 		}
 	}
 
-	count, err := provider.GetUnreadCount(workdir)
+	count, err := unreadOf(provider, workdir)
 	if err != nil {
 		t.Fatalf("GetUnreadCount() error = %v", err)
 	}
@@ -90,7 +90,7 @@ func TestGetNotifications_unreadOnly(t *testing.T) {
 	if len(notifs) != 1 {
 		t.Fatalf("GetNotifications(unread) = %d notifications, want 1", len(notifs))
 	}
-	if err := notifications.MarkAsRead(notifs[0].RepoURL, notifs[0].Hash, notifs[0].Branch); err != nil {
+	if err := notifications.MarkAsRead(notifs[0].RepoURL, notifs[0].Hash); err != nil {
 		t.Fatalf("MarkAsRead() error = %v", err)
 	}
 
@@ -101,7 +101,7 @@ func TestGetNotifications_unreadOnly(t *testing.T) {
 	if len(unread) != 0 {
 		t.Errorf("GetNotifications(unread) = %d notifications after MarkAsRead(%s), want 0", len(unread), assigned.ID)
 	}
-	count, err := provider.GetUnreadCount(workdir)
+	count, err := unreadOf(provider, workdir)
 	if err != nil {
 		t.Fatalf("GetUnreadCount() error = %v", err)
 	}
@@ -212,4 +212,35 @@ func TestIssueStateChange_actionOnly(t *testing.T) {
 	if len(types) != len(want) || types["cc0011223355"] != want["cc0011223355"] || types["ee0011223355"] != want["ee0011223355"] {
 		t.Errorf("state-change notifications = %v, want %v: one for the close, one for the reopen, none for a text edit", types, want)
 	}
+}
+
+// TestGetNotifications_assignedForkIssueIsOneEvent checks that an issue of a fork that is assigned to the user is one issue-assigned notification in the feed.
+func TestGetNotifications_assignedForkIssueIsOneEvent(t *testing.T) {
+	workdir := initWorkspace(t)
+	me := git.GetUserEmail(workdir)
+	fork := otherAuthorRepo(t, "Forker", "forker@test.com")
+	newIssue(t, fork, "Filed from the fork for me", CreateIssueOptions{Assignees: []string{me}})
+	if err := gitmsg.AddFork(workdir, gitmsg.ResolveRepoURL(fork)); err != nil {
+		t.Fatalf("AddFork: %v", err)
+	}
+	raw, err := (&pmNotificationProvider{}).GetNotifications(workdir, notifications.Filter{})
+	if err != nil {
+		t.Fatalf("GetNotifications() error = %v", err)
+	}
+	if counts := notifTypeCounts(raw); counts["fork-issue"] != 1 || counts["issue-assigned"] != 1 {
+		t.Fatalf("the provider gave %v, want one fork-issue and one issue-assigned for the one issue", counts)
+	}
+	feed, err := notifications.GetAll(workdir, notifications.Filter{})
+	if err != nil {
+		t.Fatalf("GetAll() error = %v", err)
+	}
+	if counts := notifTypeCounts(feed); counts["issue-assigned"] != 1 || counts["fork-issue"] != 0 {
+		t.Errorf("the feed gave %v, want the one issue-assigned", counts)
+	}
+}
+
+// unreadOf returns the number of unread notifications of one provider.
+func unreadOf(p notifications.Provider, workdir string) (int, error) {
+	items, err := p.GetNotifications(workdir, notifications.Filter{UnreadOnly: true})
+	return len(items), err
 }

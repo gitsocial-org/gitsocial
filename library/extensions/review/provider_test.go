@@ -98,7 +98,7 @@ func TestGetForkPRNotifications_unreadOnly(t *testing.T) {
 		State: cache.ToNullString("open"), Base: cache.ToNullString("#branch:main"),
 	})
 
-	if err := notifications.MarkAsRead(forkURL, hash, reviewTestBranch); err != nil {
+	if err := notifications.MarkAsRead(forkURL, hash); err != nil {
 		t.Fatalf("MarkAsRead() error = %v", err)
 	}
 
@@ -244,17 +244,6 @@ func TestGetFeedbackNotifications_unreadCountEmpty(t *testing.T) {
 	}
 }
 
-func TestCountUnreadForkPRs_noForks(t *testing.T) {
-	setupTestDB(t)
-	count, err := countUnreadForkPRs(reviewTestRepoURL, "me@test.com", nil)
-	if err != nil {
-		t.Fatalf("error = %v", err)
-	}
-	if count != 0 {
-		t.Errorf("count = %d, want 0", count)
-	}
-}
-
 func TestGetNotifications_emptyWorkspace(t *testing.T) {
 	setupTestDB(t)
 	dir := t.TempDir()
@@ -288,7 +277,7 @@ func TestProviderNotifications(t *testing.T) {
 		git.ExecGit(dir, []string{"remote", "set-url", "origin", "https://github.com/test/provider-unread-empty.git"})
 		git.ExecGit(dir, []string{"config", "user.email", "provider-unread-empty@test.com"})
 		p := &reviewNotificationProvider{}
-		count, err := p.GetUnreadCount(dir)
+		count, err := unreadOf(p, dir)
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -382,7 +371,7 @@ func TestProviderNotifications(t *testing.T) {
 		})
 
 		p := &reviewNotificationProvider{}
-		count, err := p.GetUnreadCount(dir)
+		count, err := unreadOf(p, dir)
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -472,7 +461,7 @@ func TestGetUnreadCount_emptyWorkspace(t *testing.T) {
 	setupTestDB(t)
 	dir := t.TempDir()
 	p := &reviewNotificationProvider{}
-	count, err := p.GetUnreadCount(dir)
+	count, err := unreadOf(p, dir)
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -499,12 +488,12 @@ func TestCountUnreadForkPRs_withForks(t *testing.T) {
 		State: cache.ToNullString("open"), Base: cache.ToNullString("#branch:main"),
 	})
 
-	count, err := countUnreadForkPRs(wsURL, "me@test.com", []string{forkURL})
+	unread, err := getForkPRNotifications(wsURL, "me@test.com", []string{forkURL}, true)
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
-	if count != 1 {
-		t.Errorf("count = %d, want 1", count)
+	if len(unread) != 1 {
+		t.Errorf("count = %d, want 1", len(unread))
 	}
 }
 
@@ -569,26 +558,12 @@ func TestGetUnreadCount_errorPaths(t *testing.T) {
 	})
 
 	p := &reviewNotificationProvider{}
-	count, err := p.GetUnreadCount(dir)
+	count, err := unreadOf(p, dir)
 	if err != nil {
 		t.Fatalf("GetUnreadCount should not error: %v", err)
 	}
 	if count != 0 {
 		t.Errorf("expected 0 when views are broken, got %d", count)
-	}
-}
-
-func TestCountUnreadForkPRs_error(t *testing.T) {
-	setupTestDB(t)
-
-	cache.ExecLocked(func(db *sql.DB) error {
-		db.Exec("DROP VIEW IF EXISTS review_items_resolved")
-		return nil
-	})
-
-	_, err := countUnreadForkPRs("ws", "me@test.com", []string{"fork"})
-	if err == nil {
-		t.Error("should fail when view is dropped")
 	}
 }
 
@@ -612,7 +587,7 @@ func TestGetFeedbackNotifications_unreadOnly(t *testing.T) {
 		PullRequestRepoURL: cache.ToNullString(wsURL), PullRequestHash: cache.ToNullString(prHash), PullRequestBranch: cache.ToNullString(reviewTestBranch),
 	})
 
-	if err := notifications.MarkAsRead(wsURL, fbHash, reviewTestBranch); err != nil {
+	if err := notifications.MarkAsRead(wsURL, fbHash); err != nil {
 		t.Fatalf("MarkAsRead() error = %v", err)
 	}
 
@@ -716,4 +691,10 @@ func TestPRStateChange_actionOnly(t *testing.T) {
 	if len(got) != 1 || got[0].Hash != mergeHash || got[0].Type != "pr-merged" {
 		t.Errorf("notifications = %+v, want one pr-merged for the merge edit and none for the text edit after it", got)
 	}
+}
+
+// unreadOf returns the number of unread notifications of one provider.
+func unreadOf(p notifications.Provider, workdir string) (int, error) {
+	items, err := p.GetNotifications(workdir, notifications.Filter{UnreadOnly: true})
+	return len(items), err
 }

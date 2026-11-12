@@ -137,12 +137,13 @@ type SearchFunc func(workdir, query, scope string, limit, offset int) (SearchRes
 
 // NotificationMeta holds metadata for a notification (for mark-read operations).
 type NotificationMeta struct {
-	RepoURL   string
+	RepoURL   string // with Hash, the key of the event
 	Hash      string
 	Branch    string
 	Type      string // "comment", "repost", "quote", "mention", "follow"
 	ActorRepo string // for follow notifications
 	IsRead    bool
+	Condition bool // has no read state
 }
 
 // NotificationsResult holds notifications for the notifications view.
@@ -155,10 +156,10 @@ type NotificationsResult struct {
 type GetNotificationsFunc func(workdir string, unreadOnly bool) (NotificationsResult, error)
 
 // MarkReadFunc marks a notification as read.
-type MarkReadFunc func(repoURL, hash, branch string) error
+type MarkReadFunc func(repoURL, hash string) error
 
 // MarkUnreadFunc marks a notification as unread.
-type MarkUnreadFunc func(repoURL, hash, branch string) error
+type MarkUnreadFunc func(repoURL, hash string) error
 
 // MarkAllReadFunc marks all notifications as read in bulk.
 type MarkAllReadFunc func(workdir string) error

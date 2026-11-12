@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -195,39 +196,59 @@ func TestNeedsReseed(t *testing.T) {
 	}
 }
 
-// TestOpen_reseedKeepsReadMarkers pins invariant 8: a read marker and a follow marker survive the version boundary.
-func TestOpen_reseedKeepsReadMarkers(t *testing.T) {
-	Reset()
-	dir := t.TempDir()
-	dbPath := seedCacheFile(t, dir, schemaVersion-1, `
-		CREATE TABLE core_notification_reads (repo_url TEXT NOT NULL, hash TEXT NOT NULL, branch TEXT NOT NULL, read_at TEXT, PRIMARY KEY (repo_url, hash, branch));
-		INSERT INTO core_notification_reads VALUES ('https://github.com/test/repo', 'abc123456789', 'gitmsg/pm', '2026-01-01T00:00:00Z');
-		INSERT INTO core_notification_reads VALUES ('https://github.com/test/follower', 'follow', '', NULL);
-	`)
-
-	if err := Open(dir); err != nil {
-		t.Fatalf("Open() error = %v", err)
+// TestOpen_reseedKeepsNotificationState checks that a version 7 read marker becomes one state row with both times, and that a state row keeps its times.
+func TestOpen_reseedKeepsNotificationState(t *testing.T) {
+	tests := []struct {
+		name, seed string
+		want       map[string][2]bool // hash to (sent, read)
+	}{
+		{"version 7 markers", `
+			CREATE TABLE core_notification_reads (repo_url TEXT NOT NULL, hash TEXT NOT NULL, branch TEXT NOT NULL, read_at TEXT, PRIMARY KEY (repo_url, hash, branch));
+			INSERT INTO core_notification_reads VALUES ('https://github.com/test/repo', 'abc123456789', 'gitmsg/pm', '2026-01-01T00:00:00Z');
+			INSERT INTO core_notification_reads VALUES ('https://github.com/test/repo', 'abc123456789', 'main', '2026-01-02T00:00:00Z');
+			INSERT INTO core_notification_reads VALUES ('https://github.com/test/follower', 'follow', '', NULL);
+		`, map[string][2]bool{"abc123456789": {true, true}, "follow": {true, true}}},
+		{"state rows", `
+			CREATE TABLE core_notification_state (repo_url TEXT NOT NULL, hash TEXT NOT NULL, sent_at TEXT NOT NULL, read_at TEXT, PRIMARY KEY (repo_url, hash));
+			INSERT INTO core_notification_state VALUES ('https://github.com/test/repo', 'abc123456789', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+			INSERT INTO core_notification_state VALUES ('https://github.com/test/repo', 'def123456789', '2026-01-01T00:00:00Z', NULL);
+		`, map[string][2]bool{"abc123456789": {true, true}, "def123456789": {true, false}}},
 	}
-	defer Reset()
-	if got := probeUserVersion(t, dbPath); got != schemaVersion {
-		t.Errorf("user_version = %d, want %d", got, schemaVersion)
-	}
-	var kept int
-	var readAt sql.NullString
-	if err := DB().QueryRow(`SELECT COUNT(*), MAX(read_at) FROM core_notification_reads`).Scan(&kept, &readAt); err != nil {
-		t.Fatalf("count markers: %v", err)
-	}
-	if kept != 2 || readAt.String != "2026-01-01T00:00:00Z" {
-		t.Errorf("markers after the reseed = %d with read_at %q, want both rows with their time", kept, readAt.String)
-	}
-	var followKept int
-	if err := DB().QueryRow(`SELECT COUNT(*) FROM core_notification_reads WHERE hash = 'follow' AND branch = ''`).Scan(&followKept); err != nil || followKept != 1 {
-		t.Errorf("follow markers after the reseed = %d, %v, want 1", followKept, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Reset()
+			dir := t.TempDir()
+			dbPath := seedCacheFile(t, dir, schemaVersion-1, tt.seed)
+			if err := Open(dir); err != nil {
+				t.Fatalf("Open() error = %v", err)
+			}
+			defer Reset()
+			if got := probeUserVersion(t, dbPath); got != schemaVersion {
+				t.Errorf("user_version = %d, want %d", got, schemaVersion)
+			}
+			rows, err := DB().Query(`SELECT hash, sent_at <> '', read_at IS NOT NULL FROM core_notification_state`)
+			if err != nil {
+				t.Fatalf("query state: %v", err)
+			}
+			defer rows.Close()
+			got := map[string][2]bool{}
+			for rows.Next() {
+				var hash string
+				var sent, read bool
+				if err := rows.Scan(&hash, &sent, &read); err != nil {
+					t.Fatalf("scan state: %v", err)
+				}
+				got[hash] = [2]bool{sent, read}
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("state after the reseed = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
-// TestOpen_reseedWithoutMarkersTable keeps the reseed of a cache that is older than the markers table.
-func TestOpen_reseedWithoutMarkersTable(t *testing.T) {
+// TestOpen_reseedWithoutStateTable keeps the reseed of a cache that has no notification table.
+func TestOpen_reseedWithoutStateTable(t *testing.T) {
 	Reset()
 	dir := t.TempDir()
 	seedCacheFile(t, dir, schemaVersion-1, "")
@@ -236,8 +257,8 @@ func TestOpen_reseedWithoutMarkersTable(t *testing.T) {
 	}
 	defer Reset()
 	var n int
-	if err := DB().QueryRow(`SELECT COUNT(*) FROM core_notification_reads`).Scan(&n); err != nil || n != 0 {
-		t.Errorf("markers = %d, %v, want an empty table", n, err)
+	if err := DB().QueryRow(`SELECT COUNT(*) FROM core_notification_state`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("state rows = %d, %v, want an empty table", n, err)
 	}
 }
 

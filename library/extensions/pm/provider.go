@@ -48,13 +48,14 @@ func (p *pmNotificationProvider) GetNotifications(workdir string, filter notific
 	}
 	forks := gitmsg.GetForks(workdir)
 	var result []notifications.Notification
-	forkIssues, err := getForkIssueNotifications(userEmail, forks, filter.UnreadOnly)
-	if err == nil {
-		result = append(result, forkIssues...)
-	}
+	// An issue from a fork that is assigned to the user stays as issue-assigned: the first entry of a commit wins.
 	assigned, err := getAssignedIssueNotifications(userEmail, filter.UnreadOnly, filter.Limit)
 	if err == nil {
 		result = append(result, assigned...)
+	}
+	forkIssues, err := getForkIssueNotifications(userEmail, forks, filter.UnreadOnly)
+	if err == nil {
+		result = append(result, forkIssues...)
 	}
 	stateChanges, err := getIssueStateChangeNotifications(userEmail, filter.UnreadOnly, filter.Limit)
 	if err == nil {
@@ -64,29 +65,6 @@ func (p *pmNotificationProvider) GetNotifications(workdir string, filter notific
 		result = result[:filter.Limit]
 	}
 	return result, nil
-}
-
-// GetUnreadCount returns the total unread PM notification count.
-func (p *pmNotificationProvider) GetUnreadCount(workdir string) (int, error) {
-	workspaceURL := gitmsg.ResolveRepoURL(workdir)
-	if workspaceURL == "" {
-		return 0, nil
-	}
-	userEmail := git.GetUserEmail(workdir)
-	if userEmail == "" {
-		return 0, nil
-	}
-	forks := gitmsg.GetForks(workdir)
-	forkIssues, _ := getForkIssueNotifications(userEmail, forks, true)
-	assigned, err := getAssignedIssueNotifications(userEmail, true, 0)
-	if err != nil {
-		return 0, err
-	}
-	stateChanges, err := getIssueStateChangeNotifications(userEmail, true, 0)
-	if err != nil {
-		return 0, err
-	}
-	return len(forkIssues) + len(assigned) + len(stateChanges), nil
 }
 
 // getForkIssueNotifications returns notifications for new issues filed from registered forks.
@@ -102,7 +80,7 @@ func getForkIssueNotifications(userEmail string, forkURLs []string, unreadOnly b
 			       v.author_name, v.author_email, v.resolved_message, v.timestamp, v.state,
 			       nr.repo_url
 			FROM pm_items_resolved v
-			LEFT JOIN core_notification_reads nr ON v.repo_url = nr.repo_url AND v.hash = nr.hash AND v.branch = nr.branch
+			` + cache.ReadStateJoin("nr", "v.repo_url", "v.hash") + `
 			WHERE v.type = 'issue'
 			  AND v.repo_url IN (` + ph + `)
 			  AND v.author_email != ?
@@ -187,7 +165,7 @@ func getAssignedIssueNotifications(userEmail string, unreadOnly bool, limit int)
 			       v.state, v.assignees,
 			       nr.repo_url
 			FROM pm_items_resolved v
-			LEFT JOIN core_notification_reads nr ON v.repo_url = nr.repo_url AND v.hash = nr.hash AND v.branch = nr.branch
+			` + cache.ReadStateJoin("nr", "v.repo_url", "v.hash") + `
 			WHERE v.type = 'issue'
 			  AND v.assignees LIKE '%' || ? || '%' ESCAPE '\'
 			  AND v.author_email != ?
@@ -280,7 +258,7 @@ func getIssueStateChangeNotifications(userEmail string, unreadOnly bool, limit i
 			JOIN pm_items pi ON cv.edit_repo_url = pi.repo_url AND cv.edit_hash = pi.hash AND cv.edit_branch = pi.branch
 			JOIN pm_items_resolved pr ON cv.canonical_repo_url = pr.repo_url AND cv.canonical_hash = pr.hash
 			 AND pr.branch = ` + cache.LiveItemBranch("pm_items", "cv.canonical_repo_url", "cv.canonical_hash") + `
-			LEFT JOIN core_notification_reads nr ON ec.repo_url = nr.repo_url AND ec.hash = nr.hash AND ec.branch = nr.branch
+			` + cache.ReadStateJoin("nr", "ec.repo_url", "ec.hash") + `
 			WHERE cv.edit_branch = ` + cache.LiveItemBranch("pm_items", "cv.edit_repo_url", "cv.edit_hash") + `
 			  AND ec.action IN ('closed', 'canceled', 'reopened')
 			  AND pr.type = 'issue'

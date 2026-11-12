@@ -2563,9 +2563,9 @@ func TestNotificationIntegration(t *testing.T) {
 	t.Run("GetUnreadCount_empty", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
-		_, err := getUnreadCount(workdir)
+		_, err := unreadOf(&notificationProvider{}, workdir)
 		if err != nil {
-			t.Fatalf("getUnreadCount() error = %v", err)
+			t.Fatalf("unreadOf(&notificationProvider{}, ) error = %v", err)
 		}
 		// Count may be non-zero due to thread participation from parallel tests sharing the cache
 	})
@@ -2573,16 +2573,16 @@ func TestNotificationIntegration(t *testing.T) {
 	t.Run("MarkAllAsRead_empty", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
-		if err := markAllAsRead(workdir); err != nil {
-			t.Fatalf("markAllAsRead() error = %v", err)
+		if err := notifications.MarkAllAsRead(workdir); err != nil {
+			t.Fatalf("notifications.MarkAllAsRead() error = %v", err)
 		}
 	})
 
 	t.Run("MarkAllAsUnread_empty", func(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
-		if err := markAllAsUnread(workdir); err != nil {
-			t.Fatalf("markAllAsUnread() error = %v", err)
+		if err := notifications.MarkAllAsUnread(workdir); err != nil {
+			t.Fatalf("notifications.MarkAllAsUnread() error = %v", err)
 		}
 	})
 
@@ -2622,7 +2622,7 @@ func TestNotificationIntegration(t *testing.T) {
 		workdir := cloneFixture(t)
 		setupExternalInteraction(t, workdir, "comment")
 		// Mark all as read
-		_ = markAllAsRead(workdir)
+		_ = notifications.MarkAllAsRead(workdir)
 		notifs, err := getNotifications(workdir, notificationFilter{UnreadOnly: true})
 		if err != nil {
 			t.Fatalf("error = %v", err)
@@ -2692,7 +2692,7 @@ func TestNotificationIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		extRepo, extHash := setupExternalInteraction(t, workdir, "comment")
-		_ = notifications.MarkAsRead(extRepo, extHash, "main")
+		_ = notifications.MarkAsRead(extRepo, extHash)
 		notifs, err := getNotifications(workdir, notificationFilter{UnreadOnly: true})
 		if err != nil {
 			t.Fatal(err)
@@ -2772,7 +2772,7 @@ func TestNotificationIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		setupExternalInteraction(t, workdir, "comment")
-		count, err := getUnreadCount(workdir)
+		count, err := unreadOf(&notificationProvider{}, workdir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2785,8 +2785,8 @@ func TestNotificationIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		setupExternalInteraction(t, workdir, "comment")
-		if err := markAllAsRead(workdir); err != nil {
-			t.Fatalf("markAllAsRead() error = %v", err)
+		if err := notifications.MarkAllAsRead(workdir); err != nil {
+			t.Fatalf("notifications.MarkAllAsRead() error = %v", err)
 		}
 		// Post-mark count not checked: parallel tests insert data between mark and count
 	})
@@ -2795,11 +2795,11 @@ func TestNotificationIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		setupExternalInteraction(t, workdir, "comment")
-		_ = markAllAsRead(workdir)
-		if err := markAllAsUnread(workdir); err != nil {
+		_ = notifications.MarkAllAsRead(workdir)
+		if err := notifications.MarkAllAsUnread(workdir); err != nil {
 			t.Fatalf("error = %v", err)
 		}
-		count, _ := getUnreadCount(workdir)
+		count, _ := unreadOf(&notificationProvider{}, workdir)
 		if count == 0 {
 			t.Error("expected non-zero after markAllAsUnread")
 		}
@@ -2810,7 +2810,7 @@ func TestNotificationIntegration(t *testing.T) {
 		workdir := cloneFixture(t)
 		workspaceURL := gitmsg.ResolveRepoURL(workdir)
 		_ = insertFollower("https://github.com/cnt/follower", workspaceURL, "list1", "", time.Now())
-		count, err := getUnreadCount(workdir)
+		count, err := unreadOf(&notificationProvider{}, workdir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -2898,9 +2898,9 @@ func TestNotificationIntegration(t *testing.T) {
 		t.Parallel()
 		workdir := cloneFixture(t)
 		p := &notificationProvider{}
-		_, err := p.GetUnreadCount(workdir)
+		_, err := unreadOf(p, workdir)
 		if err != nil {
-			t.Fatalf("provider.GetUnreadCount() error = %v", err)
+			t.Fatalf("unreadOf(provider, ) error = %v", err)
 		}
 		// Count may be non-zero due to thread participation from parallel tests sharing the cache
 	})
@@ -2915,16 +2915,16 @@ func TestNotificationIntegration(t *testing.T) {
 		followerRepo := fmt.Sprintf("https://github.com/fol/markall%06d", atomic.AddInt64(&extInteractionCounter, 1))
 		_ = insertFollower(followerRepo, workspaceURL, "list1", "", time.Now())
 		// Verify both are unread
-		countBefore, _ := getUnreadCount(workdir)
+		countBefore, _ := unreadOf(&notificationProvider{}, workdir)
 		if countBefore < 2 {
 			t.Errorf("expected at least 2 unread (item + follower), got %d", countBefore)
 		}
 		// Mark all as read
-		if err := markAllAsRead(workdir); err != nil {
-			t.Fatalf("markAllAsRead() error = %v", err)
+		if err := notifications.MarkAllAsRead(workdir); err != nil {
+			t.Fatalf("notifications.MarkAllAsRead() error = %v", err)
 		}
 		// The markers are scoped to this workspace, so the cleanup drops what the test marked
-		t.Cleanup(func() { _ = markAllAsUnread(workdir) })
+		t.Cleanup(func() { _ = notifications.MarkAllAsUnread(workdir) })
 		// Post-mark count not checked: parallel tests insert data between mark and count
 	})
 
@@ -2935,12 +2935,12 @@ func TestNotificationIntegration(t *testing.T) {
 		setupExternalInteraction(t, workdir, "comment")
 		followerRepo := "https://github.com/fol/markallun"
 		_ = insertFollower(followerRepo, workspaceURL, "list1", "", time.Now())
-		_ = markAllAsRead(workdir)
+		_ = notifications.MarkAllAsRead(workdir)
 		// Now unread all
-		if err := markAllAsUnread(workdir); err != nil {
+		if err := notifications.MarkAllAsUnread(workdir); err != nil {
 			t.Fatalf("error = %v", err)
 		}
-		countAfter, _ := getUnreadCount(workdir)
+		countAfter, _ := unreadOf(&notificationProvider{}, workdir)
 		if countAfter < 2 {
 			t.Errorf("expected at least 2 after markAllAsUnread, got %d", countAfter)
 		}
@@ -3020,7 +3020,7 @@ func TestNotificationIntegration(t *testing.T) {
 		workspaceURL := gitmsg.ResolveRepoURL(workdir)
 		setupExternalInteraction(t, workdir, "comment")
 		_ = insertFollower("https://github.com/fol/count", workspaceURL, "list1", "", time.Now())
-		count, err := getUnreadCount(workdir)
+		count, err := unreadOf(&notificationProvider{}, workdir)
 		if err != nil {
 			t.Fatalf("error = %v", err)
 		}
@@ -3056,7 +3056,7 @@ func TestNotificationIntegration(t *testing.T) {
 			OriginalHash:    cache.ToNullString(postHash),
 			OriginalBranch:  cache.ToNullString(branch),
 		})
-		count, err := getUnreadCount(workdir)
+		count, err := unreadOf(&notificationProvider{}, workdir)
 		if err != nil {
 			t.Fatalf("GetUnreadCount error: %v", err)
 		}
@@ -3093,7 +3093,7 @@ func TestNotificationIntegration(t *testing.T) {
 		// Also add a follower
 		_ = insertFollower(extRepo, wsURL, "", "", time.Now())
 
-		if err := markAllAsRead(workdir); err != nil {
+		if err := notifications.MarkAllAsRead(workdir); err != nil {
 			t.Fatalf("markAllAsRead error: %v", err)
 		}
 		// Post-mark count not checked: parallel tests insert data between mark and count
@@ -3125,12 +3125,12 @@ func TestNotificationIntegration(t *testing.T) {
 			OriginalBranch:  cache.ToNullString(branch),
 		})
 		// Mark all as read first
-		_ = markAllAsRead(workdir)
+		_ = notifications.MarkAllAsRead(workdir)
 		// Then unread
-		if err := markAllAsUnread(workdir); err != nil {
+		if err := notifications.MarkAllAsUnread(workdir); err != nil {
 			t.Fatalf("markAllAsUnread error: %v", err)
 		}
-		count, _ := getUnreadCount(workdir)
+		count, _ := unreadOf(&notificationProvider{}, workdir)
 		if count < 1 {
 			t.Errorf("expected at least 1 unread after markAllAsUnread, got %d", count)
 		}
@@ -3139,7 +3139,7 @@ func TestNotificationIntegration(t *testing.T) {
 
 func TestGetUnreadCount_emptyWorkdir(t *testing.T) {
 	setupTestDB(t)
-	count, err := getUnreadCount("")
+	count, err := unreadOf(&notificationProvider{}, "")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -3161,14 +3161,14 @@ func TestGetNotifications_emptyWorkdir(t *testing.T) {
 
 func TestMarkAllAsRead_emptyWorkdir(t *testing.T) {
 	setupTestDB(t)
-	if err := markAllAsRead(""); err != nil {
+	if err := notifications.MarkAllAsRead(""); err != nil {
 		t.Fatalf("error = %v", err)
 	}
 }
 
 func TestMarkAllAsUnread_emptyWorkdir(t *testing.T) {
 	setupTestDB(t)
-	if err := markAllAsUnread(""); err != nil {
+	if err := notifications.MarkAllAsUnread(""); err != nil {
 		t.Fatalf("error = %v", err)
 	}
 }
@@ -3334,7 +3334,7 @@ func setupExternalInteraction(t *testing.T, workdir, interactionType string) (ex
 	parsed := protocol.ParseRef(post.Data.ID)
 	suffix := fmt.Sprintf("%06d", atomic.AddInt64(&extInteractionCounter, 1))
 	externalRepo = "https://github.com/external/" + interactionType + "/" + suffix
-	externalHash = "ext_" + interactionType[:4] + suffix
+	externalHash = "eeeeee" + suffix // 12 characters, as each hash in the cache
 	_ = cache.InsertCommits([]cache.Commit{{
 		Hash: externalHash, RepoURL: externalRepo, Branch: "main",
 		AuthorName: "External User", AuthorEmail: "ext@test.com",

@@ -51,6 +51,18 @@ func LiveBranch(repoExpr, hashExpr string) string {
 		` ORDER BY ` + LiveFirstOrder("lb") + `, lb.branch LIMIT 1)`
 }
 
+// EventStateMatch is the SQL test, on the columns of core_notification_state, that a row is the state of an event: a commit by its hash in each repository that holds it, a follow by its repository.
+func EventStateMatch(repoExpr, hashExpr string) string {
+	return `hash = ` + hashExpr + ` AND (hash <> 'follow' OR repo_url = ` + repoExpr + `)`
+}
+
+// ReadStateJoin is a LEFT JOIN that gives one row under alias only when the event of the repository and hash expressions is read.
+func ReadStateJoin(alias, repoExpr, hashExpr string) string {
+	return `LEFT JOIN (SELECT repo_url, hash FROM core_notification_state WHERE read_at IS NOT NULL
+		GROUP BY CASE WHEN hash = 'follow' THEN repo_url END, hash) ` + alias +
+		` ON ` + alias + `.hash = ` + hashExpr + ` AND (` + alias + `.hash <> 'follow' OR ` + alias + `.repo_url = ` + repoExpr + `)`
+}
+
 // CanonicalBranch is the branch of the live row of a version row's canonical, or the branch of the reference when the canonical has no row; alias names the core_commits_version row.
 func CanonicalBranch(alias string) string {
 	return `COALESCE(` + LiveBranch(alias+".canonical_repo_url", alias+".canonical_hash") + `, ` + alias + `.canonical_branch)`

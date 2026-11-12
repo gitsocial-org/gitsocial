@@ -643,6 +643,9 @@ func makeGetNotificationsFunc(userEmail string, showEmailFn func() bool) tuicore
 					IsRead:    n.IsRead,
 				})
 			}
+			// The row carries the key of the event, which is not always the item that the row shows.
+			row := &meta[len(meta)-1]
+			row.RepoURL, row.Hash, row.Condition = n.RepoURL, n.Hash, n.Condition
 		}
 		return tuicore.NotificationsResult{Items: items, Meta: meta}, nil
 	}

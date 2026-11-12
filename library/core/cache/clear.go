@@ -26,7 +26,7 @@ var repoRowDeletes = []string{
 	"DELETE FROM core_commits_version WHERE edit_repo_url = ? OR canonical_repo_url = ?",
 	"DELETE FROM core_edit_acceptances WHERE edit_repo_url = ?",
 	"DELETE FROM core_edit_declines WHERE edit_repo_url = ?",
-	"DELETE FROM core_notification_reads WHERE repo_url = ?",
+	"DELETE FROM core_notification_state WHERE repo_url = ?",
 	"DELETE FROM core_mentions WHERE repo_url = ?",
 	"DELETE FROM core_trailer_refs WHERE repo_url = ?",
 	"DELETE FROM core_labels WHERE repo_url = ?",

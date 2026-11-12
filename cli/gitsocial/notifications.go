@@ -114,6 +114,23 @@ func newNotificationsCountCmd() *cobra.Command {
 	}
 }
 
+// notificationKey parses a notification id, <repo>#commit:<hash> or <repo>#follow, into the key of its event.
+func notificationKey(id string) (repoURL, hash string, ok bool) {
+	if repo, found := strings.CutSuffix(id, "#follow"); found {
+		return repo, "follow", repo != ""
+	}
+	ref := protocol.ParseRef(id)
+	return ref.Repository, ref.Value, ref.Type == "commit" && ref.Repository != "" && ref.Value != ""
+}
+
+// notificationID returns the id that read and unread take for an event.
+func notificationID(n notifications.Notification) string {
+	if n.Hash == "follow" {
+		return n.RepoURL + "#follow"
+	}
+	return n.RepoURL + "#commit:" + n.Hash
+}
+
 // newNotificationsReadCmd creates the command to mark a notification as read.
 func newNotificationsReadCmd() *cobra.Command {
 	return &cobra.Command{
@@ -128,26 +145,13 @@ func newNotificationsReadCmd() *cobra.Command {
 			cfg := GetConfig(cmd)
 			id := args[0]
 
-			var repoURL, hash, branch string
-			if strings.HasSuffix(id, "#follow") {
-				repoURL = strings.TrimSuffix(id, "#follow")
-				hash = "follow"
-				branch = ""
-			} else {
-				ref := protocol.ParseRef(id)
-				if ref.Type != "commit" {
-					PrintError(cmd, "invalid notification ID")
-					return exit(ExitInvalidArgs)
-				}
-				repoURL = ref.Repository
-				hash = ref.Value
-				branch = ref.Branch
-				if branch == "" {
-					branch = "main"
-				}
+			repoURL, hash, ok := notificationKey(id)
+			if !ok {
+				PrintError(cmd, "invalid notification ID")
+				return exit(ExitInvalidArgs)
 			}
 
-			if err := notifications.MarkAsRead(repoURL, hash, branch); err != nil {
+			if err := notifications.MarkAsRead(repoURL, hash); err != nil {
 				PrintError(cmd, "mark as read: "+err.Error())
 				return exit(ExitError)
 			}
@@ -202,26 +206,13 @@ func newNotificationsUnreadCmd() *cobra.Command {
 			cfg := GetConfig(cmd)
 			id := args[0]
 
-			var repoURL, hash, branch string
-			if strings.HasSuffix(id, "#follow") {
-				repoURL = strings.TrimSuffix(id, "#follow")
-				hash = "follow"
-				branch = ""
-			} else {
-				ref := protocol.ParseRef(id)
-				if ref.Type != "commit" {
-					PrintError(cmd, "invalid notification ID")
-					return exit(ExitInvalidArgs)
-				}
-				repoURL = ref.Repository
-				hash = ref.Value
-				branch = ref.Branch
-				if branch == "" {
-					branch = "main"
-				}
+			repoURL, hash, ok := notificationKey(id)
+			if !ok {
+				PrintError(cmd, "invalid notification ID")
+				return exit(ExitInvalidArgs)
 			}
 
-			if err := notifications.MarkAsUnread(repoURL, hash, branch); err != nil {
+			if err := notifications.MarkAsUnread(repoURL, hash); err != nil {
 				PrintError(cmd, "mark as unread: "+err.Error())
 				return exit(ExitError)
 			}
@@ -357,6 +348,10 @@ func formatNotification(n notifications.Notification) string {
 			}
 			lines = append(lines, fmt.Sprintf("  %s", sn.ID))
 		}
+	}
+	// A condition has no read state, so it has no id for read and unread.
+	if !n.Condition {
+		lines = append(lines, "  id: "+notificationID(n))
 	}
 
 	return strings.Join(lines, "\n")

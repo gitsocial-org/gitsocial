@@ -49,11 +49,11 @@ func resolveClick(workdir, ref string, getFn tuicore.GetNotificationsFunc) tea.M
 		return clickResolvedMsg{location: tuicore.LocRef(ref)}
 	}
 	for i, meta := range result.Meta {
-		if meta.Type == "follow" || parsed.Value == "" || protocol.NormalizeURL(meta.RepoURL) != parsed.Repository || !strings.HasPrefix(strings.ToLower(meta.Hash), parsed.Value) {
+		if meta.Type == "follow" || meta.Condition || parsed.Value == "" || protocol.NormalizeURL(meta.RepoURL) != parsed.Repository || !strings.HasPrefix(strings.ToLower(meta.Hash), parsed.Value) {
 			continue
 		}
 		if !meta.IsRead {
-			if err := notifications.MarkAsRead(meta.RepoURL, meta.Hash, meta.Branch); err != nil {
+			if err := notifications.MarkAsRead(meta.RepoURL, meta.Hash); err != nil {
 				log.Warn("mark a clicked notification read", "error", err)
 			}
 		}

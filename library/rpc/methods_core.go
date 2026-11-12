@@ -266,15 +266,14 @@ func coreMarkAsRead() HandlerFunc {
 		p, rpcErr := decodeParams[struct {
 			RepoURL string `json:"repoURL"`
 			Hash    string `json:"hash"`
-			Branch  string `json:"branch"`
 		}](raw)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		if p.RepoURL == "" || p.Hash == "" || p.Branch == "" {
-			return nil, &RPCError{Code: CodeInvalidParams, Message: "repoURL, hash, and branch are required"}
+		if p.RepoURL == "" || p.Hash == "" {
+			return nil, &RPCError{Code: CodeInvalidParams, Message: "repoURL and hash are required"}
 		}
-		if err := notifications.MarkAsRead(p.RepoURL, p.Hash, p.Branch); err != nil {
+		if err := notifications.MarkAsRead(p.RepoURL, p.Hash); err != nil {
 			return nil, appError(CodeAppInternal, "INTERNAL", fmt.Sprintf("mark as read: %s", err))
 		}
 		return true, nil
@@ -438,7 +437,7 @@ func coreFetch(s *Server) HandlerFunc {
 					})
 				},
 			}
-			result, _, newUnread := client.Fetch(workdir, cacheDir, opts)
+			result, _ := client.Fetch(workdir, cacheDir, opts)
 			if result.Success {
 				errCount := len(result.Data.Errors)
 				s.Emit("fetch", "fetch.complete", map[string]any{
@@ -453,13 +452,14 @@ func coreFetch(s *Server) HandlerFunc {
 					"message": result.Error.Message,
 				})
 			}
+			// A fetch that failed delivers nothing, as in the TUI and the CLI.
 			count, _ := notifications.GetUnreadCount(workdir)
+			if result.Success {
+				count = client.Deliver(workdir, cacheDir, "", true)
+			}
 			s.Emit("notifications", "notifications.changed", map[string]any{
 				"unreadCount": count,
 			})
-			if result.Success {
-				client.NotifyNew(workdir, cacheDir, "", newUnread)
-			}
 		}()
 		return map[string]string{"fetchId": fetchID}, nil
 	}

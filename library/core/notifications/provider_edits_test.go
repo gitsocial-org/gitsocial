@@ -124,7 +124,7 @@ func TestEditProvider_GetNotifications_unreadOnly(t *testing.T) {
 	now := time.Now()
 	seedEditPair(t, "ca0444444444", "alice@example.com", "ed0444444444", "Bob", "bob@example.com", now)
 	seedEditPair(t, "ca0555555555", "alice@example.com", "ed0555555555", "Carol", "carol@example.com", now)
-	_ = MarkAsRead(editTestRepoURL, "ed0444444444", editTestBranch)
+	_ = MarkAsRead(editTestRepoURL, "ed0444444444")
 
 	p := &editProvider{}
 	items, err := p.GetNotifications(workdir, Filter{UnreadOnly: true})
@@ -144,7 +144,7 @@ func TestEditProvider_GetNotifications_isReadFlag(t *testing.T) {
 	workdir := setupGitRepo(t)
 	now := time.Now()
 	seedEditPair(t, "ca0666666666", "alice@example.com", "ed0666666666", "Bob", "bob@example.com", now)
-	_ = MarkAsRead(editTestRepoURL, "ed0666666666", editTestBranch)
+	_ = MarkAsRead(editTestRepoURL, "ed0666666666")
 
 	p := &editProvider{}
 	items, err := p.GetNotifications(workdir, Filter{})
@@ -184,10 +184,10 @@ func TestEditProvider_GetUnreadCount(t *testing.T) {
 	seedEditPair(t, "ca0aaaaaaaaa", "alice@example.com", "ed0aaaaaaaaa", "Bob", "bob@example.com", now)
 	seedEditPair(t, "ca0bbbbbbbbb", "alice@example.com", "ed0bbbbbbbbb", "Carol", "carol@example.com", now)
 	// One read, one unread
-	_ = MarkAsRead(editTestRepoURL, "ed0aaaaaaaaa", editTestBranch)
+	_ = MarkAsRead(editTestRepoURL, "ed0aaaaaaaaa")
 
 	p := &editProvider{}
-	count, err := p.GetUnreadCount(workdir)
+	count, err := unreadOf(p, workdir)
 	if err != nil {
 		t.Fatalf("GetUnreadCount() error = %v", err)
 	}
@@ -266,7 +266,7 @@ func TestEditNotifications_movedCanonicalOnce(t *testing.T) {
 	if items[0].Branch != "main" || en.CanonicalBranch != "main" {
 		t.Errorf("notification on %s for a canonical on %s, want both on the live rows under main", items[0].Branch, en.CanonicalBranch)
 	}
-	if count, err := p.GetUnreadCount(workdir); err != nil || count != 1 {
+	if count, err := unreadOf(p, workdir); err != nil || count != 1 {
 		t.Errorf("GetUnreadCount() = %d (%v), want 1", count, err)
 	}
 }

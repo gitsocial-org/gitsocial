@@ -3,6 +3,7 @@ package cache
 
 import (
 	"database/sql"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -422,37 +423,59 @@ func TestMarkCommitsStaleByHome_rowIsLiveOnlyUnderItsHome(t *testing.T) {
 	}
 }
 
-func TestMarkCommitsStaleByHome_readMarkerFollowsTheCommit(t *testing.T) {
+// TestReadState_branchFree checks that the read state of a commit holds on each of its branch rows and on its copy in a second repository, that a row that was only sent is unread, and that a follow is read per repository.
+func TestReadState_branchFree(t *testing.T) {
 	setupTestDB(t)
 	repoURL := "https://github.com/user/repo"
 	now := time.Now()
 	if err := InsertCommits([]Commit{
 		{Hash: "aaa111111111", RepoURL: repoURL, Branch: "feature/x", Message: "moved", Timestamp: now},
 		{Hash: "aaa111111111", RepoURL: repoURL, Branch: "main", Message: "moved", Timestamp: now},
+		{Hash: "bbb111111111", RepoURL: repoURL, Branch: "main", Message: "sent", Timestamp: now},
+		{Hash: "aaa111111111", RepoURL: "https://github.com/fork/repo", Branch: "main", Message: "moved", Timestamp: now},
 	}); err != nil {
 		t.Fatalf("InsertCommits() error = %v", err)
 	}
 	if err := ExecLocked(func(db *sql.DB) error {
-		_, err := db.Exec("INSERT INTO core_notification_reads (repo_url, hash, branch, read_at) VALUES (?, ?, ?, ?)",
-			repoURL, "aaa111111111", "feature/x", "2026-01-01T00:00:00Z")
+		_, err := db.Exec(`INSERT INTO core_notification_state (repo_url, hash, sent_at, read_at) VALUES
+			(?, 'aaa111111111', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'), (?, 'bbb111111111', '2026-01-01T00:00:00Z', NULL),
+			(?, 'follow', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`, repoURL, repoURL, repoURL)
 		return err
 	}); err != nil {
-		t.Fatalf("insert read marker: %v", err)
+		t.Fatalf("insert state: %v", err)
 	}
-	if _, err := MarkCommitsStaleByHome(repoURL, map[string]string{"aaa111111111": "main"}, nil); err != nil {
+	if _, err := MarkCommitsStaleByHome(repoURL, map[string]string{"aaa111111111": "main", "bbb111111111": "main"}, nil); err != nil {
 		t.Fatalf("MarkCommitsStaleByHome() error = %v", err)
 	}
-	read, err := QueryLocked(func(db *sql.DB) (int, error) {
-		var c int
-		err := db.QueryRow("SELECT COUNT(*) FROM core_notification_reads WHERE repo_url = ? AND hash = ? AND branch = ?",
-			repoURL, "aaa111111111", "main").Scan(&c)
-		return c, err
+	got, err := QueryLocked(func(db *sql.DB) (map[string]bool, error) {
+		rows, err := db.Query(`SELECT c.hash || '@' || c.branch || CASE WHEN c.repo_url = ?1 THEN '' ELSE '@fork' END, r.repo_url IS NOT NULL FROM core_commits c `+
+			ReadStateJoin("r", "c.repo_url", "c.hash")+`
+			UNION ALL SELECT 'follow@' || f.column1, r.repo_url IS NOT NULL FROM (VALUES (?1), ('https://github.com/fork/repo')) f `+
+			ReadStateJoin("r", "f.column1", "'follow'"), repoURL)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		read := map[string]bool{}
+		for rows.Next() {
+			var key string
+			var isRead bool
+			if err := rows.Scan(&key, &isRead); err != nil {
+				return nil, err
+			}
+			read[key] = isRead
+		}
+		return read, rows.Err()
 	})
 	if err != nil {
-		t.Fatalf("query read marker: %v", err)
+		t.Fatalf("query read state: %v", err)
 	}
-	if read != 1 {
-		t.Errorf("read markers under the new home = %d, want 1", read)
+	want := map[string]bool{
+		"aaa111111111@feature/x": true, "aaa111111111@main": true, "aaa111111111@main@fork": true, "bbb111111111@main": false,
+		"follow@" + repoURL: true, "follow@https://github.com/fork/repo": false,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("read state = %v, want %v", got, want)
 	}
 }
 

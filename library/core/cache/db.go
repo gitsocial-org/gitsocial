@@ -54,7 +54,7 @@ func RegisterSchema(name, schema string) {
 // schemaVersion is bumped whenever the core schema changes in a way that
 // requires reseeding the cache. Open() compares user_version to this and
 // nukes-and-recreates the file when it lags. Bump on every breaking change.
-const schemaVersion = 7
+const schemaVersion = 8
 
 const coreSchema = `
 -- Core: Raw commits (1:1 with git, per repo+branch). The is_retracted/has_edits/
@@ -208,14 +208,16 @@ CREATE TABLE IF NOT EXISTS core_list_repositories (
 );
 CREATE INDEX IF NOT EXISTS idx_core_list_repos_url ON core_list_repositories(repo_url);
 
--- Core: Notification read state (shared across extensions)
-CREATE TABLE IF NOT EXISTS core_notification_reads (
+-- Core: Notification state of an event (shared across extensions). A row exists only for an event that was sent or read;
+-- the state of a commit holds for its hash in each repository, and the state of a follow for its repository.
+CREATE TABLE IF NOT EXISTS core_notification_state (
     repo_url TEXT NOT NULL,
     hash TEXT NOT NULL,
-    branch TEXT NOT NULL,
+    sent_at TEXT NOT NULL,
     read_at TEXT,
-    PRIMARY KEY (repo_url, hash, branch)
+    PRIMARY KEY (repo_url, hash)
 );
+CREATE INDEX IF NOT EXISTS idx_core_notification_state_hash ON core_notification_state(hash);
 
 -- Core: acceptances (a cross-repo proposal was accepted). Derived index keyed on
 -- the proposing edit, populated from the mirror edit's accepts= header on every
@@ -318,7 +320,7 @@ func Open(cacheDir string) error {
 		return fail(err)
 	}
 
-	// An older cache is deleted and refilled by the next fetch; only the read markers are not in git, so they are carried over.
+	// An older cache is deleted and refilled by the next fetch; only the notification state is not in git, so it is carried over.
 	var markers [][4]string
 	reseed := needsReseed(dbPath)
 	// Each pool holds the shared lock for its life, so a reseed under the exclusive lock removes no file that another process has open.
@@ -328,7 +330,7 @@ func Open(cacheDir string) error {
 	}
 	if reseed {
 		log.Info("cache schema is older than current; deleting and recreating", "path", dbPath)
-		markers = readMarkersFromFile(dbPath)
+		markers = readStateFromFile(dbPath)
 		if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
 			log.Warn("failed to remove stale cache", "path", dbPath, "error", err)
 		}
@@ -387,7 +389,7 @@ func Open(cacheDir string) error {
 		}
 	}
 	schemaMu.Unlock()
-	restoreReadMarkers(d, markers)
+	restoreState(d, markers)
 	// The version is written last, so a cache that failed between the schemas is reseeded on the next open.
 	if _, err := d.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion)); err != nil {
 		log.Warn("cache user_version set failed", "error", err)
@@ -454,16 +456,21 @@ func applySchema(d *sql.DB, schema string) error {
 	return tx.Commit()
 }
 
-// readMarkersFromFile reads the rows of core_notification_reads from a cache file before its reseed; a file without the table gives none.
-func readMarkersFromFile(dbPath string) [][4]string {
+// readStateFromFile reads the notification state from a cache file before its reseed; a version 7 read marker becomes a row that was sent and read.
+func readStateFromFile(dbPath string) [][4]string {
 	probe, err := sql.Open("sqlite", dbPath+"?_busy_timeout=5000")
 	if err != nil {
 		return nil
 	}
 	defer probe.Close()
-	rows, err := probe.Query(`SELECT repo_url, hash, branch, COALESCE(read_at, '') FROM core_notification_reads`)
+	now := time.Now().UTC().Format(time.RFC3339)
+	rows, err := probe.Query(`SELECT repo_url, hash, sent_at, COALESCE(read_at, '') FROM core_notification_state`)
 	if err != nil {
-		log.Warn("read markers not kept across the reseed", "error", err)
+		rows, err = probe.Query(`SELECT repo_url, hash, COALESCE(MIN(read_at), ?), COALESCE(MIN(read_at), ?)
+			FROM core_notification_reads GROUP BY repo_url, hash`, now, now)
+	}
+	if err != nil {
+		log.Warn("notification state not kept across the reseed", "error", err)
 		return nil
 	}
 	defer rows.Close()
@@ -477,29 +484,29 @@ func readMarkersFromFile(dbPath string) [][4]string {
 	return markers
 }
 
-// restoreReadMarkers writes the read markers of the deleted cache into the new one.
-func restoreReadMarkers(d *sql.DB, markers [][4]string) {
+// restoreState writes the notification state of the deleted cache into the new one.
+func restoreState(d *sql.DB, markers [][4]string) {
 	if len(markers) == 0 {
 		return
 	}
 	tx, err := d.Begin()
 	if err != nil {
-		log.Warn("read markers not kept across the reseed", "error", err)
+		log.Warn("notification state not kept across the reseed", "error", err)
 		return
 	}
 	defer func() { _ = tx.Rollback() }()
 	for _, m := range markers {
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO core_notification_reads (repo_url, hash, branch, read_at) VALUES (?, ?, ?, ?)`,
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO core_notification_state (repo_url, hash, sent_at, read_at) VALUES (?, ?, ?, ?)`,
 			m[0], m[1], m[2], ToNullString(m[3])); err != nil {
-			log.Warn("read markers not kept across the reseed", "error", err)
+			log.Warn("notification state not kept across the reseed", "error", err)
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		log.Warn("read markers not kept across the reseed", "error", err)
+		log.Warn("notification state not kept across the reseed", "error", err)
 		return
 	}
-	log.Info("read markers kept across the reseed", "count", len(markers))
+	log.Info("notification state kept across the reseed", "count", len(markers))
 }
 
 // needsReseed returns true when the cache file at dbPath exists but its

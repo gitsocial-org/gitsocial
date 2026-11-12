@@ -3,7 +3,6 @@ package social
 
 import (
 	"database/sql"
-	"fmt"
 	"sort"
 	"time"
 
@@ -78,7 +77,7 @@ func getNotifications(workdir string, filter notificationFilter) ([]Notification
 			FROM social_items s
 			JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
 			LEFT JOIN social_interactions i ON s.repo_url = i.repo_url AND s.hash = i.hash AND s.branch = i.branch
-			LEFT JOIN core_notification_reads r ON s.repo_url = r.repo_url AND s.hash = r.hash AND s.branch = r.branch
+			` + cache.ReadStateJoin("r", "s.repo_url", "s.hash") + `
 			WHERE ` + notifiableItems
 		args := []interface{}{userEmail, workspaceURL, workdir, workspaceURL, userEmail, workspaceURL, workdir}
 
@@ -183,7 +182,7 @@ func getFollowNotifications(workspaceURL string, unreadOnly bool) ([]Notificatio
 			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END as is_read,
 			       COALESCE((SELECT branch FROM core_list_repositories WHERE list_id = f.list_id AND repo_url = f.repo_url LIMIT 1), 'main')
 			FROM social_followers f
-			LEFT JOIN core_notification_reads r ON f.repo_url = r.repo_url AND r.hash = 'follow' AND r.branch = ''
+			` + cache.ReadStateJoin("r", "f.repo_url", "'follow'") + `
 			WHERE f.workspace_url = ?
 		`
 		if unreadOnly {
@@ -232,107 +231,6 @@ func getFollowNotifications(workspaceURL string, unreadOnly bool) ([]Notificatio
 func sortNotificationsByTime(notifications []Notification) {
 	sort.SliceStable(notifications, func(i, j int) bool {
 		return notifications[i].Timestamp.After(notifications[j].Timestamp)
-	})
-}
-
-// getUnreadCount returns the count of unread notifications.
-func getUnreadCount(workdir string) (int, error) {
-	workspaceURL := gitmsg.ResolveRepoURL(workdir)
-	if workspaceURL == "" {
-		return 0, nil
-	}
-	userEmail := git.GetUserEmail(workdir)
-
-	return cache.QueryLocked(func(db *sql.DB) (int, error) {
-		var itemCount, followCount int
-		// Drive from social_items, not the view, as getNotifications does.
-		if err := db.QueryRow(`
-			WITH `+userThreadsCTE+`
-			SELECT COUNT(*) FROM social_items s
-			JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
-			LEFT JOIN core_notification_reads r ON s.repo_url = r.repo_url AND s.hash = r.hash AND s.branch = r.branch
-			WHERE `+notifiableItems+`
-			  AND r.repo_url IS NULL
-		`, userEmail, workspaceURL, workdir, workspaceURL, userEmail, workspaceURL, workdir).Scan(&itemCount); err != nil {
-			return 0, fmt.Errorf("count unread items: %w", err)
-		}
-		if err := db.QueryRow(`
-			SELECT COUNT(*) FROM social_followers f
-			LEFT JOIN core_notification_reads r ON f.repo_url = r.repo_url AND r.hash = 'follow' AND r.branch = ''
-			WHERE f.workspace_url = ? AND r.repo_url IS NULL
-		`, workspaceURL).Scan(&followCount); err != nil {
-			return 0, fmt.Errorf("count unread followers: %w", err)
-		}
-		return itemCount + followCount, nil
-	})
-}
-
-// markAllAsRead marks all social notifications for the workspace as read.
-func markAllAsRead(workdir string) error {
-	workspaceURL := gitmsg.ResolveRepoURL(workdir)
-	if workspaceURL == "" {
-		return nil
-	}
-	userEmail := git.GetUserEmail(workdir)
-
-	now := time.Now().UTC().Format(time.RFC3339)
-	return cache.ExecLocked(func(db *sql.DB) error {
-		// Drive from social_items, not the view, as getNotifications does.
-		if _, err := db.Exec(`
-			WITH `+userThreadsCTE+`
-			INSERT INTO core_notification_reads (repo_url, hash, branch, read_at)
-			SELECT s.repo_url, s.hash, s.branch, ? FROM social_items s
-			JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
-			LEFT JOIN core_notification_reads r ON s.repo_url = r.repo_url AND s.hash = r.hash AND s.branch = r.branch
-			WHERE `+notifiableItems+`
-			  AND r.repo_url IS NULL
-			ON CONFLICT(repo_url, hash, branch) DO NOTHING
-		`, userEmail, workspaceURL, workdir, now, workspaceURL, userEmail, workspaceURL, workdir); err != nil {
-			return fmt.Errorf("mark items as read: %w", err)
-		}
-		if _, err := db.Exec(`
-			INSERT INTO core_notification_reads (repo_url, hash, branch, read_at)
-			SELECT f.repo_url, 'follow', '', ? FROM social_followers f
-			LEFT JOIN core_notification_reads r ON f.repo_url = r.repo_url AND r.hash = 'follow' AND r.branch = ''
-			WHERE f.workspace_url = ? AND r.repo_url IS NULL
-			ON CONFLICT(repo_url, hash, branch) DO NOTHING
-		`, now, workspaceURL); err != nil {
-			return fmt.Errorf("mark followers as read: %w", err)
-		}
-		return nil
-	})
-}
-
-// markAllAsUnread marks all notifications for the workspace as unread.
-func markAllAsUnread(workdir string) error {
-	workspaceURL := gitmsg.ResolveRepoURL(workdir)
-	if workspaceURL == "" {
-		return nil
-	}
-	userEmail := git.GetUserEmail(workdir)
-	return cache.ExecLocked(func(db *sql.DB) error {
-		// Drive from social_items, not the view, as getNotifications does.
-		if _, err := db.Exec(`
-			WITH `+userThreadsCTE+`
-			DELETE FROM core_notification_reads
-			WHERE (repo_url, hash, branch) IN (
-				SELECT s.repo_url, s.hash, s.branch FROM social_items s
-				JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
-				WHERE `+notifiableItems+`
-			)
-		`, userEmail, workspaceURL, workdir, workspaceURL, userEmail, workspaceURL, workdir); err != nil {
-			return fmt.Errorf("unmark items as read: %w", err)
-		}
-		if _, err := db.Exec(`
-			DELETE FROM core_notification_reads
-			WHERE (repo_url, hash, branch) IN (
-				SELECT f.repo_url, 'follow', '' FROM social_followers f
-				WHERE f.workspace_url = ?
-			)
-		`, workspaceURL); err != nil {
-			return fmt.Errorf("unmark followers as read: %w", err)
-		}
-		return nil
 	})
 }
 

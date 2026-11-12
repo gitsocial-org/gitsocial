@@ -58,12 +58,6 @@ func (p *memoNotificationProvider) GetNotifications(workdir string, filter notif
 	return all, nil
 }
 
-// GetUnreadCount returns the unread count via the same query path.
-func (p *memoNotificationProvider) GetUnreadCount(workdir string) (int, error) {
-	items, err := p.GetNotifications(workdir, notifications.Filter{UnreadOnly: true})
-	return len(items), err
-}
-
 // getMemoCommentNotifications surfaces comments where the original is a memo
 // the current user authored. Drives off social_items joined to memo_items so
 // the predicate stays selective on the (small) extension tables before
@@ -91,10 +85,7 @@ func getMemoCommentNotifications(userEmail string, filter notifications.Filter) 
 			  ON s.repo_url = c.repo_url
 			 AND s.hash = c.hash
 			 AND s.branch = c.branch
-			LEFT JOIN core_notification_reads r
-			  ON s.repo_url = r.repo_url
-			 AND s.hash = r.hash
-			 AND s.branch = r.branch
+			` + cache.ReadStateJoin("r", "s.repo_url", "s.hash") + `
 			WHERE s.type = 'comment'
 			  AND COALESCE(mc.origin_author_email, mc.author_email) = ?
 			  AND COALESCE(c.origin_author_email, c.author_email) != ?
@@ -189,10 +180,7 @@ func getInheritedPolicyNotifications(workdir, userEmail string, filter notificat
 			       v.labels,
 			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END
 			FROM memo_items_resolved v
-			LEFT JOIN core_notification_reads r
-			  ON v.repo_url = r.repo_url
-			 AND v.hash = r.hash
-			 AND v.branch = r.branch
+			` + cache.ReadStateJoin("r", "v.repo_url", "v.hash") + `
 			WHERE v.repo_url IN (` + ph + `)
 			  AND NOT v.is_edit_commit AND NOT v.is_retracted AND v.stale_since IS NULL
 			  AND v.author_email != ?

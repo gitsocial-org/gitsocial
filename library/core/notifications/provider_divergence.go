@@ -68,7 +68,7 @@ func (p *divergenceProvider) GetNotifications(workdir string, _ Filter) ([]Notif
 			Source:    "gitmsg-divergence",
 			Item:      DivergenceNotification{Branch: branch},
 			Timestamp: now,
-			IsRead:    false,
+			Condition: true,
 		})
 	}
 	return out, nil
@@ -84,13 +84,4 @@ func anyRemoteTipDiffers(local map[string]string, remotes map[string]map[string]
 		}
 	}
 	return false
-}
-
-// GetUnreadCount returns the count of diverged branches.
-func (p *divergenceProvider) GetUnreadCount(workdir string) (int, error) {
-	notifs, err := p.GetNotifications(workdir, Filter{})
-	if err != nil {
-		return 0, err
-	}
-	return len(notifs), nil
 }

@@ -1,12 +1,12 @@
-// desktop_test.go - Tests for the new unread items of a fetch and the setting that turns desktop messages off.
+// desktop_test.go - Tests for the delivery of the events of a fetch and the setting that turns desktop messages off.
 package client
 
 import (
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -44,7 +44,7 @@ const failingProviderMarker = "fail-notifications"
 // failingProvider fails for a workspace that has the marker file.
 type failingProvider struct{}
 
-// init registers the provider that TestFetch_snapshotErrorSendsNothing turns on with the marker.
+// init registers the provider that TestDeliver_providerFailureSendsTheRest turns on with the marker.
 func init() {
 	notifications.RegisterProvider("test-failing", failingProvider{})
 }
@@ -55,11 +55,6 @@ func (failingProvider) GetNotifications(workdir string, _ notifications.Filter) 
 		return nil, errors.New("provider unavailable")
 	}
 	return nil, nil
-}
-
-// GetUnreadCount returns no count.
-func (failingProvider) GetUnreadCount(string) (int, error) {
-	return 0, nil
 }
 
 // mentionWorkspace returns a workspace whose registered fork mentions the workspace user.
@@ -96,11 +91,17 @@ func mentionWorkspace(t *testing.T) string {
 	return workdir
 }
 
-// fetchNewUnread runs the fetch sequence and returns its new unread items.
-func fetchNewUnread(t *testing.T, workdir string) []notifications.Notification {
+// fetchedMention returns a workspace after a fetch that brought one unread mention and delivered nothing, as serve does.
+func fetchedMention(t *testing.T) string {
 	t.Helper()
-	_, _, newUnread := Fetch(workdir, t.TempDir(), FetchOptions{})
-	return newUnread
+	workdir := mentionWorkspace(t)
+	if result, _ := Fetch(workdir, t.TempDir(), FetchOptions{}); !result.Success {
+		t.Fatalf("Fetch() error = %v", result.Error)
+	}
+	if unread, _ := notifications.GetAll(workdir, notifications.Filter{UnreadOnly: true}); len(unread) != 1 || unread[0].Type != "mention" {
+		t.Fatalf("unread after the fetch = %+v, want the one mention", unread)
+	}
+	return workdir
 }
 
 func TestDesktopEnabled_envOverridesKey(t *testing.T) {
@@ -127,72 +128,109 @@ func TestDesktopEnabled_envOverridesKey(t *testing.T) {
 	}
 }
 
-func TestFetch_newUnreadInResult(t *testing.T) {
+func TestDeliver_afterServeFetch(t *testing.T) {
 	isolateDesktopSetting(t)
-	workdir := mentionWorkspace(t)
-	newUnread := fetchNewUnread(t, workdir)
-	if len(newUnread) != 1 || newUnread[0].Type != "mention" || newUnread[0].Actor.Name != "Ada" {
-		t.Fatalf("new unread = %+v, want the one mention by Ada", newUnread)
-	}
+	workdir := fetchedMention(t)
 	send, sent := recordSends()
-	notifyNew(workdir, t.TempDir(), "", newUnread, send, http.DefaultClient)
-	if len(*sent) != 1 {
-		t.Errorf("sent %q with the setting on, want one message", *sent)
+	if count := deliver(workdir, t.TempDir(), "", true, send, http.DefaultClient); count != 1 || len(*sent) != 1 {
+		t.Errorf("deliver() = %d unread with %q sent, want 1 and one message", count, *sent)
+	}
+	if count := deliver(workdir, t.TempDir(), "", true, send, http.DefaultClient); count != 1 || len(*sent) != 1 {
+		t.Errorf("second deliver() = %d unread with %q sent, want 1 and no second message", count, *sent)
 	}
 }
 
-func TestFetch_desktopOffSendsNothing(t *testing.T) {
+// TestDeliver_twoProcessesSendOnce runs two deliveries on one cache at the same time, as two processes do through the claim.
+func TestDeliver_twoProcessesSendOnce(t *testing.T) {
 	isolateDesktopSetting(t)
+	workdir := fetchedMention(t)
+	var sends atomic.Int32
+	send := func(messages []notifications.DesktopMessage) error {
+		if sends.Add(int32(len(messages))) > 1 {
+			return errors.New("sent twice")
+		}
+		return nil
+	}
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			deliver(workdir, t.TempDir(), "", true, send, http.DefaultClient)
+		}()
+	}
+	wg.Wait()
+	if sends.Load() != 1 {
+		t.Errorf("two deliveries sent %d messages, want 1", sends.Load())
+	}
+}
+
+func TestDeliver_manualClaimsNoDesktop(t *testing.T) {
+	isolateDesktopSetting(t)
+	workdir := fetchedMention(t)
+	server, docs := webhookRecorder(t, func(map[string]any, int) int { return http.StatusOK })
+	if err := settings.NewManager().Write("notifications.webhook", server.URL); err != nil {
+		t.Fatalf("write webhook: %v", err)
+	}
+	send, sent := recordSends()
+	deliver(workdir, t.TempDir(), "", false, send, server.Client())
+	if len(*sent) != 0 || len(docs()) != 1 {
+		t.Errorf("a manual delivery sent %d desktop messages and %d webhook posts, want 0 and 1", len(*sent), len(docs()))
+	}
+	deliver(workdir, t.TempDir(), "", true, send, server.Client())
+	if len(*sent) != 0 || len(docs()) != 1 {
+		t.Errorf("the next delivery sent %d desktop messages and %d webhook posts, want the event to stay claimed", len(*sent), len(docs()))
+	}
+}
+
+func TestDeliver_readThenUnread(t *testing.T) {
+	isolateDesktopSetting(t)
+	workdir := fetchedMention(t)
+	if err := notifications.MarkAllAsRead(workdir); err != nil {
+		t.Fatalf("MarkAllAsRead() error = %v", err)
+	}
+	if err := notifications.MarkAllAsUnread(workdir); err != nil {
+		t.Fatalf("MarkAllAsUnread() error = %v", err)
+	}
+	send, sent := recordSends()
+	if count := deliver(workdir, t.TempDir(), "", true, send, http.DefaultClient); count != 1 || len(*sent) != 0 {
+		t.Errorf("deliver() = %d unread with %q sent, want 1 unread and no message for an event that was read", count, *sent)
+	}
+}
+
+func TestDeliver_channelsOffClaimsNothing(t *testing.T) {
+	isolateDesktopSetting(t)
+	workdir := fetchedMention(t)
 	if err := settings.NewManager().Write("notifications.desktop", "false"); err != nil {
 		t.Fatalf("write key: %v", err)
 	}
 	send, sent := recordSends()
-	workdir := mentionWorkspace(t)
-	newUnread := fetchNewUnread(t, workdir)
-	if len(newUnread) != 0 {
-		t.Errorf("the result carries %d items with the setting off, want none because no snapshot runs", len(newUnread))
+	if count := deliver(workdir, t.TempDir(), "", true, send, http.DefaultClient); count != 1 || len(*sent) != 0 {
+		t.Errorf("deliver() = %d unread with %q sent with both channels off, want 1 and no message", count, *sent)
 	}
-	if after, _ := notifications.GetAll(workdir, notifications.Filter{UnreadOnly: true}); len(after) == 0 {
-		t.Fatal("the fetch brought no unread mention, the fixture is broken")
+	if err := settings.NewManager().Write("notifications.desktop", "true"); err != nil {
+		t.Fatalf("write key: %v", err)
 	}
-	var posts atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { posts.Add(1) }))
-	defer server.Close()
-	notifyNew(workdir, t.TempDir(), "", newUnread, send, server.Client())
-	if len(*sent) != 0 || posts.Load() != 0 {
-		t.Errorf("sent %d desktop messages and %d webhook posts with the setting off and no webhook, want none", len(*sent), posts.Load())
-	}
-	if err := settings.NewManager().Write("notifications.webhook", server.URL); err != nil {
-		t.Fatalf("write webhook: %v", err)
-	}
-	after, _ := notifications.GetAll(workdir, notifications.Filter{UnreadOnly: true})
-	notifyNew(workdir, t.TempDir(), "", after, send, server.Client())
-	if len(*sent) != 0 || int(posts.Load()) != len(after) {
-		t.Errorf("sent %d desktop messages and %d webhook posts with a webhook and desktop off, want 0 and %d", len(*sent), posts.Load(), len(after))
+	deliver(workdir, t.TempDir(), "", true, send, http.DefaultClient)
+	if len(*sent) != 1 {
+		t.Errorf("sent %q after the setting went on, want the one event that no process claimed", *sent)
 	}
 }
 
-func TestFetch_snapshotErrorSendsNothing(t *testing.T) {
+func TestDeliver_providerFailureSendsTheRest(t *testing.T) {
 	isolateDesktopSetting(t)
-	send, sent := recordSends()
-	workdir := mentionWorkspace(t)
+	workdir := fetchedMention(t)
 	if err := os.WriteFile(filepath.Join(workdir, ".git", failingProviderMarker), nil, 0o644); err != nil {
 		t.Fatalf("write marker: %v", err)
 	}
-	newUnread := fetchNewUnread(t, workdir)
-	if len(newUnread) != 0 {
-		t.Errorf("the result carries %d items after a provider failed, want none", len(newUnread))
-	}
-	if after, _ := notifications.GetAll(workdir, notifications.Filter{UnreadOnly: true}); len(after) == 0 {
-		t.Fatal("the fetch brought no unread mention, the fixture is broken")
-	}
-	notifyNew(workdir, t.TempDir(), "", newUnread, send, http.DefaultClient)
-	if len(*sent) != 0 {
-		t.Errorf("a desktop message was sent after a provider failed")
+	send, sent := recordSends()
+	deliver(workdir, t.TempDir(), "", true, send, http.DefaultClient)
+	if len(*sent) != 1 {
+		t.Errorf("sent %q after one provider failed, want the mention of the other provider", *sent)
 	}
 }
 
-func TestNotifyNew_emitterSocket(t *testing.T) {
+func TestSendClaimed_emitterSocket(t *testing.T) {
 	isolateDesktopSetting(t)
 	template, err := testutil.NewRepoTemplate()
 	if err != nil {
@@ -215,7 +253,7 @@ func TestNotifyNew_emitterSocket(t *testing.T) {
 		return nil
 	}
 	socket := "/tmp/gitsocial/click/1-2.sock"
-	notifyNew(workdir, t.TempDir(), socket, []notifications.Notification{item, follow}, send, server.Client())
+	sendClaimed(workdir, t.TempDir(), socket, true, []notifications.Notification{item, follow}, server.URL, send, server.Client())
 	wantRefs := []string{protocol.CreateRef(protocol.RefTypeCommit, item.Hash, item.RepoURL, item.Branch), ""}
 	if len(sent) != 2 {
 		t.Fatalf("desktop messages = %+v, want two", sent)
@@ -235,7 +273,7 @@ func TestNotifyNew_emitterSocket(t *testing.T) {
 		}
 	}
 	sent = nil
-	notifyNew(workdir, t.TempDir(), "", []notifications.Notification{item}, send, server.Client())
+	sendClaimed(workdir, t.TempDir(), "", true, []notifications.Notification{item}, server.URL, send, server.Client())
 	if len(sent) != 1 || sent[0].Socket != "" || sent[0].URL != "https://site.example/index.html#commit:0123456789ab" {
 		t.Errorf("desktop messages with no socket = %+v, want the item URL", sent)
 	}

@@ -93,9 +93,9 @@ var Registry = []KeySpec{
 		Desc: "Concurrent object uploads per s3:// push (overridden by GITSOCIAL_S3_CONCURRENCY)."},
 
 	{Key: "notifications.desktop", Scope: ScopePersonalConfig, Type: KeyBool, Default: "true",
-		Desc: "Send a desktop message for new unread notifications after a fetch (overridden by GITSOCIAL_DESKTOP_NOTIFICATIONS)."},
+		Desc: "Send a desktop message after a fetch for each unread notification that no process sent before (overridden by GITSOCIAL_DESKTOP_NOTIFICATIONS)."},
 	{Key: "notifications.webhook", Scope: ScopePersonalConfig, Type: KeyString, Default: "",
-		Desc: "An http or https URL that receives each new unread notification of a fetch as JSON."},
+		Desc: "An http or https URL that receives, as JSON, each unread notification that no process sent before."},
 
 	// fetch.workspace_mode is a per-repo-URL map; handled outside the Registry
 	// via Get/WriteWorkspaceMode (the personal config also stores the map, but

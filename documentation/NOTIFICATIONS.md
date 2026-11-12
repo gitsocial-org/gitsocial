@@ -15,9 +15,31 @@ gitsocial notifications unread <id> | unread-all
 
 `gitsocial fetch` reports the unread count when it finishes. In the TUI, `@` opens the feed.
 
+`gitsocial notifications` prints the id of each notification that has a read state: `<repository>#commit:<hash>`, or `<repository>#follow` for a follow. `read` and `unread` take that id.
+
 ## Desktop notifications
 
-A fetch that brings new unread notifications sends a desktop message. Up to three new notifications give one message each, and more give one summary message. `gitsocial fetch --json` sends no message. The TUI sends messages only after an auto-fetch, so turn on `fetch.auto.enabled` to get messages from the TUI.
+After a fetch, GitSocial sends a desktop message for each unread notification that no process sent before. Up to three notifications give one message each, and more give one summary message. The cache records each notification that is sent, so the TUI, `gitsocial fetch` and RPC on one cache send a notification one time.
+
+| Fetch | Desktop message | Webhook |
+|---|---|---|
+| the auto-fetch of the TUI | yes | yes |
+| the key `f` in the TUI | no, the footer shows the result; no later fetch sends these notifications | yes |
+| the command `gitsocial fetch`, RPC `core.fetch` | yes | yes |
+| the command `gitsocial fetch --json`, `gitsocial social fetch`, `gitsocial serve`, the sync when the TUI starts, the fetch of one repository or of an added repository in the TUI, an import | no; the next fetch of the first three rows sends the notifications | no; the same |
+
+Turn on `fetch.auto.enabled` to get desktop messages from the TUI. A notification that you read before a fetch sends it gets no message, also when you mark it unread again. The [branch notifications](#types) send no message. A new cache, or a repository that you add, can bring old unread notifications; they give a maximum of three messages or one summary.
+
+The cache records one sent state per notification, not one per channel. A notification that the webhook got while the desktop was off gets no desktop message later.
+
+| Rule | Test |
+|---|---|
+| Two deliveries on one cache send an event one time | `TestDeliver_twoProcessesSendOnce` |
+| A fetch without delivery leaves its events for the next delivery | `TestDeliver_afterServeFetch` |
+| A manual fetch posts to the webhook and shows no desktop message, now or later | `TestDeliver_manualClaimsNoDesktop` |
+| An event that was read is never sent | `TestDeliver_readThenUnread` |
+| An event that was sent stays unread | `TestClaim_staysUnread` |
+| With the desktop off and no webhook, nothing is recorded as sent | `TestDeliver_channelsOffClaimsNothing` |
 
 A click on a message goes to the process that sent it.
 
@@ -127,4 +149,23 @@ The scope of a type tells which repositories can create it. GitSocial does not n
 
 The four branch notifications come from `review_branch_observations` ([ARCHITECTURE.md](ARCHITECTURE.md#schema)), which GitSocial updates after each fetch, and go to the author and the reviewers of the pull request. A notification clears when `pr update` records the new tip, when the branch is on its remote again, or when the pull request closes. `branch-diverged` clears when the local and remote branches no longer diverge, for example after you merge and push.
 
-The read state of each notification is in `core_notification_reads`.
+The four branch notifications and `branch-diverged` are conditions: each is in the feed and in the unread count until the cause goes away. A condition has no read state, so `m`, `u`, `read` and `read-all` do not change it, and it sends no desktop message and no webhook post.
+
+Each other notification is an event: one commit, or one follow of one repository. Its state is one row of `core_notification_state`, which exists only after the event is sent or read. The state of a commit holds for its hash, with no branch and in each repository, so it stays with a commit that moves to a different branch, and with the copy of a commit in a registered fork.
+
+One commit gives one notification. A commit that is in the workspace and in a fork gives the notification of the workspace. When a commit matches more than one type, this order decides:
+
+1. a type of `pm`, `review`, `release` or `memo`; of two such types, `issue-assigned` before `fork-issue` and `review-requested` before `fork-pr`
+2. a type of `social` (`comment`, `repost`, `quote`)
+3. `mention`, then `reference`, then `edit`
+
+`--type` filters before this rule, so `--type mention` also finds a comment that mentions you.
+
+| Rule | Test |
+|---|---|
+| One commit gives one notification and one count, also with a limit and a type filter | `TestGather_oneEventPerKey` |
+| A commit in the workspace and in a fork gives one notification, one message and one state | `TestOnePerKey_workspaceRowWins`, `TestClaim_copyOfCommit` |
+| The count equals the number of rows of the unread feed | `TestUnreadCount_equalsFeed` |
+| A condition has no state, hides no event and no other condition, and "read all" leaves it | `TestCondition_noState` |
+| A follow is marked read and unread alone | `TestFollow_markByKey`, `TestNotificationKey_roundTrip` |
+| A state change needs an edit whose action changes the state | `TestIssueStateChange_actionOnly`, `TestPRStateChange_actionOnly` |

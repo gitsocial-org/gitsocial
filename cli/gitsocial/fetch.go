@@ -16,7 +16,6 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/fetch"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
-	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
 )
@@ -53,35 +52,22 @@ For extension-specific options, use the extension's fetch command directly:
 			if len(args) == 1 {
 				repoURL := args[0]
 				workspaceURL := gitmsg.ResolveRepoURL(cfg.WorkDir)
-				countBefore, err := notifications.GetUnreadCount(cfg.WorkDir)
-				if err != nil {
-					slog.Debug("get unread count", "error", err)
-				}
-				newUnread := client.WatchUnread(cfg.WorkDir)
 				result := client.FetchRepository(cfg.CacheDir, repoURL, "", workspaceURL)
 				if !result.Success {
 					PrintError(cmd, result.Error.Text())
 					return exit(ExitCode(result.Error.Code))
 				}
-				if !cfg.JSONOutput {
-					client.NotifyNew(cfg.WorkDir, cfg.CacheDir, "", newUnread())
-				}
-
 				if cfg.JSONOutput {
 					if err := PrintJSON(cmd, result.Data); err != nil {
 						return err
 					}
 				} else {
 					fmt.Fprintf(cmd.OutOrStdout(), "✓ %s (%d posts)\n", repoURL, result.Data.Items)
-					printNotificationDelta(cmd.OutOrStdout(), cfg.WorkDir, countBefore)
+					printUnread(cmd.OutOrStdout(), client.Deliver(cfg.WorkDir, cfg.CacheDir, "", true))
 				}
 				return nil
 			}
 
-			countBefore, err := notifications.GetUnreadCount(cfg.WorkDir)
-			if err != nil {
-				slog.Debug("get unread count", "error", err)
-			}
 			if !cfg.JSONOutput {
 				if listID != "" {
 					fmt.Fprintf(cmd.OutOrStdout(), "Fetching repositories from list '%s'...\n", listID)
@@ -90,7 +76,7 @@ For extension-specific options, use the extension's fetch command directly:
 				}
 			}
 
-			result, forkStats, newUnread := runFullFetch(cmd, cfg, client.FetchOptions{
+			result, forkStats := runFullFetch(cmd, cfg, client.FetchOptions{
 				ListID:   listID,
 				Parallel: parallel,
 			}, false, allBranches)
@@ -101,10 +87,6 @@ For extension-specific options, use the extension's fetch command directly:
 				PrintError(cmd, result.Error.Text())
 				return exit(ExitCode(result.Error.Code))
 			}
-			if !cfg.JSONOutput {
-				client.NotifyNew(cfg.WorkDir, cfg.CacheDir, "", newUnread)
-			}
-
 			stats := result.Data
 
 			if cfg.JSONOutput {
@@ -121,7 +103,7 @@ For extension-specific options, use the extension's fetch command directly:
 				if len(stats.Errors) > 0 {
 					fmt.Fprintf(cmd.OutOrStdout(), "Failed: %d repositories\n", len(stats.Errors))
 				}
-				printNotificationDelta(cmd.OutOrStdout(), cfg.WorkDir, countBefore)
+				printUnread(cmd.OutOrStdout(), client.Deliver(cfg.WorkDir, cfg.CacheDir, "", true))
 			}
 			return nil
 		},
@@ -184,26 +166,16 @@ func resolveWorkspaceMode(cmd *cobra.Command, workdir string, jsonOutput, assume
 }
 
 // runFullFetch fetches the subscribed repos, the registered forks and the workspace.
-func runFullFetch(cmd *cobra.Command, cfg *Config, opts client.FetchOptions, assumeYes, allBranches bool) (fetch.Result, fetch.Stats, []notifications.Notification) {
+func runFullFetch(cmd *cobra.Command, cfg *Config, opts client.FetchOptions, assumeYes, allBranches bool) (fetch.Result, fetch.Stats) {
 	opts.FetchAllBranches = resolveWorkspaceMode(cmd, cfg.WorkDir, cfg.JSONOutput, assumeYes, allBranches)
 	return client.Fetch(cfg.WorkDir, cfg.CacheDir, opts)
 }
 
-// printNotificationDelta writes the new notification count to out when it rose after a fetch.
-func printNotificationDelta(out io.Writer, workdir string, countBefore int) {
-	countAfter, _ := notifications.GetUnreadCount(workdir)
-	delta := countAfter - countBefore
-	if delta > 0 {
-		fmt.Fprintf(out, "You have %d new notification", delta)
-		if delta != 1 {
-			fmt.Fprint(out, "s")
-		}
-		fmt.Fprintln(out)
-	} else if countAfter > 0 {
-		fmt.Fprintf(out, "You have %d unread notification", countAfter)
-		if countAfter != 1 {
-			fmt.Fprint(out, "s")
-		}
-		fmt.Fprintln(out)
+// printUnread writes the unread notification count to out when it is not zero.
+func printUnread(out io.Writer, count int) {
+	if count == 1 {
+		fmt.Fprintln(out, "You have 1 unread notification")
+	} else if count > 1 {
+		fmt.Fprintf(out, "You have %d unread notifications\n", count)
 	}
 }
