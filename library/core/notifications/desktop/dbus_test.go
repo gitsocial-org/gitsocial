@@ -357,7 +357,7 @@ func TestDBusNotify_activatesTerminal(t *testing.T) {
 		clicks++
 		return nil
 	}
-	sent, clicked, err := dbusNotify(testHost(), socket, ptyxisCall, "GitSocial", "body", "", onClick)
+	sent, clicked, err := dbusNotify(testHost(), socket, writeCalls(testHost(), ptyxisCall), "GitSocial", "body", "", onClick)
 	if !sent || !clicked || err != nil || clicks != 1 {
 		t.Fatalf("dbusNotify = sent %v, clicked %v, %v, %d clicks; want sent, clicked and one onClick", sent, clicked, err, clicks)
 	}
@@ -383,7 +383,7 @@ func TestDBusNotify_noActivateAfterFailedClick(t *testing.T) {
 	calls := make(chan busMessage, 4)
 	socket, _, done := fakeBus(t, "OK 0123\r\n", answerAndRecord(calls, signalUS("ActivationToken", testID, "token"), signalUS("ActionInvoked", testID, clickAction)))
 	failed := errors.New("dial click socket: no such file")
-	sent, clicked, err := dbusNotify(testHost(), socket, ptyxisCall, "GitSocial", "body", "", func() error { return failed })
+	sent, clicked, err := dbusNotify(testHost(), socket, writeCalls(testHost(), ptyxisCall), "GitSocial", "body", "", func() error { return failed })
 	if !sent || !clicked || !errors.Is(err, failed) {
 		t.Errorf("dbusNotify = sent %v, clicked %v, %v; want sent, clicked and the error of onClick", sent, clicked, err)
 	}
@@ -393,11 +393,11 @@ func TestDBusNotify_noActivateAfterFailedClick(t *testing.T) {
 func TestDBusNotify_noActivate(t *testing.T) {
 	for _, c := range []struct {
 		name     string
-		activate func(token string) []byte
+		activate func(conn net.Conn, reader *bufio.Reader, token string)
 		messages [][]byte
 	}{
 		{"no call", nil, [][]byte{signalUS("ActivationToken", testID, "token"), signalUS("ActionInvoked", testID, clickAction)}},
-		{"no token", ptyxisCall, [][]byte{signalUS("ActionInvoked", testID, clickAction)}},
+		{"no token", writeCalls(testHost(), ptyxisCall), [][]byte{signalUS("ActionInvoked", testID, clickAction)}},
 	} {
 		calls := make(chan busMessage, 4)
 		socket, _, done := fakeBus(t, "OK 0123\r\n", answerAndRecord(calls, c.messages...))
@@ -411,13 +411,13 @@ func TestDBusNotify_noActivate(t *testing.T) {
 func TestDBusNotify_tokenOfOtherMessage(t *testing.T) {
 	calls := make(chan busMessage, 4)
 	socket, _, done := fakeBus(t, "OK 0123\r\n", answerAndRecord(calls, signalUS("ActivationToken", 7, "other"), signalUS("ActionInvoked", testID, clickAction)))
-	if sent, clicked, err := dbusNotify(testHost(), socket, ptyxisCall, "GitSocial", "body", "", clickSent); !sent || !clicked || err != nil {
+	if sent, clicked, err := dbusNotify(testHost(), socket, writeCalls(testHost(), ptyxisCall), "GitSocial", "body", "", clickSent); !sent || !clicked || err != nil {
 		t.Errorf("dbusNotify = sent %v, clicked %v, %v; want sent and clicked", sent, clicked, err)
 	}
 	assertNoCall(t, "token of another message", calls, done)
 	calls = make(chan busMessage, 4)
 	socket, _, done = fakeBus(t, "OK 0123\r\n", answerAndRecord(calls, signalUS("ActivationToken", testID, "mine"), signalUS("ActivationToken", 7, "other"), signalUS("ActionInvoked", testID, clickAction)))
-	if _, _, err := dbusNotify(testHost(), socket, ptyxisCall, "GitSocial", "body", "", clickSent); err != nil {
+	if _, _, err := dbusNotify(testHost(), socket, writeCalls(testHost(), ptyxisCall), "GitSocial", "body", "", clickSent); err != nil {
 		t.Fatalf("dbusNotify: %v", err)
 	}
 	<-done

@@ -16,6 +16,8 @@ func TestNotifyWait_args(t *testing.T) {
 	t.Setenv("TERM_PROGRAM", "")
 	t.Setenv("GNOME_TERMINAL_SERVICE", "")
 	t.Setenv("GNOME_TERMINAL_SCREEN", "")
+	t.Setenv("KONSOLE_DBUS_SERVICE", "")
+	t.Setenv("KONSOLE_DBUS_SESSION", "")
 	dir, cacheDir := t.TempDir(), t.TempDir()
 	for _, c := range []struct {
 		args []string

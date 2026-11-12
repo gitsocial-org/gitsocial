@@ -2,10 +2,12 @@
 package desktop
 
 import (
+	"bufio"
 	"context"
 	_ "embed"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -144,10 +146,15 @@ func hasClick(m notifications.DesktopMessage) bool {
 // notifyWait shows the message over the session bus with the click action and waits for the click or the close; on a click it sends ref to socket and brings the terminal app to the front when socket is set, else opens url with xdg-open. A message that the service did not get goes to notify-send with no click.
 func notifyWait(h host, title, body, url, socket, ref string) error {
 	icon := linuxIcon(h.dataDir)
-	var activate func(token string) []byte
+	var activate func(conn net.Conn, reader *bufio.Reader, token string)
 	onClick := func() error { return run(h.timeout, lookPath("xdg-open"), []string{url}, nil) }
 	if socket != "" {
-		activate = terminalCall(os.Getenv("TERM_PROGRAM"), os.Getenv("GHOSTTY_SURFACE_ID"), os.Getenv("GNOME_TERMINAL_SERVICE"), os.Getenv("GNOME_TERMINAL_SCREEN"), os.Getenv("PTYXIS_VERSION"))
+		service, sessionPath := os.Getenv("KONSOLE_DBUS_SERVICE"), os.Getenv("KONSOLE_DBUS_SESSION")
+		if build := terminalCall(os.Getenv("TERM_PROGRAM"), os.Getenv("GHOSTTY_SURFACE_ID"), os.Getenv("GNOME_TERMINAL_SERVICE"), os.Getenv("GNOME_TERMINAL_SCREEN"), os.Getenv("PTYXIS_VERSION")); build != nil {
+			activate = writeCalls(h, build)
+		} else if session, ok := konsoleSession(service, sessionPath); ok {
+			activate = konsoleActivate(h, service, session)
+		}
 		onClick = func() error {
 			if err := click.Send(socket, ref); err != nil {
 				return fmt.Errorf("send click: %w", err)

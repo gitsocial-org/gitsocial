@@ -46,6 +46,9 @@ const (
 // noReplyNoAutoStart is the header flags NO_REPLY_EXPECTED and NO_AUTO_START.
 const noReplyNoAutoStart byte = 0x1 | 0x2
 
+// noAutoStart is the header flag NO_AUTO_START alone, for a call that waits for its reply.
+const noAutoStart byte = 0x2
+
 // maxBody and maxFields bound the parts of a message that the client reads; a larger message is dropped.
 const maxBody, maxFields = 1 << 20, 64 << 10
 
@@ -96,8 +99,8 @@ func busAddress(value, runtimeDir string) string {
 	return ""
 }
 
-// dbusNotify shows one message with the click action on the bus at address and waits for its click, its close or waitTimeout; on a click it runs onClick and, after a good onClick with a token, writes the call that activate builds from the token. sent is false when the service did not get or refused the message.
-func dbusNotify(h host, address string, activate func(token string) []byte, title, body, icon string, onClick func() error) (sent, clicked bool, err error) {
+// dbusNotify shows one message with the click action on the bus at address and waits for its click, its close or waitTimeout; on a click it runs onClick and, after a good onClick with a token, runs the activate exchange on the connection. sent is false when the service did not get or refused the message.
+func dbusNotify(h host, address string, activate func(conn net.Conn, reader *bufio.Reader, token string), title, body, icon string, onClick func() error) (sent, clicked bool, err error) {
 	if address == "" {
 		return false, false, errors.New("no session bus address")
 	}
@@ -139,11 +142,18 @@ func dbusNotify(h host, address string, activate func(token string) []byte, titl
 		return true, true, err
 	}
 	if activate != nil && token != "" {
-		if err := busWrite(conn, h.replyTimeout, activate(token)); err != nil {
+		activate(conn, reader, token)
+	}
+	return true, true, nil
+}
+
+// writeCalls returns the exchange that writes the calls that build makes from the token and reads no reply.
+func writeCalls(h host, build func(token string) []byte) func(conn net.Conn, reader *bufio.Reader, token string) {
+	return func(conn net.Conn, _ *bufio.Reader, token string) {
+		if err := busWrite(conn, h.replyTimeout, build(token)); err != nil {
 			log.Debug("activate terminal failed", "error", err)
 		}
 	}
-	return true, true, nil
 }
 
 // busAuth runs the EXTERNAL auth with the uid of this process and starts the message stream.

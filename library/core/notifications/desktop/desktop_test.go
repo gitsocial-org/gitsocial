@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -136,7 +137,7 @@ func TestSend_textIsAnArgument(t *testing.T) {
 	}
 }
 
-// stubNotifySend puts a notify-send first on PATH that records its arguments to out, and an xdg-open that records its URL to opened, with no session bus and no Ptyxis.
+// stubNotifySend puts a notify-send first on PATH that records its arguments to out, and an xdg-open that records its URL to opened, with no session bus and no terminal with a call.
 func stubNotifySend(t *testing.T, out, opened string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -151,6 +152,8 @@ func stubNotifySend(t *testing.T, out, opened string) {
 	t.Setenv("GHOSTTY_SURFACE_ID", "")
 	t.Setenv("GNOME_TERMINAL_SERVICE", "")
 	t.Setenv("GNOME_TERMINAL_SCREEN", "")
+	t.Setenv("KONSOLE_DBUS_SERVICE", "")
+	t.Setenv("KONSOLE_DBUS_SESSION", "")
 	noBus(t)
 }
 
@@ -415,6 +418,60 @@ func TestNotifyWait_socketClickActivates(t *testing.T) {
 		}
 	default:
 		t.Error("no call to the terminal after the click")
+	}
+}
+
+func TestNotifyWait_konsole(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the click socket is a Unix socket")
+	}
+	cacheDir, err := os.MkdirTemp("/tmp", "gsclick")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(cacheDir) })
+	socket := click.SocketPath(cacheDir, os.Getpid(), time.Now())
+	stop, err := click.Listen(socket, func(string) {})
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	defer stop()
+	dir := t.TempDir()
+	stubNotifySend(t, filepath.Join(dir, "args"), filepath.Join(dir, "opened"))
+	t.Setenv("KONSOLE_DBUS_SERVICE", ":1.94")
+	t.Setenv("KONSOLE_DBUS_SESSION", "/Sessions/3")
+	for _, c := range []struct{ name, ptyxis, want string }{
+		{"Konsole", "", ":1.94 /Windows/1 sessionList"},
+		{"Ptyxis started from Konsole", "50.1", "org.gnome.Ptyxis /org/gnome/Ptyxis Activate"},
+	} {
+		t.Setenv("PTYXIS_VERSION", c.ptyxis)
+		calls := make(chan busMessage, 64)
+		record := answerAndRecord(calls, signalUS("ActivationToken", testID, "token"), signalUS("ActionInvoked", testID, clickAction))
+		bus, _, done := fakeBus(t, "OK 0123\r\n", func(conn net.Conn, call busMessage) {
+			record(conn, call)
+			if call.member == "sessionList" {
+				conn.Write(reply(call.serial, "as", appendStrings(nil, []string{"3"})))
+			}
+			if call.member == "currentSession" {
+				conn.Write(errorReply(call.serial, "org.freedesktop.DBus.Error.UnknownMethod"))
+			}
+		})
+		useBus(t, bus)
+		if err := notifyWait(testHost(), "GitSocial", "body", "", socket, "#commit:0123456789ab"); err != nil {
+			t.Fatalf("%s: notifyWait: %v", c.name, err)
+		}
+		<-done
+		select {
+		case call := <-calls:
+			if got := call.destination + " " + call.path + " " + call.member; got != c.want {
+				t.Errorf("%s: first call = %q, want %q", c.name, got, c.want)
+			}
+		default:
+			t.Errorf("%s: no call to the terminal after the click", c.name)
+		}
+		if c.ptyxis != "" {
+			assertNoCall(t, c.name+": a second call", calls, done)
+		}
 	}
 }
 
