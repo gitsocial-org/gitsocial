@@ -74,6 +74,31 @@ func TestTmuxPane_forms(t *testing.T) {
 	}
 }
 
+func TestTmuxPane_exported(t *testing.T) {
+	if socket, pane, ok := TmuxPane("/tmp/tmux-1000/default,4242,0", "%3"); socket != "/tmp/tmux-1000/default" || pane != "%3" || !ok {
+		t.Errorf("TmuxPane = %q, %q, %v; want the socket, the pane and true", socket, pane, ok)
+	}
+	for _, c := range [][2]string{{"", "%3"}, {"/tmp/tmux-1000/default,4242,0", ""}, {"/tmp/tmux-1000/default,4242,0", "-t"}} {
+		if _, _, ok := TmuxPane(c[0], c[1]); ok {
+			t.Errorf("TmuxPane(%q, %q) is in tmux, want not", c[0], c[1])
+		}
+	}
+}
+
+func TestTmuxClientTTY_latestClient(t *testing.T) {
+	calls := stubTmux(t, "5 /dev/ttys001\n9 /dev/ttys004\n")
+	if got := TmuxClientTTY(testTmuxSocket, "%3"); got != "/dev/ttys004" {
+		t.Errorf("TmuxClientTTY = %q, want the tty of the client with the higher activity", got)
+	}
+	if got := tmuxCalls(t, calls); len(got) != 2 || !strings.Contains(got[1], "#{client_activity} #{client_tty}") {
+		t.Errorf("tmux commands = %q, want the session and the client list with the tty", got)
+	}
+	stubTmux(t, "")
+	if got := TmuxClientTTY(testTmuxSocket, "%3"); got != "" {
+		t.Errorf("TmuxClientTTY with no client = %q, want none", got)
+	}
+}
+
 func TestTmuxSelect_args(t *testing.T) {
 	calls := stubTmux(t, "")
 	tmuxSelect(testHost(), testTmuxSocket, "%3")

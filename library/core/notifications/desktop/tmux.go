@@ -1,4 +1,4 @@
-// tmux.go - Selects the tmux window of the TUI and reads the environment of the tmux client that was active last.
+// tmux.go - Selects the tmux window of the TUI and reads the environment or the terminal device of the tmux client that was active last.
 package desktop
 
 import (
@@ -36,31 +36,53 @@ func tmuxSelect(h host, socket, pane string) {
 	}
 }
 
-// tmuxClientEnv returns a lookup of the environment of the client of the session of pane with the highest activity, or a lookup that gives "" for each name when tmux, the client or its environment is not available.
-func tmuxClientEnv(h host, socket, pane string) func(string) string {
-	none := func(string) string { return "" }
+// TmuxPane returns the socket and the pane of a process from the values of TMUX and TMUX_PANE, and whether the process runs in tmux.
+func TmuxPane(tmux, pane string) (string, string, bool) {
+	socket := tmuxSocket(tmux)
+	return socket, pane, socket != "" && tmuxPane(pane)
+}
+
+// TmuxSelect selects the window and the pane of pane on the tmux server at socket; a failure is logged and not returned.
+func TmuxSelect(socket, pane string) {
+	tmuxSelect(host{timeout: sendTimeout}, socket, pane)
+}
+
+// TmuxClientTTY returns the terminal device of the client of the session of pane that was active last, or "".
+func TmuxClientTTY(socket, pane string) string {
+	return tmuxClient(host{timeout: sendTimeout}, socket, pane, "client_tty")
+}
+
+// tmuxClient returns field of the client of the session of pane with the highest activity, or "" when tmux or a client is not available.
+func tmuxClient(h host, socket, pane, field string) string {
 	tool := lookPath("tmux")
 	if tool == "" {
 		log.Debug("no tmux tool for the terminal of the click")
-		return none
+		return ""
 	}
 	session, err := output(h.timeout, tool, "-S", socket, "display-message", "-p", "-t", pane, "#{session_id}")
 	if err != nil {
 		log.Debug("tmux session of the pane failed", "error", err)
-		return none
+		return ""
 	}
-	clients, err := output(h.timeout, tool, "-S", socket, "list-clients", "-t", strings.TrimSpace(session), "-F", "#{client_activity} #{client_pid}")
+	clients, err := output(h.timeout, tool, "-S", socket, "list-clients", "-t", strings.TrimSpace(session), "-F", "#{client_activity} #{"+field+"}")
 	if err != nil {
 		log.Debug("tmux client list failed", "error", err)
-		return none
+		return ""
 	}
-	pid, latest := "", int64(-1)
+	value, latest := "", int64(-1)
 	for _, line := range strings.Split(clients, "\n") {
 		activity, candidate, _ := strings.Cut(strings.TrimSpace(line), " ")
 		if n, err := strconv.ParseInt(activity, 10, 64); err == nil && n > latest {
-			pid, latest = candidate, n
+			value, latest = candidate, n
 		}
 	}
+	return value
+}
+
+// tmuxClientEnv returns a lookup of the environment of the client of the session of pane with the highest activity, or a lookup that gives "" for each name when tmux, the client or its environment is not available.
+func tmuxClientEnv(h host, socket, pane string) func(string) string {
+	none := func(string) string { return "" }
+	pid := tmuxClient(h, socket, pane, "client_pid")
 	if n, err := strconv.Atoi(pid); err != nil || n < 1 {
 		log.Debug("no tmux client with a pid", "pid", pid)
 		return none
