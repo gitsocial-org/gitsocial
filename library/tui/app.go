@@ -360,7 +360,6 @@ func (m Model) Init() tea.Cmd {
 			m.loadInitialLists(),
 		)
 	}
-	m.host.State().LastInputAt = time.Now()
 	return tea.Batch(
 		m.host.ActivateView(),
 		func() tea.Msg { return startSyncMsg{} },
@@ -522,7 +521,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
-		m.host.State().LastInputAt = time.Now()
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
@@ -535,7 +533,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMsg:
-		m.host.State().LastInputAt = time.Now()
 		return m.handleMouse(msg)
 	}
 
@@ -1546,10 +1543,6 @@ const (
 	autoFetchGrowth = 1.25
 	// autoFetchFast is the interval below which the back-off is always on, so a short interval does not poll a quiet remote at full rate.
 	autoFetchFast = 60 * time.Second
-	// autoFetchIdleAfter pauses the heartbeat when there's been no keypress or
-	// mouse input for this long, so an unattended TUI stops polling. Resumes on
-	// the next input event.
-	autoFetchIdleAfter = 1 * time.Hour
 )
 
 // scheduleAutoFetch arms a single auto-fetch tick after d. The tick handler
@@ -1590,13 +1583,6 @@ func (m Model) autoFetchCmd() tea.Cmd {
 func (m Model) handleAutoFetchTick() tea.Cmd {
 	s, _ := settings.Load("")
 	if !s.Fetch.AutoEnabled {
-		return scheduleAutoFetch(autoFetchIdlePoll)
-	}
-	// Pause when the workstation looks unattended (no keypress/mouse for
-	// autoFetchIdleAfter). LastInputAt refreshes in Update's KeyPressMsg /
-	// MouseMsg cases, so the heartbeat resumes on the next input. A zero value
-	// is treated as active so a freshly opened session polls before any input.
-	if li := m.host.State().LastInputAt; !li.IsZero() && time.Since(li) > autoFetchIdleAfter {
 		return scheduleAutoFetch(autoFetchIdlePoll)
 	}
 	// Never start an auto-fetch on top of another operation, while the user is
