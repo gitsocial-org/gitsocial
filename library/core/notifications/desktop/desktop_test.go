@@ -526,34 +526,25 @@ func TestDarwinSender_precedence(t *testing.T) {
 	}
 	root := t.TempDir()
 	out := filepath.Join(root, "args")
-	bundled := filepath.Join(root, "own", "GitSocial.app", "Contents", "MacOS")
 	home := filepath.Join(root, "home", "Applications")
 	system := filepath.Join(root, "Applications")
 	notifierIn := func(apps string) string {
 		return filepath.Join(apps, "GitSocial.app", "Contents", "MacOS", notifierName)
 	}
 	appDirs := []string{home, system}
-	self := filepath.Join(bundled, "gitsocial")
-	if got := darwinNotifier(self, appDirs); got != "" {
+	if got := darwinNotifier(appDirs); got != "" {
 		t.Errorf("no notifier anywhere gave %q, want none, so osascript sends", got)
 	}
 	writeStub(t, notifierIn(system), recordArgs(out))
-	if got := darwinNotifier(self, appDirs); got != notifierIn(system) {
+	if got := darwinNotifier(appDirs); got != notifierIn(system) {
 		t.Errorf("a bundle in /Applications gave %q, want its notifier", got)
 	}
 	writeStub(t, notifierIn(home), recordArgs(out))
-	if got := darwinNotifier(self, appDirs); got != notifierIn(home) {
+	if got := darwinNotifier(appDirs); got != notifierIn(home) {
 		t.Errorf("bundles in both places gave %q, want the one in ~/Applications", got)
 	}
-	writeStub(t, filepath.Join(bundled, notifierName), recordArgs(out))
-	if got := darwinNotifier(filepath.Join(root, "bin", "gitsocial"), appDirs); got != notifierIn(home) {
-		t.Errorf("an executable outside a bundle gave %q, want the installed bundle", got)
-	}
-	if got := darwinNotifier(self, appDirs); got != filepath.Join(bundled, notifierName) {
-		t.Errorf("an executable in a bundle gave %q, want the notifier next to it", got)
-	}
 	m := batch("GitSocial", "-u <b>", "https://site.example/")[0]
-	if err := darwinSend(host{self: self, appDirs: appDirs, timeout: sendTimeout}, m); err != nil {
+	if err := darwinSend(host{appDirs: appDirs, timeout: sendTimeout}, m); err != nil {
 		t.Fatalf("darwinSend: %v", err)
 	}
 	if !waitForFile(out) {
@@ -574,7 +565,7 @@ func TestDarwinSender_detachedAndFallback(t *testing.T) {
 	writeStub(t, filepath.Join(bin, "osascript"), recordArgs(fellBack))
 	t.Setenv("PATH", bin)
 	bundled := filepath.Join(root, "GitSocial.app", "Contents", "MacOS")
-	h := host{self: filepath.Join(bundled, "gitsocial"), timeout: sendTimeout}
+	h := host{appDirs: []string{root}, timeout: sendTimeout}
 	m := batch("GitSocial", "body", "https://site.example/")[0]
 	writeStub(t, filepath.Join(bundled, notifierName), `/bin/sleep 3; `+recordArgs(posted))
 	if err := darwinSend(h, m); err != nil {
@@ -604,7 +595,7 @@ func TestDarwinSender_clickArgs(t *testing.T) {
 	}
 	root := t.TempDir()
 	bundled := filepath.Join(root, "GitSocial.app", "Contents", "MacOS")
-	h := host{self: filepath.Join(bundled, "gitsocial"), timeout: sendTimeout}
+	h := host{appDirs: []string{root}, timeout: sendTimeout}
 	ref := "https://example.com/owner/repo#commit:0123456789ab@main"
 	for i, c := range []struct {
 		message notifications.DesktopMessage

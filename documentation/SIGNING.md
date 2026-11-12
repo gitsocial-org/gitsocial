@@ -9,7 +9,7 @@ Darwin release binaries are signed with an Apple Developer ID Application certif
 | Stage | Where | What runs |
 |---|---|---|
 | Sign | `scripts/bundle-darwin.sh`, the post hook of the `darwin` and `darwin-notifier` builds | `rcodesign sign --code-signature-flags=runtime` on the bare `gitsocial`, then on `GitSocial.app`, before archiving |
-| Bundle | the same script | `GitSocial.app` with `gitsocial-notifier` as its executable, `gitsocial`, and the icon from `documentation/images/GitSocial.icon` compiled by `actool` |
+| Bundle | the same script | `GitSocial.app` with `gitsocial-notifier` as its executable and the icon from `documentation/images/GitSocial.icon` compiled by `actool` |
 | Archive | `.goreleaser.yaml`, `archives.darwin` | the signed binary and the signed bundle in a `.zip`; the notary rejects `.tar.gz` |
 | Publish | `goreleaser release` | archives, SBOMs and checksums to the GitHub release |
 | Notarize | `scripts/release.sh`, the build step | `rcodesign notary-submit --wait` on each `dist/*_darwin_*.zip`; the archive is unchanged |
@@ -58,7 +58,7 @@ curl -fsSLO https://gitsocial.org/artifacts/<X.Y.Z>/gitsocial_<X.Y.Z>_darwin_arm
 unzip gitsocial_<X.Y.Z>_darwin_arm64.zip
 codesign --verify --deep --strict --verbose=2 ./gitsocial     # valid on disk, satisfies its Designated Requirement
 codesign -dv --verbose ./gitsocial 2>&1 | grep Authority       # Developer ID Application: Mukhsimjon Rakhimov (J33FZDK3T7), then the two Apple authorities
-codesign --verify --deep --strict --verbose=2 ./GitSocial.app  # the bundle and the two binaries in it
+codesign --verify --deep --strict --verbose=2 ./GitSocial.app  # the bundle and the notifier in it
 spctl --assess --type install --verbose ./gitsocial_<X.Y.Z>_darwin_arm64.zip   # notarization; assess the zip, not the binary
 ```
 

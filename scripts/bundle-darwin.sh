@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# bundle-darwin.sh - The goreleaser post hook of both darwin builds: signs the bare gitsocial and stages each binary into GitSocial.app.
+# bundle-darwin.sh - The goreleaser post hook of both darwin builds: signs the bare gitsocial, and makes GitSocial.app from the notifier.
 # Usage: scripts/bundle-darwin.sh <binary> <arch> <version>
-# The second binary of an arch completes the bundle at dist/bundle/<arch>/GitSocial.app and signs it; with no APPLE_CERT_PASSWORD the signature is ad hoc.
+# The notifier of an arch gives the bundle at dist/bundle/<arch>/GitSocial.app, which is signed; with no APPLE_CERT_PASSWORD the signature is ad hoc.
 set -euo pipefail
 binary="$1" arch="$2" version="$3"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,12 +19,13 @@ sign() {
 	fi
 }
 
-[ "$name" = gitsocial ] && sign "$binary"
+# The zip has the bare gitsocial one time; the app holds only the notifier.
+if [ "$name" = gitsocial ]; then
+	sign "$binary"
+	exit 0
+fi
 mkdir -p "$app/Contents/MacOS"
-cp "$binary" "$app/Contents/MacOS/.$name.tmp"
-mv "$app/Contents/MacOS/.$name.tmp" "$app/Contents/MacOS/$name"
-[ -x "$app/Contents/MacOS/gitsocial" ] && [ -x "$app/Contents/MacOS/gitsocial-notifier" ] || exit 0
-mkdir "$stage/.complete" 2>/dev/null || exit 0
+cp "$binary" "$app/Contents/MacOS/$name"
 
 mkdir -p "$app/Contents/Resources"
 xcrun actool "$root/documentation/images/GitSocial.icon" --compile "$app/Contents/Resources" \

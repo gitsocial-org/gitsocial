@@ -100,7 +100,7 @@ func send(h host, messages []notifications.DesktopMessage) error {
 
 // darwinSend starts the notifier of GitSocial.app detached, and falls back to osascript, which has no click, when the notifier is missing or fails; a message with a socket also gives the socket and the ref.
 func darwinSend(h host, m notifications.DesktopMessage) error {
-	if notifier := darwinNotifier(h.self, h.appDirs); notifier != "" {
+	if notifier := darwinNotifier(h.appDirs); notifier != "" {
 		args := []string{"notify", m.Title, m.Body, m.URL}
 		if m.Socket != "" {
 			args = append(args, m.Socket, m.Ref)
@@ -263,16 +263,10 @@ func startDetached(grace time.Duration, path string, args ...string) error {
 	return nil
 }
 
-// darwinNotifier returns the notifier next to self when self is in a bundle, else the notifier of GitSocial.app in the first of appDirs that has one, else "".
-func darwinNotifier(self string, appDirs []string) string {
-	var candidates []string
-	if strings.Contains(self, ".app/Contents/MacOS/") {
-		candidates = append(candidates, filepath.Join(filepath.Dir(self), notifierName))
-	}
+// darwinNotifier returns the notifier of GitSocial.app in the first of appDirs that has one, else "".
+func darwinNotifier(appDirs []string) string {
 	for _, dir := range appDirs {
-		candidates = append(candidates, filepath.Join(dir, "GitSocial.app", "Contents", "MacOS", notifierName))
-	}
-	for _, candidate := range candidates {
+		candidate := filepath.Join(dir, "GitSocial.app", "Contents", "MacOS", notifierName)
 		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
 			return candidate
 		}
