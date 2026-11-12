@@ -18,9 +18,9 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/notifications/click"
 )
 
-// testHost returns a host with no bundle, so no test posts through a GitSocial.app of the machine.
+// testHost returns a host with no bundle and no proc file system, so no test posts through a GitSocial.app or reads a process of the machine.
 func testHost() host {
-	return host{timeout: sendTimeout, replyTimeout: sendTimeout}
+	return host{procDir: "/nonexistent/proc", timeout: sendTimeout, replyTimeout: sendTimeout}
 }
 
 // noBus points the session bus variables at a directory with no bus, so no test reaches the bus of the machine.
@@ -137,7 +137,7 @@ func TestSend_textIsAnArgument(t *testing.T) {
 	}
 }
 
-// stubNotifySend puts a notify-send first on PATH that records its arguments to out, and an xdg-open that records its URL to opened, with no session bus and no terminal with a call.
+// stubNotifySend puts a notify-send first on PATH that records its arguments to out, and an xdg-open that records its URL to opened, with no session bus, no terminal with a call and no tmux.
 func stubNotifySend(t *testing.T, out, opened string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -154,6 +154,8 @@ func stubNotifySend(t *testing.T, out, opened string) {
 	t.Setenv("GNOME_TERMINAL_SCREEN", "")
 	t.Setenv("KONSOLE_DBUS_SERVICE", "")
 	t.Setenv("KONSOLE_DBUS_SESSION", "")
+	t.Setenv("TMUX", "")
+	t.Setenv("TMUX_PANE", "")
 	noBus(t)
 }
 

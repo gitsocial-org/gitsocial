@@ -18,7 +18,8 @@ func newNotifyWaitCmd() *cobra.Command {
 click or its close. On a click, send the ref to the socket of the TUI
 when the message names a socket, else open the URL. In Ghostty, GNOME
 Terminal, Ptyxis and Konsole on KDE Plasma, a click that the TUI gets
-also brings the terminal to the front. With no usable session bus, show
+also brings the terminal to the front; inside tmux, the click also
+selects the tmux window of the TUI. With no usable session bus, show
 the message with notify-send and no click. The desktop sender of a fetch
 starts it in its own session; it is not a command to run by hand.`,
 		Hidden: true,

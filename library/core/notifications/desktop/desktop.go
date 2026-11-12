@@ -41,12 +41,13 @@ var iconPNG []byte
 // notifierName is the executable of GitSocial.app that posts under the GitSocial name and icon.
 const notifierName = "gitsocial-notifier"
 
-// host is what a sender reads from the machine: its own executable, the directories that can hold GitSocial.app, the data directory, the Start Menu, the timeout and the reply timeout of the session bus.
+// host is what a sender reads from the machine: its own executable, the directories that can hold GitSocial.app, the data directory, the Start Menu, the proc file system, the timeout and the reply timeout of the session bus.
 type host struct {
 	self         string
 	appDirs      []string
 	dataDir      string
 	startMenu    string
+	procDir      string
 	timeout      time.Duration
 	replyTimeout time.Duration
 }
@@ -57,7 +58,7 @@ func currentHost() host {
 	if resolved, err := filepath.EvalSymlinks(self); err == nil {
 		self = resolved
 	}
-	h := host{self: self, dataDir: os.Getenv("XDG_DATA_HOME"), timeout: sendTimeout, replyTimeout: sendTimeout}
+	h := host{self: self, dataDir: os.Getenv("XDG_DATA_HOME"), procDir: "/proc", timeout: sendTimeout, replyTimeout: sendTimeout}
 	if home, err := os.UserHomeDir(); err == nil {
 		h.appDirs = append(h.appDirs, filepath.Join(home, "Applications"))
 		if h.dataDir == "" {
@@ -143,21 +144,29 @@ func hasClick(m notifications.DesktopMessage) bool {
 	return m.URL != "" || m.Socket != ""
 }
 
-// notifyWait shows the message over the session bus with the click action and waits for the click or the close; on a click it sends ref to socket and brings the terminal app to the front when socket is set, else opens url with xdg-open. A message that the service did not get goes to notify-send with no click.
+// notifyWait shows the message over the session bus with the click action and waits for the click or the close; on a click it sends ref to socket, selects the tmux window of the TUI and brings the terminal app to the front when socket is set, else opens url with xdg-open. A message that the service did not get goes to notify-send with no click.
 func notifyWait(h host, title, body, url, socket, ref string) error {
 	icon := linuxIcon(h.dataDir)
 	var activate func(conn net.Conn, reader *bufio.Reader, token string)
 	onClick := func() error { return run(h.timeout, lookPath("xdg-open"), []string{url}, nil) }
 	if socket != "" {
-		service, sessionPath := os.Getenv("KONSOLE_DBUS_SERVICE"), os.Getenv("KONSOLE_DBUS_SESSION")
-		if build := terminalCall(os.Getenv("TERM_PROGRAM"), os.Getenv("GHOSTTY_SURFACE_ID"), os.Getenv("GNOME_TERMINAL_SERVICE"), os.Getenv("GNOME_TERMINAL_SCREEN"), os.Getenv("PTYXIS_VERSION")); build != nil {
-			activate = writeCalls(h, build)
-		} else if session, ok := konsoleSession(service, sessionPath); ok {
-			activate = konsoleActivate(h, service, session)
+		tmuxServer, pane := tmuxSocket(os.Getenv("TMUX")), os.Getenv("TMUX_PANE")
+		inTmux := tmuxServer != "" && tmuxPane(pane)
+		activate = func(conn net.Conn, reader *bufio.Reader, token string) {
+			getenv := os.Getenv
+			if inTmux {
+				getenv = tmuxClientEnv(h, tmuxServer, pane)
+			}
+			if exchange := terminalActivate(h, getenv); exchange != nil {
+				exchange(conn, reader, token)
+			}
 		}
 		onClick = func() error {
 			if err := click.Send(socket, ref); err != nil {
 				return fmt.Errorf("send click: %w", err)
+			}
+			if inTmux {
+				tmuxSelect(h, tmuxServer, pane)
 			}
 			return nil
 		}
@@ -171,6 +180,18 @@ func notifyWait(h host, title, body, url, socket, ref string) error {
 		return fmt.Errorf("desktop message: %w", err)
 	}
 	return err
+}
+
+// terminalActivate returns the exchange that brings the terminal that getenv names to the front: a call of terminalCall, else the Konsole exchange, else nil.
+func terminalActivate(h host, getenv func(string) string) func(conn net.Conn, reader *bufio.Reader, token string) {
+	if build := terminalCall(getenv("TERM_PROGRAM"), getenv("GHOSTTY_SURFACE_ID"), getenv("GNOME_TERMINAL_SERVICE"), getenv("GNOME_TERMINAL_SCREEN"), getenv("PTYXIS_VERSION")); build != nil {
+		return writeCalls(h, build)
+	}
+	service := getenv("KONSOLE_DBUS_SERVICE")
+	if session, ok := konsoleSession(service, getenv("KONSOLE_DBUS_SESSION")); ok {
+		return konsoleActivate(h, service, session)
+	}
+	return nil
 }
 
 // terminalCall returns the builder of the calls that bring the terminal of this process to the front from a token: the surface in Ghostty, the tab in GNOME Terminal, the app in Ptyxis, nil for a terminal with no tested call.
