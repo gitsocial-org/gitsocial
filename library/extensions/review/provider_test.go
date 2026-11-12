@@ -685,3 +685,35 @@ func TestReviewRequestedNotifications_excludesStaleCommit(t *testing.T) {
 		t.Errorf("getReviewRequestedNotifications() after the stale mark = %d, %v, want 0", len(got), err)
 	}
 }
+
+// TestPRStateChange_actionOnly checks that only the edit whose action merges a pull request notifies: an edit of the merged pull request gives nothing more.
+func TestPRStateChange_actionOnly(t *testing.T) {
+	setupTestDB(t)
+	const repoURL = "https://github.com/test/pr-actions"
+	const prHash, mergeHash, textHash = "ad0011223344", "bd0011223344", "cd0011223344"
+	ts := time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)
+	message := func(subject, state, edits string) string {
+		return subject + "\n\nGitMsg: ext=\"review\"; type=\"pull-request\"; state=\"" + state + "\"; " + edits + "v=\"0.1.0\""
+	}
+	edits := "edits=\"#commit:" + prHash + "@" + reviewTestBranch + "\"; "
+	versions := []struct{ hash, author, email, subject, state, edits string }{
+		{prHash, "Me", "me@x.com", "PR", "open", ""},
+		{mergeHash, "Bob", "bob@x.com", "PR", "merged", edits},
+		{textHash, "Bob", "bob@x.com", "PR with a better title", "merged", edits},
+	}
+	for i, v := range versions {
+		if err := cache.InsertCommits([]cache.Commit{{Hash: v.hash, RepoURL: repoURL, Branch: reviewTestBranch, AuthorName: v.author, AuthorEmail: v.email, Message: message(v.subject, v.state, v.edits), Timestamp: ts.Add(time.Duration(i) * time.Hour)}}); err != nil {
+			t.Fatalf("InsertCommits(%s) error = %v", v.hash, err)
+		}
+		if err := InsertReviewItem(ReviewItem{RepoURL: repoURL, Hash: v.hash, Branch: reviewTestBranch, Type: "pull-request", State: cache.ToNullString(v.state)}); err != nil {
+			t.Fatalf("InsertReviewItem(%s) error = %v", v.hash, err)
+		}
+	}
+	got, err := getPRStateChangeNotifications("me@x.com", false)
+	if err != nil {
+		t.Fatalf("getPRStateChangeNotifications() error = %v", err)
+	}
+	if len(got) != 1 || got[0].Hash != mergeHash || got[0].Type != "pr-merged" {
+		t.Errorf("notifications = %+v, want one pr-merged for the merge edit and none for the text edit after it", got)
+	}
+}

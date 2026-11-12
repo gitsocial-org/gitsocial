@@ -360,7 +360,7 @@ func countUnreadReviewRequested(userEmail string) (int, error) {
 	return len(notifs), nil
 }
 
-// getPRStateChangeNotifications returns notifications for PRs authored by the user that were merged/closed.
+// getPRStateChangeNotifications returns one notification per edit whose action merges or closes a pull request the user authored.
 func getPRStateChangeNotifications(userEmail string, unreadOnly bool) ([]notifications.Notification, error) {
 	if userEmail == "" {
 		return nil, nil
@@ -382,7 +382,7 @@ func getPRStateChangeNotifications(userEmail string, unreadOnly bool) ([]notific
 			 AND pr.branch = ` + cache.LiveItemBranch("review_items", "cv.canonical_repo_url", "cv.canonical_hash") + `
 			LEFT JOIN core_notification_reads nr ON ec.repo_url = nr.repo_url AND ec.hash = nr.hash AND ec.branch = nr.branch
 			WHERE cv.edit_branch = ` + cache.LiveItemBranch("review_items", "cv.edit_repo_url", "cv.edit_hash") + `
-			  AND ri.state IN ('merged', 'closed')
+			  AND ec.action IN ('merged', 'closed')
 			  AND pr.type = 'pull-request'
 			  AND pr.author_email = ?
 			  AND COALESCE(ec.origin_author_email, ec.author_email) != ?

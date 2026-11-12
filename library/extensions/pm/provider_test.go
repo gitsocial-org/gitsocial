@@ -170,3 +170,46 @@ func TestAssignedIssueNotifications_excludesStaleCommit(t *testing.T) {
 		t.Errorf("getAssignedIssueNotifications() after the stale mark = %d, %v, want 0", len(got), err)
 	}
 }
+
+// TestIssueStateChange_actionOnly checks that only an edit whose action changes the state notifies: a text edit of an open issue and an edit of a closed issue give nothing, and a close and a reopen give one each.
+func TestIssueStateChange_actionOnly(t *testing.T) {
+	setupTestDB(t)
+	const repoURL = "https://github.com/test/actions"
+	const issue = "aa0011223355"
+	ts := time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)
+	message := func(subject, state, edits string) string {
+		return subject + "\n\nGitMsg: ext=\"pm\"; type=\"issue\"; state=\"" + state + "\"; assignees=\"me@x.com\"; " + edits + "v=\"0.1.0\""
+	}
+	edits := "edits=\"#commit:" + issue + "@gitmsg/pm\"; "
+	versions := []struct{ hash, subject, state string }{
+		{issue, "Issue", "open"},
+		{"bb0011223355", "Issue with a better title", "open"},
+		{"cc0011223355", "Issue with a better title", "closed"},
+		{"dd0011223355", "Issue with a label", "closed"},
+		{"ee0011223355", "Issue with a label", "open"},
+	}
+	for i, v := range versions {
+		ref := edits
+		if i == 0 {
+			ref = ""
+		}
+		if err := cache.InsertCommits([]cache.Commit{{Hash: v.hash, RepoURL: repoURL, Branch: "gitmsg/pm", AuthorName: "Bob", AuthorEmail: "bob@x.com", Message: message(v.subject, v.state, ref), Timestamp: ts.Add(time.Duration(i) * time.Hour)}}); err != nil {
+			t.Fatalf("InsertCommits(%s) error = %v", v.hash, err)
+		}
+		if err := InsertPMItem(PMItem{RepoURL: repoURL, Hash: v.hash, Branch: "gitmsg/pm", Type: "issue", State: v.state, Assignees: sql.NullString{String: "me@x.com", Valid: true}}); err != nil {
+			t.Fatalf("InsertPMItem(%s) error = %v", v.hash, err)
+		}
+	}
+	got, err := getIssueStateChangeNotifications("me@x.com", false, 0)
+	if err != nil {
+		t.Fatalf("getIssueStateChangeNotifications() error = %v", err)
+	}
+	types := map[string]string{}
+	for _, n := range got {
+		types[n.Hash] = n.Type
+	}
+	want := map[string]string{"cc0011223355": "issue-closed", "ee0011223355": "issue-reopened"}
+	if len(types) != len(want) || types["cc0011223355"] != want["cc0011223355"] || types["ee0011223355"] != want["ee0011223355"] {
+		t.Errorf("state-change notifications = %v, want %v: one for the close, one for the reopen, none for a text edit", types, want)
+	}
+}
