@@ -368,7 +368,7 @@ func handleFetchCompleted(msg FetchCompletedMsg, ctx tuicore.AppContext) (bool, 
 		switch {
 		case msg.Stats.Items > 0:
 			st.AutoFetchIdleStreak = 0
-		case st.AutoFetchIdleStreak < 20:
+		case st.AutoFetchIdleStreak < 40:
 			st.AutoFetchIdleStreak++
 		}
 	}

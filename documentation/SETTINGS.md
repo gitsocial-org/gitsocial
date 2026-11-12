@@ -27,8 +27,8 @@ GitSocial reads an environment-scoped key from the environment and any other key
 | `fetch.parallel` | int | `4` | concurrent fetch workers |
 | `fetch.timeout` | int | `30` | per-repository fetch timeout, in seconds |
 | `fetch.auto.enabled` | bool | `false` | fetch periodically while the TUI is open |
-| `fetch.auto.interval` | int | `300` | auto-fetch interval in seconds, minimum 60 |
-| `fetch.auto.backoff` | bool | `true` | slow auto-fetch while idle; reset when new items arrive |
+| `fetch.auto.interval` | int | `300` | auto-fetch interval in seconds, minimum 5; `serve` uses at least 60 |
+| `fetch.auto.backoff` | bool | `true` | make the interval 1.25 times longer after each fetch with nothing new, up to 30 minutes; reset when new items arrive; always on for an interval under 60 |
 | `s3.concurrency` | int | `16` | concurrent uploads per s3 push; `GITSOCIAL_S3_CONCURRENCY` overrides |
 | `notifications.desktop` | bool | `true` | send a desktop message for new unread notifications after a fetch; `GITSOCIAL_DESKTOP_NOTIFICATIONS` overrides |
 | `notifications.webhook` | string | | an http or https URL that receives each new unread notification of a fetch as JSON ([NOTIFICATIONS.md](NOTIFICATIONS.md#webhook)) |

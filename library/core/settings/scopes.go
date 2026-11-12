@@ -85,7 +85,7 @@ var Registry = []KeySpec{
 	{Key: "fetch.auto.enabled", Scope: ScopePersonalConfig, Type: KeyBool, Default: "false",
 		Desc: "Periodically fetch in the TUI while it's open."},
 	{Key: "fetch.auto.interval", Scope: ScopePersonalConfig, Type: KeyInt, Default: "300",
-		Desc: "Auto-fetch interval in seconds (minimum 60)."},
+		Desc: "Auto-fetch interval in seconds (minimum 5)."},
 	{Key: "fetch.auto.backoff", Scope: ScopePersonalConfig, Type: KeyBool, Default: "true",
 		Desc: "Slow auto-fetch when idle; reset to the base interval when new items arrive."},
 
@@ -150,8 +150,8 @@ func Validate(key, value string) error {
 		if err != nil || n < 1 {
 			return fmt.Errorf("%s must be a positive integer", key)
 		}
-		if key == "fetch.auto.interval" && n < 60 {
-			return fmt.Errorf("fetch.auto.interval must be at least 60 seconds")
+		if key == "fetch.auto.interval" && n < 5 {
+			return fmt.Errorf("fetch.auto.interval must be at least 5 seconds")
 		}
 	case KeyString:
 		if key == "notifications.webhook" && !validWebhookURL(value) {

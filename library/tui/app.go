@@ -3,6 +3,7 @@ package tui
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"os/exec"
@@ -1539,6 +1540,10 @@ const (
 	autoFetchIdlePoll = 30 * time.Second
 	// autoFetchCeiling caps the exponential back-off interval.
 	autoFetchCeiling = 30 * time.Minute
+	// autoFetchGrowth is the factor of the back-off per empty fetch: the next check comes within a quarter of the quiet time.
+	autoFetchGrowth = 1.25
+	// autoFetchFast is the interval below which the back-off is always on, so a short interval does not poll a quiet remote at full rate.
+	autoFetchFast = 60 * time.Second
 	// autoFetchIdleAfter pauses the heartbeat when there's been no keypress or
 	// mouse input for this long, so an unattended TUI stops polling. Resumes on
 	// the next input event.
@@ -1551,21 +1556,16 @@ func scheduleAutoFetch(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return autoFetchTickMsg{} })
 }
 
-// backoffInterval returns the effective delay for an idle streak: the base
-// interval doubled per consecutive empty fetch, capped at autoFetchCeiling. A
-// loop (not a shift) keeps it overflow-safe for any streak.
+// backoffInterval returns the effective delay for an idle streak: the base interval times autoFetchGrowth per consecutive empty fetch, capped at autoFetchCeiling.
 func backoffInterval(baseSeconds, streak int) time.Duration {
-	d := time.Duration(baseSeconds) * time.Second
-	if d <= 0 {
+	if baseSeconds <= 0 {
 		return autoFetchCeiling
 	}
-	for i := 0; i < streak && d < autoFetchCeiling; i++ {
-		d *= 2
+	d := float64(baseSeconds) * math.Pow(autoFetchGrowth, float64(streak)) * float64(time.Second)
+	if d > float64(autoFetchCeiling) {
+		return autoFetchCeiling
 	}
-	if d > autoFetchCeiling {
-		d = autoFetchCeiling
-	}
-	return d
+	return time.Duration(d)
 }
 
 // autoFetchCmd starts a background fetch from the auto-fetch timer. Unlike the
@@ -1599,18 +1599,20 @@ func (m Model) handleAutoFetchTick() tea.Cmd {
 	}
 	// Never start an auto-fetch on top of another operation, while the user is
 	// mid-input, or while a dialog is open — re-check shortly instead.
+	base := time.Duration(s.Fetch.AutoInterval) * time.Second
 	if m.isFetching || m.isPushing || m.isImporting ||
 		m.host.IsInputActive() || m.host.State().ChoicePrompt != "" {
-		return scheduleAutoFetch(autoFetchIdlePoll)
+		return scheduleAutoFetch(min(autoFetchIdlePoll, max(base, time.Second)))
 	}
-	eff := time.Duration(s.Fetch.AutoInterval) * time.Second
-	if s.Fetch.AutoBackoff {
+	eff := base
+	if s.Fetch.AutoBackoff || base < autoFetchFast {
 		eff = backoffInterval(s.Fetch.AutoInterval, m.host.State().AutoFetchIdleStreak)
 	}
 	if remaining := eff - time.Since(m.host.State().LastFetchTime); remaining > 0 {
 		return scheduleAutoFetch(remaining)
 	}
-	return tea.Batch(m.autoFetchCmd(), scheduleAutoFetch(eff))
+	// The next tick comes after the base interval, not after eff: the fetch that starts now can reset the streak.
+	return tea.Batch(m.autoFetchCmd(), scheduleAutoFetch(max(base, time.Second)))
 }
 
 // refreshTimeline reloads timeline posts from the database. The total count

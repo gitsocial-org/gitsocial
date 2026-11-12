@@ -78,7 +78,7 @@ Examples:
 	return cmd
 }
 
-// serveFetchInterval returns the fetch interval of serve from the fetch.auto.interval setting, or zero when the fetch is off.
+// serveFetchInterval returns the fetch interval of serve from the fetch.auto.interval setting and at least 60 seconds, because serve has no back-off; zero when the fetch is off.
 func serveFetchInterval(on bool) time.Duration {
 	if !on {
 		return 0
@@ -87,7 +87,7 @@ func serveFetchInterval(on bool) time.Duration {
 	if err != nil || s.Fetch.AutoInterval <= 0 {
 		return 300 * time.Second
 	}
-	return time.Duration(s.Fetch.AutoInterval) * time.Second
+	return max(time.Duration(s.Fetch.AutoInterval)*time.Second, time.Minute)
 }
 
 // runServe serves the bucket on addr, pushes the workspace to it and again on each ref change until ctx ends, then drops the tracking refs; a fetchEvery above zero fetches on start and on that interval.

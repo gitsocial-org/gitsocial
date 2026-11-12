@@ -218,8 +218,8 @@ func Set(s *Settings, key, value string) error {
 		s.Fetch.AutoEnabled = value == "true"
 	case "fetch.auto.interval":
 		n, err := strconv.Atoi(value)
-		if err != nil || n < 60 {
-			return fmt.Errorf("fetch.auto.interval must be at least 60 seconds")
+		if err != nil || n < 5 {
+			return fmt.Errorf("fetch.auto.interval must be at least 5 seconds")
 		}
 		s.Fetch.AutoInterval = n
 	case "fetch.auto.backoff":

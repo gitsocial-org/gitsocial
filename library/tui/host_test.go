@@ -1,7 +1,10 @@
 // host_test.go - Tests for layout calculation
 package tui
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestNewLayout_wide(t *testing.T) {
 	l := NewLayout(120, 40)
@@ -57,5 +60,27 @@ func TestNewLayout_contentWidthConsistency(t *testing.T) {
 		if l.NavWidth+l.ContentWidth != w {
 			t.Errorf("NavWidth(%d) + ContentWidth(%d) = %d, want %d", l.NavWidth, l.ContentWidth, l.NavWidth+l.ContentWidth, w)
 		}
+	}
+}
+
+func TestBackoffInterval_growth(t *testing.T) {
+	for _, c := range []struct {
+		base, streak int
+		want         time.Duration
+	}{
+		{5, 0, 5 * time.Second},
+		{5, 1, 6250 * time.Millisecond},
+		{5, 4, 12207031250 * time.Nanosecond},
+		{5, 27, autoFetchCeiling},
+		{300, 1, 375 * time.Second},
+		{300, 40, autoFetchCeiling},
+		{0, 0, autoFetchCeiling},
+	} {
+		if got := backoffInterval(c.base, c.streak); got != c.want {
+			t.Errorf("backoffInterval(%d, %d) = %v, want %v", c.base, c.streak, got, c.want)
+		}
+	}
+	if got := backoffInterval(5, 26); got >= autoFetchCeiling || got < 25*time.Minute {
+		t.Errorf("backoffInterval(5, 26) = %v, want the last step under the ceiling", got)
 	}
 }

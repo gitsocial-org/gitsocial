@@ -76,7 +76,7 @@ gitsocial serve --fetch=false        # push on ref changes only, no fetch
 | push | forced: a rewritten branch, tag or state ref replaces that of the bucket, and no merge is written to the workspace |
 | git hooks | not run: `core.hooksPath` is the null device in the environment of the serve process |
 | poll | `git for-each-ref refs/heads refs/tags refs/gitmsg` every 2 s; one push at a time |
-| fetch | on start and every `fetch.auto.interval` seconds (default 300); a failed fetch prints one line and the loop goes on; no desktop message, the open tab notifies; `--fetch=false` turns it off |
+| fetch | on start and every `fetch.auto.interval` seconds (default 300, at least 60); a failed fetch prints one line and the loop goes on; no desktop message, the open tab notifies; `--fetch=false` turns it off |
 | tracking refs | `refs/remotes/gitsocial-serve/*` and `refs/gitsocial/tracking/gitsocial-serve/*`, deleted on exit and written again from the bucket at the next start |
 | pictures | the avatar store of the `origin` URL, which `gitsocial import avatars` fills ([import](#import)) |
 
