@@ -166,6 +166,8 @@ const (
 	notificationTypeRepost  NotificationType = "repost"
 	notificationTypeQuote   NotificationType = "quote"
 	NotificationTypeFollow  NotificationType = "follow"
+	// NotificationTypeActivity is a timeline row of a repository at the notification level all.
+	NotificationTypeActivity NotificationType = "activity"
 )
 
 type Notification struct {

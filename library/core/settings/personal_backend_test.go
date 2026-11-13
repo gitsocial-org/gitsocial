@@ -5,6 +5,10 @@ package settings
 import (
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 // freshPersonalRepo points GITSOCIAL_PERSONAL_REPO at a temp path for the
@@ -188,5 +192,86 @@ func TestWorkspaceMode_RoundTrip(t *testing.T) {
 	}
 	if got := GetWorkspaceMode(repoA); got != "" {
 		t.Errorf("GetWorkspaceMode(A) after delete = %q; want \"\"", got)
+	}
+}
+
+// TestWriteNotificationLevel_roundTrip: a write stores the identity and the set time, off has no time, and default removes the entry.
+func TestWriteNotificationLevel_roundTrip(t *testing.T) {
+	freshPersonalRepo(t)
+	setAt := time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC)
+	if err := WriteNotificationLevel("https://example.com/Owner/Repo.git", LevelAll, setAt); err != nil {
+		t.Fatalf("WriteNotificationLevel(all): %v", err)
+	}
+	if err := WriteNotificationLevel("https://example.com/other/repo", LevelOff, setAt); err != nil {
+		t.Fatalf("WriteNotificationLevel(off): %v", err)
+	}
+	identity := protocol.NormalizeURL("https://example.com/Owner/Repo.git")
+	levels := NotificationLevels()
+	if got, want := levels[identity], "all 2026-11-13T10:00:00Z"; got != want || len(levels) != 2 {
+		t.Fatalf("levels = %v, want %q under the identity %q and one other entry", levels, want, identity)
+	}
+	if level, at := NotificationLevel(levels, "https://example.com/Owner/Repo.git", "", nil); level != LevelAll || !at.Equal(setAt) {
+		t.Errorf("NotificationLevel() = %q at %v, want all at %v", level, at, setAt)
+	}
+	if level, _ := NotificationLevel(levels, "https://example.com/other/repo", "", nil); level != LevelOff {
+		t.Errorf("NotificationLevel(other) = %q, want off", level)
+	}
+	if err := WriteNotificationLevel(identity, LevelDefault, setAt); err != nil {
+		t.Fatalf("WriteNotificationLevel(default): %v", err)
+	}
+	if levels := NotificationLevels(); len(levels) != 1 {
+		t.Errorf("levels after default = %v, want the entry removed", levels)
+	}
+	if err := WriteNotificationLevel(identity, "loud", setAt); err == nil {
+		t.Error("WriteNotificationLevel(loud) gave no error, want an invalid level")
+	}
+}
+
+// TestLevel_forkTakesWorkspaceLevel: a registered fork with no entry takes the level of the workspace; another repository does not.
+func TestLevel_forkTakesWorkspaceLevel(t *testing.T) {
+	const workspace, fork, other = "https://example.com/me/repo", "https://example.com/fork/repo", "https://example.com/other/repo"
+	levels := map[string]string{workspace: "off"}
+	if level, _ := NotificationLevel(levels, fork, workspace, []string{fork}); level != LevelOff {
+		t.Errorf("fork level = %q, want off from the workspace", level)
+	}
+	if level, _ := NotificationLevel(levels, other, workspace, []string{fork}); level != LevelDefault {
+		t.Errorf("other level = %q, want default", level)
+	}
+}
+
+// TestLevel_forkOwnEntryWins: the entry of a fork has priority over the entry of the workspace.
+func TestLevel_forkOwnEntryWins(t *testing.T) {
+	const workspace, fork = "https://example.com/me/repo", "https://example.com/fork/repo"
+	levels := map[string]string{workspace: "off", fork: "all 2026-11-13T10:00:00Z"}
+	if level, _ := NotificationLevel(levels, fork, workspace, []string{fork}); level != LevelAll {
+		t.Errorf("fork level = %q, want its own all", level)
+	}
+}
+
+// TestLevel_seenByRunningProcess: a level that another process writes to the config ref is seen with no restart.
+func TestLevel_seenByRunningProcess(t *testing.T) {
+	freshPersonalRepo(t)
+	if err := WriteNotificationLevel("https://example.com/a/repo", LevelOff, time.Now()); err != nil {
+		t.Fatalf("WriteNotificationLevel: %v", err)
+	}
+	if levels := NotificationLevels(); len(levels) != 1 {
+		t.Fatalf("levels = %v, want one entry", levels)
+	}
+	path, _ := PersonalRepoPath()
+	ref := "refs/gitmsg/" + PersonalConfigExt + "/config"
+	parent, err := git.ReadRef(path, ref)
+	if err != nil {
+		t.Fatalf("read config ref: %v", err)
+	}
+	other := `{"notifications.levels": {"https://example.com/a/repo": "off", "https://example.com/b/repo": "off"}, "version": "0.1.0"}`
+	hash, err := git.CreateCommitTree(path, other, parent)
+	if err != nil {
+		t.Fatalf("create config commit: %v", err)
+	}
+	if err := git.WriteRef(path, ref, hash); err != nil {
+		t.Fatalf("write config ref: %v", err)
+	}
+	if levels := NotificationLevels(); len(levels) != 2 {
+		t.Errorf("levels after a write by another process = %v, want two entries", levels)
 	}
 }

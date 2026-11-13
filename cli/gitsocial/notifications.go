@@ -33,7 +33,7 @@ By default shows unread notifications only. Use --all to see all notifications.
 Use --type to filter by notification type (comma-separated).
 
 Valid types: mention, comment, repost, quote, follow, fork-pr, feedback,
-approved, changes-requested, issue-assigned, new-release, edit`,
+approved, changes-requested, issue-assigned, new-release, edit, activity`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !EnsureGitRepo(cmd) {
 				return exit(ExitNotRepo)
@@ -82,6 +82,7 @@ approved, changes-requested, issue-assigned, new-release, edit`,
 		newNotificationsReadAllCmd(),
 		newNotificationsUnreadCmd(),
 		newNotificationsUnreadAllCmd(),
+		newNotificationsLevelCmd(),
 	)
 
 	return cmd
@@ -342,6 +343,9 @@ func formatNotification(n notifications.Notification) string {
 	default:
 		if sn, ok := n.Item.(social.Notification); ok && sn.Item != nil {
 			content := strings.TrimSpace(sn.Item.Content)
+			if sn.Item.Action != "" {
+				content = social.ActionText(*sn.Item)
+			}
 			content = text.Truncate(content, 150)
 			if content != "" {
 				lines = append(lines, content)

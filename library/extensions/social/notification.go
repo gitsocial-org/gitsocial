@@ -52,7 +52,7 @@ const notifiableItems = `
 	  )
 `
 
-// getNotifications retrieves notifications for interactions on workspace posts and threads the user participates in.
+// getNotifications retrieves notifications for interactions on workspace posts and threads the user participates in, the activity events and the follows.
 func getNotifications(workdir string, filter notificationFilter) ([]Notification, error) {
 	workspaceURL := gitmsg.ResolveRepoURL(workdir)
 	if workspaceURL == "" {
@@ -156,6 +156,12 @@ func getNotifications(workdir string, filter notificationFilter) ([]Notification
 			IsRead:    row.isRead,
 		})
 	}
+
+	activity, err := getActivityNotifications(workdir, workspaceURL, userEmail, filter.UnreadOnly)
+	if err != nil {
+		log.Warn("get activity notifications failed, returning the rest", "error", err)
+	}
+	notifications = append(notifications, activity...)
 
 	followNotifications, err := getFollowNotifications(workspaceURL, filter.UnreadOnly)
 	if err != nil {

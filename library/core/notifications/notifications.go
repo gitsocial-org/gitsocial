@@ -119,15 +119,19 @@ func gather(workdir string, filter Filter) ([]Notification, error) {
 	return all, errors.Join(failures...)
 }
 
-// onePerKey keeps one event per commit hash, and per repository for a follow: the row of the workspace first, then the lowest rank, then the first; a condition has no key and stays.
+// onePerKey keeps one event per commit hash, and per repository for a follow: each other type before an activity row, then the row of the workspace, then the lowest rank, then the first; a condition has no key and stays.
 func onePerKey(items []Notification, workspaceURL string) []Notification {
 	type key struct{ repoURL, hash string }
-	// order puts the row of the workspace before a copy of the commit in a fork.
+	// order puts the row of the workspace before a copy of the commit in a fork, and an activity row after each other type of either.
 	order := func(n Notification) int {
-		if n.RepoURL == workspaceURL {
-			return typeRank(n)
+		rank := typeRank(n)
+		if n.Type == "activity" {
+			rank += 20
 		}
-		return typeRank(n) + 10
+		if n.RepoURL != workspaceURL {
+			rank += 10
+		}
+		return rank
 	}
 	kept := make(map[key]int, len(items))
 	out := items[:0]
@@ -150,9 +154,11 @@ func onePerKey(items []Notification, workspaceURL string) []Notification {
 	return out
 }
 
-// typeRank orders the types that one commit can have: an extension type, then a comment of social, then a mention, a reference and an edit.
+// typeRank orders the types that one commit can have: an extension type, then a comment of social, then a mention, a reference, an edit and an activity event.
 func typeRank(n Notification) int {
 	switch {
+	case n.Type == "activity":
+		return 5
 	case n.Source == "core" && n.Type == "edit":
 		return 4
 	case n.Source == "core" && n.Type == "reference":

@@ -242,7 +242,10 @@ gitsocial notifications [--all] [--type mention,follow] [--limit <n>]
 gitsocial notifications count
 gitsocial notifications read <id> | read-all
 gitsocial notifications unread <id> | unread-all
+gitsocial notifications level [<repository>] [all|default|off]
 ```
+
+A [level](NOTIFICATIONS.md#levels) of a repository changes the notifications that you get from it.
 
 ### gitsocial id
 

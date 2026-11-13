@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 // PersonalConfigExt is the extension name used under refs/gitmsg/<ext>/config.
@@ -121,22 +124,7 @@ func GetWorkspaceMode(repoURL string) string {
 	if repoURL == "" {
 		return ""
 	}
-	path, err := PersonalRepoPath()
-	if err != nil || !git.BareRepoExists(path) {
-		return ""
-	}
-	config, err := gitmsg.ReadExtConfig(path, PersonalConfigExt)
-	if err != nil || config == nil {
-		return ""
-	}
-	raw, ok := config[workspaceModesKey].(map[string]interface{})
-	if !ok {
-		return ""
-	}
-	if v, ok := raw[repoURL].(string); ok {
-		return v
-	}
-	return ""
+	return personalObject(workspaceModesKey)[repoURL]
 }
 
 // WriteWorkspaceMode persists the fetch mode for a repo URL, auto-initializing
@@ -145,6 +133,98 @@ func WriteWorkspaceMode(repoURL, mode string) error {
 	if repoURL == "" {
 		return fmt.Errorf("repo URL required")
 	}
+	return writePersonalObjectEntry(workspaceModesKey, repoURL, mode)
+}
+
+// workspaceModesKey is the personal-config key under which the per-repo mode
+// map is stored. Kept private — callers use Get/WriteWorkspaceMode.
+const workspaceModesKey = "fetch.workspace_modes"
+
+// LoadWorkspaceModes reads the entire per-repo mode map. Used by overlay to
+// populate Settings.Fetch.WorkspaceModes so legacy readers see synced values.
+func LoadWorkspaceModes() map[string]string {
+	return personalObject(workspaceModesKey)
+}
+
+// notificationLevelsKey is the personal-config key of the object from repository identity to notification level.
+const notificationLevelsKey = "notifications.levels"
+
+// The notification levels of a repository; no entry is the level default.
+const (
+	LevelAll     = "all"
+	LevelDefault = "default"
+	LevelOff     = "off"
+)
+
+// NotificationLevels reads the stored level of each repository, after a clear of the config memo so a level that another process wrote is seen.
+func NotificationLevels() map[string]string {
+	if path, err := PersonalRepoPath(); err == nil {
+		gitmsg.InvalidateExtConfig(path, PersonalConfigExt)
+	}
+	return personalObject(notificationLevelsKey)
+}
+
+// WriteNotificationLevel stores the level of a repository under its identity, all with its set time; default removes the entry.
+func WriteNotificationLevel(repoURL, level string, setAt time.Time) error {
+	identity := protocol.NormalizeURL(repoURL)
+	if identity == "" {
+		return fmt.Errorf("repository required")
+	}
+	switch level {
+	case LevelAll:
+		return writePersonalObjectEntry(notificationLevelsKey, identity, LevelAll+" "+setAt.UTC().Format(time.RFC3339))
+	case LevelOff:
+		return writePersonalObjectEntry(notificationLevelsKey, identity, LevelOff)
+	case LevelDefault:
+		return writePersonalObjectEntry(notificationLevelsKey, identity, "")
+	}
+	return fmt.Errorf("invalid level %q: use all, default or off", level)
+}
+
+// NotificationLevel returns the level of a repository and the set time of all: its own entry, else the entry of the workspace for a registered fork, else default.
+func NotificationLevel(levels map[string]string, repoURL, workspaceURL string, forks []string) (string, time.Time) {
+	identity := protocol.NormalizeURL(repoURL)
+	value, ok := levels[identity]
+	if !ok && slices.Contains(forks, identity) {
+		value = levels[protocol.NormalizeURL(workspaceURL)]
+	}
+	word, setTime, _ := strings.Cut(value, " ")
+	switch word {
+	case LevelOff:
+		return LevelOff, time.Time{}
+	case LevelAll:
+		if at, err := time.Parse(time.RFC3339, setTime); err == nil {
+			return LevelAll, at
+		}
+	}
+	return LevelDefault, time.Time{}
+}
+
+// personalObject returns the string entries of the object under key in the personal config, or nil.
+func personalObject(key string) map[string]string {
+	path, err := PersonalRepoPath()
+	if err != nil || !git.BareRepoExists(path) {
+		return nil
+	}
+	config, err := gitmsg.ReadExtConfig(path, PersonalConfigExt)
+	if err != nil || config == nil {
+		return nil
+	}
+	raw, ok := config[key].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	out := make(map[string]string, len(raw))
+	for k, v := range raw {
+		if s, ok := v.(string); ok {
+			out[k] = s
+		}
+	}
+	return out
+}
+
+// writePersonalObjectEntry sets one entry of the object under key in the personal config, or removes it for an empty value; an empty object is removed.
+func writePersonalObjectEntry(key, entry, value string) error {
 	path, err := EnsurePersonalRepo()
 	if err != nil {
 		return fmt.Errorf("ensure personal repo: %w", err)
@@ -156,52 +236,24 @@ func WriteWorkspaceMode(repoURL, mode string) error {
 	if config == nil {
 		config = make(map[string]interface{})
 	}
-	modes, _ := config[workspaceModesKey].(map[string]interface{})
-	if modes == nil {
-		modes = make(map[string]interface{})
+	object, _ := config[key].(map[string]interface{})
+	if object == nil {
+		object = make(map[string]interface{})
 	}
-	if mode == "" {
-		delete(modes, repoURL)
+	if value == "" {
+		delete(object, entry)
 	} else {
-		modes[repoURL] = mode
+		object[entry] = value
 	}
-	if len(modes) == 0 {
-		delete(config, workspaceModesKey)
+	if len(object) == 0 {
+		delete(config, key)
 	} else {
-		config[workspaceModesKey] = modes
+		config[key] = object
 	}
 	if err := gitmsg.WriteExtConfig(path, PersonalConfigExt, config); err != nil {
 		return fmt.Errorf("write personal config: %w", err)
 	}
 	return nil
-}
-
-// workspaceModesKey is the personal-config key under which the per-repo mode
-// map is stored. Kept private — callers use Get/WriteWorkspaceMode.
-const workspaceModesKey = "fetch.workspace_modes"
-
-// LoadWorkspaceModes reads the entire per-repo mode map. Used by overlay to
-// populate Settings.Fetch.WorkspaceModes so legacy readers see synced values.
-func LoadWorkspaceModes() map[string]string {
-	path, err := PersonalRepoPath()
-	if err != nil || !git.BareRepoExists(path) {
-		return nil
-	}
-	config, err := gitmsg.ReadExtConfig(path, PersonalConfigExt)
-	if err != nil || config == nil {
-		return nil
-	}
-	raw, ok := config[workspaceModesKey].(map[string]interface{})
-	if !ok {
-		return nil
-	}
-	out := make(map[string]string, len(raw))
-	for k, v := range raw {
-		if s, ok := v.(string); ok {
-			out[k] = s
-		}
-	}
-	return out
 }
 
 // --- helpers ---

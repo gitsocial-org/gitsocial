@@ -124,6 +124,8 @@ func desktopVerb(notificationType string) string {
 		return "commented on your memo"
 	case "inherited-policy":
 		return "added a critical memo"
+	case "activity":
+		return "has new activity"
 	}
 	return notificationType
 }

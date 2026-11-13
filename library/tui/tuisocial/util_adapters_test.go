@@ -2,11 +2,16 @@
 package tuisocial
 
 import (
+	"fmt"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
+	"github.com/gitsocial-org/gitsocial/library/tui/tuiviews"
 )
 
 func TestPostItem_ItemType_RegularPost(t *testing.T) {
@@ -153,5 +158,53 @@ func TestNavTargetIntegration(t *testing.T) {
 	if itemType.Extension != "pm" || itemType.Type != "issue" {
 		t.Errorf("Comment on PM issue should have ItemType {pm, issue}, got {%s, %s}",
 			itemType.Extension, itemType.Type)
+	}
+}
+
+// activityRowWorkdir is the workdir for which activityProvider gives its event.
+const activityRowWorkdir = "activity-row-test"
+
+// activityProvider gives one activity event of an assign for activityRowWorkdir.
+type activityProvider struct{}
+
+// init registers the provider that TestActivityRow_timelineTarget reads.
+func init() {
+	notifications.RegisterProvider("test-activity", activityProvider{})
+}
+
+// GetNotifications returns the activity event of an assign of an issue.
+func (activityProvider) GetNotifications(workdir string, _ notifications.Filter) ([]notifications.Notification, error) {
+	if workdir != activityRowWorkdir {
+		return nil, nil
+	}
+	post := activityAssignPost()
+	return []notifications.Notification{{
+		RepoURL: post.Repository, Hash: "ed0000000001", Branch: post.Branch, Type: "activity", Source: "social",
+		Timestamp: post.Timestamp, Item: social.Notification{ID: post.ID, Type: social.NotificationTypeActivity, Item: &post},
+	}}, nil
+}
+
+// activityAssignPost returns the timeline post of an assign of an issue.
+func activityAssignPost() social.Post {
+	return social.Post{
+		ID: "https://github.com/a/b#commit:ed0000000001@gitmsg/pm", Repository: "https://github.com/a/b", Branch: "gitmsg/pm",
+		Type: social.PostTypePost, HeaderExt: "pm", HeaderType: "issue", Action: "assigned",
+		EditOf: "#commit:a55000000001@gitmsg/pm", Timestamp: time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC),
+	}
+}
+
+// TestActivityRow_timelineTarget checks that the activity row of an assign opens what the timeline row opens: the issue, not the edit commit.
+func TestActivityRow_timelineTarget(t *testing.T) {
+	result, err := makeGetNotificationsFunc("", func() bool { return false })(activityRowWorkdir, false)
+	if err != nil || len(result.Items) != 1 {
+		t.Fatalf("notifications = %+v, %v, want the one activity row", result.Items, err)
+	}
+	got := tuiviews.NotificationTarget(result.Meta[0], result.Items[0])
+	want := tuicore.GetNavTarget(postsToItems([]social.Post{activityAssignPost()}, "", false, "")[0])
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("activity row target = %+v, want the target of the timeline row %+v", got, want)
+	}
+	if issue := "https://github.com/a/b#commit:a55000000001@gitmsg/pm"; !strings.Contains(fmt.Sprint(got.Params), issue) {
+		t.Errorf("activity row target = %+v, want the issue %s", got, issue)
 	}
 }

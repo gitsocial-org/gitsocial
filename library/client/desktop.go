@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/log"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications/desktop"
@@ -50,20 +51,42 @@ func deliver(workdir, cacheDir, socket string, onDesktop bool, send func([]notif
 	return len(unread)
 }
 
-// sendClaimed sends the messages of the claimed events with their click targets to the desktop and to the webhook.
+// sendClaimed sends the messages of the claimed events with their click targets: to the desktop without the events of a repository at the level off, and to the webhook all of them.
 func sendClaimed(workdir, cacheDir, socket string, onDesktop bool, claimed []notifications.Notification, url string, send func([]notifications.DesktopMessage) error, httpClient *http.Client) {
 	if len(claimed) == 0 {
 		return
 	}
 	all := messages(workdir, cacheDir, claimed)
 	if onDesktop && DesktopEnabled() {
-		if err := send(desktopCopy(all, socket)); err != nil {
-			log.Debug("desktop notification failed", "error", err)
+		shown := all
+		if audible := withoutOffRepos(workdir, claimed); len(audible) < len(claimed) {
+			shown = messages(workdir, cacheDir, audible)
+		}
+		if len(shown) > 0 {
+			if err := send(desktopCopy(shown, socket)); err != nil {
+				log.Debug("desktop notification failed", "error", err)
+			}
 		}
 	}
 	if url != "" {
 		postWebhook(httpClient, url, all, webhookRetryDelay)
 	}
+}
+
+// withoutOffRepos returns the events whose repository is not at the notification level off.
+func withoutOffRepos(workdir string, events []notifications.Notification) []notifications.Notification {
+	levels := settings.NotificationLevels()
+	if len(levels) == 0 {
+		return events
+	}
+	workspaceURL, forks := gitmsg.ResolveRepoURL(workdir), gitmsg.GetForks(workdir)
+	out := make([]notifications.Notification, 0, len(events))
+	for _, n := range events {
+		if level, _ := settings.NotificationLevel(levels, n.RepoURL, workspaceURL, forks); level != settings.LevelOff {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // desktopCopy returns the messages for the desktop sender: with a socket, each names it and has no URL, so a click goes to that TUI.

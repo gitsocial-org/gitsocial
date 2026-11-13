@@ -2,7 +2,7 @@
 
 Notifications from all extensions are in one feed, with the newest first.
 
-[Commands](#commands) · [Desktop notifications](#desktop-notifications) · [Types](#types)
+[Commands](#commands) · [Levels](#levels) · [Desktop notifications](#desktop-notifications) · [Types](#types)
 
 ## Commands
 
@@ -11,11 +11,52 @@ gitsocial notifications [--all] [--type mention,follow] [--limit <n>]
 gitsocial notifications count
 gitsocial notifications read <id> | read-all
 gitsocial notifications unread <id> | unread-all
+gitsocial notifications level [<repository>] [all|default|off]
 ```
 
 `gitsocial fetch` reports the unread count when it finishes. In the TUI, `@` opens the feed.
 
 `gitsocial notifications` prints the id of each notification that has a read state: `<repository>#commit:<hash>`, or `<repository>#follow` for a follow. `read` and `unread` take that id.
+
+## Levels
+
+A level of a repository changes the notifications that you get from it. The level is in your personal settings ([SETTINGS.md](SETTINGS.md)), not in the repository.
+
+```
+gitsocial notifications level                                   # print the levels
+gitsocial notifications level all                               # the workspace
+gitsocial notifications level https://github.com/org/repo off
+gitsocial notifications level https://github.com/org/repo default  # remove the level
+```
+
+| Level | Notifications |
+|---|---|
+| default | the [types](#types); a repository with no level is at default |
+| all | the types, and one `activity` notification for each new timeline item of the repository that is not yours, from the time that you set the level |
+| off | the notifications stay in the feed and in the count, and go to the webhook; none gives a desktop message |
+
+The level applies to the repository of the commit of a notification, not to the repository of the item that the commit is about. For example, a comment from a followed repository on your post gives a desktop message when your workspace is at `off`; it gives none when the followed repository is at `off`.
+
+A registered fork with no level takes the level of the workspace. The level `all` applies only to the workspace, its registered forks and the repositories of its lists. The `activity` notifications count toward the limit of three desktop messages, so a fetch with many of them gives one summary. A notification of a repository at `off` is recorded as sent, so it gets no desktop message after a later change of the level.
+
+| Rule | Test |
+|---|---|
+| A repository with no level gives the same notifications as before | `TestLevel_defaultAddsNothing` |
+| The level `all` gives one `activity` notification for each timeline item of the repository | `TestLevel_allGivesTimelineRows` |
+| An item that is not newer than the set time gives no notification | `TestLevel_allStartsAtSetTime` |
+| An item by you gives no notification | `TestLevel_allSkipsOwnItems` |
+| A repository that the workspace does not use gives no `activity` notification | `TestLevel_allOnlyInScope` |
+| A fork commit that is also in the workspace gives no `activity` notification | `TestLevel_forkCopyGivesNoEvent` |
+| A commit with one of the types keeps that type | `TestOnePerKey_activityRanksLast` |
+| An assign after a read `activity` notification of the issue gives a new unread one | `TestLevel_assignAfterReadGivesEvent` |
+| An `activity` notification is sent one time and is read by its hash | `TestDeliver_activityClaimedOnce` |
+| A notification of a repository at `off` is recorded as sent, is in the feed, goes to the webhook, gives no desktop message and is not in the count of a summary | `TestDeliver_offRepoNoDesktop` |
+| A registered fork with no level takes the level of the workspace | `TestLevel_forkTakesWorkspaceLevel` |
+| The level of a fork has priority over the level of the workspace | `TestLevel_forkOwnEntryWins` |
+| A running TUI, `serve` or RPC server reads a level that a different process wrote | `TestLevel_seenByRunningProcess` |
+| A set stores the identity of the repository and the set time; `default` removes the level | `TestWriteNotificationLevel_roundTrip` |
+| The command sets, prints and removes a level | `TestNotificationsLevel_setAndList` |
+| An `activity` row in the TUI opens what the timeline row of the item opens | `TestActivityRow_timelineTarget` |
 
 ## Desktop notifications
 
@@ -146,6 +187,7 @@ The scope of a type tells which repositories can create it. GitSocial does not n
 | `memo-comment` | any | someone else comments on a memo you authored |
 | `inherited-policy` | inherited | a `priority/critical` memo is added to an inherited repository |
 | `branch-diverged` | workspace | a local `gitmsg/<ext>` branch has unpushed commits and diverges from origin |
+| `activity` | workspace, forks, followed | a repository at the [level](#levels) `all` has a new timeline item that is not yours |
 
 The four branch notifications come from `review_branch_observations` ([ARCHITECTURE.md](ARCHITECTURE.md#schema)), which GitSocial updates after each fetch, and go to the author and the reviewers of the pull request. A notification clears when `pr update` records the new tip, when the branch is on its remote again, or when the pull request closes. `branch-diverged` clears when the local and remote branches no longer diverge, for example after you merge and push.
 
@@ -158,6 +200,7 @@ One commit gives one notification. A commit that is in the workspace and in a fo
 1. a type of `pm`, `review`, `release` or `memo`; of two such types, `issue-assigned` before `fork-issue` and `review-requested` before `fork-pr`
 2. a type of `social` (`comment`, `repost`, `quote`)
 3. `mention`, then `reference`, then `edit`
+4. `activity`
 
 `--type` filters before this rule, so `--type mention` also finds a comment that mentions you.
 

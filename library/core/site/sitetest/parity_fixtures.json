@@ -849,6 +849,7 @@
     "new-release": "Alice published a release · owner/repo",
     "memo-comment": "Alice commented on your memo · owner/repo",
     "inherited-policy": "Alice added a critical memo · owner/repo",
-    "branch-diverged": "A local gitmsg branch diverged from origin · owner/repo"
+    "branch-diverged": "A local gitmsg branch diverged from origin · owner/repo",
+    "activity": "Alice has new activity · owner/repo"
   }
 }

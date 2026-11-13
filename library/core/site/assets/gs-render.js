@@ -4734,6 +4734,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     feedback: "gave feedback on a pull request", approved: "approved a pull request", "changes-requested": "requested changes",
     "pr-merged": "merged your pull request", "pr-closed": "closed your pull request", "pr-ready": "marked a pull request ready",
     "new-release": "published a release", "memo-comment": "commented on your memo", "inherited-policy": "added a critical memo",
+    activity: "has new activity",
   };
 
   // notificationBody returns the text of a notification: the actor and the verb of the type, or the sentence of a type with no actor, then the repository. Mirrors desktopBody in Go; parity_fixtures.json pins the two.

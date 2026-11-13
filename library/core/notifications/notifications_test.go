@@ -281,6 +281,28 @@ func TestOnePerKey_workspaceRowWins(t *testing.T) {
 	}
 }
 
+// TestOnePerKey_activityRanksLast checks that a commit with a type of the default level keeps that type, also when only a fork row has it.
+func TestOnePerKey_activityRanksLast(t *testing.T) {
+	ws, fork := "https://github.com/a/b", "https://github.com/fork/b"
+	got := onePerKey([]Notification{
+		{RepoURL: ws, Hash: "aaa111222333", Type: "activity", Source: "social"},
+		{RepoURL: ws, Hash: "aaa111222333", Type: "edit", Source: "core"},
+		{RepoURL: ws, Hash: "bbb111222333", Type: "activity", Source: "social"},
+		{RepoURL: fork, Hash: "bbb111222333", Type: "fork-issue", Source: "pm"},
+		{RepoURL: ws, Hash: "ccc111222333", Type: "comment", Source: "social"},
+		{RepoURL: ws, Hash: "ccc111222333", Type: "activity", Source: "social"},
+		{RepoURL: ws, Hash: "ddd111222333", Type: "activity", Source: "social"},
+	}, ws)
+	want := []string{ws + " edit", fork + " fork-issue", ws + " comment", ws + " activity"}
+	keys := make([]string, len(got))
+	for i, n := range got {
+		keys[i] = n.RepoURL + " " + n.Type
+	}
+	if !reflect.DeepEqual(keys, want) {
+		t.Errorf("onePerKey() = %v, want %v", keys, want)
+	}
+}
+
 // TestClaim_copyOfCommit checks that the state of a commit holds for its copy in a second repository: no second claim, and one unread mark for both.
 func TestClaim_copyOfCommit(t *testing.T) {
 	setupTestDB(t)

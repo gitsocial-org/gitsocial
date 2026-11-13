@@ -867,14 +867,14 @@ func scanResolvedRows(rows *sql.Rows) ([]SocialItem, error) {
 	return items, rows.Err()
 }
 
-// scanResolvedRow scans one baseSelectFromView or baseDirectSelect row.
-func scanResolvedRow(s cache.RowScanner) (*SocialItem, error) {
+// scanResolvedRow scans one baseSelectFromView or baseDirectSelect row, and into extra each column that a caller adds after them.
+func scanResolvedRow(s cache.RowScanner, extra ...any) (*SocialItem, error) {
 	var item SocialItem
 	var ts, message, originalMessage, staleSince, editorName, editorEmail sql.NullString
 	var editRepoURL, editHash, editBranch sql.NullString
 	var labelsStr sql.NullString
 	var isVirtual, isRetracted, hasEdits, followsWorkspace, hasProposed int
-	err := s.Scan(
+	dest := append(make([]any, 0, 32+len(extra)),
 		&item.RepoURL, &item.Hash, &item.Branch,
 		&item.AuthorName, &item.AuthorEmail, &message, &originalMessage, &ts,
 		&item.Type,
@@ -888,7 +888,7 @@ func scanResolvedRow(s cache.RowScanner) (*SocialItem, error) {
 		&item.Action,
 		&followsWorkspace, &hasProposed,
 	)
-	if err != nil {
+	if err := s.Scan(append(dest, extra...)...); err != nil {
 		return nil, err
 	}
 	if message.Valid {

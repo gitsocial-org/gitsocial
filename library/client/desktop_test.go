@@ -9,7 +9,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
@@ -276,5 +278,69 @@ func TestSendClaimed_emitterSocket(t *testing.T) {
 	sendClaimed(workdir, t.TempDir(), "", true, []notifications.Notification{item}, server.URL, send, server.Client())
 	if len(sent) != 1 || sent[0].Socket != "" || sent[0].URL != "https://site.example/index.html#commit:0123456789ab" {
 		t.Errorf("desktop messages with no socket = %+v, want the item URL", sent)
+	}
+}
+
+// TestDeliver_activityClaimedOnce: an activity event gets one desktop message, the next delivery sends nothing, and a read by its hash takes it from the unread feed.
+func TestDeliver_activityClaimedOnce(t *testing.T) {
+	isolateDesktopSetting(t)
+	workdir := mentionWorkspace(t)
+	workspaceURL := gitmsg.ResolveRepoURL(workdir)
+	const hash = "ac7171717171"
+	if err := cache.InsertCommits([]cache.Commit{{Hash: hash, RepoURL: workspaceURL, Branch: "gitmsg/social",
+		AuthorName: "Bea", AuthorEmail: "bea@example.com", Message: "Hello", Timestamp: time.Now()}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	if err := settings.WriteNotificationLevel(workspaceURL, settings.LevelAll, time.Now().Add(-time.Hour)); err != nil {
+		t.Fatalf("WriteNotificationLevel() error = %v", err)
+	}
+	send, sent := recordSends()
+	deliver(workdir, t.TempDir(), "", true, send, http.DefaultClient)
+	deliver(workdir, t.TempDir(), "", true, send, http.DefaultClient)
+	if want := "Bea has new activity · " + protocol.GetFullDisplayName(workspaceURL); len(*sent) != 1 || (*sent)[0] != want {
+		t.Errorf("sent %q after two deliveries, want one %q", *sent, want)
+	}
+	if err := notifications.MarkAsRead(workspaceURL, hash); err != nil {
+		t.Fatalf("MarkAsRead() error = %v", err)
+	}
+	if unread, _ := notifications.GetAll(workdir, notifications.Filter{UnreadOnly: true}); len(unread) != 0 {
+		t.Errorf("unread after the read = %+v, want none", unread)
+	}
+}
+
+// TestDeliver_offRepoNoDesktop: an event of a repository at off is claimed and stays in the list, goes to the webhook and not to the desktop, and is not in the count of a desktop summary.
+func TestDeliver_offRepoNoDesktop(t *testing.T) {
+	isolateDesktopSetting(t)
+	workdir := fetchedMention(t)
+	server, docs := webhookRecorder(t, func(map[string]any, int) int { return http.StatusOK })
+	if err := settings.NewManager().Write("notifications.webhook", server.URL); err != nil {
+		t.Fatalf("write webhook: %v", err)
+	}
+	workspaceURL := gitmsg.ResolveRepoURL(workdir)
+	if err := settings.WriteNotificationLevel(workspaceURL, settings.LevelOff, time.Now()); err != nil {
+		t.Fatalf("WriteNotificationLevel() error = %v", err)
+	}
+	send, sent := recordSends()
+	deliver(workdir, t.TempDir(), "", true, send, server.Client())
+	deliver(workdir, t.TempDir(), "", true, send, server.Client())
+	if len(*sent) != 0 || len(docs()) != 1 {
+		t.Errorf("the mention of a fork of an off workspace gave %d desktop messages and %d webhook posts, want 0 and 1", len(*sent), len(docs()))
+	}
+	if unread, _ := notifications.GetAll(workdir, notifications.Filter{UnreadOnly: true}); len(unread) != 1 {
+		t.Errorf("unread = %+v, want the claimed mention in the list", unread)
+	}
+	event := func(repoURL, hash string) notifications.Notification {
+		return notifications.Notification{RepoURL: repoURL, Hash: hash, Branch: "gitmsg/social", Type: "mention", Actor: notifications.Actor{Name: "Bea"}}
+	}
+	const other = "https://example.com/other/repo"
+	claimed := []notifications.Notification{
+		event(workspaceURL, "a1"), event(workspaceURL, "a2"),
+		event(other, "b1"), event(other, "b2"), event(other, "b3"), event(other, "b4"),
+	}
+	*sent = nil
+	sendClaimed(workdir, t.TempDir(), "", true, claimed, server.URL, send, server.Client())
+	posted := docs()
+	if len(*sent) != 1 || (*sent)[0] != "4 new notifications" || posted[len(posted)-1]["body"] != "6 new notifications" {
+		t.Errorf("desktop %q and last webhook post %v, want a desktop summary of the 4 events that are not off and a webhook summary of 6", *sent, posted[len(posted)-1]["body"])
 	}
 }

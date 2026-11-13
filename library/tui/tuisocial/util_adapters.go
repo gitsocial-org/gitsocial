@@ -289,29 +289,34 @@ func postsToItems(posts []social.Post, userEmail string, showEmail bool, workdir
 		p.Display.UserEmail = userEmail
 		p.Display.ShowEmail = showEmail
 		p.Display.Workdir = workdir
-		item := tuicore.NewItem(p.ID, "social", string(p.Type), p.Timestamp, p)
-		// Handle cross-extension routing (comments on PM items, etc.)
-		// OriginalExt/OriginalType affect navigation routing via ItemType()
-		// OriginalID ensures the target detail view receives the referenced item's ID
-		if p.Type == social.PostTypeComment && p.OriginalExtension != "" {
-			item.OriginalExt = p.OriginalExtension
-			item.OriginalType = p.OriginalType
-			item.OriginalID = p.OriginalPostID
-		} else if p.HeaderExt != "" && p.HeaderExt != "social" {
-			// Non-social items (issues, milestones, sprints) stored in social cache:
-			// Use OriginalExt/Type for navigation routing, keep Ext/Type as "social"
-			// for correct card rendering (data is social.Post, not pm.Issue)
-			item.OriginalExt = p.HeaderExt
-			item.OriginalType = p.HeaderType
-			// An action entry is an edit commit, and its detail view takes the item it edits.
-			if p.Action != "" && p.EditOf != "" {
-				target := protocol.ResolveRefWithDefaults(p.EditOf, p.Repository, p.Branch)
-				item.OriginalID = protocol.CreateRef(protocol.RefTypeCommit, target.Hash, target.RepoURL, target.Branch)
-			}
-		}
-		items[i] = item
+		items[i] = timelineItem(p)
 	}
 	return items
+}
+
+// timelineItem converts a timeline post to an Item with the routing of its target, for the timeline and for an activity notification.
+func timelineItem(p social.Post) tuicore.Item {
+	item := tuicore.NewItem(p.ID, "social", string(p.Type), p.Timestamp, p)
+	// Handle cross-extension routing (comments on PM items, etc.)
+	// OriginalExt/OriginalType affect navigation routing via ItemType()
+	// OriginalID ensures the target detail view receives the referenced item's ID
+	if p.Type == social.PostTypeComment && p.OriginalExtension != "" {
+		item.OriginalExt = p.OriginalExtension
+		item.OriginalType = p.OriginalType
+		item.OriginalID = p.OriginalPostID
+	} else if p.HeaderExt != "" && p.HeaderExt != "social" {
+		// Non-social items (issues, milestones, sprints) stored in social cache:
+		// Use OriginalExt/Type for navigation routing, keep Ext/Type as "social"
+		// for correct card rendering (data is social.Post, not pm.Issue)
+		item.OriginalExt = p.HeaderExt
+		item.OriginalType = p.HeaderType
+		// An action entry is an edit commit, and its detail view takes the item it edits.
+		if p.Action != "" && p.EditOf != "" {
+			target := protocol.ResolveRefWithDefaults(p.EditOf, p.Repository, p.Branch)
+			item.OriginalID = protocol.CreateRef(protocol.RefTypeCommit, target.Hash, target.RepoURL, target.Branch)
+		}
+	}
+	return item
 }
 
 // itemToPost extracts social.Post from a DisplayItem
@@ -571,6 +576,9 @@ func makeGetNotificationsFunc(userEmail string, showEmailFn func() bool) tuicore
 					post.Display.UserEmail = userEmail
 					post.Display.ShowEmail = showEmail
 					item := tuicore.NewItem(post.ID, "social", string(post.Type), post.Timestamp, post)
+					if sn.Type == social.NotificationTypeActivity {
+						item = timelineItem(post)
+					}
 					items = append(items, item)
 					hash := protocol.ParseRef(sn.Item.ID).Value
 					meta = append(meta, tuicore.NotificationMeta{
