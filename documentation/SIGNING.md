@@ -59,7 +59,7 @@ unzip gitsocial_<X.Y.Z>_darwin_arm64.zip
 codesign --verify --deep --strict --verbose=2 ./gitsocial     # valid on disk, satisfies its Designated Requirement
 codesign -dv --verbose ./gitsocial 2>&1 | grep Authority       # Developer ID Application: Mukhsimjon Rakhimov (J33FZDK3T7), then the two Apple authorities
 codesign --verify --deep --strict --verbose=2 ./GitSocial.app  # the bundle and the notifier in it
-spctl --assess --type install --verbose ./gitsocial_<X.Y.Z>_darwin_arm64.zip   # notarization; assess the zip, not the binary
+spctl --assess --type execute --verbose ./GitSocial.app        # notarization; assess the app, not the zip
 ```
 
 ## Troubleshooting
