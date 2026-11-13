@@ -3371,10 +3371,18 @@
     if (!prev) return "";
     const state = cur.state;
     if (state && state !== prev.state) return state === "open" ? "reopened" : state === "active" ? "started" : state === "planned" ? "" : state;
-    return prev.draft === "true" && cur.draft !== "true" && state === "open" ? "ready" : "";
+    if (prev.draft === "true" && cur.draft !== "true" && state === "open") return "ready";
+    return gainsEmail(prev.assignees, cur.assignees) ? "assigned" : gainsEmail(prev.reviewers, cur.reviewers) ? "review-requested" : "";
   }
 
-  // itemActions returns the action entries of a lane's resolved items: each edit that changes a state, and each review with a review-state.
+  // gainsEmail tells if a comma-separated email list has an entry, compared with no case, that the list before it does not have. Mirrors gainsEmail in core/cache/actions.go.
+  function gainsEmail(prev, cur) {
+    const emails = (list) => (list || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+    const before = emails(prev);
+    return emails(cur).some((e) => !before.includes(e));
+  }
+
+  // itemActions returns the action entries of a lane's resolved items: each edit that has an action, and each review with a review-state.
   function itemActions(items, ext, branch) {
     const byShort = new Map(items.map((it) => [it.commit.short, it]));
     const out = [];

@@ -239,6 +239,33 @@ func TestGetNotifications_assignedForkIssueIsOneEvent(t *testing.T) {
 	}
 }
 
+// TestGetNotifications_assignActionAddsNothing checks that an edit that assigns an issue has the assigned action and gives only the one issue-assigned notification.
+func TestGetNotifications_assignActionAddsNothing(t *testing.T) {
+	workdir := initWorkspace(t)
+	me := git.GetUserEmail(workdir)
+	other := otherAuthorRepo(t, "Other", "other@test.com")
+	issue := newIssue(t, other, "Assigned later", CreateIssueOptions{})
+	assignees := []string{me}
+	if res := UpdateIssue(other, issue.ID, UpdateIssueOptions{Assignees: &assignees}); !res.Success {
+		t.Fatalf("UpdateIssue() failed: %s", res.Error.Message)
+	}
+	actions, err := cache.QueryLocked(func(db *sql.DB) (int, error) {
+		var n int
+		err := db.QueryRow(`SELECT COUNT(*) FROM core_commits WHERE action = 'assigned'`).Scan(&n)
+		return n, err
+	})
+	if err != nil || actions != 1 {
+		t.Fatalf("assigned actions = %d, %v, want 1", actions, err)
+	}
+	feed, err := notifications.GetAll(workdir, notifications.Filter{})
+	if err != nil {
+		t.Fatalf("GetAll() error = %v", err)
+	}
+	if counts := notifTypeCounts(feed); len(feed) != 1 || counts["issue-assigned"] != 1 {
+		t.Errorf("the feed gave %v, want the one issue-assigned", counts)
+	}
+}
+
 // unreadOf returns the number of unread notifications of one provider.
 func unreadOf(p notifications.Provider, workdir string) (int, error) {
 	items, err := p.GetNotifications(workdir, notifications.Filter{UnreadOnly: true})

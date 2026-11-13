@@ -29,9 +29,17 @@ eq(actions(history, "pm")[0]._target.commit.short, ISSUE, "the target is the ite
 
 eq(names(actions([
   commit(ISSUE, 100, pm({ state: "open" }), "Issue"),
-  commit("ed0000000001", 110, pm({ edits: EDITS, state: "open", assignees: "a@example.com" }), "Issue"),
+  commit("ed0000000001", 110, pm({ edits: EDITS, state: "open", labels: "kind/bug" }), "Issue"),
   commit("ed0000000002", 120, pm({ edits: EDITS }), "Issue again"),
-], "pm")), [], "a text or assignee edit has no action");
+], "pm")), [], "a text or label edit has no action");
+
+eq(names(actions([
+  commit(ISSUE, 100, pm({ state: "open", assignees: "a@example.com" }), "Issue"),
+  commit("ed0000000001", 110, pm({ edits: EDITS, state: "open", assignees: "a@example.com,b@example.com" }), "Issue"),
+  commit("ed0000000002", 120, pm({ edits: EDITS, state: "open", assignees: "b@example.com" }), "Issue"),
+  commit("ed0000000003", 130, pm({ edits: EDITS, state: "open" }), "Issue"),
+  commit("ed0000000004", 140, pm({ edits: EDITS, state: "open", assignees: "B@example.com" }), "Issue"),
+], "pm")), ["ed0000000001 assigned", "ed0000000004 assigned"], "an assign is an action, a removal is not, and an edit with no assignees has none");
 
 eq(names(actions([
   commit(ISSUE, 100, pm({ state: "open" }), "Issue"),

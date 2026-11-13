@@ -222,6 +222,11 @@ eq(findClass(GS.timelineCard(action({ state: "closed" }, "Fix the parser")), "ex
 const review = Object.assign(item("v", { type: "feedback", "review-state": "changes-requested" }, "Split this function"), { _ext: "review", _branch: "gitmsg/review", _action: "changes-requested", _target: target, _subject: "A PR" });
 ok(textOf(findClass(GS.timelineCard(review), "excerpt")[0]).indexOf("Split this function") !== -1, "a review's excerpt is its whole text");
 ok(/^Ada requested changes · /.test(textOf(findClass(GS.timelineCard(review), "meta")[0])), "a changes-requested review reads requested changes", textOf(findClass(GS.timelineCard(review), "meta")[0]));
+const actorLine = (name, ext, header) => textOf(findClass(GS.timelineCard(Object.assign(item("y", header, "Add the fix"), { _ext: ext, _branch: "gitmsg/" + ext, _action: name, _target: target, _subject: "Add the fix" })), "meta")[0]);
+const requestLine = actorLine("review-requested", "review", { type: "pull-request", reviewers: "bob@example.com" });
+const assignLine = actorLine("assigned", "pm", { type: "issue", assignees: "bob@example.com" });
+ok(/^Ada requested a review · /.test(requestLine), "a review request reads requested a review", requestLine);
+ok(/^Ada assigned · /.test(assignLine), "an assign reads assigned", assignLine);
 
 const merged = Object.assign(item("w", { type: "pull-request", edits: "#commit:" + H("t") + "@gitmsg/review", state: "merged", closes: "#commit:" + H("a") + "@gitmsg/pm" }, "Add the fix"), { _ext: "review", _branch: "gitmsg/review", _action: "merged", _target: target, _subject: "Add the fix" });
 const mergedCard = GS.timelineCard(merged);

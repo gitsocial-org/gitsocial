@@ -84,7 +84,7 @@ gitsocial social followers [--json]
 
 ### Timeline actions
 
-An action is derived from commits that exist already: an edit that changes a state, or a review. No command writes an action.
+An action is derived from commits that exist already: an edit that changes a state or adds a person, or a review. No command writes an action.
 
 | Action | Shown for | Source |
 |---|---|---|
@@ -93,9 +93,13 @@ An action is derived from commits that exist already: an edit that changes a sta
 | `merged`, `closed`, `reopened` | pull request | an edit whose `state` differs from the version before it |
 | `ready` | pull request | an edit that removes `draft="true"` from an open pull request |
 | `approved`, `changes-requested` | pull request | a review with `review-state`; an edit of the review only when the value changes |
+| `assigned` | issue | an edit whose `assignees` has an email that the version before it does not have |
+| `review-requested` | pull request | an edit whose `reviewers` has an email that the version before it does not have |
 
 - The version before an edit is the earlier version of the same repository by commit time, then by hash.
-- An edit of text, labels or assignees, a retraction, an edit from another repository and a conversion to draft are not actions.
+- An edit has one action, in this order: a review state, a state change, `ready`, `assigned`, `review-requested`. An edit that closes an issue and assigns it shows `closed`.
+- An edit with no `assignees` or `reviewers` field has an empty list. The lists are split at commas, and emails compare with no case. The entry does not name the person.
+- An edit of text or labels, an edit that only removes a person, a retraction, an edit from another repository and a conversion to draft are not actions. A first version has no action other than a review: an issue that is created with assignees shows as the item.
 - A merge that closes issues shows one entry that names them. The `closed` entry of an issue is hidden when the same author merged a pull request that closes it not more than 60 seconds before.
 - Only the timeline shows an action entry, for all lists or for one list (`-l`). Issue, pull request and repository lists show items only, and a review shows there with its full text.
 - When two versions of an item have the same commit time, the TUI orders them by hash and the site by history, so the two can name the action on different edits.

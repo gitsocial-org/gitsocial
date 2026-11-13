@@ -315,7 +315,13 @@ The denormalized columns `resolved_message`, `has_edits` and `is_retracted` are 
 | Rule | Test |
 |---|---|
 | The action of an edit is the same for each order of arrival | `TestAction_orderOfArrival` |
-| A text, label or assignee edit has no action | `TestAction_textEditHasNone` |
+| A text or label edit has no action | `TestAction_textEditHasNone` |
+| An edit that adds an assignee is `assigned`, and one that adds a reviewer is `review-requested` | `TestAction_assigned`, `TestAction_reviewRequested` |
+| A state change in the same edit wins over an assign | `TestAction_stateChangeWinsOverAssign` |
+| A removal only, and a first version with assignees, have no action | `TestAction_unassignAndFirstVersionHaveNone` |
+| The timeline has an assign at its own time | `TestTimeline_assignEntry` |
+| An assign gives no new notification | `TestGetNotifications_assignActionAddsNothing` |
+| An assign and a review request have their verb in the TUI and on the site | `TestActionLine_assignAndReviewRequest`, `unit_render_cards.js` |
 | A proposal and a retraction have no action | `TestAction_proposalAndRetractionHaveNone` |
 | A merge, a ready mark and a review have their action | `TestAction_pullRequestAndReview` |
 | The timeline has the item at its creation time and each action at its own time | `TestTimeline_actionEntries` |

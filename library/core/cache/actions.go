@@ -4,8 +4,11 @@ package cache
 import (
 	"database/sql"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
+	"github.com/gitsocial-org/gitsocial/library/core/text"
 )
 
 // headerFields returns the header fields of a message, or an empty map when it has no header.
@@ -33,8 +36,23 @@ func headerAction(prev, cur map[string]string) string {
 		return stateAction(state)
 	case prev["draft"] == "true" && cur["draft"] != "true" && state == "open":
 		return "ready"
+	case gainsEmail(prev["assignees"], cur["assignees"]):
+		return "assigned"
+	case gainsEmail(prev["reviewers"], cur["reviewers"]):
+		return "review-requested"
 	}
 	return ""
+}
+
+// gainsEmail reports whether a comma-separated email list has an entry, compared with no case, that the list before it does not have.
+func gainsEmail(prev, cur string) bool {
+	before := text.SplitCSV(prev)
+	for _, email := range text.SplitCSV(cur) {
+		if !slices.ContainsFunc(before, func(p string) bool { return strings.EqualFold(p, email) }) {
+			return true
+		}
+	}
+	return false
 }
 
 // stateAction names the change to a state: an item that opens again is reopened, a sprint that goes active is started, and a return to planned is no action.

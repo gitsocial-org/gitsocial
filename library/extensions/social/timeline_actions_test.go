@@ -147,3 +147,37 @@ func TestTimeline_mergeHidesIssueClose(t *testing.T) {
 		t.Errorf("merged entry closes = %v, want the two issues of the pull request", merged.Closes)
 	}
 }
+
+// TestTimeline_assignEntry: the timeline has an assign at its own time, and its line names the issue but not the assignee.
+func TestTimeline_assignEntry(t *testing.T) {
+	setupTestDB(t)
+	if err := cache.InsertCommits([]cache.Commit{
+		actionsCommit("a55000000001", "gitmsg/pm", "a@example.com", 0, "Fix the build", `ext="pm"; type="issue"; state="open"`),
+		actionsCommit("ed0000000001", "gitmsg/pm", "b@example.com", 10, "Fix the build", `ext="pm"; type="issue"; edits="#commit:a55000000001@gitmsg/pm"; state="open"; assignees="c@example.com"`),
+	}); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if got, want := timelineActions(t), []string{"ed0000000001 assigned", "a55000000001 "}; !sameEntries(got, want) {
+		t.Fatalf("timeline = %v, want %v", got, want)
+	}
+	items, _ := getTimeline(nil, actionsWorkspace, actionsWorkspace, nil, 50, "")
+	assigned := timelinePost(items[0])
+	if want := time.Date(2025, 10, 21, 12, 0, 10, 0, time.UTC); !assigned.Timestamp.Equal(want) || assigned.Author.Email != "b@example.com" {
+		t.Errorf("assigned entry = %v by %q, want %v by the author of the edit", assigned.Timestamp, assigned.Author.Email, want)
+	}
+	if got, want := ActionLine(assigned), `assigned issue "Fix the build"`; got != want {
+		t.Errorf("ActionLine() = %q, want %q", got, want)
+	}
+}
+
+// TestActionLine_assignAndReviewRequest: the line of an assign and of a review request names the verb, the type and the subject.
+func TestActionLine_assignAndReviewRequest(t *testing.T) {
+	for _, tt := range []struct{ action, headerType, want string }{
+		{"assigned", "issue", `assigned issue "Fix the build"`},
+		{"review-requested", "pull-request", `requested a review of pull request "Fix the build"`},
+	} {
+		if got := ActionLine(Post{Action: tt.action, HeaderType: tt.headerType, ActionSubject: "Fix the build"}); got != tt.want {
+			t.Errorf("ActionLine(%s) = %q, want %q", tt.action, got, tt.want)
+		}
+	}
+}

@@ -898,7 +898,7 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
   // ACTION_VERBS words each action whose name is not its verb.
-  const ACTION_VERBS = { "changes-requested": "requested changes", ready: "marked ready" };
+  const ACTION_VERBS = { "changes-requested": "requested changes", ready: "marked ready", "review-requested": "requested a review" };
 
   // actionCard renders a timeline action as a card: the glyph of the item, the actor line with the verb and the hash of the edit, the issues a merge closes as chips, then the subject of the item and its text as the excerpt.
   function actionCard(item) {

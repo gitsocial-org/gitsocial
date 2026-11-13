@@ -91,6 +91,8 @@ func ActionLine(post Post) string {
 		verb = "requested changes on"
 	case "ready":
 		verb = "marked ready"
+	case "review-requested":
+		verb = "requested a review of"
 	}
 	itemType := strings.ReplaceAll(post.HeaderType, "-", " ")
 	if post.HeaderType == "feedback" {

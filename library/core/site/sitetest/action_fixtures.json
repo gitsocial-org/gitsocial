@@ -18,6 +18,22 @@
     { "name": "review comment", "prev": null, "cur": { "type": "feedback", "file": "a.go" }, "expect": "" },
     { "name": "review text edited", "prev": { "review-state": "approved" }, "cur": { "review-state": "approved" }, "expect": "" },
     { "name": "review changed", "prev": { "review-state": "approved" }, "cur": { "review-state": "changes-requested" }, "expect": "changes-requested" },
-    { "name": "retraction", "prev": { "state": "open" }, "cur": { "state": "closed", "retracted": "true" }, "expect": "" }
+    { "name": "retraction", "prev": { "state": "open" }, "cur": { "state": "closed", "retracted": "true" }, "expect": "" },
+    { "name": "issue assigned", "prev": { "state": "open" }, "cur": { "state": "open", "assignees": "a@example.com" }, "expect": "assigned" },
+    { "name": "assignee added to a list", "prev": { "assignees": "a@example.com" }, "cur": { "assignees": "a@example.com, b@example.com" }, "expect": "assigned" },
+    { "name": "assignee replaced", "prev": { "assignees": "a@example.com" }, "cur": { "assignees": "b@example.com" }, "expect": "assigned" },
+    { "name": "assignee removed", "prev": { "assignees": "a@example.com,b@example.com" }, "cur": { "assignees": "a@example.com" }, "expect": "" },
+    { "name": "edit with no assignees", "prev": { "state": "open", "assignees": "a@example.com" }, "cur": { "state": "open" }, "expect": "" },
+    { "name": "same assignees in another case and order", "prev": { "assignees": "a@example.com, b@example.com" }, "cur": { "assignees": "B@Example.com,a@example.com" }, "expect": "" },
+    { "name": "first version with assignees", "prev": null, "cur": { "type": "issue", "state": "open", "assignees": "a@example.com" }, "expect": "" },
+    { "name": "closed and assigned", "prev": { "state": "open" }, "cur": { "state": "closed", "assignees": "a@example.com" }, "expect": "closed" },
+    { "name": "retraction that assigns", "prev": { "state": "open" }, "cur": { "state": "open", "assignees": "a@example.com", "retracted": "true" }, "expect": "" },
+    { "name": "review requested", "prev": { "state": "open" }, "cur": { "state": "open", "reviewers": "b@example.com" }, "expect": "review-requested" },
+    { "name": "reviewer added to a list", "prev": { "reviewers": "b@example.com" }, "cur": { "reviewers": " b@example.com , c@example.com " }, "expect": "review-requested" },
+    { "name": "reviewer removed", "prev": { "reviewers": "b@example.com,c@example.com" }, "cur": { "reviewers": "c@example.com" }, "expect": "" },
+    { "name": "first version with reviewers", "prev": null, "cur": { "type": "pull-request", "state": "open", "reviewers": "b@example.com" }, "expect": "" },
+    { "name": "merged and review requested", "prev": { "state": "open" }, "cur": { "state": "merged", "reviewers": "b@example.com" }, "expect": "merged" },
+    { "name": "draft marked ready and review requested", "prev": { "state": "open", "draft": "true" }, "cur": { "state": "open", "reviewers": "b@example.com" }, "expect": "ready" },
+    { "name": "assigned and review requested", "prev": { "state": "open" }, "cur": { "state": "open", "assignees": "a@example.com", "reviewers": "b@example.com" }, "expect": "assigned" }
   ]
 }

@@ -140,7 +140,7 @@ Params:
 - `until` (string): RFC 3339 timestamp upper bound; the server ignores a value that does not parse
 - `includeImplicit` (boolean): Include implicit posts
 
-Posts come back newest first. A param this list does not name is ignored. The `timeline` and `list:<id>` scopes also return [action entries](SOCIAL.md#timeline-actions): a post with `Action` set. For a state change, `EditOf` is the item; a review is its own item.
+Posts come back newest first. A param this list does not name is ignored. The `timeline` and `list:<id>` scopes also return [action entries](SOCIAL.md#timeline-actions): a post with `Action` set. For an edit, `EditOf` is the item; a review is its own item.
 
 Result: `Post[]`
 
