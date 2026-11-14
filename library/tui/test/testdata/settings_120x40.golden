@@ -3,20 +3,21 @@
 │  ⌕  Search  ············  /  ││  Fetch  · synced                                                                     │
 │  ⚑  Notifications  ·····  @  ││  ▸ fetch.parallel          4                                                         │
 │  ◧  Analytics  ·········  %  ││    fetch.timeout           30                                                        │
-│ ──────────────────────────── ││    fetch.auto.enabled      false  (false · true)  pauses after 1h idle               │
+│ ──────────────────────────── ││    fetch.auto.enabled      false  (false · true)                                     │
 │  ⌘  Social  ············  S  ││    fetch.auto.interval     300  s                                                    │
-│     ⏱  Timeline              ││    fetch.auto.backoff      true  (false · true)  doubles per empty cycle, max 30m    │
+│     ⏱  Timeline              ││    fetch.auto.backoff      true  (false · true)  x1.25 per empty fetch, max 30m      │
 │     ⊡  My Repository         ││                                                                                      │
 │     ⎇  My Branches           ││  Workspace                                                                           │
 │     ⌗  My Tags               ││    fetch.workspace_mode    (not set)  (default · *)                                  │
-│     ☷ My Lists              ││                                                                                      │
-│        • Memo Inherits (au...││  Output  · synced                                                                    │
-│     ㋡ My Followers          ││    output.color            auto  (auto · always · never)                             │
-│     ➼  Explore               ││                                                                                      │
-│  ☐  PM  ················  P  ││  Log  · synced                                                                       │
-│  △  Review  ············  R  ││    log.level               info  (debug · info · warn · error)                       │
-│  ⏏  Release  ···········  V  ││                                                                                      │
-│  ☞  Memos  ·············  M  ││  Display  · synced                                                                   │
+│     ☷ My Lists              ││    notifications.level     default  (default · all · off)  this repository           │
+│        • Memo Inherits (au...││                                                                                      │
+│     ㋡ My Followers          ││  Output  · synced                                                                    │
+│     ➼  Explore               ││    output.color            auto  (auto · always · never)                             │
+│  ☐  PM  ················  P  ││                                                                                      │
+│  △  Review  ············  R  ││  Log  · synced                                                                       │
+│  ⏏  Release  ···········  V  ││    log.level               info  (debug · info · warn · error)                       │
+│  ☞  Memos  ·············  M  ││                                                                                      │
+│                              ││  Display  · synced                                                                   │
 │                              ││    display.show_email      false  (false · true)                                     │
 │                              ││    display.theme           auto  (auto · light · dark)  applies on restart           │
 │                              ││                                                                                      │
@@ -28,12 +29,11 @@
 │                              ││    extensions.memo         true  (true · false)                                      │
 │                              ││                                                                                      │
 │                              ││  S3  · synced                                                                        │
-│                              ││    s3.concurrency          16                                                        │
-│ ──────────────────────────── ││                                                                                      │
-│  ⚙  Configuration            ││  Notifications  · synced                                                             │
-│  ⚿  Identity                 ││    notifications.desktop   true  (true · false)                                      │
-│  ⛁  Cache  ········ XXXKB    ││    notifications.webhook   (not set)                                                 │
-│  ⌨  Settings                 ││                                                                                      │
+│ ──────────────────────────── ││    s3.concurrency          16                                                        │
+│  ⚙  Configuration            ││                                                                                      │
+│  ⚿  Identity                 ││  Notifications  · synced                                                             │
+│  ⛁  Cache  ········ XXXKB    ││    notifications.desktop   true  (true · false)  all repositories                    │
+│  ⌨  Settings                 ││    notifications.webhook   (not set)                                                 │
 │  ⚠  Error Log  ·········  !  ││                                                                                      │
 │ ──────────────────────────── ││                                                                                      │
 │.../tui-test-FIXTURE          ││   e:edit  tab:focus  f:fetch  q:quit  ?:help                                         │

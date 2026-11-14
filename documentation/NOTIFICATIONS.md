@@ -37,7 +37,7 @@ gitsocial notifications level https://github.com/org/repo default  # remove the 
 
 The level applies to the repository of the commit of a notification, not to the repository of the item that the commit is about. For example, a comment from a followed repository on your post gives a desktop message when your workspace is at `off`; it gives none when the followed repository is at `off`.
 
-A registered fork with no level takes the level of the workspace. The level `all` applies only to the workspace, its registered forks and the repositories of its lists. The `activity` notifications count toward the limit of three desktop messages, so a fetch with many of them gives one summary. A notification of a repository at `off` is recorded as sent, so it gets no desktop message after a later change of the level.
+The settings view of the TUI shows the level of the workspace as `notifications.level`; `e` or Enter changes it to the next level. A registered fork with no level takes the level of the workspace. The level `all` applies only to the workspace, its registered forks and the repositories of its lists. The `activity` notifications count toward the limit of three desktop messages, so a fetch with many of them gives one summary. A notification of a repository at `off` is recorded as sent, so it gets no desktop message after a later change of the level.
 
 | Rule | Test |
 |---|---|

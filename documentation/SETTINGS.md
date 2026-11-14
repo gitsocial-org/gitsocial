@@ -35,7 +35,7 @@ GitSocial reads an environment-scoped key from the environment and any other key
 
 `fetch.workspace_mode` is a map from each repository to `default` or `*`. The first-fetch prompt writes it, and `settings set` refuses it.
 
-`notifications.levels` is a map from each repository to its [notification level](NOTIFICATIONS.md#levels). `gitsocial notifications level` writes it, and `settings set` refuses it.
+`notifications.levels` is a map from each repository to its [notification level](NOTIFICATIONS.md#levels). `gitsocial notifications level` writes it, and `settings set` refuses it. The settings view of the TUI shows the level of the workspace as `notifications.level` and changes it.
 
 The registry in `library/core/settings/scopes.go` defines the core keys. Each extension keeps its user state in `refs/gitmsg/<ext>/config` of the same repository.
 

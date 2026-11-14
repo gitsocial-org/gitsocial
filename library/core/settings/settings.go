@@ -187,7 +187,7 @@ func Get(s *Settings, key string) (string, bool) {
 		return strconv.FormatBool(s.Notifications.Desktop), true
 	case "notifications.webhook":
 		return s.Notifications.Webhook, true
-	case "fetch.workspace_mode":
+	case "fetch.workspace_mode", "notifications.level":
 		return "(per-repo)", true
 	default:
 		return "", false
@@ -295,6 +295,8 @@ func Set(s *Settings, key, value string) error {
 		s.Notifications.Webhook = value
 	case "fetch.workspace_mode":
 		return fmt.Errorf("fetch.workspace_mode is per-repo: change it in the settings view")
+	case "notifications.level":
+		return fmt.Errorf("notifications.level is per-repo: use gitsocial notifications level")
 	default:
 		return fmt.Errorf("unknown settings key: %s", key)
 	}
@@ -323,6 +325,7 @@ func ListKeys() []string {
 		"identity.dns_verification",
 		"notifications.desktop",
 		"notifications.webhook",
+		"notifications.level",
 	}
 }
 
@@ -369,6 +372,7 @@ var EnumOptions = map[string][]string{
 	"extensions.memo":           {"true", "false"},
 	"identity.dns_verification": {"false", "true"},
 	"notifications.desktop":     {"true", "false"},
+	"notifications.level":       {LevelDefault, LevelAll, LevelOff},
 }
 
 // IsEnum checks if a setting has enumerated options.

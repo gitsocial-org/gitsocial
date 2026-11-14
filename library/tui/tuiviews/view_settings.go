@@ -3,6 +3,7 @@ package tuiviews
 
 import (
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -240,6 +241,18 @@ func (v *SettingsView) editOrCycleSetting() tea.Cmd {
 		return nil
 	}
 	key := row.key
+	if key == "notifications.level" {
+		originURL := protocol.NormalizeURL(git.GetOriginURL(v.workdir))
+		if originURL == "" {
+			return nil
+		}
+		current, _ := settings.NotificationLevel(settings.NotificationLevels(), originURL, "", nil)
+		if err := settings.WriteNotificationLevel(originURL, settings.NextEnumValue(key, current), time.Now()); err != nil {
+			log.Warn("failed to save the notification level", "error", err)
+			v.err = "Failed to save: " + err.Error()
+		}
+		return v.loadSettings()
+	}
 	if key == "fetch.workspace_mode" {
 		originURL := protocol.NormalizeURL(git.GetOriginURL(v.workdir))
 		if originURL == "" {
@@ -323,9 +336,9 @@ var keysOwnedElsewhere = map[string]bool{
 	"identity.dns_verification": true,
 }
 
-// sectionOf returns the section a key groups under: the part before the first dot, with the per-repo workspace mode split out.
+// sectionOf returns the section a key groups under: the part before the first dot, with the two per-repo keys split out.
 func sectionOf(key string) string {
-	if key == "fetch.workspace_mode" {
+	if key == "fetch.workspace_mode" || key == "notifications.level" {
 		return "workspace"
 	}
 	section, _, ok := settings.ParseKey(key)
@@ -425,10 +438,11 @@ func categoryScopeLabel(keys []string) string {
 // enum options). Used to surface units (e.g. "s" for seconds) and brief inline
 // explainers for non-obvious settings.
 var rowSuffix = map[string]string{
-	"fetch.auto.enabled":  "pauses after 1h idle",
-	"fetch.auto.interval": "s",
-	"fetch.auto.backoff":  "doubles per empty cycle, max 30m",
-	"display.theme":       "applies on restart",
+	"fetch.auto.interval":   "s",
+	"fetch.auto.backoff":    "x1.25 per empty fetch, max 30m",
+	"display.theme":         "applies on restart",
+	"notifications.desktop": "all repositories",
+	"notifications.level":   "this repository",
 }
 
 // notifyDisplayChange notifies the callback of display setting changes.
@@ -460,6 +474,16 @@ func (v *SettingsView) resolveWorkspaceMode(state *tuicore.State) string {
 		return "(not set)"
 	}
 	return mode
+}
+
+// resolveNotificationLevel returns the notification level of the current workdir.
+func (v *SettingsView) resolveNotificationLevel(state *tuicore.State) string {
+	originURL := protocol.NormalizeURL(git.GetOriginURL(state.Workdir))
+	if originURL == "" {
+		return "(no origin)"
+	}
+	level, _ := settings.NotificationLevel(settings.NotificationLevels(), originURL, "", nil)
+	return level
 }
 
 // IsInputActive returns true if the view is handling text input.
@@ -498,8 +522,11 @@ func (v *SettingsView) Render(state *tuicore.State) string {
 		}
 
 		value := row.value
-		if row.key == "fetch.workspace_mode" {
+		switch row.key {
+		case "fetch.workspace_mode":
 			value = v.resolveWorkspaceMode(state)
+		case "notifications.level":
+			value = v.resolveNotificationLevel(state)
 		}
 		if value == "" {
 			value = "(not set)"

@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	zone "github.com/lrstanley/bubblezone/v2"
 
+	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
@@ -101,8 +102,8 @@ func TestSettingsEditActsOnRowUnderCursor(t *testing.T) {
 				t.Fatalf("row %d (%s): %s", row, key, v.err)
 			}
 			written := writtenSettingKeys(t)
-			// The per-repo workspace mode lives outside the registry, so it writes no key here.
-			if key == "fetch.workspace_mode" {
+			// The two per-repo keys live outside the registry, so they write no key here.
+			if key == "fetch.workspace_mode" || key == "notifications.level" {
 				if len(written) != 0 {
 					t.Fatalf("row %d (%s) wrote %v; want nothing", row, key, written)
 				}
@@ -139,5 +140,38 @@ func TestSettingsCursorStopsAtLastRow(t *testing.T) {
 	v.Update(tea.KeyPressMsg{Code: tea.KeyEnd}, state)
 	if v.cursor != len(rendered)-1 {
 		t.Errorf("end put the cursor on row %d; the last rendered row is %d", v.cursor, len(rendered)-1)
+	}
+}
+
+// TestSettingsLevelRowCyclesWorkspaceLevel checks that the level row shows the level of the workspace and writes the next one on each edit.
+func TestSettingsLevelRowCyclesWorkspaceLevel(t *testing.T) {
+	isolatePersonalRepo(t)
+	workdir := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", "https://example.com/owner/repo"}} {
+		if _, err := git.ExecGit(workdir, args); err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
+	}
+	v, state := loadedSettingsView(t)
+	v.workdir, state.Workdir = workdir, workdir
+	for i, row := range v.rows {
+		if row.key == "notifications.level" {
+			v.cursor = i
+		}
+	}
+	for _, want := range []string{"all", "off", "default"} {
+		v.editOrCycleSetting()
+		if v.err != "" {
+			t.Fatalf("set %s: %s", want, v.err)
+		}
+		if got := v.resolveNotificationLevel(state); got != want {
+			t.Errorf("level after an edit = %q, want %q", got, want)
+		}
+	}
+	if levels := settings.NotificationLevels(); len(levels) != 0 {
+		t.Errorf("levels after default = %v, want no entry", levels)
+	}
+	if out := ansiEscape.ReplaceAllString(v.Render(state), ""); !strings.Contains(out, "notifications.level") || !strings.Contains(out, "this repository") {
+		t.Errorf("the view does not show the level row with its scope:\n%s", out)
 	}
 }
