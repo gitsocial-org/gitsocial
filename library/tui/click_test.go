@@ -65,8 +65,8 @@ func TestClickHandler_activatesFirst(t *testing.T) {
 func TestFocusScript_byTerminal(t *testing.T) {
 	for _, bundle := range []string{"com.mitchellh.ghostty", "com.apple.Terminal", "com.googlecode.iterm2"} {
 		script := focusScript(bundle, "/dev/ttys007")
-		if !strings.Contains(script, `application id "`+bundle+`"`) || !strings.Contains(script, `is "/dev/ttys007"`) {
-			t.Errorf("focusScript(%s) = %q, want a script for the app that names the tty", bundle, script)
+		if !strings.Contains(script, `application id "`+bundle+`"`) || !strings.Contains(script, `is "/dev/ttys007"`) || !strings.Contains(script, "\nactivate\n") {
+			t.Errorf("focusScript(%s) = %q, want a script for the app that names the tty and activates the app", bundle, script)
 		}
 	}
 	if script := focusScript("com.example.terminal", "/dev/ttys007"); script != "" {

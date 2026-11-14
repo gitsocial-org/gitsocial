@@ -47,7 +47,11 @@ func clickRef(line string) (string, bool) {
 func focusScript(bundle, tty string) string {
 	switch bundle {
 	case "com.mitchellh.ghostty":
-		return `tell application id "` + bundle + `" to focus (first terminal whose tty is "` + tty + `")`
+		// focus alone selects the tab and leaves a different app in front.
+		return `tell application id "` + bundle + `"
+focus (first terminal whose tty is "` + tty + `")
+activate
+end tell`
 	case "com.apple.Terminal":
 		return `tell application id "` + bundle + `"
 repeat with w in windows
