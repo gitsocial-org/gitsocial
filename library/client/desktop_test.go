@@ -29,12 +29,12 @@ func isolateDesktopSetting(t *testing.T) {
 	t.Setenv(desktopEnv, "")
 }
 
-// recordSends returns a sender that records the body of each message, and the list it fills.
+// recordSends returns a sender that records the title of each message, and the list it fills.
 func recordSends() (func([]notifications.DesktopMessage) error, *[]string) {
 	var sent []string
 	return func(messages []notifications.DesktopMessage) error {
 		for _, m := range messages {
-			sent = append(sent, m.Body)
+			sent = append(sent, m.Title)
 		}
 		return nil
 	}, &sent
@@ -297,7 +297,7 @@ func TestDeliver_activityClaimedOnce(t *testing.T) {
 	send, sent := recordSends()
 	deliver(workdir, t.TempDir(), "", true, send, http.DefaultClient)
 	deliver(workdir, t.TempDir(), "", true, send, http.DefaultClient)
-	if want := "Bea has new activity · " + protocol.GetFullDisplayName(workspaceURL); len(*sent) != 1 || (*sent)[0] != want {
+	if want := "• Bea posted"; len(*sent) != 1 || (*sent)[0] != want {
 		t.Errorf("sent %q after two deliveries, want one %q", *sent, want)
 	}
 	if err := notifications.MarkAsRead(workspaceURL, hash); err != nil {
@@ -340,7 +340,7 @@ func TestDeliver_offRepoNoDesktop(t *testing.T) {
 	*sent = nil
 	sendClaimed(workdir, t.TempDir(), "", true, claimed, server.URL, send, server.Client())
 	posted := docs()
-	if len(*sent) != 1 || (*sent)[0] != "4 new notifications" || posted[len(posted)-1]["body"] != "6 new notifications" {
-		t.Errorf("desktop %q and last webhook post %v, want a desktop summary of the 4 events that are not off and a webhook summary of 6", *sent, posted[len(posted)-1]["body"])
+	if len(*sent) != 1 || (*sent)[0] != "4 new notifications" || posted[len(posted)-1]["title"] != "6 new notifications" {
+		t.Errorf("desktop %q and last webhook post %v, want a desktop summary of the 4 events that are not off and a webhook summary of 6", *sent, posted[len(posted)-1]["title"])
 	}
 }

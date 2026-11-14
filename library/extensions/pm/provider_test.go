@@ -271,3 +271,39 @@ func unreadOf(p notifications.Provider, workdir string) (int, error) {
 	items, err := p.GetNotifications(workdir, notifications.Filter{UnreadOnly: true})
 	return len(items), err
 }
+
+func TestNotificationText_fields(t *testing.T) {
+	workdir := initWorkspace(t)
+	me := git.GetUserEmail(workdir)
+	fork := otherAuthorRepo(t, "Forker", "forker@test.com")
+	other := otherAuthorRepo(t, "Other", "other@test.com")
+	newIssue(t, fork, "Filed from the fork", CreateIssueOptions{})
+	if err := gitmsg.AddFork(workdir, gitmsg.ResolveRepoURL(fork)); err != nil {
+		t.Fatalf("AddFork: %v", err)
+	}
+	newIssue(t, other, "Still open", CreateIssueOptions{Assignees: []string{me}})
+	for subject, state := range map[string]State{"Closed for me": StateClosed, "Canceled for me": StateCancelled} {
+		issue := newIssue(t, other, subject, CreateIssueOptions{Assignees: []string{me}})
+		if res := UpdateIssue(other, issue.ID, UpdateIssueOptions{State: &state}); !res.Success {
+			t.Fatalf("UpdateIssue() failed: %s", res.Error.Message)
+		}
+	}
+	notifs, err := (&pmNotificationProvider{}).GetNotifications(workdir, notifications.Filter{})
+	if err != nil {
+		t.Fatalf("GetNotifications() error = %v", err)
+	}
+	got := make(map[[5]string]bool, len(notifs))
+	for _, n := range notifs {
+		got[[5]string{n.Type, n.Subject, n.Excerpt, n.Phrase, n.Glyph}] = true
+	}
+	for _, want := range [][5]string{
+		{"fork-issue", "Filed from the fork", "", "", "☐"},
+		{"issue-assigned", "Still open", "", "", "☐"},
+		{"issue-closed", "Closed for me", "", "", "☑"},
+		{"issue-closed", "Canceled for me", "", "canceled an issue of yours", "☒"},
+	} {
+		if !got[want] {
+			t.Errorf("no notification %q in %v", want, got)
+		}
+	}
+}

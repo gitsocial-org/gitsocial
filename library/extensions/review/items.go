@@ -539,11 +539,11 @@ func GetStateChangeInfo(repoURL, hash, branch string, state PRState) (*StateChan
 
 // scanResolvedRow scans a baseSelectFromView row (single- or multi-row query).
 func scanResolvedRow(s cache.RowScanner) (*ReviewItem, error) {
-	return scanReviewRow(s, nil)
+	return scanReviewRow(s)
 }
 
-// scanReviewRow scans a resolved review row; readDest takes the read state when the query has one.
-func scanReviewRow(s cache.RowScanner, readDest *sql.NullString) (*ReviewItem, error) {
+// scanReviewRow scans a resolved review row; extra takes each column that a query adds after the review columns.
+func scanReviewRow(s cache.RowScanner, extra ...any) (*ReviewItem, error) {
 	var item ReviewItem
 	dest := []any{
 		&item.Type, &item.State, &item.Draft, &item.Base, &item.BaseTip, &item.Head, &item.HeadTip, &item.DependsOn, &item.Closes, &item.Reviewers,
@@ -552,10 +552,7 @@ func scanReviewRow(s cache.RowScanner, readDest *sql.NullString) (*ReviewItem, e
 		&item.ReviewStateField, &item.Suggestion,
 		&item.Labels,
 	}
-	if readDest != nil {
-		dest = append(dest, readDest)
-	}
-	meta, err := cache.ScanResolved(s, dest...)
+	meta, err := cache.ScanResolved(s, append(dest, extra...)...)
 	if err != nil {
 		return nil, err
 	}

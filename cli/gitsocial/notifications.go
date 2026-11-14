@@ -10,8 +10,6 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/text"
-	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
-	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 )
@@ -263,100 +261,28 @@ func formatNotifications(items []notifications.Notification) string {
 	return strings.Join(parts, "\n\n---\n\n")
 }
 
-// formatNotification formats a single notification for display.
+// formatNotification formats one notification: the type, the read state, the title and the time, then the body of its message and the detail of its type.
 func formatNotification(n notifications.Notification) string {
-	var lines []string
-
-	typeLabel := n.Type
 	readStatus := ""
 	if !n.IsRead {
 		readStatus = " [unread]"
 	}
-
-	header := fmt.Sprintf("[%s]%s %s · %s", typeLabel, readStatus, n.Actor.Name, social.FormatRelativeTime(n.Timestamp))
-	lines = append(lines, header)
-
-	switch n.Type {
-	case "follow":
-		lines = append(lines, fmt.Sprintf("  %s added you to their list", n.ActorRepo))
-	case "mention":
-		lines = append(lines, fmt.Sprintf("  mentioned you in %s", n.ActorRepo))
-		id := n.RepoURL + "#commit:" + n.Hash
-		lines = append(lines, fmt.Sprintf("  %s", id))
-	case "edit":
-		if en, ok := n.Item.(notifications.EditNotification); ok {
-			verb := "edited your item"
-			if en.IsRetracted {
-				verb = "retracted your item"
-			}
-			lines = append(lines, fmt.Sprintf("  %s", verb))
-			canonicalID := en.CanonicalRepoURL + "#commit:" + en.CanonicalHash
-			lines = append(lines, fmt.Sprintf("  %s", canonicalID))
+	title, body := notifications.MessageText(n)
+	lines := []string{fmt.Sprintf("[%s]%s %s · %s", n.Type, readStatus, title, social.FormatRelativeTime(n.Timestamp))}
+	for _, line := range strings.Split(body, "\n") {
+		if line != "" {
+			lines = append(lines, "  "+line)
 		}
-	case "branch-diverged":
-		if dn, ok := n.Item.(notifications.DivergenceNotification); ok {
-			// Same words as the TUI card, so both clients report the branch alike.
-			lines = append(lines, fmt.Sprintf("  %s diverged from origin", dn.Branch))
-		}
-	case "fork-pr":
-		if rn, ok := n.Item.(review.ReviewNotification); ok {
-			if rn.PRSubject != "" {
-				lines = append(lines, fmt.Sprintf("  PR: %s", rn.PRSubject))
-			}
-			lines = append(lines, fmt.Sprintf("  %s", rn.ID))
-		}
-	case "feedback", "approved", "changes-requested":
-		if rn, ok := n.Item.(review.ReviewNotification); ok {
-			if rn.Content != "" {
-				content := strings.TrimSpace(rn.Content)
-				content = text.Truncate(content, 150)
-				lines = append(lines, content)
-			}
-			lines = append(lines, fmt.Sprintf("  %s", rn.ID))
-		}
-	case "issue-assigned":
-		if pn, ok := n.Item.(pm.PMNotification); ok {
-			if pn.Subject != "" {
-				lines = append(lines, fmt.Sprintf("  Issue: %s [%s]", pn.Subject, pn.State))
-			}
-			lines = append(lines, fmt.Sprintf("  %s", pn.ID))
-		}
-	case "new-release":
-		if rn, ok := n.Item.(release.ReleaseNotification); ok {
-			label := rn.Version
-			if label == "" {
-				label = rn.Tag
-			}
-			if rn.Prerelease {
-				label += " (pre-release)"
-			}
-			if label != "" {
-				lines = append(lines, fmt.Sprintf("  Release: %s", label))
-			}
-			if rn.Subject != "" {
-				subject := rn.Subject
-				subject = text.Truncate(subject, 150)
-				lines = append(lines, fmt.Sprintf("  %s", subject))
-			}
-			lines = append(lines, fmt.Sprintf("  %s", rn.ID))
-		}
-	default:
-		if sn, ok := n.Item.(social.Notification); ok && sn.Item != nil {
-			content := strings.TrimSpace(sn.Item.Content)
-			if sn.Item.Action != "" {
-				content = social.ActionText(*sn.Item)
-			}
-			content = text.Truncate(content, 150)
-			if content != "" {
-				lines = append(lines, content)
-			}
-			lines = append(lines, fmt.Sprintf("  %s", sn.ID))
-		}
+	}
+	if en, ok := n.Item.(notifications.EditNotification); ok {
+		lines = append(lines, "  item: "+en.CanonicalRepoURL+"#commit:"+en.CanonicalHash)
+	}
+	if rn, ok := n.Item.(review.ReviewNotification); ok && n.Condition {
+		lines = append(lines, "  "+text.SafeLine(rn.Content, 0))
 	}
 	// A condition has no read state, so it has no id for read and unread.
 	if !n.Condition {
 		lines = append(lines, "  id: "+notificationID(n))
 	}
-
 	return strings.Join(lines, "\n")
 }

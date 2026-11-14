@@ -1304,7 +1304,7 @@ Tagged type. Every field is always present.
 
 ### Notification
 
-`RepoURL`, `Hash`, `Branch`, `Type` ([NOTIFICATIONS.md](NOTIFICATIONS.md#types)), `Source` (`social`, `pm`, `review`, `release`, `memo`, `core`), `Item` (the extension's own notification object), `Actor`, `ActorRepo`, `Timestamp`, `IsRead`, `Condition` (true for a [condition](NOTIFICATIONS.md#types), which has no read state).
+`RepoURL`, `Hash`, `Branch`, `Type` ([NOTIFICATIONS.md](NOTIFICATIONS.md#types)), `Source` (`social`, `pm`, `review`, `release`, `memo`, `core`), `Item` (the extension's own notification object), `Actor`, `ActorRepo`, `Timestamp`, `IsRead`, `Condition` (true for a [condition](NOTIFICATIONS.md#types), which has no read state), `Subject`, `Excerpt`, `Phrase`, `Glyph` (the [text parts](NOTIFICATIONS.md#message-text), raw).
 
 ### MessageVersion
 

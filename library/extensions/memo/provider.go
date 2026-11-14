@@ -71,7 +71,8 @@ func getMemoCommentNotifications(userEmail string, filter notifications.Filter) 
 			       COALESCE(c.resolved_message, c.message),
 			       COALESCE(c.origin_time, c.timestamp),
 			       s.original_repo_url, s.original_hash, s.original_branch,
-			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END
+			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END,
+			       COALESCE(mc.resolved_message, mc.message)
 			FROM social_items s
 			JOIN memo_items m
 			  ON s.original_repo_url = m.repo_url
@@ -113,14 +114,14 @@ func scanCommentRows(db *sql.DB, query string, args []interface{}) ([]notificati
 	var result []notifications.Notification
 	for rows.Next() {
 		var repoURL, hash, branch, actorName, actorEmail string
-		var message, ts sql.NullString
+		var message, ts, memoMessage sql.NullString
 		var origRepoURL, origHash, origBranch sql.NullString
 		var isRead int
 		if err := rows.Scan(
 			&repoURL, &hash, &branch,
 			&actorName, &actorEmail, &message, &ts,
 			&origRepoURL, &origHash, &origBranch,
-			&isRead,
+			&isRead, &memoMessage,
 		); err != nil {
 			return nil, err
 		}
@@ -156,6 +157,9 @@ func scanCommentRows(db *sql.DB, query string, args []interface{}) ([]notificati
 			ActorRepo: repoURL,
 			Timestamp: timestamp,
 			IsRead:    isRead == 1,
+			Subject:   notifications.FirstLine(memoMessage.String),
+			Excerpt:   subject,
+			Glyph:     protocol.TypeGlyph("comment", ""),
 		})
 	}
 	return result, rows.Err()
@@ -257,6 +261,8 @@ func getInheritedPolicyNotifications(workdir, userEmail string, filter notificat
 				ActorRepo: repoURL,
 				Timestamp: timestamp,
 				IsRead:    isRead == 1,
+				Subject:   subject,
+				Glyph:     protocol.TypeGlyph("memo", ""),
 			})
 		}
 		return result, rows.Err()

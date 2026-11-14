@@ -27,6 +27,10 @@ type Notification struct {
 	Timestamp time.Time
 	IsRead    bool
 	Condition bool // true until someone repairs it: no read state, no message
+	Subject   string
+	Excerpt   string
+	Phrase    string
+	Glyph     string
 }
 
 // Actor identifies who triggered the notification.

@@ -4,10 +4,12 @@ package social
 import (
 	"database/sql"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/gitsocial-org/gitsocial/library/core/cache"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
 )
 
@@ -103,4 +105,32 @@ func activityEvents(repoURL, workspaceURL string, isFork bool, setAt time.Time, 
 		}
 		return events, rows.Err()
 	})
+}
+
+// activityKind returns the kind of the item of a timeline row: the header type for pm and review, the extension for release and memo, a commit for a code branch commit with no header, else the post type.
+func activityKind(post Post) string {
+	switch post.HeaderExt {
+	case "pm", "review":
+		if post.HeaderType != "" {
+			return post.HeaderType
+		}
+	case "release", "memo":
+		return post.HeaderExt
+	case "":
+		if !strings.HasPrefix(post.Branch, "gitmsg/") {
+			return "commit"
+		}
+	}
+	return string(post.Type)
+}
+
+// activityGlyph returns the glyph of a timeline row as the timeline shows it: the icon of a review, else the item in its state; a code commit has none.
+func activityGlyph(post Post) string {
+	switch post.Action {
+	case "approved":
+		return "✓"
+	case "changes-requested":
+		return "✗"
+	}
+	return protocol.TypeGlyph(activityKind(post), post.HeaderState)
 }

@@ -1,5 +1,5 @@
-// util_glyph_test.go - Tests for the type and state glyph table
-package tuicore
+// glyph_test.go - Tests for the type and state glyph table
+package protocol
 
 import "testing"
 

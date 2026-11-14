@@ -9,6 +9,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 	"github.com/gitsocial-org/gitsocial/library/extensions/social"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
@@ -65,7 +66,7 @@ func (v *memoDetailView) Title() string {
 	if v.showEmail && m.Author.Email != "" {
 		name += " <" + m.Author.Email + ">"
 	}
-	title := tuicore.TypeGlyph("memo", "") + "  " + name
+	title := protocol.TypeGlyph("memo", "") + "  " + name
 	if !m.Timestamp.IsZero() {
 		title += " · " + tuicore.FormatFullTime(m.Timestamp)
 	}

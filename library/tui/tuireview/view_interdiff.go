@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
@@ -259,11 +260,11 @@ func (v *interdiffView) IsInputActive() bool {
 // Title returns the view title.
 func (v *interdiffView) Title() string {
 	if !v.loaded || len(v.versions) < 2 {
-		return tuicore.TypeGlyph("pull-request", "") + "  Interdiff"
+		return protocol.TypeGlyph("pull-request", "") + "  Interdiff"
 	}
 	fromLabel := v.versions[v.fromVersion].Label
 	toLabel := v.versions[v.toVersion].Label
-	return fmt.Sprintf("%s  Interdiff · %s → %s", tuicore.TypeGlyph("pull-request", ""), fromLabel, toLabel)
+	return fmt.Sprintf("%s  Interdiff · %s → %s", protocol.TypeGlyph("pull-request", ""), fromLabel, toLabel)
 }
 
 // Bindings returns keybindings for this view.

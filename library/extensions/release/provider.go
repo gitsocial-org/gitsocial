@@ -123,8 +123,34 @@ func getNewReleaseNotifications(workspaceURL, workdir string, unreadOnly bool, l
 				ActorRepo: repoURL,
 				Timestamp: timestamp,
 				IsRead:    isRead,
+				Subject:   releaseSubject(subject, tag.String),
+				Phrase:    releasePhrase(tag.String, version.String, prerelease == 1),
+				Glyph:     protocol.TypeGlyph("release", ""),
 			})
 		}
 		return result, rows.Err()
 	})
+}
+
+// releasePhrase returns "released" and the tag, else "v" and the version, with "(pre-release)"; with neither it returns "" for the verb of the type.
+func releasePhrase(tag, version string, prerelease bool) string {
+	label := tag
+	if label == "" && version != "" {
+		label = "v" + version
+	}
+	if label == "" {
+		return ""
+	}
+	if prerelease {
+		label += " (pre-release)"
+	}
+	return "released " + label
+}
+
+// releaseSubject returns the subject of a release, or "" when it is the tag.
+func releaseSubject(subject, tag string) string {
+	if subject == tag {
+		return ""
+	}
+	return subject
 }

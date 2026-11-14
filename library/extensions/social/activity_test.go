@@ -208,3 +208,37 @@ func TestLevel_assignAfterReadGivesEvent(t *testing.T) {
 		t.Errorf("unread activity after the assign = %v, want the assign", activity)
 	}
 }
+
+// TestLevel_activityPhrase: an activity event has the phrase of the kind of a new item or of an action, the subject of its row and the glyph of the timeline row.
+func TestLevel_activityPhrase(t *testing.T) {
+	workdir, workspaceURL, _ := activityWorkspace(t)
+	insertActivity(t,
+		activityCommit(workspaceURL, "ac0000000001", "gitmsg/pm", "b@example.com", 0, "Fix the build", `ext="pm"; type="issue"; state="open"`),
+		activityCommit(workspaceURL, "ac0000000002", "gitmsg/pm", "b@example.com", 10, "Fix the build", `ext="pm"; type="issue"; edits="#commit:ac0000000001@gitmsg/pm"; state="closed"`),
+		activityCommit(workspaceURL, "ac0000000003", "gitmsg/social", "c@example.com", 20, "Hello", ""),
+		activityCommit(workspaceURL, "ac0000000004", "main", "c@example.com", 30, "Fix the parser", ""),
+		activityCommit(workspaceURL, "ac0000000005", "gitmsg/pm", "b@example.com", 40, "Release 2", `ext="pm"; type="milestone"; state="open"`),
+		activityCommit(workspaceURL, "ac0000000006", "gitmsg/review", "c@example.com", 50, "Ship it", `ext="review"; type="feedback"; review-state="approved"`),
+	)
+	setAll(t, workspaceURL, -10)
+	items, err := (&notificationProvider{}).GetNotifications(workdir, notifications.Filter{})
+	if err != nil {
+		t.Fatalf("GetNotifications() error = %v", err)
+	}
+	got := make(map[string][4]string, len(items))
+	for _, n := range items {
+		got[n.Hash] = [4]string{n.Phrase, n.Subject, n.Excerpt, n.Glyph}
+	}
+	for hash, want := range map[string][4]string{
+		"ac0000000001": {"opened an issue", "Fix the build", "", "☑"},
+		"ac0000000002": {"closed an issue", "Fix the build", "", "☑"},
+		"ac0000000003": {"posted", "Hello", "", "•"},
+		"ac0000000004": {"committed", "Fix the parser", "", ""},
+		"ac0000000005": {"added a milestone", "Release 2", "", "◇"},
+		"ac0000000006": {"approved a pull request", "", "Ship it", "✓"},
+	} {
+		if got[hash] != want {
+			t.Errorf("%s = %q, want %q", hash, got[hash], want)
+		}
+	}
+}

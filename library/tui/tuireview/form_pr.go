@@ -434,7 +434,7 @@ func (v *prFormView) Render(state *tuicore.State) string {
 
 // Title returns the view title.
 func (v *prFormView) Title() string {
-	return tuicore.TypeGlyph("pull-request", "") + "  New Pull Request"
+	return protocol.TypeGlyph("pull-request", "") + "  New Pull Request"
 }
 
 // prEditFormView wraps the form for editing an existing pull request.
@@ -534,9 +534,9 @@ func (v *prEditFormView) Render(state *tuicore.State) string {
 // Title returns the view title.
 func (v *prEditFormView) Title() string {
 	if v.pr != nil {
-		return fmt.Sprintf("%s  Edit: %s", tuicore.TypeGlyph("pull-request", ""), v.pr.Subject)
+		return fmt.Sprintf("%s  Edit: %s", protocol.TypeGlyph("pull-request", ""), v.pr.Subject)
 	}
-	return tuicore.TypeGlyph("pull-request", "") + "  Edit Pull Request"
+	return protocol.TypeGlyph("pull-request", "") + "  Edit Pull Request"
 }
 
 // firstSliceVal returns the first element of a slice or empty string.

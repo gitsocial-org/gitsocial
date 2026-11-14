@@ -103,5 +103,7 @@ func branchStateNotif(prRef string, pr PullRequest, notifType, branchRef,
 		ActorRepo: pr.Repository,
 		Timestamp: pr.Timestamp,
 		Condition: true,
+		Subject:   pr.Subject,
+		Glyph:     protocol.TypeGlyph("branch", ""),
 	}
 }

@@ -17,15 +17,15 @@ import (
 
 // init registers the review views, card renderers, dimmed checker, nav targets and message handler.
 func init() {
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/prs", Context: tuicore.ReviewPRs, Title: "Pull Requests", Icon: tuicore.TypeGlyph("pull-request", ""), NavItemID: "review.prs", Component: "CardList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr", Context: tuicore.ReviewPRDetail, Title: "PR Detail", Icon: tuicore.TypeGlyph("pull-request", ""), NavItemID: "review.prs", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/new-pr", Context: tuicore.ReviewPRDetail, Title: "New Pull Request", Icon: tuicore.TypeGlyph("pull-request", ""), NavItemID: "review.prs", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/edit-pr", Context: tuicore.ReviewPRDetail, Title: "Edit Pull Request", Icon: tuicore.TypeGlyph("pull-request", ""), NavItemID: "review.prs", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/feedback", Context: tuicore.ReviewPRDetail, Title: "Feedback", Icon: tuicore.TypeGlyph("pull-request", ""), NavItemID: "review.prs", Component: "SectionList"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr/history", Context: tuicore.ReviewPRHistory, Title: "PR History", Icon: tuicore.TypeGlyph("pull-request", ""), NavItemID: "review.prs", Component: "VersionPicker"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr/history/diff", Context: tuicore.ReviewPRHistoryDiff, Title: "PR Diff", Icon: tuicore.TypeGlyph("pull-request", ""), NavItemID: "review.prs"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/diff", Context: tuicore.ReviewDiff, Title: "Files Changed", Icon: tuicore.TypeGlyph("pull-request", ""), NavItemID: "review.prs"})
-	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr/interdiff", Context: tuicore.ReviewInterdiff, Title: "Interdiff", Icon: tuicore.TypeGlyph("pull-request", ""), NavItemID: "review.prs"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/prs", Context: tuicore.ReviewPRs, Title: "Pull Requests", Icon: protocol.TypeGlyph("pull-request", ""), NavItemID: "review.prs", Component: "CardList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr", Context: tuicore.ReviewPRDetail, Title: "PR Detail", Icon: protocol.TypeGlyph("pull-request", ""), NavItemID: "review.prs", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/new-pr", Context: tuicore.ReviewPRDetail, Title: "New Pull Request", Icon: protocol.TypeGlyph("pull-request", ""), NavItemID: "review.prs", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/edit-pr", Context: tuicore.ReviewPRDetail, Title: "Edit Pull Request", Icon: protocol.TypeGlyph("pull-request", ""), NavItemID: "review.prs", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/feedback", Context: tuicore.ReviewPRDetail, Title: "Feedback", Icon: protocol.TypeGlyph("pull-request", ""), NavItemID: "review.prs", Component: "SectionList"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr/history", Context: tuicore.ReviewPRHistory, Title: "PR History", Icon: protocol.TypeGlyph("pull-request", ""), NavItemID: "review.prs", Component: "VersionPicker"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr/history/diff", Context: tuicore.ReviewPRHistoryDiff, Title: "PR Diff", Icon: protocol.TypeGlyph("pull-request", ""), NavItemID: "review.prs"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/diff", Context: tuicore.ReviewDiff, Title: "Files Changed", Icon: protocol.TypeGlyph("pull-request", ""), NavItemID: "review.prs"})
+	tuicore.RegisterViewMeta(tuicore.ViewMeta{Path: "/review/pr/interdiff", Context: tuicore.ReviewInterdiff, Title: "Interdiff", Icon: protocol.TypeGlyph("pull-request", ""), NavItemID: "review.prs"})
 	tuicore.RegisterMessageHandler(handleReviewMessages)
 	tuicore.RegisterNavTarget(
 		tuicore.ItemType{Extension: "review", Type: "pull-request"},
@@ -118,7 +118,7 @@ func reviewNotificationCardRenderer(data any, resolver tuicore.ItemResolver) tui
 	if !ok {
 		return tuicore.Card{Header: tuicore.CardHeader{Title: "Invalid notification"}}
 	}
-	icon := tuicore.TypeGlyph("pull-request", "")
+	icon := protocol.TypeGlyph("pull-request", "")
 	badge := ""
 	content := rn.PRSubject
 	switch rn.Type {
@@ -134,14 +134,14 @@ func reviewNotificationCardRenderer(data any, resolver tuicore.ItemResolver) tui
 		badge = "changes requested"
 		content = rn.Content
 	case "feedback":
-		icon = tuicore.TypeGlyph("feedback", "")
+		icon = protocol.TypeGlyph("feedback", "")
 		badge = "feedback"
 		content = rn.Content
 	case "review-requested":
 		badge = "review requested"
 		content = rn.PRSubject
 	case "pr-merged":
-		icon = tuicore.TypeGlyph("pull-request", string(review.PRStateMerged))
+		icon = protocol.TypeGlyph("pull-request", string(review.PRStateMerged))
 		badge = "merged"
 		content = rn.PRSubject
 	case "pr-closed":
@@ -206,7 +206,7 @@ type prToCardOptions struct {
 
 // prToCardWithOptions converts a PullRequest to a Card with configuration options.
 func prToCardWithOptions(pr review.PullRequest, opts prToCardOptions) tuicore.Card {
-	icon := tuicore.TypeGlyph("pull-request", string(pr.State))
+	icon := protocol.TypeGlyph("pull-request", string(pr.State))
 	stateStr := string(pr.State)
 	if pr.IsDraft {
 		stateStr = "draft"
@@ -360,7 +360,7 @@ func feedbackCodeLocation(fb review.Feedback, pr *review.PullRequest, workspaceU
 
 // feedbackToCard converts a review.Feedback to a Card for display; codeLoc, when set, links its file and lines.
 func feedbackToCard(fb review.Feedback, userEmail string, isWorkspace bool, showEmail bool, codeLoc *tuicore.Location) tuicore.Card {
-	icon := tuicore.TypeGlyph("feedback", "")
+	icon := protocol.TypeGlyph("feedback", "")
 	badge := ""
 	switch fb.ReviewState {
 	case review.ReviewStateApproved:

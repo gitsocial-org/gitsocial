@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
@@ -280,7 +281,7 @@ func (v *releaseFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *releaseFormView) Title() string { return tuicore.TypeGlyph("release", "") + "  New Release" }
+func (v *releaseFormView) Title() string { return protocol.TypeGlyph("release", "") + "  New Release" }
 
 // releaseEditFormView wraps the form for editing an existing release.
 type releaseEditFormView struct {
@@ -368,7 +369,7 @@ func (v *releaseEditFormView) Render(state *tuicore.State) string {
 // Title returns the view title.
 func (v *releaseEditFormView) Title() string {
 	if v.rel != nil {
-		return fmt.Sprintf("%s  Edit: %s", tuicore.TypeGlyph("release", ""), v.rel.Subject)
+		return fmt.Sprintf("%s  Edit: %s", protocol.TypeGlyph("release", ""), v.rel.Subject)
 	}
-	return tuicore.TypeGlyph("release", "") + "  Edit Release"
+	return protocol.TypeGlyph("release", "") + "  Edit Release"
 }

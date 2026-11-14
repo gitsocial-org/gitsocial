@@ -3,6 +3,8 @@ package review
 
 import (
 	"database/sql"
+	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 func TestGetForkPRNotifications_noForks(t *testing.T) {
@@ -697,4 +700,77 @@ func TestPRStateChange_actionOnly(t *testing.T) {
 func unreadOf(p notifications.Provider, workdir string) (int, error) {
 	items, err := p.GetNotifications(workdir, notifications.Filter{UnreadOnly: true})
 	return len(items), err
+}
+
+func TestNotificationText_fields(t *testing.T) {
+	setupTestDB(t)
+	const wsURL, forkURL, gone = "https://github.com/ws/text", "https://github.com/fork/text", "9000000000ff"
+	ts := time.Date(2025, 10, 21, 12, 0, 0, 0, time.UTC)
+	header := func(fields map[string]string) protocol.Header {
+		return protocol.Header{Ext: "review", V: "0.1.0", Fields: fields}
+	}
+	orphan := protocol.FormatMessage("Nice work", header(map[string]string{"type": "feedback"}),
+		[]protocol.Ref{{Ext: "review", Ref: "#commit:" + gone + "@" + reviewTestBranch, V: "0.1.0", Author: "Me", Email: "me@test.com", Time: "2025-10-21T12:00:00Z", Fields: map[string]string{"type": "pull-request"}, Metadata: "> Gone from the cache"}})
+	rows := []struct {
+		repo, hash, author, message string
+		item                        ReviewItem
+	}{
+		{wsURL, "900000000001", "me@test.com", "Add a dark theme\n\nThe body", ReviewItem{Type: "pull-request", State: cache.ToNullString("open")}},
+		{forkURL, "900000000002", "forker@test.com", "Fork the theme", ReviewItem{Type: "pull-request", State: cache.ToNullString("open"), Base: cache.ToNullString("#branch:main")}},
+		{wsURL, "900000000003", "rev@test.com", "Ship it\n\nMore", ReviewItem{Type: "feedback", ReviewStateField: cache.ToNullString("approved")}},
+		{wsURL, "900000000004", "rev@test.com", "Too dark", ReviewItem{Type: "feedback", ReviewStateField: cache.ToNullString("changes-requested")}},
+		{wsURL, "900000000005", "rev@test.com", "A question", ReviewItem{Type: "feedback"}},
+		{wsURL, "900000000006", "rev@test.com", orphan, ReviewItem{Type: "feedback", PullRequestRepoURL: cache.ToNullString(wsURL), PullRequestHash: cache.ToNullString(gone), PullRequestBranch: cache.ToNullString(reviewTestBranch)}},
+		{wsURL, "900000000007", "other@test.com", "Review me", ReviewItem{Type: "pull-request", State: cache.ToNullString("open"), Reviewers: cache.ToNullString("me@test.com")}},
+	}
+	for i, r := range rows {
+		if err := cache.InsertCommits([]cache.Commit{{Hash: r.hash, RepoURL: r.repo, Branch: reviewTestBranch, AuthorName: r.author, AuthorEmail: r.author, Message: r.message, Timestamp: ts.Add(time.Duration(i) * time.Hour)}}); err != nil {
+			t.Fatalf("InsertCommits(%s) error = %v", r.hash, err)
+		}
+		item := r.item
+		item.RepoURL, item.Hash, item.Branch = r.repo, r.hash, reviewTestBranch
+		if item.Type == "feedback" && !item.PullRequestHash.Valid {
+			item.PullRequestRepoURL, item.PullRequestHash, item.PullRequestBranch = cache.ToNullString(wsURL), cache.ToNullString("900000000001"), cache.ToNullString(reviewTestBranch)
+		}
+		if err := InsertReviewItem(item); err != nil {
+			t.Fatalf("InsertReviewItem(%s) error = %v", r.hash, err)
+		}
+	}
+	forkPRs, forkErr := getForkPRNotifications(wsURL, "me@test.com", []string{forkURL}, false)
+	feedback, feedbackErr := getFeedbackNotifications(wsURL, "me@test.com", false)
+	requested, requestedErr := getReviewRequestedNotifications("me@test.com", false)
+	if err := errors.Join(forkErr, feedbackErr, requestedErr); err != nil {
+		t.Fatalf("read notifications: %v", err)
+	}
+	all := slices.Concat(forkPRs, feedback, requested)
+	got := make(map[string][4]string, len(all))
+	for _, n := range all {
+		got[n.Type+" "+n.Hash] = [4]string{n.Subject, n.Excerpt, n.Phrase, n.Glyph}
+	}
+	for key, want := range map[string][4]string{
+		"fork-pr 900000000002":           {"Fork the theme", "", "", "△"},
+		"approved 900000000003":          {"Add a dark theme", "Ship it", "", "✓"},
+		"changes-requested 900000000004": {"Add a dark theme", "Too dark", "", "✗"},
+		"feedback 900000000005":          {"Add a dark theme", "A question", "", "↩"},
+		"feedback 900000000006":          {"Gone from the cache", "Nice work", "", "↩"},
+		"review-requested 900000000007":  {"Review me", "", "", "△"},
+	} {
+		if got[key] != want {
+			t.Errorf("%s = %q, want %q", key, got[key], want)
+		}
+	}
+	const mergeHash = "900000000008"
+	merged := protocol.FormatMessage("Add a dark theme", header(map[string]string{"type": "pull-request", "state": "merged", "edits": "#commit:900000000001@" + reviewTestBranch}), nil)
+	if err := cache.InsertCommits([]cache.Commit{{Hash: mergeHash, RepoURL: wsURL, Branch: reviewTestBranch, AuthorName: "Bob", AuthorEmail: "bob@test.com", Message: merged, Timestamp: ts.Add(24 * time.Hour)}}); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	if err := InsertReviewItem(ReviewItem{RepoURL: wsURL, Hash: mergeHash, Branch: reviewTestBranch, Type: "pull-request", State: cache.ToNullString("merged")}); err != nil {
+		t.Fatalf("InsertReviewItem() error = %v", err)
+	}
+	if items, err := getPRStateChangeNotifications("me@test.com", false); err != nil || len(items) != 1 || items[0].Subject != "Add a dark theme" || items[0].Glyph != "▲" {
+		t.Errorf("merge = %+v, %v, want the subject of the pull request and the merged glyph", items, err)
+	}
+	if n := branchStateNotif("", PullRequest{ID: wsURL + "#commit:900000000001", Subject: "Add a dark theme"}, "head-advanced", "#branch:feature", "aaa", "bbb", true); n.Subject != "Add a dark theme" || n.Glyph != "⎇" {
+		t.Errorf("branch condition = %q, %q, want the subject of the pull request and the branch glyph", n.Subject, n.Glyph)
+	}
 }

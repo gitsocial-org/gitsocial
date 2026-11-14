@@ -10,6 +10,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
@@ -300,7 +301,7 @@ func (v *releasesView) Render(state *tuicore.State) string {
 
 // Title returns the view title.
 func (v *releasesView) Title() string {
-	title := tuicore.TypeGlyph("release", "") + "  Releases"
+	title := protocol.TypeGlyph("release", "") + "  Releases"
 	if v.searchQuery != "" {
 		title += fmt.Sprintf(" · /%s", v.searchQuery)
 	}

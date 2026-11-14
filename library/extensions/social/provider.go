@@ -43,7 +43,37 @@ func (p *notificationProvider) GetNotifications(workdir string, filter notificat
 			cn.Hash = protocol.ParseRef(n.Item.ID).Value
 			cn.Branch = n.Item.Branch
 		}
-		result = append(result, cn)
+		result = append(result, withText(cn, n))
 	}
 	return result, nil
+}
+
+// withText returns the notification with the subject, the excerpt, the phrase and the glyph of its type; a follow has the repository as its actor.
+func withText(cn notifications.Notification, n Notification) notifications.Notification {
+	if n.Type == NotificationTypeFollow {
+		cn.Actor = notifications.Actor{Name: protocol.GetFullDisplayName(n.ActorRepo)}
+		cn.Glyph = protocol.TypeGlyph("list", "")
+		return cn
+	}
+	if n.Item == nil {
+		return cn
+	}
+	content := notifications.FirstLine(n.Item.Content)
+	switch n.Type {
+	case NotificationTypeActivity:
+		cn.Glyph = activityGlyph(*n.Item)
+		kind := activityKind(*n.Item)
+		cn.Phrase, cn.Subject = notifications.NewItemPhrase(kind), content
+		if n.Item.Action != "" {
+			cn.Phrase, cn.Subject = notifications.ActionPhrase(n.Item.Action, kind), n.Item.ActionSubject
+			if kind == "feedback" {
+				cn.Excerpt = content
+			}
+		}
+	case notificationTypeRepost:
+		cn.Glyph, cn.Subject = protocol.TypeGlyph(string(n.Type), ""), n.OriginalSubject
+	default:
+		cn.Glyph, cn.Subject, cn.Excerpt = protocol.TypeGlyph(string(n.Type), ""), n.OriginalSubject, content
+	}
+	return cn
 }

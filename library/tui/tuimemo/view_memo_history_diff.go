@@ -13,7 +13,7 @@ import (
 func newMemoHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:   tuicore.MemoHistoryDiff,
-		TitleIcon: tuicore.TypeGlyph("memo", ""),
+		TitleIcon: protocol.TypeGlyph("memo", ""),
 		Title:     "Memo Diff",
 		Load:      loadMemoHistoryVersions,
 	})

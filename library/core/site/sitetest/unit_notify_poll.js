@@ -33,7 +33,7 @@ async function main() {
   GS.startFreshnessWatch({ base, manifestText: "{}" }, night);
   await wait(3300);
   ok("with permission the page runs the notifier once after the baseline load", loads === 1, "loads=" + loads);
-  ok("the item from the night shows at the first open", global.window.Notification.shown.length === 1 && global.window.Notification.shown[0] === "Alice posted · a", JSON.stringify(global.window.Notification.shown));
+  ok("the item from the night shows at the first open", global.window.Notification.shown.length === 1 && global.window.Notification.shown[0] === "a", JSON.stringify(global.window.Notification.shown));
 
   // Busy: changes during a run give one more run, not one per change.
   const busyBase = "https://poll.example/b/";

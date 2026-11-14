@@ -8,6 +8,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
+	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 )
 
 // TestFormatNotification_divergedBranchNamesTheBranch checks the CLI line names the branch and its state.
@@ -20,13 +21,63 @@ func TestFormatNotification_divergedBranchNamesTheBranch(t *testing.T) {
 		Source:    "gitmsg-divergence",
 		Item:      notifications.DivergenceNotification{Branch: "gitmsg/social"},
 		Timestamp: time.Now(),
+		Phrase:    "The branch gitmsg/social diverged from its remote",
 	})
 
 	if !strings.Contains(out, "[branch-diverged]") {
 		t.Errorf("output missing the type label:\n%s", out)
 	}
-	if !strings.Contains(out, "gitmsg/social diverged from origin") {
+	if !strings.Contains(out, "gitmsg/social diverged from its remote") {
 		t.Errorf("output missing the branch and its state:\n%s", out)
+	}
+}
+
+// TestFormatNotification_everyType checks that each type prints its label, its title, its line 1, its context and its id, and no control character of a remote text.
+func TestFormatNotification_everyType(t *testing.T) {
+	t.Parallel()
+	const repoURL = "https://github.com/user/repo"
+	types := []string{"mention", "reference", "edit", "comment", "repost", "quote", "follow", "issue-assigned", "issue-closed", "issue-reopened",
+		"fork-issue", "fork-pr", "review-requested", "feedback", "approved", "changes-requested", "pr-merged", "pr-closed", "pr-ready",
+		"head-advanced", "base-advanced", "head-deleted", "base-deleted", "new-release", "memo-comment", "inherited-policy", "branch-diverged", "activity"}
+	for _, typ := range types {
+		n := notifications.Notification{RepoURL: repoURL, Hash: "abc123456789", Type: typ, Actor: notifications.Actor{Name: "Bob\x1b[2J"},
+			Subject: "The \x1b]0;subject\x07item", Excerpt: "A\u202e line\nsecond line", Glyph: "↩", Timestamp: time.Now()}
+		switch typ {
+		case "follow":
+			n.Hash = "follow"
+		case "edit":
+			n.Item = notifications.EditNotification{CanonicalRepoURL: repoURL, CanonicalHash: "def123456789"}
+		case "head-advanced", "base-advanced", "head-deleted", "base-deleted", "branch-diverged":
+			n.Condition = true
+			n.Item = review.ReviewNotification{Content: "#branch:feature\x1b[31m: aaa → bbb"}
+		}
+		out := formatNotification(n)
+		title, body := notifications.MessageText(n)
+		if !strings.HasPrefix(out, "["+typ+"] [unread] "+title+" · ") {
+			t.Errorf("%s: output does not start with the label and the title %q:\n%s", typ, title, out)
+		}
+		for _, line := range strings.Split(body, "\n") {
+			if line != "" && !strings.Contains(out, "\n  "+line+"\n") {
+				t.Errorf("%s: output is missing the body line %q:\n%s", typ, line, out)
+			}
+		}
+		if typ != "follow" && !strings.Contains(out, "item · user/repo\n") {
+			t.Errorf("%s: output is missing the context:\n%s", typ, out)
+		}
+		if id := "  id: " + notificationID(n); n.Condition == strings.Contains(out, id) {
+			t.Errorf("%s: id line present = %v, want it for an event only:\n%s", typ, !n.Condition, out)
+		}
+		if strings.ContainsAny(out, "\x1b\x07\u202e") || strings.Contains(out, "second line") {
+			t.Errorf("%s: output holds a control character or a second line of a remote text:\n%q", typ, out)
+		}
+	}
+	edit := formatNotification(notifications.Notification{RepoURL: repoURL, Hash: "abc123456789", Type: "edit", Item: notifications.EditNotification{CanonicalRepoURL: repoURL, CanonicalHash: "def123456789"}})
+	if !strings.Contains(edit, "  item: "+repoURL+"#commit:def123456789") {
+		t.Errorf("an edit does not name its item:\n%s", edit)
+	}
+	branch := formatNotification(notifications.Notification{RepoURL: repoURL, Type: "head-advanced", Condition: true, Item: review.ReviewNotification{Content: "#branch:feature: aaa → bbb"}})
+	if !strings.Contains(branch, "  #branch:feature: aaa → bbb") {
+		t.Errorf("a branch condition does not name the branch and the tips:\n%s", branch)
 	}
 }
 

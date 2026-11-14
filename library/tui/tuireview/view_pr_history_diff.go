@@ -13,7 +13,7 @@ import (
 func newPRHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:    tuicore.ReviewPRHistoryDiff,
-		TitleIcon:  tuicore.TypeGlyph("pull-request", ""),
+		TitleIcon:  protocol.TypeGlyph("pull-request", ""),
 		Title:      "PR Diff",
 		Load:       loadPRHistoryVersions,
 		EnablePush: true,

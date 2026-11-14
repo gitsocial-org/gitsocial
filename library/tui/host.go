@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
@@ -276,16 +277,16 @@ func (h *Host) currentTitleFor(view tuicore.View) string {
 			icon = "⌘"
 			extName = "Social"
 		case "pm":
-			icon = tuicore.TypeGlyph("issue", "")
+			icon = protocol.TypeGlyph("issue", "")
 			extName = "PM"
 		case "release":
-			icon = tuicore.TypeGlyph("release", "")
+			icon = protocol.TypeGlyph("release", "")
 			extName = "Release"
 		case "review":
-			icon = tuicore.TypeGlyph("pull-request", "")
+			icon = protocol.TypeGlyph("pull-request", "")
 			extName = "Review"
 		case "memo":
-			icon = tuicore.TypeGlyph("memo", "")
+			icon = protocol.TypeGlyph("memo", "")
 			extName = "Memo"
 		}
 		return tuicore.SafeIcon(icon) + "  " + extName + " Configuration"

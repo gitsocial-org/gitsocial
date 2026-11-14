@@ -460,7 +460,7 @@ async function main() {
 
   // The notification code is the same on every bucket: no function of it names a host, an address or the host of the page.
   {
-    const NOTIFY_FNS = ["notificationBody", "notifyPanel", "notifyState", "notifyStorage", "readNotifyEmail", "loadNotifyItems", "notifyRun", "pickNotifyItems", "notifyMessages", "showNotifications", "startNotifier", "startFreshnessWatch", "wireNotifyBell", "notifyWorker"];
+    const NOTIFY_FNS = ["notificationText", "safeLine", "notifyPanel", "notifyState", "notifyStorage", "readNotifyEmail", "loadNotifyItems", "notifyRun", "pickNotifyItems", "notifyMessages", "showNotifications", "startNotifier", "startFreshnessWatch", "wireNotifyBell", "notifyWorker"];
     const HOST_RE = /[a-z]+:\/\/|\b[a-z0-9-]+\.(?:org|com|net|io|dev|app|site)\b|location\.(?:host|hostname|origin)\b|gitsocial\.org/i;
     const named = NOTIFY_FNS.filter((name) => typeof GS[name] !== "function" || HOST_RE.test(String(GS[name])));
     ok("the notification code names no host", named.length === 0, named.join(", "));

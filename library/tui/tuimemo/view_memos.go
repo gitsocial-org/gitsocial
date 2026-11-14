@@ -11,6 +11,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/client"
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/core/settings"
 	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
@@ -261,25 +262,25 @@ func (v *memosView) SetSourceCursor(index int) {
 
 // Title returns the view's title with current selection info.
 func (v *memosView) Title() string {
-	title := tuicore.TypeGlyph("memo", "") + "  Memos"
+	title := protocol.TypeGlyph("memo", "") + "  Memos"
 	switch v.variant {
 	case variantProject:
-		title = tuicore.TypeGlyph("memo", "") + "  Project Memos"
+		title = protocol.TypeGlyph("memo", "") + "  Project Memos"
 	case variantInherited:
-		title = tuicore.TypeGlyph("memo", "") + "  Inherited Memos"
+		title = protocol.TypeGlyph("memo", "") + "  Inherited Memos"
 	case variantPersonal:
-		title = tuicore.TypeGlyph("memo", "") + "  Personal Memos"
+		title = protocol.TypeGlyph("memo", "") + "  Personal Memos"
 		if path, err := settings.PersonalRepoPath(); err == nil && path != "" {
 			title += " · " + tildePath(path)
 		}
 	case variantSessionItems:
 		if v.sessionID != "" {
-			title = tuicore.TypeGlyph("memo", "") + "  Session · " + v.sessionID
+			title = protocol.TypeGlyph("memo", "") + "  Session · " + v.sessionID
 			if path, err := memo.SessionRepoPath(v.sessionID); err == nil && path != "" {
 				title += " · " + tildePath(path)
 			}
 		} else {
-			title = tuicore.TypeGlyph("memo", "") + "  Session"
+			title = protocol.TypeGlyph("memo", "") + "  Session"
 		}
 	}
 	items := v.cardList.Items()

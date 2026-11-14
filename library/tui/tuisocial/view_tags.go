@@ -12,6 +12,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/log"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
@@ -255,7 +256,7 @@ func (t tagRow) sinceLabel() string {
 // Title returns the view title for the header.
 func (v *tagsView) Title() string {
 	if v.name == "" {
-		return tuicore.TypeGlyph("tag", "") + "  Tags"
+		return protocol.TypeGlyph("tag", "") + "  Tags"
 	}
-	return tuicore.TypeGlyph("tag", "") + "  " + v.name + " tags"
+	return protocol.TypeGlyph("tag", "") + "  " + v.name + " tags"
 }

@@ -4716,35 +4716,66 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
 
   // ---- Browser notifications ----
 
-  // NOTIFY_SENTENCES is the full text of each notification type with no actor. Mirrors desktopSentence in core/notifications/desktop_text.go.
+  // NOTIFY_SENTENCES is the full title of each notification type that names no actor. Mirrors typeSentences in core/notifications/desktop_text.go.
   const NOTIFY_SENTENCES = {
+    "issue-assigned": "An issue is assigned to you",
+    "review-requested": "Your review is requested",
     "head-advanced": "The head branch of a pull request advanced",
     "base-advanced": "The base branch of a pull request advanced",
     "head-deleted": "The head branch of a pull request is not on its remote",
     "base-deleted": "The base branch of a pull request is not on its remote",
-    "branch-diverged": "A local gitmsg branch diverged from origin",
+    "branch-diverged": "A branch diverged from its remote",
   };
 
-  // NOTIFY_VERBS is the phrase that follows the actor for each notification type. Mirrors desktopVerb in core/notifications/desktop_text.go.
+  // NOTIFY_VERBS is the phrase that follows the actor for each other notification type. Mirrors typeVerbs in core/notifications/desktop_text.go.
   const NOTIFY_VERBS = {
     mention: "mentioned you", reference: "referenced your item", edit: "edited your item", comment: "commented",
-    repost: "reposted your post", quote: "quoted your post", follow: "followed you",
-    "issue-assigned": "assigned you an issue", "issue-closed": "closed your issue", "issue-reopened": "reopened your issue",
-    "fork-issue": "opened an issue on a fork", "fork-pr": "opened a pull request", "review-requested": "requested your review",
-    feedback: "gave feedback on a pull request", approved: "approved a pull request", "changes-requested": "requested changes",
+    repost: "reposted your post", quote: "quoted your post", follow: "added your repository to a list",
+    "issue-closed": "closed an issue of yours", "issue-reopened": "reopened an issue of yours",
+    "fork-issue": "opened an issue on a fork", "fork-pr": "opened a pull request",
+    feedback: "commented on a pull request", approved: "approved a pull request", "changes-requested": "requested changes",
     "pr-merged": "merged your pull request", "pr-closed": "closed your pull request", "pr-ready": "marked a pull request ready",
     "new-release": "published a release", "memo-comment": "commented on your memo", "inherited-policy": "added a critical memo",
-    activity: "has new activity",
+    activity: "added an item",
   };
 
-  // notificationBody returns the text of a notification: the actor and the verb of the type, or the sentence of a type with no actor, then the repository. Mirrors desktopBody in Go; parity_fixtures.json pins the two.
-  function notificationBody(type, actor, repo) {
-    let text = NOTIFY_SENTENCES[type] || "";
-    if (!text) {
-      text = Object.prototype.hasOwnProperty.call(NOTIFY_VERBS, type) ? NOTIFY_VERBS[type] : type;
-      if (actor) text = actor + " " + text;
+  // NOTIFY_ACTOR_LIMIT, NOTIFY_PHRASE_LIMIT, NOTIFY_LINE_LIMIT and NOTIFY_CONTEXT_LIMIT are the code points of the actor, of a phrase or a repository name, of line 1 and of the subject in the context line.
+  const NOTIFY_ACTOR_LIMIT = 30, NOTIFY_PHRASE_LIMIT = 60, NOTIFY_LINE_LIMIT = 100, NOTIFY_CONTEXT_LIMIT = 40;
+
+  // SAFE_LINE_END ends a line; SAFE_LINE_DROP is a control, bidi or zero-width character; SAFE_LINE_SPACE is a space separator; SAFE_LINE_JOIN is a joiner or a variation selector.
+  const SAFE_LINE_END = /[\n\r\v\f\u0085\u2028\u2029]/;
+  const SAFE_LINE_DROP = /[\u0000-\u001f\u007f-\u009f\u061c\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
+  const SAFE_LINE_SPACE = /[\u0020\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]+/g;
+  const SAFE_LINE_JOIN = /^(?:\u200d|[\ufe00-\ufe0f]|\udb40[\udd00-\uddef])$/;
+
+  // safeLine returns the first line of s that is not empty, with no control, bidi or zero-width character and its spaces collapsed, cut to limit code points with "..." inside the limit; a limit of 0 does not cut. Mirrors text.SafeLine in Go.
+  function safeLine(s, limit) {
+    const whole = String(s || "").replace(/[\ud800-\udbff][\udc00-\udfff]|[\ud800-\udfff]/g, (m) => (m.length === 2 ? m : "\ufffd"));
+    for (const raw of whole.split(SAFE_LINE_END)) {
+      const line = raw.replace(/\t/g, " ").replace(SAFE_LINE_DROP, "").replace(SAFE_LINE_SPACE, " ").trim();
+      if (!line) continue;
+      const points = Array.from(line);
+      if (!limit || points.length <= limit) return line;
+      if (limit < 4) return limit < 3 ? points.slice(0, limit).join("") : "...";
+      const kept = points.slice(0, limit - 3);
+      while (kept.length && SAFE_LINE_JOIN.test(kept[kept.length - 1])) kept.pop();
+      return kept.join("") + "...";
     }
-    return repo ? text + " · " + repo : text;
+    return "";
+  }
+
+  // notificationText returns the title and the body of a notification from its parts, each remote part as a safe line. Mirrors MessageText in Go; parity_fixtures.json pins the two.
+  function notificationText(type, actor, repo, subject, excerpt, phrase, glyph) {
+    const sentence = Object.prototype.hasOwnProperty.call(NOTIFY_SENTENCES, type);
+    let title = safeLine(phrase, NOTIFY_PHRASE_LIMIT) || (sentence ? NOTIFY_SENTENCES[type] : Object.prototype.hasOwnProperty.call(NOTIFY_VERBS, type) ? NOTIFY_VERBS[type] : type);
+    const who = sentence ? "" : safeLine(actor, NOTIFY_ACTOR_LIMIT);
+    if (who) title = who + " " + title;
+    if (glyph) title = glyph + " " + title;
+    if (type === "follow") return { title, body: "" };
+    const place = safeLine(repo, NOTIFY_PHRASE_LIMIT), line = safeLine(excerpt, NOTIFY_LINE_LIMIT);
+    const join = (sep, parts) => parts.filter(Boolean).join(sep);
+    if (!line) return { title, body: join("\n", [safeLine(subject, NOTIFY_LINE_LIMIT), place]) };
+    return { title, body: join("\n", [line, join(" · ", [safeLine(subject, NOTIFY_CONTEXT_LIMIT), place])]) };
   }
 
   // NOTIFY_CAP is the most new items that get one notification each; more get one summary, as on the desktop.
@@ -4789,37 +4820,51 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
     return "";
   }
 
-  // pickNotifyItems keeps the new items for the reader as { item, type }: with an email, those that mention it, assign it, request its review or answer its post, and never its own; without one, every new item with no type.
+  // pickNotifyItems keeps the new items for the reader as { item, type, original }: with an email, those that mention it, assign it, request its review or answer its post, and never its own; without one, every new item with no type. original is the item that a comment answers, when the window has it.
   function pickNotifyItems(fresh, all, email) {
     const want = String(email || "").trim();
-    if (!want) return fresh.map((item) => ({ item, type: "" }));
     const byShort = new Map(all.map((it) => [it.commit.short, it]));
+    const pick = (item, type) => ({ item, type, original: byShort.get(anyRefHash((item.header || {}).original || "")) });
+    if (!want) return fresh.map((item) => pick(item, ""));
     const out = [];
     for (const item of fresh) {
       if (eqFold(effectiveAuthorEmail(item.commit, item.header), want)) continue;
       const type = notifyType(item, want, byShort);
-      if (type) out.push({ item, type });
+      if (type) out.push(pick(item, type));
     }
     return out;
   }
 
-  // NEW_ITEM_VERBS is the phrase after the actor of a new item that no notification type names, by item type.
-  const NEW_ITEM_VERBS = { post: "posted", comment: "commented", repost: "reposted a post", quote: "quoted a post", issue: "opened an issue", milestone: "added a milestone", sprint: "added a sprint", "pull-request": "opened a pull request", release: "published a release" };
+  // NEW_ITEM_PHRASES is the phrase after the actor of a new item, by its kind. Mirrors newItemPhrases in core/notifications/desktop_text.go.
+  const NEW_ITEM_PHRASES = { post: "posted", comment: "commented", repost: "reposted", quote: "quoted", issue: "opened an issue", "pull-request": "opened a pull request", feedback: "commented on a pull request", milestone: "added a milestone", sprint: "added a sprint", release: "published a release", memo: "added a memo", commit: "committed" };
 
-  // newItemBody returns the text of a new item without a type: the actor, the kind of the item and the repository.
-  function newItemBody(item, repo) {
-    const verb = NEW_ITEM_VERBS[facetType(item, item._ext)] || "added an item";
-    const text = item.author ? item.author + " " + verb : verb;
-    return repo ? text + " · " + repo : text;
+  // newItemPhrase returns the phrase of a new item of a kind, or the verb of an activity.
+  function newItemPhrase(kind) {
+    return Object.prototype.hasOwnProperty.call(NEW_ITEM_PHRASES, kind) ? NEW_ITEM_PHRASES[kind] : NOTIFY_VERBS.activity;
   }
 
-  // notifyMessages returns one message per picked item, or one summary over the cap; a message has a title, a body, the route a click opens and a tag.
-  function notifyMessages(picked, title, repo) {
-    if (picked.length > NOTIFY_CAP) return [{ title, body: picked.length + " new notifications", route: "#/timeline", tag: "" }];
-    return picked.map(({ item, type }) => ({
-      title, body: type ? notificationBody(type, item.author, repo) : newItemBody(item, repo),
-      route: "#commit:" + item.commit.short, tag: item.commit.short,
-    }));
+  // notifyItemText returns the title and the body of a picked item: the commit subject is line 1 of a mention and of a comment, whose original is the subject, and the subject of each other item; a code commit has no glyph.
+  function notifyItemText({ item, type, original }, repo) {
+    const kind = facetType(item, item._ext);
+    const glyph = item._ext === "code" ? "" : typeGlyph(item, item._ext);
+    const line = itemSubject(item), answered = original ? itemSubject(original) : "";
+    if (type === "mention") return notificationText(type, item.author, repo, "", line, "", glyph);
+    if (type === "comment" || (!type && kind === "comment")) return notificationText(type || "activity", item.author, repo, answered, line, type ? "" : newItemPhrase(kind), glyph);
+    if (type) return notificationText(type, item.author, repo, line, "", "", glyph);
+    return notificationText("activity", item.author, repo, line, "", newItemPhrase(kind), glyph);
+  }
+
+  // NOTIFY_SUMMARY_TAG is the tag of the summary, so a new summary replaces the one before it.
+  const NOTIFY_SUMMARY_TAG = "summary";
+
+  // notifyMessages returns one message per picked item, or one summary over the cap that lists the first titles; repo is the context line, the site title or the repository. A message has a title, a body, the route a click opens and a tag.
+  function notifyMessages(picked, repo) {
+    const texts = picked.map((p) => notifyItemText(p, repo));
+    if (picked.length > NOTIFY_CAP) {
+      const lines = texts.slice(0, NOTIFY_CAP).map((t) => t.title).concat("and " + (picked.length - NOTIFY_CAP) + " more");
+      return [{ title: picked.length + " new notifications", body: lines.join("\n"), route: "#/timeline", tag: NOTIFY_SUMMARY_TAG }];
+    }
+    return picked.map(({ item }, i) => ({ title: texts[i].title, body: texts[i].body, route: "#commit:" + item.commit.short, tag: item.commit.short }));
   }
 
   // pageNotification shows one message through the page; a click focuses the tab and opens the route of the message in it.
@@ -4936,6 +4981,6 @@ if (typeof module !== "undefined" && module.exports) require("./gs-core.js");
   }
 
 
-  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, routeTitle, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, notificationBody, notifyPanel, notifyState, notifyStorage, readNotifyEmail, notifyRun, pickNotifyItems, notifyMessages, showNotifications, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, relativeHref, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures, navFeaturesOff });
+  Object.assign(NS, { LIST_HEADINGS, LIST_EMPTY, routeTitle, headingRow, DIFF_FILE_CAP, PR_DIFF_NOTICE, isGeneratedFile, REF_LINK_RE, MENTION_RE, notificationText, safeLine, newItemPhrase, notifyPanel, notifyState, notifyStorage, readNotifyEmail, notifyRun, pickNotifyItems, notifyMessages, showNotifications, RELEASE_DETAIL_SKIP, trailerRows, FORK_DIFF_NOTICE, forkDiffSection, diffSection, diffStatusLabel, hunkHeadText, prDiffNotice, listHeading, analyticsView, mdSlug, authorEl, authorAvatar, setAvatarKeys, avatarInitials, avatarHue, AVATAR_HUES, commitAuthorEl, countHead, autoScrollListView, boardView, boardBody, branchLogView, branchesView, commitsView, compareView, enrichDetail, ensureGrammar, ensurePrism, feedbackCard, feedbackFileRef, highlightsSettled, setGrammarBase, setRefContext, chipEl, highlightTo, langForPath, langForFence, graphView, headTagLink, codeSidebarTarget, codeView, commitCard, commitDetail, configView, el, filteredListView, focusSearchInput, focusTreeSearch, highlightNav, homeView, icon, iconEl, issuesBody, milestonesBody, sprintsBody, MILESTONE_STATES, SPRINT_STATES, itemDetail, listDetailView, listMemberRow, listsView, memoCard, metaRow, mountTree, openFullscreen, pagedListView, prCard, PR_STATES, releaseCard, renderInline, renderList, renderMarkdown, relativeHref, renderCommitBody, revokeObjectUrls, sanitizeInert, searchIconEl, searchResultCard, searchView, setView, spinner, subjectBody, tagsView, tagDetail, timelineCard, cardsHeading, toggleCodeTree, treeOrBlob, updateCodeSidebar, updateNavCounts, applyNavFeatures, navFeaturesOff });
   if (typeof module !== "undefined" && module.exports) module.exports = NS;
 })();

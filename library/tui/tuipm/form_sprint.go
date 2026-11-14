@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
@@ -216,7 +217,7 @@ func (v *sprintFormView) Render(state *tuicore.State) string {
 }
 
 // Title returns the view title.
-func (v *sprintFormView) Title() string { return tuicore.TypeGlyph("sprint", "") + "  New Sprint" }
+func (v *sprintFormView) Title() string { return protocol.TypeGlyph("sprint", "") + "  New Sprint" }
 
 // updateSprintFromForm updates an existing sprint from form data.
 func (f *sprintForm) updateSprintFromForm() tea.Cmd {
@@ -343,7 +344,7 @@ func (v *sprintEditFormView) Render(state *tuicore.State) string {
 // Title returns the view title.
 func (v *sprintEditFormView) Title() string {
 	if v.sprint != nil {
-		return fmt.Sprintf("%s  Edit: %s", tuicore.TypeGlyph("sprint", ""), v.sprint.Title)
+		return fmt.Sprintf("%s  Edit: %s", protocol.TypeGlyph("sprint", ""), v.sprint.Title)
 	}
-	return tuicore.TypeGlyph("sprint", "") + "  Edit Sprint"
+	return protocol.TypeGlyph("sprint", "") + "  Edit Sprint"
 }

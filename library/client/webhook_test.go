@@ -47,8 +47,8 @@ func webhookRecorder(t *testing.T, fail func(doc map[string]any, seen int) int) 
 }
 
 func TestWebhook_payloadAndRetry(t *testing.T) {
-	item := notifications.DesktopMessage{Title: "GitSocial", Body: "Alice mentioned you · owner/repo", URL: "https://site.example/index.html#commit:0123456789ab", Type: "mention", Repo: "https://example.com/owner/repo", Hash: "0123456789abcdef", Socket: "/tmp/click/1-2.sock", Ref: "https://example.com/owner/repo#commit:0123456789ab"}
-	summary := notifications.DesktopMessage{Title: "GitSocial", Body: "5 new notifications", URL: "https://site.example/"}
+	item := notifications.DesktopMessage{Title: "• Alice mentioned you", Body: "Can you check the new sync code?\nowner/repo", URL: "https://site.example/index.html#commit:0123456789ab", Type: "mention", Repo: "https://example.com/owner/repo", Hash: "0123456789abcdef", Socket: "/tmp/click/1-2.sock", Ref: "https://example.com/owner/repo#commit:0123456789ab"}
+	summary := notifications.DesktopMessage{Title: "5 new notifications", Body: "• Alice mentioned you\n↩ Bob commented\n☐ An issue is assigned to you\nand 2 more", URL: "https://site.example/"}
 	server, docs := webhookRecorder(t, func(doc map[string]any, seen int) int {
 		if doc["body"] == item.Body && seen == 0 {
 			return http.StatusBadGateway

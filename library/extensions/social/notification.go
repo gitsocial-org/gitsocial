@@ -10,6 +10,7 @@ import (
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
 	"github.com/gitsocial-org/gitsocial/library/core/log"
+	"github.com/gitsocial-org/gitsocial/library/core/notifications"
 	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
@@ -73,7 +74,9 @@ func getNotifications(workdir string, filter notificationFilter) ([]Notification
 			       COALESCE(c.origin_time, c.timestamp),
 			       c.is_virtual,
 			       COALESCE(i.comments, 0), COALESCE(i.reposts, 0), COALESCE(i.quotes, 0),
-			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END as is_read
+			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END as is_read,
+			       (SELECT COALESCE(o.resolved_message, o.message) FROM core_commits o WHERE o.repo_url = s.original_repo_url AND o.hash = s.original_hash
+			        ORDER BY ` + cache.LiveFirstOrder("o") + `, o.branch LIMIT 1)
 			FROM social_items s
 			JOIN core_commits c ON s.repo_url = c.repo_url AND s.hash = c.hash AND s.branch = c.branch
 			LEFT JOIN social_interactions i ON s.repo_url = i.repo_url AND s.hash = i.hash AND s.branch = i.branch
@@ -101,7 +104,7 @@ func getNotifications(workdir string, filter notificationFilter) ([]Notification
 		var results []notificationRow
 		for rows.Next() {
 			var row notificationRow
-			var message, originalMessage, ts sql.NullString
+			var message, originalMessage, ts, targetMessage sql.NullString
 			var isVirtual int
 			var isRead int
 			err := rows.Scan(
@@ -110,7 +113,7 @@ func getNotifications(workdir string, filter notificationFilter) ([]Notification
 				&row.item.ReplyToRepoURL, &row.item.ReplyToHash, &row.item.ReplyToBranch,
 				&message, &originalMessage, &row.item.AuthorName, &row.item.AuthorEmail, &ts,
 				&isVirtual,
-				&row.item.Comments, &row.item.Reposts, &row.item.Quotes, &isRead,
+				&row.item.Comments, &row.item.Reposts, &row.item.Quotes, &isRead, &targetMessage,
 			)
 			if err != nil {
 				return nil, err
@@ -130,6 +133,7 @@ func getNotifications(workdir string, filter notificationFilter) ([]Notification
 			}
 			row.item.IsVirtual = isVirtual == 1
 			row.isRead = isRead == 1
+			row.originalSubject = notifications.FirstLine(targetMessage.String)
 			results = append(results, row)
 		}
 		return results, rows.Err()
@@ -146,14 +150,15 @@ func getNotifications(workdir string, filter notificationFilter) ([]Notification
 			targetID = row.item.OriginalRepoURL.String + "#commit:" + row.item.OriginalHash.String
 		}
 		notifications = append(notifications, Notification{
-			ID:        post.ID,
-			Type:      NotificationType(row.item.Type),
-			Item:      &post,
-			TargetID:  targetID,
-			Actor:     post.Author,
-			ActorRepo: row.item.RepoURL,
-			Timestamp: row.item.Timestamp,
-			IsRead:    row.isRead,
+			ID:              post.ID,
+			Type:            NotificationType(row.item.Type),
+			Item:            &post,
+			TargetID:        targetID,
+			Actor:           post.Author,
+			ActorRepo:       row.item.RepoURL,
+			Timestamp:       row.item.Timestamp,
+			IsRead:          row.isRead,
+			OriginalSubject: row.originalSubject,
 		})
 	}
 
@@ -241,6 +246,7 @@ func sortNotificationsByTime(notifications []Notification) {
 }
 
 type notificationRow struct {
-	item   SocialItem
-	isRead bool
+	item            SocialItem
+	isRead          bool
+	originalSubject string
 }

@@ -3,6 +3,7 @@ package social
 
 import (
 	"database/sql"
+	"fmt"
 	"sort"
 	"testing"
 	"time"
@@ -309,4 +310,52 @@ func TestNotifications_excludesStaleComment(t *testing.T) {
 func unreadOf(p notifications.Provider, workdir string) (int, error) {
 	items, err := p.GetNotifications(workdir, notifications.Filter{UnreadOnly: true})
 	return len(items), err
+}
+
+func TestNotificationText_fields(t *testing.T) {
+	workdir := initWorkspace(t)
+	workspaceURL := gitmsg.ResolveRepoURL(workdir)
+	const other, follower = "https://github.com/text/other", "https://github.com/text/follower"
+	at := time.Date(2025, 10, 22, 12, 0, 0, 0, time.UTC)
+	texts := []string{"Looks good\n\nMore", "", "Read this first", "An answer"}
+	commits := make([]cache.Commit, 0, 1+len(texts))
+	commits = append(commits, cache.Commit{Hash: "7e0000000001", RepoURL: workspaceURL, Branch: "gitmsg/social", AuthorName: "Me", AuthorEmail: git.GetUserEmail(workdir), Message: "Release notes for v1.2\n\nThe body", Timestamp: at})
+	for i, text := range texts {
+		commits = append(commits, cache.Commit{Hash: fmt.Sprintf("7e000000001%d", i), RepoURL: other, Branch: "gitmsg/social", AuthorName: "Bob", AuthorEmail: "bob@test.com", Message: text, Timestamp: at.Add(time.Duration(i+1) * time.Hour)})
+	}
+	if err := cache.InsertCommits(commits); err != nil {
+		t.Fatalf("InsertCommits() error = %v", err)
+	}
+	for i, typ := range []string{"comment", "repost", "quote", "comment"} {
+		original := "7e0000000001"
+		if i == 3 {
+			original = "7e00000000ff"
+		}
+		if err := InsertSocialItem(SocialItem{RepoURL: other, Hash: fmt.Sprintf("7e000000001%d", i), Branch: "gitmsg/social", Type: typ,
+			OriginalRepoURL: cache.ToNullString(workspaceURL), OriginalHash: cache.ToNullString(original), OriginalBranch: cache.ToNullString("gitmsg/social")}); err != nil {
+			t.Fatalf("InsertSocialItem() error = %v", err)
+		}
+	}
+	if err := insertFollower(follower, workspaceURL, "list1", "", at); err != nil {
+		t.Fatalf("insertFollower() error = %v", err)
+	}
+	items, err := (&notificationProvider{}).GetNotifications(workdir, notifications.Filter{})
+	if err != nil {
+		t.Fatalf("GetNotifications() error = %v", err)
+	}
+	got := make(map[string][5]string, len(items))
+	for _, n := range items {
+		got[n.Hash] = [5]string{n.Actor.Name, n.Subject, n.Excerpt, n.Phrase, n.Glyph}
+	}
+	for hash, want := range map[string][5]string{
+		"7e0000000010": {"Bob", "Release notes for v1.2", "Looks good", "", "↩"},
+		"7e0000000011": {"Bob", "Release notes for v1.2", "", "", "↻"},
+		"7e0000000012": {"Bob", "Release notes for v1.2", "Read this first", "", "↻"},
+		"7e0000000013": {"Bob", "", "An answer", "", "↩"},
+		"follow":       {"text/follower", "", "", "", "☷"},
+	} {
+		if got[hash] != want {
+			t.Errorf("%s = %q, want %q", hash, got[hash], want)
+		}
+	}
 }

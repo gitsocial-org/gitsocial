@@ -238,16 +238,16 @@ func PostToCardWithOptions(post social.Post, resolver PostResolver, cardOpts Pos
 func postGlyph(post social.Post) string {
 	switch post.HeaderExt {
 	case "pm", "review":
-		if g := tuicore.TypeGlyph(post.HeaderType, post.HeaderState); g != "" {
+		if g := protocol.TypeGlyph(post.HeaderType, post.HeaderState); g != "" {
 			return g
 		}
 	case "release", "memo":
-		return tuicore.TypeGlyph(post.HeaderExt, "")
+		return protocol.TypeGlyph(post.HeaderExt, "")
 	}
-	if g := tuicore.TypeGlyph(string(post.Type), ""); g != "" {
+	if g := protocol.TypeGlyph(string(post.Type), ""); g != "" {
 		return g
 	}
-	return tuicore.TypeGlyph("post", "")
+	return protocol.TypeGlyph("post", "")
 }
 
 // RenderCommentCard renders a social comment as an indented card with depth-based nesting.

@@ -436,7 +436,7 @@ func (v *issuesView) Title() string {
 	if v.showAll {
 		stateFilter = "All"
 	}
-	title := fmt.Sprintf("%s  %s Issues", tuicore.TypeGlyph("issue", ""), stateFilter)
+	title := fmt.Sprintf("%s  %s Issues", protocol.TypeGlyph("issue", ""), stateFilter)
 	if v.assigneeFilter == "me" {
 		title += " · Mine"
 	}

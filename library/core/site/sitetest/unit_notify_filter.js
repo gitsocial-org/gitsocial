@@ -1,4 +1,4 @@
-// unit_notify_filter.js - the site filters new items to the reader's email when one is set, else keeps all, and caps the notifications at three
+// unit_notify_filter.js - the site filters new items to the reader's email when one is set, else keeps all, fills the text of each from what it holds, and caps the notifications at three
 require("./shim.js");
 const GS = require("../assets/gs-render.js");
 let pass = 0, fail = 0;
@@ -29,16 +29,26 @@ eq(picked(" ME@example.com "), picked(ME), "the email matches without case or sp
 eq(picked(ME).some((p) => p.startsWith("a00000000008")), false, "the reader's own item drops");
 eq(picked(""), fresh.map((it) => it.commit.short + " "), "without an email every new item passes");
 
-const three = GS.notifyMessages(GS.pickNotifyItems(fresh.slice(0, 3), all, ME), "GitSocial", "owner/repo");
+const three = GS.notifyMessages(GS.pickNotifyItems(fresh.slice(0, 3), all, ME), "owner/repo");
 eq(three.map((m) => [m.title, m.body, m.route]), [
-  ["GitSocial", "Alice mentioned you · owner/repo", "#commit:a00000000002"],
-  ["GitSocial", "Alice assigned you an issue · owner/repo", "#commit:a00000000003"],
-  ["GitSocial", "Alice requested your review · owner/repo", "#commit:a00000000004"],
-], "three items give one notification each, with the shared text and the item route");
-const four = GS.notifyMessages(GS.pickNotifyItems(fresh, all, ME), "My Site", "owner/repo");
-eq(four.map((m) => [m.title, m.body, m.route]), [["My Site", "4 new notifications", "#/timeline"]], "more than three give one summary that opens the timeline");
-eq(GS.notifyMessages(GS.pickNotifyItems([assigned, review], all, ""), "GitSocial", "owner/repo").map((m) => m.body),
-  ["Alice opened an issue · owner/repo", "Alice opened a pull request · owner/repo"], "without an email the body names the kind of the item");
+  ["• Alice mentioned you", "Hello @ME@Example.com, look\nowner/repo", "#commit:a00000000002"],
+  ["☐ An issue is assigned to you", "Fix it\nowner/repo", "#commit:a00000000003"],
+  ["△ Your review is requested", "Add it\nowner/repo", "#commit:a00000000004"],
+], "three items give one notification each: the glyph and the title, then line 1 and the context, and the item route");
+const four = GS.notifyMessages(GS.pickNotifyItems(fresh, all, ME), "owner/repo");
+eq(four.map((m) => [m.title, m.body, m.route, m.tag]), [["4 new notifications", "• Alice mentioned you\n☐ An issue is assigned to you\n△ Your review is requested\nand 1 more", "#/timeline", "summary"]],
+  "more than three give one summary with the first three titles, the count of the rest and a fixed tag, that opens the timeline");
+eq(GS.notifyMessages(GS.pickNotifyItems([reply], all, ME), "owner/repo").map((m) => [m.title, m.body]), [["↩ Alice commented", "Nice\nMy post · owner/repo"]],
+  "a comment has its subject as line 1 and the post it answers in the context line");
+eq(GS.notifyMessages(GS.pickNotifyItems([reply], fresh, ""), "owner/repo").map((m) => [m.title, m.body]), [["↩ Alice commented", "Nice\nowner/repo"]],
+  "a new comment whose post is not in the window has no subject in the context line");
+eq(GS.notifyMessages(GS.pickNotifyItems([assigned, review], all, ""), "owner/repo").map((m) => [m.title, m.body]),
+  [["☐ Alice opened an issue", "Fix it\nowner/repo"], ["△ Alice opened a pull request", "Add it\nowner/repo"]], "without an email the title names the kind of the item and line 1 is its subject");
+const commit = { commit: { short: "a00000000009", hash: "a00000000009" + "0".repeat(28), authorTime: 100, authorEmail: "alice@example.com", subject: "Fix the parser" }, header: {}, content: "", author: "Alice", _ext: "code" };
+eq(GS.notifyMessages(GS.pickNotifyItems([commit], all, ""), "owner/repo").map((m) => [m.title, m.body]), [["Alice committed", "Fix the parser\nowner/repo"]],
+  "a code commit has no glyph, and its commit subject is line 1 when the item is not hydrated");
+eq(GS.notifyMessages(GS.pickNotifyItems([mention], all, ME), "My Site").map((m) => [m.title, m.body]), [["• Alice mentioned you", "Hello @ME@Example.com, look\nMy Site"]],
+  "the site title is the context line, not the title");
 
 const notes = [];
 global.window.Notification = function (title, opts) { this.close = () => { this.closed = true; }; notes.push({ title, opts, n: this }); };

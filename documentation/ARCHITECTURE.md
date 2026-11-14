@@ -215,7 +215,7 @@ Outside the tree:
 | Package | Key Types | Key Exports |
 |---------|-------|---------|
 | `core/git`<br>Git operations | `Commit`, `FileDiff`, `Hunk`, `DiffLine`, `DiffStats` | `GetCommits`, `CreateCommit`, `ReadRef`, `WriteRef`, `GetDiff`, `WorkingStatus`, `GetWorkingFileDiff`, `StageFiles`, `UnstageFiles`, `CommitIndex`, `GetFileDiff`, `GetFileContent`, `ListTree`, `ObjectType`, `ListTags`, `TagOrder`, `CompareTagsDesc`, `CountCommits`, `GetDiffStats`, `MergeBranches`, `SquashMerge`, `RebaseMerge`, `ForceMerge`, `RebaseBranch`, `RangeDiff`, `PatchesEqual`, `GetBehindCount`, `GetMergeBase`, `GetUserName`, `GetGitConfig`, `GetCommitSignerKey` |
-| `core/protocol`<br>Message parsing | `Header`, `Message`, `Origin`, `Trailer`, `RefSpan`, `MentionSpan` | `ParseMessage`, `ParseHeader`, `CreateHeader`, `FormatMessage`, `ParseRef`, `CreateRef`, `FormatShortRef`, `QuoteContent`, `ApplyOrigin`, `ExtractTrailers`, `Trailer`, `FindRefs`, `FindMentions` |
+| `core/protocol`<br>Message parsing | `Header`, `Message`, `Origin`, `Trailer`, `RefSpan`, `MentionSpan` | `ParseMessage`, `ParseHeader`, `CreateHeader`, `FormatMessage`, `ParseRef`, `CreateRef`, `FormatShortRef`, `QuoteContent`, `ApplyOrigin`, `ExtractTrailers`, `Trailer`, `FindRefs`, `FindMentions`, `TypeGlyph` |
 | `core/cache`<br>SQLite operations | `Repository`, `Commit`, `TrailerRef` | `Open`, `DB`, `ExecLocked`, `QueryLocked`, `InsertCommits`, `FilterUnfetchedCommitsByRepo`, `MarkCommitsStaleByRepo`, `MarkCommitsStaleByHome`, `GetCommitOnAnyBranch`, `ResetRepositoryData`, `ToNullString`, `ToNullInt64`, `GetTrailerRefsTo`, `TrailerRef`, `GetRepositoryBranches` |
 | `core/gitmsg`<br>Protocol-level storage | | `ResolveRepoURL`, `Push`, `ReadExtConfig`, `WriteList`, `GetHistory`, `GetExtBranch`, `IsBranchConfigurable`, `IsExtInitialized`, `GetForks`, `AddFork`, `AddForks`, `RemoveFork` |
 | `core/storage`<br>Bare repo management | | `EnsureRepository`, `GetStorageDir`, `FetchRepository` |
@@ -225,7 +225,7 @@ Outside the tree:
 | `core/settings`<br>User settings | | `Get`, `Set`, `ListAll` |
 | `core/search`<br>Cross-extension search | | `Search`, `Params`, `Result`, `Item`, `Group`, `GroupedItem`, `FormatResult`, `IsValidGroupBy` |
 | `core/result`<br>Result type | `Result[T]`, `Error` | `Ok`, `Err`, `ErrWithDetails` |
-| `core/notifications`<br>Notification aggregation | `Notification`, `Provider`, `Filter` | `RegisterProvider`, `GetAll`, `GetUnreadCount`, `Claim`, `MarkAsRead`, `MarkAsUnread`, `MarkAllAsRead`, `MarkAllAsUnread`, `MentionProcessor`, `ExtractMentions`, `TrailerProcessor` |
+| `core/notifications`<br>Notification aggregation | `Notification`, `Provider`, `Filter` | `RegisterProvider`, `GetAll`, `GetUnreadCount`, `Claim`, `MarkAsRead`, `MarkAsUnread`, `MarkAllAsRead`, `MarkAllAsUnread`, `MentionProcessor`, `ExtractMentions`, `TrailerProcessor`, `DesktopMessages`, `MessageText` |
 | `core/notifications/click`<br>Click socket of a TUI | | `SocketPath`, `Listen`, `Send` |
 | `core/identity`<br>Identity verification | `Identity`, `ResolvedIdentity`, `DNSIdentity`, `Binding`, `Source`, `VerifyCandidate` | `VerifyBinding`, `IsVerified`, `IsVerifiedCommit`, `LookupBinding`, `VerifyCandidates`, `NormalizeSignerKey`, `NormalizeEmail`, `ResolveIdentity` |
 | `core/identity/forge`<br>Forge adapters | `Forge`, `GPGKey`, `CommitVerification` | `Forge`, `Register`, `Lookup`, `LookupForRepo`, `ParseRepoURL`, `NewGitHub`, `GPGKey`, `CommitVerification` |

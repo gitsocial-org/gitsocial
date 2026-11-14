@@ -2,6 +2,7 @@
 package tuipm
 
 import (
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
 
@@ -9,7 +10,7 @@ import (
 func newIssueHistoryDiffView(workdir string) *tuicore.HistoryDiffView {
 	return tuicore.NewHistoryDiffView(workdir, tuicore.HistoryDiffConfig{
 		Context:   tuicore.PMIssueHistoryDiff,
-		TitleIcon: tuicore.TypeGlyph("issue", ""),
+		TitleIcon: protocol.TypeGlyph("issue", ""),
 		Title:     "Issue Diff",
 		Load:      loadPMHistoryVersionsKey("issueID"),
 	})

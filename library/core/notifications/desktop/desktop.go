@@ -111,7 +111,7 @@ func darwinSend(h host, m notifications.DesktopMessage) error {
 		}
 		log.Debug("darwin notifier failed, using osascript", "error", err)
 	}
-	return run(h.timeout, lookPath("osascript"), []string{"-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", m.Title, m.Body}, nil)
+	return run(h.timeout, lookPath("osascript"), []string{"-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", "--", m.Title, m.Body}, nil)
 }
 
 // linuxSend gives each message with a click to a detached child of self that shows it and waits for the click, so the caller does not; it shows a message with no click with notify-send.

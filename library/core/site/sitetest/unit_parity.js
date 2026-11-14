@@ -402,7 +402,14 @@ console.log("=== parity invariant: the href of a relative markdown link ===");
 }
 
 console.log("=== parity invariant: notification text ===");
-for (const [type, body] of Object.entries(FIX.notificationBodies)) eq(GS.notificationBody(type, "Alice", "owner/repo"), body, "notification body: " + type);
+for (const c of FIX.notificationTexts) {
+  const got = GS.notificationText(c.type, c.actor, c.repo, c.subject, c.excerpt, c.phrase, c.glyph);
+  eq(got.title, c.title, "notification title: " + c.name);
+  eq(got.body, c.body, "notification body: " + c.name);
+}
+for (const c of FIX.typeGlyphs) eq(GS.typeGlyph({ header: { type: c.type, state: c.state } }, ""), c.glyph, "type glyph: " + c.type + " " + c.state);
+for (const c of FIX.safeLines) eq(GS.safeLine(c.in, c.limit), c.out, "safe line: " + JSON.stringify(c.in));
+for (const [kind, phrase] of Object.entries(FIX.newItemPhrases)) eq(GS.newItemPhrase(kind), phrase, "new item phrase: " + kind);
 
 console.log("=== parity invariant: tag display order ===");
 (async () => {

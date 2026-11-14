@@ -182,6 +182,8 @@ type Notification struct {
 	CommitHash string
 	Timestamp  time.Time
 	IsRead     bool
+	// OriginalSubject is the first line of the original of a comment, repost or quote, "" when the original is not in the cache.
+	OriginalSubject string
 }
 
 type notificationFilter struct {

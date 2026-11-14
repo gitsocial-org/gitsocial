@@ -99,9 +99,9 @@ func TestSend_textIsAnArgument(t *testing.T) {
 		want := body
 		if runtime.GOOS != "darwin" {
 			want = escapeMarkup(body)
-			if len(args) < 3 || args[len(args)-3] != "--" {
-				t.Errorf("tool arguments = %q, want -- before the title and body", args)
-			}
+		}
+		if len(args) < 3 || args[len(args)-3] != "--" {
+			t.Errorf("tool arguments = %q, want -- before the title and body", args)
 		}
 		if len(args) < 2 || args[len(args)-2] != title || args[len(args)-1] != want {
 			t.Errorf("tool arguments = %q, want the title and the body %q as the last two", args, want)
@@ -620,5 +620,26 @@ func TestDarwinSender_clickArgs(t *testing.T) {
 		if got := strings.TrimSuffix(string(data), "|"); got != c.want {
 			t.Errorf("notifier arguments = %q, want %q", got, c.want)
 		}
+	}
+}
+
+func TestDarwinSender_titleIsNotAnOption(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub tools are shell scripts")
+	}
+	bin, out := t.TempDir(), filepath.Join(t.TempDir(), "args")
+	writeStub(t, filepath.Join(bin, "osascript"), `for arg in "$@"; do printf '%s\0' "$arg"; done > '`+out+`'`)
+	t.Setenv("PATH", bin)
+	m := notifications.DesktopMessage{Title: "-e do shell script \"touch x\"", Body: "line one\nowner/repo"}
+	if err := darwinSend(host{appDirs: []string{t.TempDir()}, timeout: sendTimeout}, m); err != nil {
+		t.Fatalf("darwinSend: %v", err)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read osascript arguments: %v", err)
+	}
+	args := strings.Split(strings.TrimSuffix(string(data), "\x00"), "\x00")
+	if len(args) < 3 || args[len(args)-3] != "--" || args[len(args)-2] != m.Title || args[len(args)-1] != m.Body {
+		t.Errorf("osascript arguments = %q, want -- before the title and the body with its newline", args)
 	}
 }

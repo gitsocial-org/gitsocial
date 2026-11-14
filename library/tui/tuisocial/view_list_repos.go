@@ -451,9 +451,9 @@ func (v *listReposView) IsExternalList() bool {
 // another repo's list.
 func (v *listReposView) Title() string {
 	if v.externalListOwner != "" {
-		return tuicore.TypeGlyph("list", "") + "  " + v.list.Name + " · " + protocol.GetDisplayName(v.externalListOwner)
+		return protocol.TypeGlyph("list", "") + "  " + v.list.Name + " · " + protocol.GetDisplayName(v.externalListOwner)
 	}
-	return tuicore.TypeGlyph("list", "") + "  " + v.list.Name
+	return protocol.TypeGlyph("list", "") + "  " + v.list.Name
 }
 
 // HeaderInfo returns position and total for the header.

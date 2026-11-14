@@ -507,7 +507,7 @@ if (typeof module !== "undefined" && module.exports) { require("./gs-core.js"); 
       const href = icon ? icon.getAttribute("href") : "";
       let iconHref = "";
       try { iconHref = href ? new URL(href, location.href).href : ""; } catch (e) { /* no icon */ }
-      await showNotifications(notifyMessages(pickNotifyItems(fresh, all, email), customTitle || "GitSocial", repoTitle(ctx.base)), iconHref, await registration(), String(location.href).split("#")[0]);
+      await showNotifications(notifyMessages(pickNotifyItems(fresh, all, email), customTitle || repoTitle(ctx.base)), iconHref, await registration(), String(location.href).split("#")[0]);
     };
     const run = async () => {
       if (!on()) return;

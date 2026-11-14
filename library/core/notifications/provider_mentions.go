@@ -27,7 +27,7 @@ func (p *mentionProvider) GetNotifications(workdir string, filter Filter) ([]Not
 	return cache.QueryLocked(func(db *sql.DB) ([]Notification, error) {
 		query := `
 			SELECT m.repo_url, m.hash, m.branch,
-			       c.author_name, c.author_email, c.timestamp,
+			       c.author_name, c.author_email, c.timestamp, c.message,
 			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END as is_read
 			FROM core_mentions m
 			JOIN core_commits c ON m.repo_url = c.repo_url AND m.hash = c.hash AND m.branch = c.branch
@@ -57,10 +57,10 @@ func (p *mentionProvider) GetNotifications(workdir string, filter Filter) ([]Not
 
 		var results []Notification
 		for rows.Next() {
-			var repoURL, hash, branch, authorName, authorEmail string
+			var repoURL, hash, branch, authorName, authorEmail, message string
 			var ts sql.NullString
 			var isRead int
-			if err := rows.Scan(&repoURL, &hash, &branch, &authorName, &authorEmail, &ts, &isRead); err != nil {
+			if err := rows.Scan(&repoURL, &hash, &branch, &authorName, &authorEmail, &ts, &message, &isRead); err != nil {
 				return nil, err
 			}
 			var timestamp time.Time
@@ -79,6 +79,8 @@ func (p *mentionProvider) GetNotifications(workdir string, filter Filter) ([]Not
 				ActorRepo: repoURL,
 				Timestamp: timestamp,
 				IsRead:    isRead == 1,
+				Excerpt:   FirstLine(message),
+				Glyph:     commitGlyph(message, branch),
 			})
 		}
 		return results, rows.Err()

@@ -150,6 +150,8 @@ func getForkIssueNotifications(userEmail string, forkURLs []string, unreadOnly b
 				ActorRepo: repoURL,
 				Timestamp: timestamp,
 				IsRead:    isRead,
+				Subject:   subject,
+				Glyph:     protocol.TypeGlyph("issue", state.String),
 			})
 		}
 		return result, rows.Err()
@@ -236,6 +238,8 @@ func getAssignedIssueNotifications(userEmail string, unreadOnly bool, limit int)
 				ActorRepo: repoURL,
 				Timestamp: timestamp,
 				IsRead:    isRead,
+				Subject:   subject,
+				Glyph:     protocol.TypeGlyph("issue", state.String),
 			})
 		}
 		return result, rows.Err()
@@ -333,8 +337,19 @@ func getIssueStateChangeNotifications(userEmail string, unreadOnly bool, limit i
 				ActorRepo: ecRepoURL,
 				Timestamp: timestamp,
 				IsRead:    isRead == 1,
+				Subject:   subject,
+				Phrase:    canceledPhrase(state.String),
+				Glyph:     protocol.TypeGlyph("issue", state.String),
 			})
 		}
 		return result, rows.Err()
 	})
+}
+
+// canceledPhrase returns the phrase of an edit that cancels an issue, or "" for another state.
+func canceledPhrase(state string) string {
+	if strings.HasPrefix(state, "cancel") {
+		return "canceled an issue of yours"
+	}
+	return ""
 }

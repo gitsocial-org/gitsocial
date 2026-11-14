@@ -20,12 +20,12 @@ function post(short, time) {
 
 const shorts = (items) => items.map((it) => it.commit.short);
 
-// run runs the notifier step over items on a store and returns the bodies it showed.
+// run runs the notifier step over items on a store and returns the bodies it showed: the subject of the post, then the repository.
 async function run(store, items, base) {
   const bodies = [];
   global.window.Notification = function (title, opts) { bodies.push(opts.body); };
   await GS.notifyRun(store, base || BASE, async () => items, async (fresh, all) => {
-    GS.showNotifications(GS.notifyMessages(GS.pickNotifyItems(fresh, all, ""), "GitSocial", "repo"), "");
+    GS.showNotifications(GS.notifyMessages(GS.pickNotifyItems(fresh, all, ""), "repo"), "");
   });
   return bodies;
 }
@@ -37,27 +37,27 @@ async function main() {
   eq(JSON.parse(store.getItem(KEY)), ["aaaaaaaaaaa1", "aaaaaaaaaaa2"], "the first run records the hashes as the baseline");
 
   const second = [post("bbbbbbbbbbb1", 110), ...first];
-  eq(await run(store, second), ["Alice posted · repo"], "a second run shows the new item once");
+  eq(await run(store, second), ["post bbbbbbbbbbb1\nrepo"], "a second run shows the new item once");
   eq(await run(store, second), [], "a third run with the same items shows nothing");
 
-  eq(await run(store, [post("ccccccccccc1", 50), ...second]), ["Alice posted · repo"], "an item with an older date than the others is still new");
+  eq(await run(store, [post("ccccccccccc1", 50), ...second]), ["post ccccccccccc1\nrepo"], "an item with an older date than the others is still new");
 
   const before = store.getItem(KEY);
   let threw = null;
   try { await GS.notifyRun(store, BASE, async () => { throw new Error("offline"); }, async () => {}); } catch (e) { threw = e; }
   eq([!!threw, store.getItem(KEY)], [true, before], "a failed load keeps the mark");
   const pending = [post("ddddddddddd1", 120), post("ddddddddddd2", 121)];
-  eq(await run(store, [...pending, ...second]), ["Alice posted · repo", "Alice posted · repo"], "after a failed load the next run shows the items it missed");
+  eq(await run(store, [...pending, ...second]), ["post ddddddddddd1\nrepo", "post ddddddddddd2\nrepo"], "after a failed load the next run shows the items it missed");
 
   const night = memoryStore();
   night.setItem(KEY, JSON.stringify(["aaaaaaaaaaa1", "aaaaaaaaaaa2"]));
-  eq(await run(night, second), ["Alice posted · repo"], "a grant with an existing mark shows the pending items");
+  eq(await run(night, second), ["post bbbbbbbbbbb1\nrepo"], "a grant with an existing mark shows the pending items");
 
   eq(await run(store, second, "https://other.example/"), [], "another site base has its own mark and starts with a baseline");
 
   store.setItem(KEY, "not json");
   eq(await run(store, second), [], "an unreadable mark is a baseline");
-  eq(await run(store, [post("eeeeeeeeeee1", 130), ...second]), ["Alice posted · repo"], "and the run after it shows new items again");
+  eq(await run(store, [post("eeeeeeeeeee1", 130), ...second]), ["post eeeeeeeeeee1\nrepo"], "and the run after it shows new items again");
 
   const many = Array.from({ length: 600 }, (_, i) => post(String(i).padStart(12, "f"), i));
   await run(store, many);

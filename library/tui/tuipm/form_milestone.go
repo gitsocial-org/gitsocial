@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/pm"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
@@ -195,7 +196,7 @@ func (v *milestoneFormView) Render(state *tuicore.State) string {
 
 // Title returns the view title.
 func (v *milestoneFormView) Title() string {
-	return tuicore.TypeGlyph("milestone", "") + "  New Milestone"
+	return protocol.TypeGlyph("milestone", "") + "  New Milestone"
 }
 
 // updateMilestoneFromForm updates an existing milestone from form data.
@@ -318,7 +319,7 @@ func (v *milestoneEditFormView) Render(state *tuicore.State) string {
 // Title returns the view title.
 func (v *milestoneEditFormView) Title() string {
 	if v.milestone != nil {
-		return fmt.Sprintf("%s  Edit: %s", tuicore.TypeGlyph("milestone", ""), v.milestone.Title)
+		return fmt.Sprintf("%s  Edit: %s", protocol.TypeGlyph("milestone", ""), v.milestone.Title)
 	}
-	return tuicore.TypeGlyph("milestone", "") + "  Edit Milestone"
+	return protocol.TypeGlyph("milestone", "") + "  Edit Milestone"
 }

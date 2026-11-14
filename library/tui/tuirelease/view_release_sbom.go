@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/release"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
@@ -111,9 +112,9 @@ func (v *releaseSBOMView) Render(state *tuicore.State) string {
 // Title returns the view title.
 func (v *releaseSBOMView) Title() string {
 	if v.rel == nil {
-		return tuicore.TypeGlyph("release", "") + "  SBOM"
+		return protocol.TypeGlyph("release", "") + "  SBOM"
 	}
-	return fmt.Sprintf("%s  SBOM · %s", tuicore.TypeGlyph("release", ""), tuicore.TruncateToWidth(v.rel.Subject, 40))
+	return fmt.Sprintf("%s  SBOM · %s", protocol.TypeGlyph("release", ""), tuicore.TruncateToWidth(v.rel.Subject, 40))
 }
 
 // Bindings returns keybindings for this view.

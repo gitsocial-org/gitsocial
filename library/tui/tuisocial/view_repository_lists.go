@@ -226,7 +226,7 @@ func (v *repoListsView) Render(state *tuicore.State) string {
 // Title returns the view title for the header.
 func (v *repoListsView) Title() string {
 	if v.repoName != "" {
-		return tuicore.TypeGlyph("list", "") + "  " + v.repoName + " lists"
+		return protocol.TypeGlyph("list", "") + "  " + v.repoName + " lists"
 	}
-	return tuicore.TypeGlyph("list", "") + "  Repository Lists"
+	return protocol.TypeGlyph("list", "") + "  Repository Lists"
 }

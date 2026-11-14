@@ -2,7 +2,7 @@
 
 Notifications from all extensions are in one feed, with the newest first.
 
-[Commands](#commands) · [Levels](#levels) · [Desktop notifications](#desktop-notifications) · [Types](#types)
+[Commands](#commands) · [Levels](#levels) · [Desktop notifications](#desktop-notifications) · [Message text](#message-text) · [Types](#types)
 
 ## Commands
 
@@ -112,6 +112,84 @@ On macOS without the app, or when the app cannot post, the message comes from `o
 
 To turn the messages off, run `gitsocial settings set notifications.desktop false`, or set `GITSOCIAL_DESKTOP_NOTIFICATIONS=false` on one machine.
 
+### Message text
+
+A message has a title and a body of one or two lines. The desktop, the webhook, the browser and the list of `gitsocial notifications` show the same text; the TUI feed shows cards.
+
+| Part | Content | Limit |
+|---|---|---|
+| title | the glyph of the row, the actor and what the actor did; it never holds the text of an item | actor 30 |
+| line 1 | the excerpt, the first line of the new text of the event, else the subject, the first line of the item that the event is about | 100 |
+| line 2 | the repository; when line 1 is the excerpt, the subject, then ` · `, then the repository | subject 40 |
+
+A part with no value is left out, so a message with no excerpt and no subject has the repository as its body. A limit counts code points, with `...` inside the limit. The glyph is the glyph of the timeline row: the item in its state, `✓` or `✗` for a review, `☷` for a follow and `⎇` for a branch notification. A code commit has no glyph.
+
+Each type has this text, for the actor Alice. `S` is the subject and `E` the excerpt.
+
+| Type | Title | Line 1 |
+|---|---|---|
+| `mention` | • Alice mentioned you | E, the first line of the message that mentions you |
+| `reference` | ☐ Alice referenced your item | E, the subject of the commit with the trailer; S is your item |
+| `edit` | ☐ Alice edited your item; Alice retracted your item; Alice proposed an edit to your item, for an edit from a different repository | S, the first line of the first version |
+| `comment` | ↩ Alice commented | E; S is the original item |
+| `repost` | ↻ Alice reposted your post | S |
+| `quote` | ↻ Alice quoted your post | E; S |
+| `follow` | ☷ owner/repo added your repository to a list | none, and no line 2 |
+| `issue-assigned` | ☐ An issue is assigned to you | S |
+| `issue-closed` | ☑ Alice closed an issue of yours; ☒ Alice canceled an issue of yours | S |
+| `issue-reopened` | ☐ Alice reopened an issue of yours | S |
+| `fork-issue` | ☐ Alice opened an issue on a fork | S |
+| `fork-pr` | △ Alice opened a pull request | S |
+| `review-requested` | △ Your review is requested | S |
+| `feedback` | ↩ Alice commented on a pull request | E; S is the pull request |
+| `approved` | ✓ Alice approved a pull request | E when the review has text; S |
+| `changes-requested` | ✗ Alice requested changes | E; S |
+| `pr-merged` | ▲ Alice merged your pull request | S |
+| `pr-closed` | △ Alice closed your pull request | S |
+| `pr-ready` | △ Alice marked a pull request ready | S |
+| `head-advanced` | ⎇ The head branch of a pull request advanced | S |
+| `base-advanced` | ⎇ The base branch of a pull request advanced | S |
+| `head-deleted` | ⎇ The head branch of a pull request is not on its remote | S |
+| `base-deleted` | ⎇ The base branch of a pull request is not on its remote | S |
+| `new-release` | ⏏ Alice released v1.2.0, the tag, else `v` and the version, with ` (pre-release)`; with neither, Alice published a release | S, left out when it is the tag |
+| `memo-comment` | ↩ Alice commented on your memo | E; S is the memo |
+| `inherited-policy` | ☞ Alice added a critical memo | S |
+| `branch-diverged` | ⎇ The branch gitmsg/social diverged from its remote | none |
+| `activity`, a new item | Alice posted, commented, reposted, quoted, opened an issue, opened a pull request, commented on a pull request, added a milestone, added a sprint, published a release, added a memo, committed; else Alice added an item | S |
+| `activity`, an action | Alice and the verb of the action and the kind of the item: closed an issue, merged a pull request, assigned an issue, approved a pull request; requested a review | S; E for a review |
+
+- `issue-assigned` and `review-requested` name no actor, because the author of the item is not always the person who assigns.
+- A `follow` names the repository that added yours to a list.
+- An issue of yours is an issue that is assigned to you.
+- More than three messages give one summary: the title is the count, `5 new notifications`, and the body is the titles of the first three, one on each line, then `and 2 more`.
+- `gitsocial notifications` prints the type, the read state, the title and the time, then the body, the item of an edit, the branch and the tips of a branch notification, and the id.
+
+Each part of a remote text goes through one safe line before it gets to a message or to the terminal. RPC and `--json` return the parts raw, as `Subject`, `Excerpt`, `Phrase` and `Glyph`.
+
+| Step | Safe line |
+|---|---|
+| 1 | replace invalid UTF-8 with U+FFFD |
+| 2 | take the first line that is not empty; a line ends at LF, CR, VT, FF, U+0085, U+2028 or U+2029 |
+| 3 | change a tab to a space, and remove each other control character |
+| 4 | remove the bidi controls, U+200B and U+FEFF; keep U+200C and U+200D |
+| 5 | change each run of spaces to one space, and trim; a line of only spaces is empty |
+| 6 | cut to the limit, with no joiner or variation selector before the `...` |
+
+| Rule | Test |
+|---|---|
+| The title and the body of each type are the same in Go and in the browser | `TestNotificationText_parity`, `unit_parity.js` |
+| The glyph of each type and state is the same in Go and in the browser, and the TUI and the site pages use the one Go table | `TestTypeGlyph_parity`, `unit_parity.js` |
+| The new-item phrase of each kind is the same in Go and in the browser | `TestNewItemPhrase_parity`, `unit_parity.js` |
+| A safe line is the same in Go and in the browser | `TestSafeLine`, `unit_parity.js` |
+| Each type of a provider has its subject, excerpt, phrase and glyph | `TestNotificationText_fields` |
+| An `activity` notification has the phrase of its kind or action | `TestLevel_activityPhrase` |
+| A message with no excerpt and no subject has the repository as its body, and a title never holds a subject | `TestNotificationText_missingParts` |
+| A title is not longer than the actor limit and the longest phrase | `TestNotificationText_titleLimit` |
+| A summary lists the first three titles and the count of the rest | `TestDesktopMessages_summaryListsTitles` |
+| A title that starts with `-` is text for `osascript` | `TestDarwinSender_titleIsNotAnOption` |
+| The list prints each type with no control character of a remote text | `TestFormatNotification_everyType` |
+| The browser fills the parts by its own rule, and the site title is in line 2 | `unit_notify_filter.js` |
+
 ### Webhook
 
 `notifications.webhook` is a URL that receives each message as JSON, for a relay that shows it on a phone or in a chat. The webhook gets the messages also when `notifications.desktop` is off.
@@ -120,12 +198,12 @@ To turn the messages off, run `gitsocial settings set notifications.desktop fals
 gitsocial settings set notifications.webhook https://relay.example/hook
 ```
 
-Each message is one POST with `Content-Type: application/json`. A summary has no `type`, `repo` or `hash`.
+Each message is one POST with `Content-Type: application/json`, with the [message text](#message-text) as `title` and `body`. A summary has no `type`, `repo` or `hash`.
 
 ```json
 {
-  "title": "GitSocial",
-  "body": "Alice mentioned you · owner/repo",
+  "title": "• Alice mentioned you",
+  "body": "Can you check the new sync code?\nowner/repo",
   "url": "https://site.example/index.html#commit:0123456789ab",
   "type": "mention",
   "repo": "https://example.com/owner/repo",
@@ -149,6 +227,8 @@ The static site, on a bucket or under `gitsocial serve`, shows browser notificat
 3. To filter, type your email in **Notify me about items for**.
 
 With an email, the tab shows the new items that mention the email, assign an issue to it, request its review, or comment on a post that it wrote. An item by that email does not show. Without an email, the tab shows each new post, comment, issue, pull request and release.
+
+A notification of the tab has the [message text](#message-text) of its type, or of a new item with no email. Line 1 is the subject of the commit: the excerpt of a mention and of a comment, else the subject. A comment has its post in line 2 only when the post is in the items that the tab loaded. The site title, when the site has one, is in line 2 in place of the repository.
 
 When you open the site, and then each minute while the tab is open, also in the background, and when you go back to the tab, the tab reads the ref list of the site. Each item shows once per browser, and the items that arrived while no tab was open show when you open the site again. The first time a browser turns notifications on, it records the current items and shows nothing. Up to three new items give one notification each, and more give one summary, the same as on the desktop. The tab shows each notification through the service worker of the site, so the notification stays in the notification list of the system after the tab closes. A click opens the item in a tab of the site, or opens the site when no tab is open, and a click on the summary opens the timeline. A browser without service workers shows the notification from the tab, and it can go away when the tab closes.
 

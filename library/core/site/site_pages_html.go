@@ -661,34 +661,17 @@ func sitePageTypeLabel(t string) string {
 	return t
 }
 
-// sitePageTypeGlyph maps an item type to the app's leading card glyph (gs-core.js TYPE_GLYPH).
-var sitePageTypeGlyph = map[string]string{
-	"post": "•", "comment": "↩", "repost": "↻", "quote": "↻",
-	"milestone": "◇", "sprint": "◷", "pull-request": "△", "feedback": "↩",
-	"release": "⏏", "memo": "☞", "commit": "•",
+// sitePageTypeGlyph returns the glyph of an item type in no state.
+func sitePageTypeGlyph(itemType string) string {
+	glyph, _ := sitePageGlyph(itemType, "")
+	return glyph
 }
 
-// sitePageGlyph returns a type's glyph and tint class (gs-render.js typeGlyphEl); a state-bearing type is tinted by its state.
+// sitePageGlyph returns a type's glyph from protocol.TypeGlyph, "•" for a commit, and its tint class (gs-render.js typeGlyphEl); a state-bearing type is tinted by its state.
 func sitePageGlyph(itemType, state string) (glyph, class string) {
-	glyph = sitePageTypeGlyph[itemType]
-	switch {
-	case itemType == "issue":
-		glyph = "☐"
-		if state == "closed" || state == "completed" {
-			glyph = "☑"
-		} else if strings.HasPrefix(state, "cancel") {
-			glyph = "☒"
-		}
-	case itemType == "milestone" && (state == "closed" || strings.HasPrefix(state, "cancel")):
-		glyph = "◆"
-	case itemType == "pull-request" && state == "merged":
-		glyph = "▲"
-	case itemType == "sprint" && state == "active":
-		glyph = "◶"
-	case itemType == "sprint" && state == "completed":
-		glyph = "◵"
-	case itemType == "sprint" && strings.HasPrefix(state, "cancel"):
-		glyph = "⊘"
+	glyph = protocol.TypeGlyph(itemType, state)
+	if itemType == "commit" {
+		glyph = "•"
 	}
 	class = itemType
 	if itemType == "issue" || itemType == "pull-request" || itemType == "milestone" || itemType == "sprint" {
@@ -1051,10 +1034,7 @@ func siteRefGlyph(ref, typ string) string {
 		ext = strings.TrimPrefix(branch, "gitmsg/")
 	}
 	typ = cmp.Or(typ, sitePageDefaultTypes[ext])
-	if typ == "issue" {
-		return "☐"
-	}
-	return sitePageTypeGlyph[typ]
+	return sitePageTypeGlyph(typ)
 }
 
 // siteRelationChips lists the reference chips of one relation field: a ref of this repository links its route and names its target's subject, else its short hash, and takes the glyph of its target's type from types; a browsable cross-repository ref links its URL; a value that is not refs alone is one chip as written. more caps a card's list and links its "+n" chip. Mirrors relationChips in gs-core.js.
@@ -1135,7 +1115,7 @@ func siteItemChips(it *sitePageItem, subjects, types map[string]string, more str
 	}
 	if t == "release" {
 		if label := siteReleaseAssetLabel(h["artifacts"]); label != "" {
-			chips = append(chips, sitePageChip{Kind: "count", Icon: sitePageTypeGlyph["release"], Label: label})
+			chips = append(chips, sitePageChip{Kind: "count", Icon: sitePageTypeGlyph("release"), Label: label})
 		}
 	}
 	if t == "pull-request" && (h["head"] != "" || h["base"] != "") {
@@ -1144,10 +1124,10 @@ func siteItemChips(it *sitePageItem, subjects, types map[string]string, more str
 	}
 	if t == "pull-request" && (h["base-tip"] != "" || h["head-tip"] != "") {
 		head, base := siteTipPart("head-tip", h), siteTipPart("base-tip", h)
-		chips = append(chips, sitePageChip{Kind: "reference", Icon: sitePageTypeGlyph["commit"], Label: head.Text + " → " + base.Text, Parts: []sitePageBit{head, base}})
+		chips = append(chips, sitePageChip{Kind: "reference", Icon: sitePageTypeGlyph("commit"), Label: head.Text + " → " + base.Text, Parts: []sitePageBit{head, base}})
 	}
 	if deps := h["depends-on"]; deps != "" {
-		chip := sitePageChip{Kind: "reference", Icon: sitePageTypeGlyph["pull-request"], Label: "stacked"}
+		chip := sitePageChip{Kind: "reference", Icon: sitePageTypeGlyph("pull-request"), Label: "stacked"}
 		if under := sitePageAnyRefHash(strings.Split(deps, ",")[0]); under != "" {
 			chip.Href = cmp.Or(siteRootPageHref(under, types), "../index.html#commit:"+under+"@gitmsg/review")
 		}

@@ -29,7 +29,9 @@ func (p *trailerProvider) GetNotifications(workdir string, filter Filter) ([]Not
 	return cache.QueryLocked(func(db *sql.DB) ([]Notification, error) {
 		query := `
 			SELECT t.repo_url, t.hash, t.branch, t.trailer_key,
-			       c.author_name, c.author_email, c.timestamp,
+			       c.author_name, c.author_email, c.timestamp, c.message,
+			       (SELECT COALESCE(ref.resolved_message, ref.message) FROM core_commits ref WHERE ref.repo_url = t.ref_repo_url AND ref.hash = t.ref_hash
+			        ORDER BY ` + cache.LiveFirstOrder("ref") + `, ref.branch LIMIT 1),
 			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END as is_read
 			FROM core_trailer_refs t
 			JOIN core_commits c ON t.repo_url = c.repo_url AND t.hash = c.hash AND t.branch = c.branch
@@ -54,10 +56,10 @@ func (p *trailerProvider) GetNotifications(workdir string, filter Filter) ([]Not
 		defer rows.Close()
 		var results []Notification
 		for rows.Next() {
-			var repoURL, hash, branch, trailerKey, authorName, authorEmail string
-			var ts sql.NullString
+			var repoURL, hash, branch, trailerKey, authorName, authorEmail, message string
+			var ts, target sql.NullString
 			var isRead int
-			if err := rows.Scan(&repoURL, &hash, &branch, &trailerKey, &authorName, &authorEmail, &ts, &isRead); err != nil {
+			if err := rows.Scan(&repoURL, &hash, &branch, &trailerKey, &authorName, &authorEmail, &ts, &message, &target, &isRead); err != nil {
 				continue
 			}
 			var timestamp time.Time
@@ -76,6 +78,9 @@ func (p *trailerProvider) GetNotifications(workdir string, filter Filter) ([]Not
 				ActorRepo: repoURL,
 				Timestamp: timestamp,
 				IsRead:    isRead == 1,
+				Subject:   FirstLine(target.String),
+				Excerpt:   FirstLine(message),
+				Glyph:     commitGlyph(message, branch),
 			})
 		}
 		return results, rows.Err()

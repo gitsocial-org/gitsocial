@@ -10,6 +10,7 @@ import (
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 )
 
 // gitmsgBranchPrefix is the refs/heads prefix every extension branch carries.
@@ -69,6 +70,8 @@ func (p *divergenceProvider) GetNotifications(workdir string, _ Filter) ([]Notif
 			Item:      DivergenceNotification{Branch: branch},
 			Timestamp: now,
 			Condition: true,
+			Phrase:    "The branch " + branch + " diverged from its remote",
+			Glyph:     protocol.TypeGlyph("branch", ""),
 		})
 	}
 	return out, nil

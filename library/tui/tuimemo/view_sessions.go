@@ -9,6 +9,7 @@ import (
 	"charm.land/huh/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/gitmsg"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/memo"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
@@ -36,7 +37,7 @@ func newSessionsView(workdir string) *sessionsView {
 
 // Title returns the panel header.
 func (v *sessionsView) Title() string {
-	return fmt.Sprintf("%s  Sessions · %d", tuicore.TypeGlyph("memo", ""), len(v.sessions))
+	return fmt.Sprintf("%s  Sessions · %d", protocol.TypeGlyph("memo", ""), len(v.sessions))
 }
 
 // HeaderInfo returns the position indicator for the title bar.

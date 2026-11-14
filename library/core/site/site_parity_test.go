@@ -385,42 +385,43 @@ type parityCountChipsCase struct {
 
 // parityFixtures is the shared fixture file shape.
 type parityFixtures struct {
-	CountChips     []parityCountChipsCase    `json:"countChips"`
-	RefTokens      []parityRefTokenCase      `json:"refTokens"`
-	PageBodyRefs   []parityPageBodyCase      `json:"pageBodyRefs"`
-	RowText        []parityRowTextCase       `json:"rowText"`
-	ItemPageMeta   []parityItemPageMetaCase  `json:"itemPageMeta"`
-	ChipKinds      []parityChipKindCase      `json:"chipKinds"`
-	PRDiff         parityPRDiff              `json:"prDiff"`
-	MessageCases   []parityMessageCase       `json:"messageCases"`
-	RawObjectCases []parityRawObjectCase     `json:"rawObjectCases"`
-	FeedbackCards  []parityFeedbackCase      `json:"feedbackCards"`
-	FeedbackFiles  []parityFeedbackFileCase  `json:"feedbackFileRefs"`
-	ReleaseHeads   []parityReleaseHeadCase   `json:"releaseHeads"`
-	DetailHeads    []parityDetailHeadCase    `json:"detailHeads"`
-	RowHeads       []parityDetailHeadCase    `json:"rowHeads"`
-	MetaRow        parityMetaRow             `json:"metaRow"`
-	DefaultTitles  []parityDefaultTitle      `json:"defaultTitles"`
-	RowGlyphs      []parityRowGlyphCase      `json:"rowGlyphs"`
-	ReleaseRows    []parityReleaseRowCase    `json:"releaseRows"`
-	ReleaseNotes   []parityReleaseNotesCase  `json:"releaseNotes"`
-	ReleaseAssets  []parityReleaseAssetsCase `json:"releaseAssets"`
-	CardSkeleton   parityCardSkeleton        `json:"cardSkeleton"`
-	Avatars        []parityAvatarCase        `json:"avatars"`
-	AvatarKeys     []parityAvatarKeyCase     `json:"avatarKeys"`
-	HomeRows       parityHomeRows            `json:"homeRows"`
-	Adopted        parityAdopted             `json:"adopted"`
-	ItemCounts     parityItemCounts          `json:"itemCounts"`
-	MarkdownPaths  []parityMarkdownPath      `json:"markdownPaths"`
-	MDXStrip       []parityMDXStripCase      `json:"mdxStrip"`
-	FrontMatter    []parityMDXStripCase      `json:"frontMatter"`
-	Admonitions    []parityAdmonitionCase    `json:"admonitions"`
-	ListEmpty      map[string]string         `json:"listEmpty"`
-	ListHeadings   map[string]string         `json:"listHeadings"`
-	RouteTitles    []parityRouteTitleCase    `json:"routeTitles"`
-	TagOrder       []parityTagOrderCase      `json:"tagOrder"`
-	TreeIcons      []parityTreeIconCase      `json:"treeIcons"`
-	MarkdownLinks  parityMarkdownLinks       `json:"markdownLinks"`
+	CountChips     []parityCountChipsCase                `json:"countChips"`
+	RefTokens      []parityRefTokenCase                  `json:"refTokens"`
+	PageBodyRefs   []parityPageBodyCase                  `json:"pageBodyRefs"`
+	RowText        []parityRowTextCase                   `json:"rowText"`
+	ItemPageMeta   []parityItemPageMetaCase              `json:"itemPageMeta"`
+	ChipKinds      []parityChipKindCase                  `json:"chipKinds"`
+	PRDiff         parityPRDiff                          `json:"prDiff"`
+	MessageCases   []parityMessageCase                   `json:"messageCases"`
+	RawObjectCases []parityRawObjectCase                 `json:"rawObjectCases"`
+	FeedbackCards  []parityFeedbackCase                  `json:"feedbackCards"`
+	FeedbackFiles  []parityFeedbackFileCase              `json:"feedbackFileRefs"`
+	ReleaseHeads   []parityReleaseHeadCase               `json:"releaseHeads"`
+	DetailHeads    []parityDetailHeadCase                `json:"detailHeads"`
+	RowHeads       []parityDetailHeadCase                `json:"rowHeads"`
+	MetaRow        parityMetaRow                         `json:"metaRow"`
+	DefaultTitles  []parityDefaultTitle                  `json:"defaultTitles"`
+	RowGlyphs      []parityRowGlyphCase                  `json:"rowGlyphs"`
+	ReleaseRows    []parityReleaseRowCase                `json:"releaseRows"`
+	ReleaseNotes   []parityReleaseNotesCase              `json:"releaseNotes"`
+	ReleaseAssets  []parityReleaseAssetsCase             `json:"releaseAssets"`
+	CardSkeleton   parityCardSkeleton                    `json:"cardSkeleton"`
+	Avatars        []parityAvatarCase                    `json:"avatars"`
+	AvatarKeys     []parityAvatarKeyCase                 `json:"avatarKeys"`
+	HomeRows       parityHomeRows                        `json:"homeRows"`
+	Adopted        parityAdopted                         `json:"adopted"`
+	ItemCounts     parityItemCounts                      `json:"itemCounts"`
+	MarkdownPaths  []parityMarkdownPath                  `json:"markdownPaths"`
+	MDXStrip       []parityMDXStripCase                  `json:"mdxStrip"`
+	FrontMatter    []parityMDXStripCase                  `json:"frontMatter"`
+	Admonitions    []parityAdmonitionCase                `json:"admonitions"`
+	ListEmpty      map[string]string                     `json:"listEmpty"`
+	ListHeadings   map[string]string                     `json:"listHeadings"`
+	RouteTitles    []parityRouteTitleCase                `json:"routeTitles"`
+	TagOrder       []parityTagOrderCase                  `json:"tagOrder"`
+	TreeIcons      []parityTreeIconCase                  `json:"treeIcons"`
+	MarkdownLinks  parityMarkdownLinks                   `json:"markdownLinks"`
+	TypeGlyphs     []struct{ Type, State, Glyph string } `json:"typeGlyphs"`
 }
 
 // parityRouteTitleCase is one route, the site title and the subject of its item, and the <title> its page and the app give it.
@@ -678,6 +679,22 @@ func TestParityRowGlyph(t *testing.T) {
 				t.Errorf("glyph title = %q, want %q", got, c.ExpectTitle)
 			}
 		})
+	}
+}
+
+// TestTypeGlyph_parity asserts the glyph of each type and state of the one Go table, as the TUI and the site pages show it, against the fixture unit_parity.js also asserts.
+func TestTypeGlyph_parity(t *testing.T) {
+	f := loadParityFixtures(t)
+	if len(f.TypeGlyphs) == 0 {
+		t.Fatal("no type glyph cases in parity fixtures")
+	}
+	for _, c := range f.TypeGlyphs {
+		if got := protocol.TypeGlyph(c.Type, c.State); got != c.Glyph {
+			t.Errorf("protocol.TypeGlyph(%q, %q) = %q, want %q", c.Type, c.State, got, c.Glyph)
+		}
+		if got, _ := sitePageGlyph(c.Type, c.State); got != c.Glyph {
+			t.Errorf("sitePageGlyph(%q, %q) = %q, want %q", c.Type, c.State, got, c.Glyph)
+		}
 	}
 }
 

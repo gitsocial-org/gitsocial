@@ -49,7 +49,9 @@ func (p *editProvider) GetNotifications(workdir string, filter Filter) ([]Notifi
 			SELECT v.edit_repo_url, v.edit_hash, v.edit_branch,
 			       v.canonical_repo_url, v.canonical_hash, ` + cache.CanonicalBranch("v") + `,
 			       v.is_retracted,
-			       ec.author_name, ec.author_email, ec.timestamp,
+			       ec.author_name, ec.author_email, ec.timestamp, ec.message,
+			       (SELECT cm.message FROM core_commits cm WHERE cm.repo_url = v.canonical_repo_url AND cm.hash = v.canonical_hash
+			        ORDER BY ` + cache.LiveFirstOrder("cm") + `, cm.branch LIMIT 1),
 			       CASE WHEN r.repo_url IS NOT NULL THEN 1 ELSE 0 END as is_read
 			` + editNotificationsFrom
 		args := []interface{}{userEmail, userEmail}
@@ -71,14 +73,14 @@ func (p *editProvider) GetNotifications(workdir string, filter Filter) ([]Notifi
 			var editRepoURL, editHash, editBranch string
 			var canonicalRepoURL, canonicalHash, canonicalBranch string
 			var isRetracted int
-			var authorName, authorEmail string
-			var ts sql.NullString
+			var authorName, authorEmail, message string
+			var ts, canonicalMessage sql.NullString
 			var isRead int
 			if err := rows.Scan(
 				&editRepoURL, &editHash, &editBranch,
 				&canonicalRepoURL, &canonicalHash, &canonicalBranch,
 				&isRetracted,
-				&authorName, &authorEmail, &ts,
+				&authorName, &authorEmail, &ts, &message, &canonicalMessage,
 				&isRead,
 			); err != nil {
 				continue
@@ -105,8 +107,22 @@ func (p *editProvider) GetNotifications(workdir string, filter Filter) ([]Notifi
 				ActorRepo: editRepoURL,
 				Timestamp: timestamp,
 				IsRead:    isRead == 1,
+				Subject:   FirstLine(canonicalMessage.String),
+				Phrase:    editPhrase(isRetracted == 1, editRepoURL != canonicalRepoURL),
+				Glyph:     commitGlyph(message, editBranch),
 			})
 		}
 		return results, rows.Err()
 	})
+}
+
+// editPhrase returns the phrase of a retraction or of a proposal from a different repository, or "" for an edit.
+func editPhrase(retracted, proposal bool) string {
+	switch {
+	case retracted:
+		return "retracted your item"
+	case proposal:
+		return "proposed an edit to your item"
+	}
+	return ""
 }

@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 )
@@ -220,5 +221,5 @@ func (v *feedbackFormView) Render(state *tuicore.State) string {
 
 // Title returns the view title.
 func (v *feedbackFormView) Title() string {
-	return tuicore.TypeGlyph("pull-request", "") + "  Review Feedback"
+	return protocol.TypeGlyph("pull-request", "") + "  Review Feedback"
 }

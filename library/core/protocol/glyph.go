@@ -1,9 +1,9 @@
-// util_glyph.go - The glyph of an item type in a state
-package tuicore
+// glyph.go - The glyph of an item type in a state
+package protocol
 
 import "strings"
 
-// TypeGlyph returns the glyph of an item type in a state, "" for a commit; it mirrors typeGlyph in gs-core.js and sitePageGlyph in site_pages_html.go.
+// TypeGlyph returns the glyph of an item type in a state, "" for a commit; typeGlyph in gs-core.js is its copy.
 func TypeGlyph(itemType, state string) string {
 	canceled := strings.HasPrefix(state, "cancel")
 	switch itemType {

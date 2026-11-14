@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/gitsocial-org/gitsocial/library/core/git"
+	"github.com/gitsocial-org/gitsocial/library/core/protocol"
 	"github.com/gitsocial-org/gitsocial/library/extensions/review"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore"
 	"github.com/gitsocial-org/gitsocial/library/tui/tuicore/diff"
@@ -141,10 +142,10 @@ func (v *diffView) Render(state *tuicore.State) string {
 // Title returns the view title.
 func (v *diffView) Title() string {
 	if v.pr == nil {
-		return tuicore.TypeGlyph("pull-request", "") + "  Files Changed"
+		return protocol.TypeGlyph("pull-request", "") + "  Files Changed"
 	}
 	s := v.core.Stats()
-	return fmt.Sprintf("%s  Files Changed · %s · %s", tuicore.TypeGlyph("pull-request", ""), tuicore.TruncateToWidth(v.pr.Subject, 30), tuicore.RenderDiffStatsBadge(s.Added, s.Removed))
+	return fmt.Sprintf("%s  Files Changed · %s · %s", protocol.TypeGlyph("pull-request", ""), tuicore.TruncateToWidth(v.pr.Subject, 30), tuicore.RenderDiffStatsBadge(s.Added, s.Removed))
 }
 
 // Bindings returns keybindings for this view: the shared diff bindings

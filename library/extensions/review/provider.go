@@ -29,6 +29,15 @@ var notificationSelectFromView = cache.ResolvedSelect("review_items_resolved",
 	` + cache.ReadStateJoin("nr", "v.repo_url", "v.hash") + `
 `
 
+// feedbackSelectFromView is notificationSelectFromView with the message of the live row of the pull request of the feedback as the last column.
+var feedbackSelectFromView = cache.ResolvedSelect("review_items_resolved",
+	reviewExtColumns+`,
+       nr.repo_url,
+       (SELECT COALESCE(p.resolved_message, p.message) FROM core_commits p WHERE p.repo_url = v.pull_request_repo_url AND p.hash = v.pull_request_hash
+        ORDER BY `+cache.LiveFirstOrder("p")+`, p.branch LIMIT 1)`) + `
+	` + cache.ReadStateJoin("nr", "v.repo_url", "v.hash") + `
+`
+
 // ReviewNotification holds review-specific notification data.
 type ReviewNotification struct {
 	ID          string
@@ -159,6 +168,8 @@ func getForkPRNotifications(workspaceURL, userEmail string, forkURLs []string, u
 				ActorRepo: item.RepoURL,
 				Timestamp: item.Timestamp,
 				IsRead:    isRead,
+				Subject:   subject,
+				Glyph:     protocol.TypeGlyph("pull-request", item.State.String),
 			})
 		}
 		return result, rows.Err()
@@ -168,7 +179,7 @@ func getForkPRNotifications(workspaceURL, userEmail string, forkURLs []string, u
 // getFeedbackNotifications returns notifications for feedback on the user's PRs (workspace or authored).
 func getFeedbackNotifications(workspaceURL, userEmail string, unreadOnly bool) ([]notifications.Notification, error) {
 	return cache.QueryLocked(func(db *sql.DB) ([]notifications.Notification, error) {
-		query := notificationSelectFromView + `
+		query := feedbackSelectFromView + `
 			WHERE v.type = 'feedback'
 			  AND (
 			    v.pull_request_repo_url = ?
@@ -195,10 +206,12 @@ func getFeedbackNotifications(workspaceURL, userEmail string, unreadOnly bool) (
 		defer rows.Close()
 		var result []notifications.Notification
 		for rows.Next() {
-			item, isRead, err := scanResolvedRowWithRead(rows)
+			var readRepoURL, prMessage sql.NullString
+			item, err := scanReviewRow(rows, &readRepoURL, &prMessage)
 			if err != nil {
 				return nil, err
 			}
+			isRead := readRepoURL.Valid
 			notifType := "feedback"
 			reviewState := cache.FromNullString(item.ReviewStateField)
 			switch ReviewState(reviewState) {
@@ -235,6 +248,9 @@ func getFeedbackNotifications(workspaceURL, userEmail string, unreadOnly bool) (
 				ActorRepo: item.RepoURL,
 				Timestamp: item.Timestamp,
 				IsRead:    isRead,
+				Subject:   feedbackTarget(prMessage.String, item.References),
+				Excerpt:   subject,
+				Glyph:     feedbackGlyph(notifType),
 			})
 		}
 		return result, rows.Err()
@@ -297,6 +313,8 @@ func getReviewRequestedNotifications(userEmail string, unreadOnly bool) ([]notif
 				ActorRepo: item.RepoURL,
 				Timestamp: item.Timestamp,
 				IsRead:    isRead,
+				Subject:   subject,
+				Glyph:     protocol.TypeGlyph("pull-request", item.State.String),
 			})
 		}
 		return result, rows.Err()
@@ -396,6 +414,8 @@ func getPRStateChangeNotifications(userEmail string, unreadOnly bool) ([]notific
 				ActorRepo: ecRepoURL,
 				Timestamp: timestamp,
 				IsRead:    isRead == 1,
+				Subject:   subject,
+				Glyph:     protocol.TypeGlyph("pull-request", state.String),
 			})
 		}
 		return result, rows.Err()
@@ -489,6 +509,8 @@ func draftReadyNotif(pr PullRequest, edit PRVersion, userEmail string, unreadOnl
 		ActorRepo: edit.RepoURL,
 		Timestamp: timestamp,
 		IsRead:    isRead,
+		Subject:   pr.Subject,
+		Glyph:     protocol.TypeGlyph("pull-request", string(pr.State)),
 	}, true
 }
 
@@ -521,4 +543,27 @@ func scanResolvedRowWithRead(s cache.RowScanner) (*ReviewItem, bool, error) {
 		return nil, false, err
 	}
 	return item, readRepoURL.Valid, nil
+}
+
+// feedbackTarget returns the first line of the pull request of a feedback, else the subject that its first reference quotes.
+func feedbackTarget(prMessage string, refs []protocol.Ref) string {
+	if subject := notifications.FirstLine(prMessage); subject != "" {
+		return subject
+	}
+	if len(refs) == 0 {
+		return ""
+	}
+	subject, _, _ := strings.Cut(strings.TrimPrefix(strings.TrimSpace(refs[0].Metadata), ">"), "\n")
+	return strings.TrimSpace(subject)
+}
+
+// feedbackGlyph returns the icon of a review as the timeline shows it, else the feedback glyph.
+func feedbackGlyph(notifType string) string {
+	switch notifType {
+	case "approved":
+		return "✓"
+	case "changes-requested":
+		return "✗"
+	}
+	return protocol.TypeGlyph("feedback", "")
 }
