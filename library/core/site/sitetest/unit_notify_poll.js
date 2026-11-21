@@ -4,9 +4,9 @@ let pass = 0, fail = 0;
 const ok = (n, c, e) => { (c ? pass++ : fail++); console.log((c ? "PASS " : "FAIL ") + n + (!c && e ? " :: " + e : "")); };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// fakeNotification records each notification body.
+// fakeNotification records the tag of each notification, the short hash of its item.
 function fakeNotification(permission) {
-  const api = function (title, opts) { api.shown.push(opts.body); };
+  const api = function (title, opts) { api.shown.push(opts.tag); };
   api.permission = permission;
   api.shown = [];
   api.requestPermission = () => Promise.resolve(permission);
@@ -33,7 +33,7 @@ async function main() {
   GS.startFreshnessWatch({ base, manifestText: "{}" }, night);
   await wait(3300);
   ok("with permission the page runs the notifier once after the baseline load", loads === 1, "loads=" + loads);
-  ok("the item from the night shows at the first open", global.window.Notification.shown.length === 1 && global.window.Notification.shown[0] === "a", JSON.stringify(global.window.Notification.shown));
+  ok("the item from the night shows at the first open", global.window.Notification.shown.length === 1 && global.window.Notification.shown[0] === "bbbbbbbbbbb1", JSON.stringify(global.window.Notification.shown));
 
   // Busy: changes during a run give one more run, not one per change.
   const busyBase = "https://poll.example/b/";
