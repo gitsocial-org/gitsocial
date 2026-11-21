@@ -4,13 +4,17 @@
 
 ---
 
-Git made code portable, but nothing around the code is: a clone carries every commit, author, signature and branch, while the issues, pull requests and comments stay in the host's database, and the notes of each AI agent stay in its own files.
+GitSocial stores issues, pull requests and comments as git commits on `gitmsg/*` branches ([GitMsg](specs/GITMSG.md)), so they travel with the code in every clone, independent of any host.
 
-GitSocial's philosophy is that the commit was always enough: it has an author and a time, it carries a signature, and its message carries structured trailers, so an issue or a pull request can be stored as a commit with the right trailers. GitSocial writes this collaboration data on `gitmsg/*` branches alongside the code, following the [GitMsg](specs/GITMSG.md) protocol.
+It is a single open source binary:
 
-GitSocial is a single open source binary: run `gitsocial tui` or `gitsocial serve` in any git repository to explore it, or `gitsocial import` to bring the issues, pull requests and releases of a project from GitHub or GitLab. You can also publish the repository and a static site to an S3 bucket with `gitsocial push`; [GitSocial.org](https://gitsocial.org) is hosted this way on Cloudflare R2.
+- `gitsocial tui` to read and write issues, pull requests, reviews, releases and posts in the terminal
+- `gitsocial serve` to browse the site of a repository in the browser
+- `gitsocial import` to bring in the issues, pull requests and releases of a GitHub or GitLab project
+- `gitsocial push` to publish a repository and its static site to an S3 bucket, like [GitSocial.org](https://gitsocial.org)
+- `gitsocial mirror` to import and publish a GitHub or GitLab project in one step, and to refresh it later
 
-For data sovereignty, static hosting, portability, AI agent memory, verified identity and the alternatives, see [Why GitSocial](documentation/WHY-GITSOCIAL.md).
+GitSocial lets you own all your project data and keep a full copy of it offline, change host at any time without losing anything, host your project on any S3 bucket with no server to run, attest your identity with your own key and domain without needing a host account, and make your AI agent memories portable across any model, harness or platform. See [Why GitSocial](documentation/WHY-GITSOCIAL.md) for more.
 
 ## Install
 
