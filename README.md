@@ -1,4 +1,4 @@
-# GitSocial
+# <img src="documentation/images/gitsocial-icon-title.svg" alt="" width="52" height="65" align="absmiddle"> GitSocial
 
 *Git-native collaboration platform*
 
