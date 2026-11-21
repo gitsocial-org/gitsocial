@@ -388,6 +388,8 @@ func TestSyncWorkspace(t *testing.T) {
 	t.Run("withCommits", func(t *testing.T) {
 		t.Parallel()
 		dir := initTestRepo(t)
+		// own URL: a parallel sync of another copy of the template marks rows it does not reach stale
+		git.ExecGit(dir, []string{"remote", "set-url", "origin", "https://github.com/test/sync-with-commits.git"})
 		git.CreateCommitOnBranch(dir, "gitmsg/review", "Add feature\n\n"+`GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="#branch:feature"; v="0.1.0"`)
 		git.CreateCommitOnBranch(dir, "gitmsg/review", "Fix bug\n\n"+`GitMsg: ext="review"; type="pull-request"; state="open"; base="#branch:main"; head="#branch:bugfix"; v="0.1.0"`)
 
@@ -395,7 +397,7 @@ func TestSyncWorkspace(t *testing.T) {
 			t.Fatalf("syncWorkspace() error = %v", err)
 		}
 
-		res := GetPullRequests("https://github.com/test/repo", "gitmsg/review", nil, "", 10)
+		res := GetPullRequests("https://github.com/test/sync-with-commits", "gitmsg/review", nil, "", 10)
 		if !res.Success {
 			t.Fatalf("GetPullRequests() failed: %s", res.Error.Message)
 		}
