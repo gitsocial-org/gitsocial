@@ -261,10 +261,10 @@
   .card-head + .meta { display: flex; margin-top: var(--sp-1); }
   .meta + .card-head { margin-top: var(--sp-1); }
   /* The title follows the chip row of a card on a line of its own. The row keeps one chip line of height, and a head with no
-     row sits where it would after one, so the title starts level with or under the glyph on every card. */
+     row sits where it would after one, so the title starts level with or under the glyph; a card with no glyph keeps no space. */
   .card > .card-chips { min-height: calc(var(--fs-ui) * var(--lh-body) + 0.1rem); }
   .card > .card-chips + .card-head { margin-top: var(--sp-2); }
-  .card > .meta + .card-head { margin-top: calc(var(--sp-5) + var(--sp-3)); }
+  .card > .type-glyph ~ .meta + .card-head { margin-top: calc(var(--sp-5) + var(--sp-3)); }
   /* The author of a card's author line, and of a quote box, reads in the text color. */
   .meta .author { font-family: var(--sans); letter-spacing: 0; font-size: var(--fs-md); font-weight: 700; color: var(--text); }
   /* On the front page's tip line the author is set like the rest of the line: the same mono, size and weight. */
